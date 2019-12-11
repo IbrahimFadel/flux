@@ -33,6 +33,8 @@ public:
 };
 class Then
 {
+public:
+  vector<Token> tokens;
 };
 class WhileNode
 {
@@ -42,6 +44,7 @@ public:
 };
 } // namespace Parser
 
+void check_tokens(vector<Token> tokens, int i);
 void generate_ast(vector<Token> tokens);
 
 #endif

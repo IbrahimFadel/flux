@@ -30,8 +30,6 @@ vector<Token> generate_tokens(string input)
   int number_chars_skipped = 0;
   int chars_skipped = 0;
 
-  cout << input.length() << ' ' << sizeof(input) << endl;
-
   for (int i = 0; i < input.length(); i++)
   {
     char c = input[i];
@@ -158,7 +156,6 @@ vector<Token> generate_tokens(string input)
         }
         else
         {
-          // cout << number << endl;
           tokens.push_back(create_token(Types::lit, number));
           number.clear();
           token.clear();
@@ -171,7 +168,6 @@ vector<Token> generate_tokens(string input)
     {
       if (keywords[j] == token)
       {
-        // cout << i << endl;
         tokens.push_back(create_token(Types::kw, token));
         token.clear();
         continue;

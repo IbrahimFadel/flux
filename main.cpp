@@ -60,9 +60,9 @@ int main()
   // string str(input);
   vector<Token> tokens = generate_tokens(input);
 
-  print_tokens(tokens);
+  // print_tokens(tokens);
 
-  // generate_ast(tokens);
+  generate_ast(tokens);
 
   return 0;
 }

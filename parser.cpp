@@ -14,6 +14,69 @@ using std::endl;
 using std::string;
 using std::vector;
 
+void check_tokens(vector<Token> tokens, int i)
+{
+  // generic function that's run in generate_ast, and inside the inside of while loopes/if statements etc.
+  Token token = tokens[i];
+  if (token.type == Types::kw)
+  {
+    if (token.value == "while")
+    {
+      WhileNode node = create_while_node(tokens, i);
+      for (int j = 0; j < node.then.tokens.size(); j++)
+      {
+        cout << node.then.tokens[j].value << endl;
+      }
+    }
+  }
+}
+
+Then create_then_Node(vector<Token> tokens, int i)
+{
+  Then then;
+
+  int open_curly_brackets = 0;
+  int closed_curly_brackets = 0;
+  for (int j = i + 1; j < tokens.size(); j++)
+  {
+    Token token = tokens[j];
+    if (token.type == Types::sep)
+    {
+      if (token.value == "{")
+      {
+        open_curly_brackets++;
+      }
+      else if (token.value == "}")
+      {
+        closed_curly_brackets++;
+
+        if (closed_curly_brackets == open_curly_brackets)
+        {
+          return then;
+        }
+      }
+    }
+
+    then.tokens.push_back(token);
+  }
+
+  if (open_curly_brackets == 0 && closed_curly_brackets == 1)
+  {
+    then.tokens.pop_back();
+
+    for (int j = 0; j < then.tokens.size(); j++)
+    {
+      check_tokens(then.tokens, j);
+    }
+
+    return then;
+  }
+
+  string err_msg;
+  err_msg = "Did you forget a } in your while loop?";
+  throw std::invalid_argument(err_msg);
+}
+
 Condition create_condition(vector<Token> tokens, int i)
 {
   NumberNode left;
@@ -31,7 +94,7 @@ Condition create_condition(vector<Token> tokens, int i)
   return condition;
 }
 
-void create_while_node(vector<Token> tokens, int i)
+WhileNode create_while_node(vector<Token> tokens, int i)
 {
   std::ostringstream oss;
   string err_msg;
@@ -45,24 +108,24 @@ void create_while_node(vector<Token> tokens, int i)
 
   WhileNode while_node;
   Condition condition = create_condition(tokens, i + 2);
+  Then then;
+  for (int j = i; j < tokens.size() - i; j++)
+  {
+    if (tokens[j].value == "{")
+    {
+      then = create_then_Node(tokens, j);
+    }
+  }
 
-  cout << condition.left.value << endl;
-  cout << condition.right.value << endl;
+  while_node.condition = condition;
+  while_node.then = then;
+  return while_node;
 }
 
 void generate_ast(vector<Token> tokens)
 {
   for (int i = 0; i < tokens.size(); i++)
   {
-    Token token = tokens[i];
-    cout << token.type << " => " << token.value << endl;
-    if (token.type == Types::kw)
-    {
-      if (token.value == "while")
-      {
-        cout << "hi" << endl;
-        create_while_node(tokens, i);
-      }
-    }
+    check_tokens(tokens, i);
   }
 }
