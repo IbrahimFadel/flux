@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+// #include <cstring>
 #include <ctype.h>
 #include "lexer.h"
 
@@ -28,6 +29,8 @@ vector<Token> generate_tokens(string input)
   string number;
   int number_chars_skipped = 0;
   int chars_skipped = 0;
+
+  cout << input.length() << ' ' << sizeof(input) << endl;
 
   for (int i = 0; i < input.length(); i++)
   {
@@ -101,6 +104,33 @@ vector<Token> generate_tokens(string input)
         token.clear();
         continue;
       }
+      else
+      {
+        tokens.push_back(create_token(Types::sep, ")"));
+        token.clear();
+        continue;
+      }
+    }
+    else if (c == '(')
+    {
+      if (is_string)
+      {
+        token += c;
+        continue;
+      }
+      if (token.length() > 1)
+      {
+        tokens.push_back(create_token(Types::id, token.substr(0, token.length())));
+        tokens.push_back(create_token(Types::sep, "("));
+        token.clear();
+        continue;
+      }
+      else
+      {
+        tokens.push_back(create_token(Types::sep, "("));
+        token.clear();
+        continue;
+      }
     }
 
     token += c;
@@ -118,9 +148,17 @@ vector<Token> generate_tokens(string input)
         {
           number += input[i + j];
           number_chars_skipped++;
+          if (i + j + 1 == input.length())
+          {
+            tokens.push_back(create_token(Types::lit, number));
+            number.clear();
+            token.clear();
+            goto end;
+          }
         }
         else
         {
+          // cout << number << endl;
           tokens.push_back(create_token(Types::lit, number));
           number.clear();
           token.clear();
@@ -133,12 +171,13 @@ vector<Token> generate_tokens(string input)
     {
       if (keywords[j] == token)
       {
+        // cout << i << endl;
         tokens.push_back(create_token(Types::kw, token));
         token.clear();
         continue;
       }
     }
-    if (token == "(" || token == ")" || token == "{" || token == "}")
+    if (token == "{" || token == "}")
     {
       tokens.push_back(create_token(Types::sep, token));
       token.clear();
@@ -150,7 +189,7 @@ vector<Token> generate_tokens(string input)
       token.clear();
       continue;
     }
-    else if (token == "*" || token == "/" || token == "+" || token == "-")
+    else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">")
     {
       tokens.push_back(create_token(Types::op, token));
       token.clear();
@@ -165,13 +204,6 @@ vector<Token> generate_tokens(string input)
 
   end:;
   }
-
-  // for (int i = 0; i < tokens.size(); i++)
-  // {
-  //   // cout << tokens[i].type << " => " << tokens[i].value << endl;
-  //   cout << tokens[i].value << ' ';
-  // }
-  // cout << endl;
 
   return tokens;
 }

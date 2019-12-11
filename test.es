@@ -1,3 +1,3 @@
-while(0 < 20) {
+while(0 < 10) {
   print("hi");
 }
