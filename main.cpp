@@ -39,7 +39,7 @@ void print_tokens(vector<Token> tokens)
 
 int main()
 {
-  char *input = get_file_input("test.es");
+  char *input = get_file_input("test.yl");
   string str(input);
   vector<Token> tokens = generate_tokens(input);
 
