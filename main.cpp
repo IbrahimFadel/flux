@@ -11,37 +11,14 @@ using std::endl;
 using std::string;
 using std::vector;
 
-// char *get_file_input(const char *path)
-// {
-//   std::ifstream is(path, std::ifstream::binary);
-//   if (is)
-//   {
-//     is.seekg(0, is.end);
-//     int length = is.tellg();
-//     is.seekg(0, is.beg);
-//     char *buffer = new char[length];
-//     is.read(buffer, length);
-//     is.close();
-
-//     return buffer;
-//   }
-//   return {};
-// }
-
-string get_file_input(const char *path)
+vector<string> get_file_input(const char *path)
 {
-  string content;
-  char c;
-  std::fstream Txt1(path, std::ios::in);
-
-  Txt1.get(c);
-  do
+  vector<string> content;
+  std::ifstream input(path);
+  for (std::string line; getline(input, line);)
   {
-    content += c;
-    Txt1.get(c);
-  } while (!Txt1.eof());
-  Txt1.close();
-
+    content.push_back(line);
+  }
   return content;
 }
 
@@ -50,19 +27,19 @@ void print_tokens(vector<Token> tokens)
   for (int i = 0; i < tokens.size(); i++)
   {
     cout << "[ " << tokens[i].type << ":"
-         << " '" << tokens[i].value << "' ]" << endl;
+         << " '" << tokens[i].value << "' ]" << " - ln:" << tokens[i].line_number << " pos:" << tokens[i].line_position << endl;
   }
 }
 
 int main()
 {
-  string input = get_file_input("test.es");
+  vector<string> input = get_file_input("test.es");
   // string str(input);
   vector<Token> tokens = generate_tokens(input);
 
-  // print_tokens(tokens);
+  print_tokens(tokens);
 
-  generate_ast(tokens);
+  // generate_ast(tokens);
 
   return 0;
 }

@@ -35,6 +35,7 @@ class Then
 {
 public:
   vector<Token> tokens;
+  int end_position;
 };
 class WhileNode
 {
@@ -42,9 +43,18 @@ public:
   Condition condition;
   Then then;
 };
+class PrintNode
+{
+public:
+  Token print_value;
+};
 } // namespace Parser
 
-void check_tokens(vector<Token> tokens, int i);
+Parser::PrintNode create_print_node(vector<Token> tokens, int i);
+Parser::WhileNode create_while_node(vector<Token> tokens, int i);
+Parser::Condition create_condition(vector<Token> tokens, int i);
+Parser::Then create_then_Node(vector<Token> tokens, int i);
+void check_token(vector<Token> tokens, int i);
 void generate_ast(vector<Token> tokens);
 
 #endif

@@ -13,6 +13,8 @@ struct Token
 {
   int type;
   string value;
+  int line_number;
+  int line_position;
 };
 
 enum Types
@@ -27,6 +29,7 @@ enum Types
 
 } // namespace Lexer
 
-vector<Lexer::Token> generate_tokens(string input);
+vector<Lexer::Token> generate_tokens(vector<string> input);
+Lexer::Token create_token(int type, string value);
 
 #endif
