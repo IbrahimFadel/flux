@@ -30,6 +30,6 @@ enum Types
 } // namespace Lexer
 
 vector<Lexer::Token> generate_tokens(vector<string> input);
-Lexer::Token create_token(int type, string value);
+Lexer::Token create_token(int type, string value, int line_position);
 
 #endif

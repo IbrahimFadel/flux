@@ -1,3 +1,3 @@
-while(0 < 10) {
-  print("hi");
+while(5 < 6) {
+  print("hello");
 }

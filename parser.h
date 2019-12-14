@@ -12,6 +12,13 @@ using std::vector;
 namespace Parser
 {
 
+class Position
+{
+public:
+  int line_number;
+  int line_position;
+};
+
 class OperatorNode
 {
 public:
@@ -35,18 +42,19 @@ class Then
 {
 public:
   vector<Token> tokens;
-  int end_position;
+  Position end_position;
 };
 class WhileNode
 {
 public:
   Condition condition;
   Then then;
+  Position start_position;
 };
 class PrintNode
 {
 public:
-  Token print_value;
+  string print_value;
 };
 } // namespace Parser
 

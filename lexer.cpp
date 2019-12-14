@@ -13,16 +13,16 @@ using std::string;
 using std::vector;
 
 int line_number = 0;
-int line_position = 0;
+int line_position = -1;
 
-Token create_token(int type, string value)
+Token create_token(int type, string value, int line_pos)
 {
-  Token token;
-  token.type = type;
-  token.value = value;
-  token.line_number = line_number;
-  token.line_position = line_position;
-  return token;
+  Token tok;
+  tok.type = type;
+  tok.value = value;
+  tok.line_number = line_number;
+  tok.line_position = line_pos;
+  return tok;
 }
 
 vector<Token> generate_tokens(vector<string> input)
@@ -41,11 +41,12 @@ vector<Token> generate_tokens(vector<string> input)
     string line = input[i];
     for (int j = 0; j < line.length(); j++)
     {
+      line_position++;
       char c = line[j];
 
-      for (int j = chars_skipped; j < number_chars_skipped; j++)
+      for (int x = chars_skipped; x < number_chars_skipped; x++)
       {
-        if (j + 1 == number_chars_skipped)
+        if (x + 1 == number_chars_skipped)
         {
           number_chars_skipped = 0;
           chars_skipped = 0;
@@ -63,9 +64,9 @@ vector<Token> generate_tokens(vector<string> input)
           token += c;
           continue;
         }
-        if (token.length() > 1)
+        if (token.length() > 0)
         {
-          tokens.push_back(create_token(Types::id, token));
+          tokens.push_back(create_token(Types::id, token, line_position - token.length()));
         }
         token.clear();
         continue;
@@ -75,7 +76,7 @@ vector<Token> generate_tokens(vector<string> input)
         if (is_string)
         {
           token += "\"";
-          tokens.push_back(create_token(Types::lit, token));
+          tokens.push_back(create_token(Types::lit, token, line_position - (token.length() - 1)));
           token.clear();
           is_string = !is_string;
           continue;
@@ -91,8 +92,8 @@ vector<Token> generate_tokens(vector<string> input)
         }
         if (token.length() > 1)
         {
-          tokens.push_back(create_token(Types::id, token));
-          tokens.push_back(create_token(Types::sep, ","));
+          tokens.push_back(create_token(Types::id, token, line_position - token.length()));
+          tokens.push_back(create_token(Types::sep, ",", line_position - token.length()));
           token.clear();
           continue;
         }
@@ -106,14 +107,14 @@ vector<Token> generate_tokens(vector<string> input)
         }
         if (token.length() > 1)
         {
-          tokens.push_back(create_token(Types::id, token.substr(0, token.length())));
-          tokens.push_back(create_token(Types::sep, ")"));
+          tokens.push_back(create_token(Types::id, token.substr(0, token.length()), line_position - token.length()));
+          tokens.push_back(create_token(Types::sep, ")", line_position - token.length()));
           token.clear();
           continue;
         }
         else
         {
-          tokens.push_back(create_token(Types::sep, ")"));
+          tokens.push_back(create_token(Types::sep, ")", line_position - token.length()));
           token.clear();
           continue;
         }
@@ -127,14 +128,14 @@ vector<Token> generate_tokens(vector<string> input)
         }
         if (token.length() > 1)
         {
-          tokens.push_back(create_token(Types::id, token.substr(0, token.length())));
-          tokens.push_back(create_token(Types::sep, "("));
+          tokens.push_back(create_token(Types::id, token.substr(0, token.length()), line_position - token.length() + 1));
+          tokens.push_back(create_token(Types::sep, "(", line_position));
           token.clear();
           continue;
         }
         else
         {
-          tokens.push_back(create_token(Types::sep, "("));
+          tokens.push_back(create_token(Types::sep, "(", line_position));
           token.clear();
           continue;
         }
@@ -144,6 +145,7 @@ vector<Token> generate_tokens(vector<string> input)
 
       if (is_string)
       {
+
         continue;
       }
 
@@ -157,7 +159,7 @@ vector<Token> generate_tokens(vector<string> input)
             number_chars_skipped++;
             if (j + x + 1 == line.length())
             {
-              tokens.push_back(create_token(Types::lit, number));
+              tokens.push_back(create_token(Types::lit, number, line_position - token.length() + 1));
               number.clear();
               token.clear();
               goto end;
@@ -165,7 +167,7 @@ vector<Token> generate_tokens(vector<string> input)
           }
           else
           {
-            tokens.push_back(create_token(Types::lit, number));
+            tokens.push_back(create_token(Types::lit, number, line_position - token.length() + 1));
             number.clear();
             token.clear();
             goto end;
@@ -177,236 +179,42 @@ vector<Token> generate_tokens(vector<string> input)
       {
         if (keywords[j] == token)
         {
-          tokens.push_back(create_token(Types::kw, token));
+          tokens.push_back(create_token(Types::kw, token, line_position - (token.length() - 1)));
           token.clear();
           continue;
         }
       }
       if (token == "{" || token == "}")
       {
-        tokens.push_back(create_token(Types::sep, token));
+        tokens.push_back(create_token(Types::sep, token, line_position));
         token.clear();
         continue;
       }
       else if (token == ";")
       {
-        tokens.push_back(create_token(Types::eol, token));
+        tokens.push_back(create_token(Types::eol, token, line_position));
         token.clear();
         continue;
       }
       else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">")
       {
-        tokens.push_back(create_token(Types::op, token));
+        tokens.push_back(create_token(Types::op, token, line_position));
         token.clear();
         continue;
       }
       else if (token == "true" || token == "false")
       {
-        tokens.push_back(create_token(Types::lit, token));
+        tokens.push_back(create_token(Types::lit, token, line_position - token.length()));
         token.clear();
         continue;
       }
 
-    end:
-      line_position++;
+    end:;
     }
 
-    line_position = 0;
+    line_position = -1;
     line_number++;
   }
 
   return tokens;
 }
-
-// vector<Token> generate_tokens(vector<string> input)
-// {
-//   vector<Token> tokens;
-//   string keywords[10] = {"fn", "main", "let", "print", "int", "float", "string", "object", "class", "while"};
-//   string token;
-//   bool is_string = false;
-//   string number;
-//   int number_chars_skipped = 0;
-//   int chars_skipped = 0;
-
-//   for (int i = 0; i < input.size(); i++)
-//   {
-//     string line = input[i];
-//     for (int j = 0; i < line.length(); j++)
-//     {
-//       char c = line[j];
-
-//       for (int j = chars_skipped; j < number_chars_skipped; j++)
-//       {
-//         if (j + 1 == number_chars_skipped)
-//         {
-//           number_chars_skipped = 0;
-//           chars_skipped = 0;
-//           token.clear();
-//           continue;
-//         }
-//         chars_skipped++;
-//         goto end;
-//       }
-
-//       if (c == ' ' || c == '\n' || c == '\t')
-//       {
-//         if (is_string)
-//         {
-//           token += c;
-//           continue;
-//         }
-//         if (token.length() > 1)
-//         {
-//           tokens.push_back(create_token(Types::id, token));
-//         }
-//         token.clear();
-//         continue;
-//       }
-//       else if (c == '\"')
-//       {
-//         if (is_string)
-//         {
-//           token += "\"";
-//           tokens.push_back(create_token(Types::lit, token));
-//           token.clear();
-//           is_string = !is_string;
-//           continue;
-//         }
-//         is_string = !is_string;
-//       }
-//       else if (c == ',')
-//       {
-//         if (is_string)
-//         {
-//           token += c;
-//           continue;
-//         }
-//         if (token.length() > 1)
-//         {
-//           tokens.push_back(create_token(Types::id, token));
-//           tokens.push_back(create_token(Types::sep, ","));
-//           token.clear();
-//           continue;
-//         }
-//       }
-//       else if (c == ')')
-//       {
-//         if (is_string)
-//         {
-//           token += c;
-//           continue;
-//         }
-//         if (token.length() > 1)
-//         {
-//           tokens.push_back(create_token(Types::id, token.substr(0, token.length())));
-//           tokens.push_back(create_token(Types::sep, ")"));
-//           token.clear();
-//           continue;
-//         }
-//         else
-//         {
-//           tokens.push_back(create_token(Types::sep, ")"));
-//           token.clear();
-//           continue;
-//         }
-//       }
-//       else if (c == '(')
-//       {
-//         if (is_string)
-//         {
-//           token += c;
-//           continue;
-//         }
-//         if (token.length() > 1)
-//         {
-//           tokens.push_back(create_token(Types::id, token.substr(0, token.length())));
-//           tokens.push_back(create_token(Types::sep, "("));
-//           token.clear();
-//           continue;
-//         }
-//         else
-//         {
-//           tokens.push_back(create_token(Types::sep, "("));
-//           token.clear();
-//           continue;
-//         }
-//       }
-
-//       token += c;
-
-//       if (is_string)
-//       {
-//         continue;
-//       }
-
-//       if (isdigit(c))
-//       {
-//         for (int j = 0; j < line.length() - i; j++)
-//         {
-//           if (isdigit(line[i + j]))
-//           {
-//             number += line[i + j];
-//             number_chars_skipped++;
-//             if (i + j + 1 == line.length())
-//             {
-//               tokens.push_back(create_token(Types::lit, number));
-//               number.clear();
-//               token.clear();
-//               goto end;
-//             }
-//           }
-//           else
-//           {
-//             tokens.push_back(create_token(Types::lit, number));
-//             number.clear();
-//             token.clear();
-//             goto end;
-//           }
-//         }
-//       }
-
-//       for (int j = 0; j < sizeof(keywords) / sizeof(keywords[0]); j++)
-//       {
-//         if (keywords[j] == token)
-//         {
-//           tokens.push_back(create_token(Types::kw, token));
-//           token.clear();
-//           continue;
-//         }
-//       }
-//       if (token == "{" || token == "}")
-//       {
-//         tokens.push_back(create_token(Types::sep, token));
-//         token.clear();
-//         continue;
-//       }
-//       else if (token == ";")
-//       {
-//         tokens.push_back(create_token(Types::eol, token));
-//         token.clear();
-//         continue;
-//       }
-//       else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">")
-//       {
-//         tokens.push_back(create_token(Types::op, token));
-//         token.clear();
-//         continue;
-//       }
-//       else if (token == "true" || token == "false")
-//       {
-//         tokens.push_back(create_token(Types::lit, token));
-//         token.clear();
-//         continue;
-//       }
-
-//     end:
-//       line_position++;
-//     }
-//     line_number++;
-//   }
-//   // for (int i = 0; i < line.length(); i++)
-//   // {
-//   // }
-
-//   return tokens;
-// }

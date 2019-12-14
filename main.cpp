@@ -27,19 +27,19 @@ void print_tokens(vector<Token> tokens)
   for (int i = 0; i < tokens.size(); i++)
   {
     cout << "[ " << tokens[i].type << ":"
-         << " '" << tokens[i].value << "' ]" << " - ln:" << tokens[i].line_number << " pos:" << tokens[i].line_position << endl;
+         << " '" << tokens[i].value << "' ]"
+         << " - ln:" << tokens[i].line_number << " pos:" << tokens[i].line_position << endl;
   }
 }
 
 int main()
 {
   vector<string> input = get_file_input("test.es");
-  // string str(input);
   vector<Token> tokens = generate_tokens(input);
 
-  print_tokens(tokens);
+  // print_tokens(tokens);
 
-  // generate_ast(tokens);
+  generate_ast(tokens);
 
   return 0;
 }
