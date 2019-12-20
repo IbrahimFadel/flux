@@ -1,5 +1,6 @@
 while(5 < 6) {
-  if(5 < 9) {
+  if(4 > 2) {
+    print("hi");
   }
   print("hello");
 }
