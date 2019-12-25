@@ -37,7 +37,7 @@ int main()
   vector<string> input = get_file_input("test.ybl");
   vector<Token> tokens = generate_tokens(input);
 
-  //  print_tokens(tokens);
+  // print_tokens(tokens);
 
   generate_ast(tokens);
 

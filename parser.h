@@ -8,6 +8,9 @@ using std::vector;
 namespace Parser
 {
 
+struct Node;
+struct Then;
+
 struct Position
 {
   int line_number;
@@ -17,7 +20,8 @@ struct Position
 enum Node_Types
 {
   number = 0,
-  _while = 1
+  _while = 1,
+  _if = 2
 };
 
 struct Condition
@@ -31,7 +35,8 @@ struct Then
 {
   Position start;
   Position end;
-  vector<Token> tokens;
+  vector<Parser::Node> nodes;
+  // vector<Token> tokens;
 };
 
 struct Node
@@ -43,8 +48,9 @@ struct Node
 
 struct Tree
 {
-  vector<Parser::Node> ast;
+  vector<Parser::Node> nodes;
 };
 } // namespace Parser
 
 void generate_ast(vector<Token> tokens);
+Parser::Node check_token(vector<Token> tokens, int i);
