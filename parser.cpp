@@ -12,6 +12,51 @@ using std::vector;
 
 Tree ast;
 
+void print_node(Node node)
+{
+  if (node.type != -1)
+  {
+    if (node.then.nodes.size() > 0)
+    {
+      for (int i = 0; i < node.then.nodes.size(); i++)
+      {
+        print_node(node.then.nodes[i]);
+      }
+    }
+    else
+    {
+      if (node.type == Node_Types::_if)
+      {
+        cout << "------ IF ------" << endl;
+        cout << endl
+             << "------ CONDITION ------" << endl;
+        cout << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << endl;
+        cout << "------ THEN ------" << endl;
+      }
+      if (node.type == Node_Types::print)
+      {
+        cout << node.parameter.value;
+      }
+      // cout << " => " << node.type << endl;
+    }
+  }
+}
+
+void print_ast()
+{
+  cout << "------ START AST ------" << endl;
+  cout << endl;
+
+  for (int i = 0; i < ast.nodes.size(); i++)
+  {
+    Node node = ast.nodes[i];
+    print_node(node);
+  }
+
+  cout << endl;
+  cout << "------ END AST ------" << endl;
+}
+
 Node create_while_node(vector<Token> tokens, int i)
 {
   Node while_node;
@@ -26,7 +71,7 @@ Node create_while_node(vector<Token> tokens, int i)
   while_node.then.start = start_position;
 
   int open_curly_brackets = 0;
-  int close_curly_brackets = 0;
+  int closed_curly_brackets = 0;
   vector<Token> then_tokens;
   for (int j = i + 6; j < tokens.size(); j++)
   {
@@ -36,17 +81,17 @@ Node create_while_node(vector<Token> tokens, int i)
     }
     else if (tokens[j].value == "}" && tokens[j].type == Types::sep)
     {
-      close_curly_brackets++;
+      closed_curly_brackets++;
     }
     then_tokens.push_back(tokens[j]);
 
-    if (open_curly_brackets == close_curly_brackets && open_curly_brackets != 0)
+    if (open_curly_brackets == closed_curly_brackets && open_curly_brackets != 0)
     {
       break;
     }
   }
 
-  if (open_curly_brackets != close_curly_brackets)
+  if (open_curly_brackets != closed_curly_brackets)
   {
     std::cerr << "Are you missing a '}' ?" << endl;
     return while_node;
@@ -57,12 +102,23 @@ Node create_while_node(vector<Token> tokens, int i)
   end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
   while_node.then.end = end_position;
 
+  int closed_curly_brackets_found = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
-    // cout << then_tokens[j].value << endl;
+    // if (then_tokens[j].type == Types::sep)
+    // {
+    //   if (then_tokens[j].value == "}")
+    //   {
+    //     closed_curly_brackets_found++;
+    //     if (closed_curly_brackets_found == closed_curly_brackets)
+    //     {
+    //       cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+    //       break;
+    //     }
+    //   }
+    // }
     Node node = check_token(then_tokens, j);
     while_node.then.nodes.push_back(node);
-    // cout << node.type << ' ' << then_tokens[j].value << endl;
   }
 
   return while_node;
@@ -77,7 +133,7 @@ Node create_if_node(vector<Token> tokens, int i)
   if_node.condition.right = tokens[i + 4];
 
   int open_curly_brackets = 0;
-  int close_curly_brackets = 0;
+  int closed_curly_brackets = 0;
   vector<Token> then_tokens;
   for (int j = i + 6; j < tokens.size(); j++)
   {
@@ -87,18 +143,18 @@ Node create_if_node(vector<Token> tokens, int i)
     }
     else if (tokens[j].value == "}" && tokens[j].type == Types::sep)
     {
-      close_curly_brackets++;
+      closed_curly_brackets++;
     }
 
     then_tokens.push_back(tokens[j]);
 
-    if (open_curly_brackets == close_curly_brackets && open_curly_brackets != 0)
+    if (open_curly_brackets == closed_curly_brackets && open_curly_brackets != 0)
     {
       break;
     }
   }
 
-  if (open_curly_brackets != close_curly_brackets)
+  if (open_curly_brackets != closed_curly_brackets)
   {
     std::cerr << "You fucking donkey. You forgot a '}' ?" << endl;
     return if_node;
@@ -109,17 +165,40 @@ Node create_if_node(vector<Token> tokens, int i)
   end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
   if_node.then.end = end_position;
 
+  int closed_curly_brackets_found = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
+    // if (then_tokens[j].type == Types::sep)
+    // {
+    //   if (then_tokens[j].value == "}")
+    //   {
+    //     closed_curly_brackets_found++;
+    //     if (closed_curly_brackets_found == closed_curly_brackets)
+    //     {
+    //       cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+    //       break;
+    //     }
+    //   }
+    // }
     // cout << then_tokens[j].value << endl;
-    Node node = check_token(then_tokens, j);
-    if_node.then.nodes.push_back(node);
+    // Node node = check_token(then_tokens, j);
+    // if_node.then.nodes.push_back(node);
     // cout << node.type << ' ' << then_tokens[j].value << endl;
   }
 
   // cout << "hello" << endl;
   // cout << open_curly_brackets << " " << close_curly_brackets << endl;
   return if_node;
+}
+
+Node create_print_node(vector<Token> tokens, int i)
+{
+  Node print_node;
+
+  print_node.type = Node_Types::print;
+  print_node.parameter = tokens[i + 2];
+
+  return print_node;
 }
 
 Node check_token(vector<Token> tokens, int i)
@@ -144,7 +223,7 @@ Node check_token(vector<Token> tokens, int i)
     }
   }
 
-  cout << tokens[i].value << ' ' << tokens[i].type << endl;
+  // cout << tokens[i].value << ' ' << tokens[i].type << endl;
   if (tokens[i].type == Types::kw)
   {
     if (tokens[i].value == "while")
@@ -155,6 +234,10 @@ Node check_token(vector<Token> tokens, int i)
     {
       node = create_if_node(tokens, i);
       // cout << "hi there" << endl;
+    }
+    else if (tokens[i].value == "print")
+    {
+      node = create_print_node(tokens, i);
     }
     else
     {
@@ -178,6 +261,13 @@ void generate_ast(vector<Token> tokens)
     Node node = check_token(tokens, i);
     ast.nodes.push_back(node);
   }
+
+  print_ast();
+
+  // cout << ast.nodes[1].type << endl;
+  // cout << ast.nodes.size() << endl;
+  // cout << ast.nodes[1].type << endl;
+  // cout << ast.nodes[1].then.nodes[0].condition.the << endl;
 
   // cout << ast.nodes[0].condition.left.value << endl;
   // cout << ast.nodes[0].condition.op.value << endl;

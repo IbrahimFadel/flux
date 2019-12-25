@@ -21,7 +21,8 @@ enum Node_Types
 {
   number = 0,
   _while = 1,
-  _if = 2
+  _if = 2,
+  print = 3
 };
 
 struct Condition
@@ -44,6 +45,7 @@ struct Node
   int type;
   Parser::Condition condition;
   Parser::Then then;
+  Token parameter;
 };
 
 struct Tree
