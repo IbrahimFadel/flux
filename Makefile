@@ -1,7 +1,6 @@
 CC = g++
 CFLAGS = -std=c++11
-
-TARGETS = yabl main.o lexer.o parser.o
+PREFIX = /usr/local
 
 yabl : main.o lexer.o parser.o
 		$(CC) $(CFLAGS) -o build/yabl build/parts/main.o build/parts/lexer.o build/parts/parser.o
@@ -17,3 +16,6 @@ parser.o : src/parser.cpp src/parser.h
 
 clean :
 		-rm build/parts/*.o
+
+install : yabl
+		install -m 0755 build/yabl $(PREFIX)/bin

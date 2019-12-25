@@ -34,7 +34,7 @@ void print_tokens(vector<Token> tokens)
 
 int main()
 {
-  vector<string> input = get_file_input("test.ybl");
+  vector<string> input = get_file_input("/Users/ibrahim.fadel/devdir/yabl/test.ybl");
   vector<Token> tokens = generate_tokens(input);
 
   // print_tokens(tokens);
