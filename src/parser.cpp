@@ -12,51 +12,6 @@ using std::vector;
 
 Tree ast;
 
-void print_node(Node node)
-{
-  if (node.type != -1)
-  {
-    if (node.then.nodes.size() > 0)
-    {
-      for (int i = 0; i < node.then.nodes.size(); i++)
-      {
-        print_node(node.then.nodes[i]);
-      }
-    }
-    else
-    {
-      if (node.type == Node_Types::_if)
-      {
-        cout << "------ IF ------" << endl;
-        cout << endl
-             << "------ CONDITION ------" << endl;
-        cout << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << endl;
-        cout << "------ THEN ------" << endl;
-      }
-      if (node.type == Node_Types::print)
-      {
-        cout << node.parameter.value;
-      }
-      // cout << " => " << node.type << endl;
-    }
-  }
-}
-
-void print_ast()
-{
-  cout << "------ START AST ------" << endl;
-  cout << endl;
-
-  for (int i = 0; i < ast.nodes.size(); i++)
-  {
-    Node node = ast.nodes[i];
-    print_node(node);
-  }
-
-  cout << endl;
-  cout << "------ END AST ------" << endl;
-}
-
 Node create_while_node(vector<Token> tokens, int i)
 {
   Node while_node;
@@ -97,28 +52,41 @@ Node create_while_node(vector<Token> tokens, int i)
     return while_node;
   }
 
+  while_node.then.tokens = then_tokens;
+
   Position end_position;
   end_position.line_number = then_tokens[then_tokens.size() - 1].line_number;
   end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
   while_node.then.end = end_position;
 
+  Node node;
   int closed_curly_brackets_found = 0;
+  int skip = 0;
+  int skipped = 0;
+
+  /**
+   *  Make sure we skip over the tokens inside the 'Then' of any nodes it may find
+   *  Those tokens should be children of the node itself
+  */
   for (int j = 0; j < then_tokens.size(); j++)
   {
-    // if (then_tokens[j].type == Types::sep)
-    // {
-    //   if (then_tokens[j].value == "}")
-    //   {
-    //     closed_curly_brackets_found++;
-    //     if (closed_curly_brackets_found == closed_curly_brackets)
-    //     {
-    //       cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
-    //       break;
-    //     }
-    //   }
-    // }
-    Node node = check_token(then_tokens, j);
+    for (int x = 0; x < skip; x++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skipped = 0;
+        skip = 0;
+        goto end;
+      }
+      goto end;
+      skipped++;
+    }
+    cout << then_tokens[j].value << endl;
+    node = check_token(then_tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
   }
 
   return while_node;
@@ -160,6 +128,8 @@ Node create_if_node(vector<Token> tokens, int i)
     return if_node;
   }
 
+  if_node.then.tokens = then_tokens;
+
   Position end_position;
   end_position.line_number = then_tokens[then_tokens.size() - 1].line_number;
   end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
@@ -168,21 +138,10 @@ Node create_if_node(vector<Token> tokens, int i)
   int closed_curly_brackets_found = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
-    // if (then_tokens[j].type == Types::sep)
-    // {
-    //   if (then_tokens[j].value == "}")
-    //   {
-    //     closed_curly_brackets_found++;
-    //     if (closed_curly_brackets_found == closed_curly_brackets)
-    //     {
-    //       cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
-    //       break;
-    //     }
-    //   }
-    // }
     // cout << then_tokens[j].value << endl;
-    // Node node = check_token(then_tokens, j);
-    // if_node.then.nodes.push_back(node);
+    cout << then_tokens[j].value << endl;
+    Node node = check_token(then_tokens, j, &if_node);
+    if_node.then.nodes.push_back(node);
     // cout << node.type << ' ' << then_tokens[j].value << endl;
   }
 
@@ -201,9 +160,10 @@ Node create_print_node(vector<Token> tokens, int i)
   return print_node;
 }
 
-Node check_token(vector<Token> tokens, int i)
+Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
+  node.parent = parent;
 
   /**
    * Make sure we don't look at tokens already checked(eg. inside a while loop or an if statement)
@@ -223,7 +183,6 @@ Node check_token(vector<Token> tokens, int i)
     }
   }
 
-  // cout << tokens[i].value << ' ' << tokens[i].type << endl;
   if (tokens[i].type == Types::kw)
   {
     if (tokens[i].value == "while")
@@ -233,7 +192,7 @@ Node check_token(vector<Token> tokens, int i)
     else if (tokens[i].value == "if")
     {
       node = create_if_node(tokens, i);
-      // cout << "hi there" << endl;
+      node.skip = node.then.tokens.size() - 1;
     }
     else if (tokens[i].value == "print")
     {
@@ -252,35 +211,15 @@ Node check_token(vector<Token> tokens, int i)
   return node;
 }
 
-void generate_ast(vector<Token> tokens)
+Tree generate_ast(vector<Token> tokens)
 {
   for (int i = 0; i < tokens.size(); i++)
   {
     Token token = tokens[i];
-
-    Node node = check_token(tokens, i);
+    Node parent;
+    Node node = check_token(tokens, i, &parent);
     ast.nodes.push_back(node);
   }
 
-  print_ast();
-
-  // cout << ast.nodes[1].type << endl;
-  // cout << ast.nodes.size() << endl;
-  // cout << ast.nodes[1].type << endl;
-  // cout << ast.nodes[1].then.nodes[0].condition.the << endl;
-
-  // cout << ast.nodes[0].condition.left.value << endl;
-  // cout << ast.nodes[0].condition.op.value << endl;
-  // cout << ast.nodes[0].condition.right.value << endl;
-  // cout << endl;
-  // for (int i = 0; i < ast.nodes[0].then.nodes.size(); i++)
-  // {
-  //   Node node = ast.nodes[0].then.nodes[i];
-  //   cout << ' ' << node.type << endl;
-  // }
-
-  // for (int i = 0; i < nodes.size(); i++)
-  // {
-  //   cout << nodes[i].type << endl;
-  // }
+  return ast;
 }

@@ -7,6 +7,7 @@
 #include "parser.h"
 
 using namespace Lexer;
+using namespace Parser;
 
 using std::cout;
 using std::endl;
@@ -34,6 +35,70 @@ void print_tokens(vector<Token> tokens)
   }
 }
 
+void print_node(Node node, vector<Position> &end_positions)
+{
+  if (node.type != -1)
+  {
+    if (node.then.nodes.size() > 0)
+    {
+      for (int i = 0; i < node.then.nodes.size(); i++)
+      {
+        print_node(node.then.nodes[i], end_positions);
+      }
+    }
+    else
+    {
+      // ! Store parent in node, so that we can check if it's inside the while loop or if statement, to print -- END THEN --
+      // ? If node.parent.end.line_number == end_positions[i].line_number
+      for (int i = 0; i < end_positions.size(); i++)
+      {
+        cout << end_positions[i].line_number << ' ' << end_positions[i].line_position << endl;
+        cout << node.parent->then.end.line_number << ' ' << node.parent->then.end.line_position << endl;
+        // cout << end_positions[i
+        // cout << end_positions[i].line_number << ' ' << node.then.end.line_number << endl;
+        // Node * parent_node->node.parent;
+        // if (end_positions[i].line_number == node.parent.end.line_number && end_positions[i].line_position == node.parent.end.line_position)
+        // {
+        // cout << "------ END THEN ------" << endl;
+        // }
+        // else if(end_positions[i].line_number == node. && end_positions[i].line_position == node.then.end.line_position)
+      }
+      if (node.type == Node_Types::_if)
+      {
+        cout << "------ IF ------" << endl;
+        cout << endl
+             << "------ CONDITION ------" << endl;
+        cout << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << endl;
+        cout << "------ THEN ------" << endl;
+        end_positions.push_back(node.then.end);
+      }
+      if (node.type == Node_Types::print)
+      {
+        cout << "PRINT - " << node.parameter.value << endl;
+      }
+      // cout << " => " << node.type << endl;
+    }
+  }
+}
+
+void print_ast(Tree ast)
+{
+  // std::ostringstream oss;
+  // oss << ast.nodes[0];
+  //   vector<Position> end_positions;
+  //   cout << "------ START AST ------" << endl;
+  //   cout << endl;
+
+  //   for (int i = 0; i < ast.nodes.size(); i++)
+  //   {
+  //     Node node = ast.nodes[i];
+  //     print_node(node, end_positions);
+  //   }
+
+  //   cout << endl;
+  //   cout << "------ END AST ------" << endl;
+}
+
 int main(int argc, char **argv)
 {
   char path[PATH_MAX];
@@ -53,7 +118,8 @@ int main(int argc, char **argv)
 
   // print_tokens(tokens);
 
-  generate_ast(tokens);
+  Tree ast = generate_ast(tokens);
+  print_ast(ast);
 
   return 0;
 }

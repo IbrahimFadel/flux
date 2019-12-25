@@ -1,3 +1,6 @@
+#include <string>
+#include <sstream>
+#include <fstream>
 #include <iostream>
 #include "lexer.h"
 
@@ -37,7 +40,7 @@ struct Then
   Position start;
   Position end;
   vector<Parser::Node> nodes;
-  // vector<Token> tokens;
+  vector<Token> tokens;
 };
 
 struct Node
@@ -46,6 +49,8 @@ struct Node
   Parser::Condition condition;
   Parser::Then then;
   Token parameter;
+  Parser::Node *parent;
+  int skip = 0;
 };
 
 struct Tree
@@ -54,5 +59,10 @@ struct Tree
 };
 } // namespace Parser
 
-void generate_ast(vector<Token> tokens);
-Parser::Node check_token(vector<Token> tokens, int i);
+// std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
+// {
+//   return os << "Type: " << node.type << std::endl;
+// }
+
+Parser::Tree generate_ast(vector<Token> tokens);
+Parser::Node check_token(vector<Token> tokens, int i, Parser::Node *parent);

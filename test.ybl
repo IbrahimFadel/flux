@@ -1,6 +1,6 @@
 while(5 < 6) {
-  if(4 > 2) {
-    print("hi");
+  if(2 < 1) {
+    print("not gonna happen");
   }
-  print("hello");
+  print("always gonna happen");
 }
