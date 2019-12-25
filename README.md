@@ -21,7 +21,7 @@ while(5 < 6) {
 ## Install
 
 ```
-git clone url
+git clone https://github.com/IbrahimFadel/yabl.git
 ```
 ```
 cd yabl
