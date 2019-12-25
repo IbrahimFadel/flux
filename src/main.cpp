@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <stdlib.h>
+#include <limits.h>
 #include "lexer.h"
 #include "parser.h"
 
@@ -32,9 +34,21 @@ void print_tokens(vector<Token> tokens)
   }
 }
 
-int main()
+int main(int argc, char **argv)
 {
-  vector<string> input = get_file_input("/Users/ibrahim.fadel/devdir/yabl/test.ybl");
+  char path[PATH_MAX];
+
+  if (argc > 1)
+  {
+    realpath(argv[1], path);
+  }
+  else
+  {
+    std::cerr << "Please supply input file" << endl;
+    return 0;
+  }
+
+  vector<string> input = get_file_input(path);
   vector<Token> tokens = generate_tokens(input);
 
   // print_tokens(tokens);

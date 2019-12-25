@@ -19,3 +19,6 @@ clean :
 
 install : yabl
 		install -m 0755 build/yabl $(PREFIX)/bin
+
+uninstall : yabl
+		sudo rm $(PREFIX)/bin/yabl
