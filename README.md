@@ -17,3 +17,22 @@ while(5 < 6) {
   print("always gonna happen");
 }
 ```
+
+## Install
+
+```
+git clone url
+```
+```
+cd yabl
+```
+```
+make
+sudo make install
+```
+
+## Usage
+
+```
+yabl file.ybl
+```
