@@ -1,4 +1,2 @@
 .vscode/
-old/
-parserold.cpp/
-parserold.h/
+build/
