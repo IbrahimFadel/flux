@@ -1,6 +1,3 @@
-#include <string>
-#include <sstream>
-#include <fstream>
 #include <iostream>
 #include "lexer.h"
 
@@ -59,10 +56,18 @@ struct Tree
 };
 } // namespace Parser
 
-// std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
-// {
-//   return os << "Type: " << node.type << std::endl;
-// }
+inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
+{
+  os << std::endl
+     << "Type: " << node.type << std::endl
+     << "Condition: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl
+     << "Then: " << std::endl;
+  for (int i = 0; i < node.then.nodes.size(); i++)
+  {
+    os << "  " << node.then.nodes[i] << std::endl;
+  }
+  return os;
+}
 
 Parser::Tree generate_ast(vector<Token> tokens);
 Parser::Node check_token(vector<Token> tokens, int i, Parser::Node *parent);

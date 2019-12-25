@@ -83,8 +83,14 @@ void print_node(Node node, vector<Position> &end_positions)
 
 void print_ast(Tree ast)
 {
-  // std::ostringstream oss;
-  // oss << ast.nodes[0];
+  // cout << ast.nodes[0] << endl;
+
+  for (int i = 0; i < ast.nodes.size(); i++)
+  {
+    cout << "------ NODE ------" << endl;
+    cout << ast.nodes[i] << endl;
+    cout << "------ END NODE ------" << endl;
+  }
   //   vector<Position> end_positions;
   //   cout << "------ START AST ------" << endl;
   //   cout << endl;

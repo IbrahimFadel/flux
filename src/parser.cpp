@@ -28,7 +28,7 @@ Node create_while_node(vector<Token> tokens, int i)
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  for (int j = i + 6; j < tokens.size(); j++)
+  for (int j = i + 1; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
     {
@@ -81,7 +81,6 @@ Node create_while_node(vector<Token> tokens, int i)
       goto end;
       skipped++;
     }
-    cout << then_tokens[j].value << endl;
     node = check_token(then_tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
     skip = node.skip;
@@ -138,15 +137,9 @@ Node create_if_node(vector<Token> tokens, int i)
   int closed_curly_brackets_found = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
-    // cout << then_tokens[j].value << endl;
-    cout << then_tokens[j].value << endl;
     Node node = check_token(then_tokens, j, &if_node);
     if_node.then.nodes.push_back(node);
-    // cout << node.type << ' ' << then_tokens[j].value << endl;
   }
-
-  // cout << "hello" << endl;
-  // cout << open_curly_brackets << " " << close_curly_brackets << endl;
   return if_node;
 }
 
@@ -188,11 +181,12 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     if (tokens[i].value == "while")
     {
       node = create_while_node(tokens, i);
+      node.skip = node.then.tokens.size();
     }
     else if (tokens[i].value == "if")
     {
       node = create_if_node(tokens, i);
-      node.skip = node.then.tokens.size() - 1;
+      node.skip = node.then.tokens.size();
     }
     else if (tokens[i].value == "print")
     {
@@ -213,12 +207,31 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
 
 Tree generate_ast(vector<Token> tokens)
 {
+  Token token;
+  Node parent;
+  Node node;
+  int skip = 0;
+  int skipped = 0;
   for (int i = 0; i < tokens.size(); i++)
   {
-    Token token = tokens[i];
-    Node parent;
-    Node node = check_token(tokens, i, &parent);
+    for (int j = 0; j < skip; j++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skip = 0;
+        skipped = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+    token = tokens[i];
+
+    node = check_token(tokens, i, &parent);
     ast.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
   }
 
   return ast;
