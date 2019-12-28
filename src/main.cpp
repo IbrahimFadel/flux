@@ -74,7 +74,7 @@ void print_node(Node node, vector<Position> &end_positions)
       }
       if (node.type == Node_Types::print)
       {
-        cout << "PRINT - " << node.parameter.value << endl;
+        cout << "PRINT - " << node.print_value << endl;
       }
       // cout << " => " << node.type << endl;
     }

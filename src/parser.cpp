@@ -1,4 +1,5 @@
 #include <iostream>
+#include <ctype.h>
 #include "lexer.h"
 #include "parser.h"
 
@@ -11,6 +12,14 @@ using std::string;
 using std::vector;
 
 Tree ast;
+
+bool is_number(const std::string &s)
+{
+  std::string::const_iterator it = s.begin();
+  while (it != s.end() && std::isdigit(*it))
+    ++it;
+  return !s.empty() && it == s.end();
+}
 
 Node create_while_node(vector<Token> tokens, int i)
 {
@@ -148,9 +157,109 @@ Node create_print_node(vector<Token> tokens, int i)
   Node print_node;
 
   print_node.type = Node_Types::print;
-  print_node.parameter = tokens[i + 2];
+  print_node.print_value = tokens[i + 2].value;
 
   return print_node;
+}
+
+Node create_number_node(vector<Token> tokens, int i)
+{
+  Node number_node;
+
+  number_node.type = Node_Types::number;
+  number_node.number_value = std::stoi(tokens[i].value);
+
+  return number_node;
+}
+
+Node create_string_node(vector<Token> tokens, int i)
+{
+  Node string_node;
+
+  string_node.type = Node_Types::_string;
+  string string_value = tokens[i].value;
+  string_node.string_value = string_value;
+
+  return string_node;
+}
+
+Node create_less_than_node(vector<Token> tokens, int i)
+{
+  Node less_than_node;
+
+  less_than_node.type = Node_Types::op;
+  less_than_node.op = "<";
+
+  return less_than_node;
+}
+
+Node create_greater_than_node(vector<Token> tokens, int i)
+{
+  Node greater_than_node;
+
+  greater_than_node.type = Node_Types::op;
+  greater_than_node.op = ">";
+
+  return greater_than_node;
+}
+
+Node create_equals_node(vector<Token> tokens, int i)
+{
+  Node equals_node;
+
+  equals_node.type = Node_Types::op;
+  equals_node.op = "=";
+
+  return equals_node;
+}
+
+Node create_open_parentheses_node(vector<Token> tokens, int i)
+{
+  Node open_parentheses_node;
+
+  open_parentheses_node.type = Node_Types::sep;
+  open_parentheses_node.sep = "(";
+
+  return open_parentheses_node;
+}
+
+Node create_closed_parentheses_node(vector<Token> tokens, int i)
+{
+  Node closed_parentheses_node;
+
+  closed_parentheses_node.type = Node_Types::sep;
+  closed_parentheses_node.sep = ")";
+
+  return closed_parentheses_node;
+}
+
+Node create_open_curly_bracket_node(vector<Token> tokens, int i)
+{
+  Node open_curly_bracket_node;
+
+  open_curly_bracket_node.type = Node_Types::sep;
+  open_curly_bracket_node.sep = "{";
+
+  return open_curly_bracket_node;
+}
+
+Node create_closed_curly_bracket_node(vector<Token> tokens, int i)
+{
+  Node closed_curly_bracket_node;
+
+  closed_curly_bracket_node.type = Node_Types::sep;
+  closed_curly_bracket_node.sep = "}";
+
+  return closed_curly_bracket_node;
+}
+
+Node create_eol_node(vector<Token> tokens, int i)
+{
+  Node eol_node;
+
+  eol_node.type = Node_Types::eol;
+
+  return eol_node;
 }
 
 Node check_token(vector<Token> tokens, int i, Node *parent)
@@ -196,6 +305,55 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     {
       node.type = -1;
     }
+  }
+  else if (tokens[i].type == Types::lit)
+  {
+    if (is_number(tokens[i].value))
+    {
+      node = create_number_node(tokens, i);
+    }
+    else if (tokens[i].value.substr(0, 1) == "\"")
+    {
+      node = create_string_node(tokens, i);
+    }
+  }
+  else if (tokens[i].type == Types::op)
+  {
+    if (tokens[i].value == "<")
+    {
+      node = create_less_than_node(tokens, i);
+    }
+    else if (tokens[i].value == ">")
+    {
+      node = create_greater_than_node(tokens, i);
+    }
+    else if (tokens[i].value == "=")
+    {
+      node = create_equals_node(tokens, i);
+    }
+  }
+  else if (tokens[i].type == Types::sep)
+  {
+    if (tokens[i].value == "(")
+    {
+      node = create_open_parentheses_node(tokens, i);
+    }
+    else if (tokens[i].value == ")")
+    {
+      node = create_closed_parentheses_node(tokens, i);
+    }
+    else if (tokens[i].value == "{")
+    {
+      node = create_open_curly_bracket_node(tokens, i);
+    }
+    else if (tokens[i].value == "}")
+    {
+      node = create_closed_curly_bracket_node(tokens, i);
+    }
+  }
+  else if (tokens[i].type == Types::eol)
+  {
+    node = create_eol_node(tokens, i);
   }
   else
   {

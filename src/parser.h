@@ -22,7 +22,11 @@ enum Node_Types
   number = 0,
   _while = 1,
   _if = 2,
-  print = 3
+  print = 3,
+  _string = 4,
+  op = 5,
+  sep = 6,
+  eol = 7
 };
 
 struct Condition
@@ -45,9 +49,13 @@ struct Node
   int type;
   Parser::Condition condition;
   Parser::Then then;
-  Token parameter;
+  string print_value;
   Parser::Node *parent;
   int skip = 0;
+  int number_value;
+  string string_value;
+  string op;
+  string sep;
 };
 
 struct Tree
@@ -60,14 +68,25 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
 {
   os << std::endl
      << "Type: " << node.type << std::endl
-     << "Condition: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl
-     << "Then: " << std::endl;
-  for (int i = 0; i < node.then.nodes.size(); i++)
+     << "Condition: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
+
+  os << "Number value: " << node.number_value << std::endl;
+  os << "String value: " << node.string_value << std::endl;
+  os << "Operator value: " << node.op << std::endl;
+  os << "Seperator value: " << node.sep << std::endl;
+  os << "Print value: " << node.print_value << std::endl;
+
+  if (node.then.nodes.size() > 0)
   {
-    os << "  " << node.then.nodes[i] << std::endl;
+    os << "Then: " << std::endl;
+    for (int i = 0; i < node.then.nodes.size(); i++)
+    {
+      os << "  " << node.then.nodes[i] << std::endl;
+    }
   }
   return os;
 }
 
+bool is_number(const std::string &s);
 Parser::Tree generate_ast(vector<Token> tokens);
 Parser::Node check_token(vector<Token> tokens, int i, Parser::Node *parent);
