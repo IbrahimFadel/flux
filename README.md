@@ -27,8 +27,7 @@ git clone https://github.com/IbrahimFadel/yabl.git
 cd yabl
 ```
 ```
-make
-sudo make install
+make && make install
 ```
 
 ## Usage
