@@ -1,3 +1,6 @@
+#ifndef PARSER_H
+#define PARSER_H
+
 #include <iostream>
 #include "lexer.h"
 
@@ -133,3 +136,5 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
 bool is_number(const std::string &s);
 Parser::Tree generate_ast(vector<Token> tokens);
 Parser::Node check_token(vector<Token> tokens, int i, Parser::Node *parent);
+
+#endif
