@@ -42,6 +42,7 @@ yabl file.ybl
 
 Currently, the lexer is pretty simple. It takes an array of lines, which is an array of characters, and breaks them up into tokens with line numbers, positions, and types/values.
 
+```
 [ 1: 'while' ] - ln:0 pos:0
 [ 4: '(' ] - ln:0 pos:5
 [ 3: '5' ] - ln:0 pos:6
@@ -68,11 +69,13 @@ Currently, the lexer is pretty simple. It takes an array of lines, which is an a
 [ 4: ')' ] - ln:4 pos:29
 [ 5: ';' ] - ln:4 pos:30
 [ 4: '}' ] - ln:5 pos:0
+```
 
 ### Parser
 
 The parser then takes these tokens and builds a parse tree / ast
 
+```
 ------ NODE ------
 WHILE LOOP: 
 CONDITION: 5 < 6
@@ -103,6 +106,7 @@ SEPERATOR: }
 -- END THEN --
 
 ------ END NODE ------
+```
 
 ### Interpereter
 
