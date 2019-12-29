@@ -67,5 +67,10 @@ int main(int argc, char **argv)
   Tree ast = generate_ast(tokens);
   print_ast(ast);
 
+  // for (int i = 0; i < ast.nodes[0].then.nodes.size(); i++)
+  // {
+  //   cout << ast.nodes[0].then.nodes[i] << endl;
+  // }
+
   return 0;
 }

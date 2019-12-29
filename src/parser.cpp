@@ -81,18 +81,22 @@ Node create_while_node(vector<Token> tokens, int i)
   {
     for (int x = 0; x < skip; x++)
     {
+      cout << then_tokens[j].value << endl;
+      // cout << skipped << ' ' << then_tokens[j].value << endl;
       if (skipped + 1 == skip)
       {
         skipped = 0;
         skip = 0;
+        cout << then_tokens[j].value << " DONE SKIPPING" << endl;
         goto end;
       }
-      goto end;
       skipped++;
+      goto end;
     }
     node = check_token(then_tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
     skip = node.skip;
+    // cout << node.type << ' ' << skip << endl;
 
   end:;
   }
@@ -111,7 +115,7 @@ Node create_if_node(vector<Token> tokens, int i)
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  for (int j = i + 6; j < tokens.size(); j++)
+  for (int j = i + 1; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
     {
@@ -132,7 +136,7 @@ Node create_if_node(vector<Token> tokens, int i)
 
   if (open_curly_brackets != closed_curly_brackets)
   {
-    std::cerr << "You fucking donkey. You forgot a '}' ?" << endl;
+    std::cerr << "Are you missing a '}' ?" << endl;
     return if_node;
   }
 
@@ -143,11 +147,28 @@ Node create_if_node(vector<Token> tokens, int i)
   end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
   if_node.then.end = end_position;
 
+  Node node;
   int closed_curly_brackets_found = 0;
+  int skip = 0;
+  int skipped = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
-    Node node = check_token(then_tokens, j, &if_node);
+    for (int x = 0; x < skip; x++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skipped = 0;
+        skip = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+    node = check_token(then_tokens, j, &if_node);
     if_node.then.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
   }
   return if_node;
 }
