@@ -70,47 +70,62 @@ struct Tree
 
 inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
 {
-  os << std::endl
-     << "Type: " << node.type << std::endl
-     << "Condition: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
 
-  os << "Number value: " << node.number_value << std::endl;
-  os << "String value: " << node.string_value << std::endl;
-  os << "Operator value: " << node.op << std::endl;
-  os << "Seperator value: " << node.sep << std::endl;
-
-  if (node.parameters.size() > 0)
+  if (node.type == Parser::Node_Types::eol)
   {
-    os << "Parameters: " << std::endl;
+    os << "EOL";
+  }
+  else if (node.type == Parser::Node_Types::function_call)
+  {
+    os << "FUNCTION_CALL: " << node.function_call_name << std::endl;
+    os << "-- PARAMETERS --" << std::endl;
     for (int i = 0; i < node.parameters.size(); i++)
     {
       os << node.parameters[i] << std::endl;
     }
+    os << "-- END PARAMETERS --" << std::endl;
   }
-  // os << node.parameters->size() << std::endl;
-  // if (node.parameters)
-  // os << "Print value: " << node.print_value << std::endl;
-  // if (node.parameters->size())
-  // {
-  // os << "Hi" << std::endl;
-  // }
-  // {
-  //   os << "Parameters: " << std::endl;
-
-  //   // for(int *param = node.parameters; param != )
-  //   for (int i = 0; i < node.parameters->size(); i++)
-  //   {
-  //     // os << " " << &node.parameters[i] << std::endl;
-  //   }
-  // }
-
-  if (node.then.nodes.size() > 0)
+  else if (node.type == Parser::Node_Types::lit)
   {
-    os << "Then: " << std::endl;
+    os << "LITERAL: ";
+    if (node.string_value.length() > 0)
+    {
+      os << node.string_value << std::endl;
+    }
+    else
+    {
+      os << node.number_value << std::endl;
+    }
+  }
+  else if (node.type == Parser::Node_Types::op)
+  {
+    os << "OPERATOR: " << node.op << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::sep)
+  {
+    os << "SEPERATOR: " << node.sep << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::_if)
+  {
+    os << "IF STATEMENT: " << std::endl;
+    os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
+    os << "THEN: " << std::endl;
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
-      os << "  " << node.then.nodes[i] << std::endl;
+      os << node.then.nodes[i] << std::endl;
     }
+    os << "-- END THEN --" << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::_while)
+  {
+    os << "WHILE LOOP: " << std::endl;
+    os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
+    os << "THEN: " << std::endl;
+    for (int i = 0; i < node.then.nodes.size(); i++)
+    {
+      os << node.then.nodes[i] << std::endl;
+    }
+    os << "-- END THEN --" << std::endl;
   }
   return os;
 }

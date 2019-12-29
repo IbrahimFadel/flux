@@ -307,22 +307,6 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
   else if (tokens[i].type == Types::sep)
   {
     node = create_seperator_node(tokens, i);
-    // if (tokens[i].value == "(")
-    // {
-    //   node = create_open_parentheses_node(tokens, i);
-    // }
-    // else if (tokens[i].value == ")")
-    // {
-    //   node = create_closed_parentheses_node(tokens, i);
-    // }
-    // else if (tokens[i].value == "{")
-    // {
-    //   node = create_open_curly_bracket_node(tokens, i);
-    // }
-    // else if (tokens[i].value == "}")
-    // {
-    //   node = create_closed_curly_bracket_node(tokens, i);
-    // }
   }
   else if (tokens[i].type == Types::eol)
   {

@@ -62,15 +62,11 @@ int main(int argc, char **argv)
   vector<string> input = get_file_input(path);
   vector<Token> tokens = generate_tokens(input);
 
-  // print_tokens(tokens);
-
   Tree ast = generate_ast(tokens);
-  print_ast(ast);
 
-  // for (int i = 0; i < ast.nodes[0].then.nodes.size(); i++)
-  // {
-  //   cout << ast.nodes[0].then.nodes[i] << endl;
-  // }
+  print_tokens(tokens);
+
+  print_ast(ast);
 
   return 0;
 }
