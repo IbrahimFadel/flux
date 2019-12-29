@@ -70,7 +70,7 @@ Node create_while_node(vector<Token> tokens, int i)
 
   Node node;
   int closed_curly_brackets_found = 0;
-  int skip = 0;
+  int skip = 6;
   int skipped = 0;
 
   /**
@@ -81,13 +81,13 @@ Node create_while_node(vector<Token> tokens, int i)
   {
     for (int x = 0; x < skip; x++)
     {
-      cout << then_tokens[j].value << endl;
+      // cout << then_tokens[j].value << endl;
       // cout << skipped << ' ' << then_tokens[j].value << endl;
       if (skipped + 1 == skip)
       {
         skipped = 0;
         skip = 0;
-        cout << then_tokens[j].value << " DONE SKIPPING" << endl;
+        // cout << then_tokens[j].value << " DONE SKIPPING" << endl;
         goto end;
       }
       skipped++;
@@ -149,7 +149,7 @@ Node create_if_node(vector<Token> tokens, int i)
 
   Node node;
   int closed_curly_brackets_found = 0;
-  int skip = 0;
+  int skip = 6;
   int skipped = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
@@ -283,6 +283,59 @@ Node create_eol_node(vector<Token> tokens, int i)
   return eol_node;
 }
 
+Node create_literal_node(Token token)
+{
+  Node literal_token;
+
+  literal_token.type = Node_Types::lit;
+
+  // cout << token.value << endl;
+
+  if (token.value.substr(0, 1) == "\"" && token.type == Types::lit)
+  {
+    literal_token.string_value = token.value;
+  }
+  else if (is_number(token.value))
+  {
+    literal_token.number_value = std::stoi(token.value);
+  }
+
+  return literal_token;
+}
+
+Node create_function_call_node(vector<Token> tokens, int i)
+{
+  Node function_call_node;
+
+  function_call_node.type = Node_Types::function_call;
+  function_call_node.function_call_name = tokens[i].value;
+
+  int comma = 0;
+  Node param;
+  vector<Node> parameters;
+  for (int j = i + 2; j < tokens.size(); j++)
+  {
+    if (tokens[j].type == Types::sep && tokens[j].value == ")")
+    {
+      break;
+    }
+    if (comma % 2 == 0)
+    {
+      param = create_literal_node(tokens[j]);
+      parameters.push_back(param);
+      // function_call_node.parameters->push_back(param);
+    }
+    // cout << tokens[j].value << endl;
+
+    comma++;
+  }
+
+  function_call_node.parameters = parameters;
+  function_call_node.skip = parameters.size() + 2;
+
+  return function_call_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -320,7 +373,8 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     }
     else if (tokens[i].value == "print")
     {
-      node = create_print_node(tokens, i);
+      // node = create_print_node(tokens, i);
+      node = create_function_call_node(tokens, i);
     }
     else
     {

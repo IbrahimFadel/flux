@@ -26,7 +26,9 @@ enum Node_Types
   _string = 4,
   op = 5,
   sep = 6,
-  eol = 7
+  eol = 7,
+  function_call = 8,
+  lit = 9
 };
 
 struct Condition
@@ -56,6 +58,8 @@ struct Node
   string string_value;
   string op;
   string sep;
+  vector<Parser::Node> parameters;
+  string function_call_name;
 };
 
 struct Tree
@@ -74,7 +78,31 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   os << "String value: " << node.string_value << std::endl;
   os << "Operator value: " << node.op << std::endl;
   os << "Seperator value: " << node.sep << std::endl;
-  os << "Print value: " << node.print_value << std::endl;
+
+  if (node.parameters.size() > 0)
+  {
+    os << "Parameters: " << std::endl;
+    for (int i = 0; i < node.parameters.size(); i++)
+    {
+      os << node.parameters[i] << std::endl;
+    }
+  }
+  // os << node.parameters->size() << std::endl;
+  // if (node.parameters)
+  // os << "Print value: " << node.print_value << std::endl;
+  // if (node.parameters->size())
+  // {
+  // os << "Hi" << std::endl;
+  // }
+  // {
+  //   os << "Parameters: " << std::endl;
+
+  //   // for(int *param = node.parameters; param != )
+  //   for (int i = 0; i < node.parameters->size(); i++)
+  //   {
+  //     // os << " " << &node.parameters[i] << std::endl;
+  //   }
+  // }
 
   if (node.then.nodes.size() > 0)
   {
