@@ -81,13 +81,10 @@ Node create_while_node(vector<Token> tokens, int i)
   {
     for (int x = 0; x < skip; x++)
     {
-      // cout << then_tokens[j].value << endl;
-      // cout << skipped << ' ' << then_tokens[j].value << endl;
       if (skipped + 1 == skip)
       {
         skipped = 0;
         skip = 0;
-        // cout << then_tokens[j].value << " DONE SKIPPING" << endl;
         goto end;
       }
       skipped++;
@@ -96,7 +93,6 @@ Node create_while_node(vector<Token> tokens, int i)
     node = check_token(then_tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
     skip = node.skip;
-    // cout << node.type << ' ' << skip << endl;
 
   end:;
   }
@@ -173,16 +169,6 @@ Node create_if_node(vector<Token> tokens, int i)
   return if_node;
 }
 
-Node create_print_node(vector<Token> tokens, int i)
-{
-  Node print_node;
-
-  print_node.type = Node_Types::print;
-  print_node.print_value = tokens[i + 2].value;
-
-  return print_node;
-}
-
 Node create_number_node(vector<Token> tokens, int i)
 {
   Node number_node;
@@ -193,85 +179,24 @@ Node create_number_node(vector<Token> tokens, int i)
   return number_node;
 }
 
-Node create_string_node(vector<Token> tokens, int i)
+Node create_operator_node(vector<Token> tokens, int i)
 {
-  Node string_node;
+  Node operator_node;
 
-  string_node.type = Node_Types::_string;
-  string string_value = tokens[i].value;
-  string_node.string_value = string_value;
+  operator_node.type = Node_Types::op;
+  operator_node.op = tokens[i].value;
 
-  return string_node;
+  return operator_node;
 }
 
-Node create_less_than_node(vector<Token> tokens, int i)
+Node create_seperator_node(vector<Token> tokens, int i)
 {
-  Node less_than_node;
+  Node seperator_node;
 
-  less_than_node.type = Node_Types::op;
-  less_than_node.op = "<";
+  seperator_node.type = Node_Types::sep;
+  seperator_node.sep = tokens[i].value;
 
-  return less_than_node;
-}
-
-Node create_greater_than_node(vector<Token> tokens, int i)
-{
-  Node greater_than_node;
-
-  greater_than_node.type = Node_Types::op;
-  greater_than_node.op = ">";
-
-  return greater_than_node;
-}
-
-Node create_equals_node(vector<Token> tokens, int i)
-{
-  Node equals_node;
-
-  equals_node.type = Node_Types::op;
-  equals_node.op = "=";
-
-  return equals_node;
-}
-
-Node create_open_parentheses_node(vector<Token> tokens, int i)
-{
-  Node open_parentheses_node;
-
-  open_parentheses_node.type = Node_Types::sep;
-  open_parentheses_node.sep = "(";
-
-  return open_parentheses_node;
-}
-
-Node create_closed_parentheses_node(vector<Token> tokens, int i)
-{
-  Node closed_parentheses_node;
-
-  closed_parentheses_node.type = Node_Types::sep;
-  closed_parentheses_node.sep = ")";
-
-  return closed_parentheses_node;
-}
-
-Node create_open_curly_bracket_node(vector<Token> tokens, int i)
-{
-  Node open_curly_bracket_node;
-
-  open_curly_bracket_node.type = Node_Types::sep;
-  open_curly_bracket_node.sep = "{";
-
-  return open_curly_bracket_node;
-}
-
-Node create_closed_curly_bracket_node(vector<Token> tokens, int i)
-{
-  Node closed_curly_bracket_node;
-
-  closed_curly_bracket_node.type = Node_Types::sep;
-  closed_curly_bracket_node.sep = "}";
-
-  return closed_curly_bracket_node;
+  return seperator_node;
 }
 
 Node create_eol_node(vector<Token> tokens, int i)
@@ -288,8 +213,6 @@ Node create_literal_node(Token token)
   Node literal_token;
 
   literal_token.type = Node_Types::lit;
-
-  // cout << token.value << endl;
 
   if (token.value.substr(0, 1) == "\"" && token.type == Types::lit)
   {
@@ -323,10 +246,7 @@ Node create_function_call_node(vector<Token> tokens, int i)
     {
       param = create_literal_node(tokens[j]);
       parameters.push_back(param);
-      // function_call_node.parameters->push_back(param);
     }
-    // cout << tokens[j].value << endl;
-
     comma++;
   }
 
@@ -373,58 +293,36 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     }
     else if (tokens[i].value == "print")
     {
-      // node = create_print_node(tokens, i);
       node = create_function_call_node(tokens, i);
-    }
-    else
-    {
-      node.type = -1;
     }
   }
   else if (tokens[i].type == Types::lit)
   {
-    if (is_number(tokens[i].value))
-    {
-      node = create_number_node(tokens, i);
-    }
-    else if (tokens[i].value.substr(0, 1) == "\"")
-    {
-      node = create_string_node(tokens, i);
-    }
+    node = create_literal_node(tokens[i]);
   }
   else if (tokens[i].type == Types::op)
   {
-    if (tokens[i].value == "<")
-    {
-      node = create_less_than_node(tokens, i);
-    }
-    else if (tokens[i].value == ">")
-    {
-      node = create_greater_than_node(tokens, i);
-    }
-    else if (tokens[i].value == "=")
-    {
-      node = create_equals_node(tokens, i);
-    }
+    node = create_operator_node(tokens, i);
   }
   else if (tokens[i].type == Types::sep)
   {
-    if (tokens[i].value == "(")
-    {
-      node = create_open_parentheses_node(tokens, i);
-    }
-    else if (tokens[i].value == ")")
-    {
-      node = create_closed_parentheses_node(tokens, i);
-    }
-    else if (tokens[i].value == "{")
-    {
-      node = create_open_curly_bracket_node(tokens, i);
-    }
-    else if (tokens[i].value == "}")
-    {
-      node = create_closed_curly_bracket_node(tokens, i);
-    }
+    node = create_seperator_node(tokens, i);
+    // if (tokens[i].value == "(")
+    // {
+    //   node = create_open_parentheses_node(tokens, i);
+    // }
+    // else if (tokens[i].value == ")")
+    // {
+    //   node = create_closed_parentheses_node(tokens, i);
+    // }
+    // else if (tokens[i].value == "{")
+    // {
+    //   node = create_open_curly_bracket_node(tokens, i);
+    // }
+    // else if (tokens[i].value == "}")
+    // {
+    //   node = create_closed_curly_bracket_node(tokens, i);
+    // }
   }
   else if (tokens[i].type == Types::eol)
   {
