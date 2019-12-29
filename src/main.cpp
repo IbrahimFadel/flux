@@ -5,6 +5,7 @@
 #include <limits.h>
 #include "lexer.h"
 #include "parser.h"
+#include "interpreter.h"
 
 using namespace Lexer;
 using namespace Parser;
@@ -47,6 +48,7 @@ void print_ast(Tree ast)
 
 int main(int argc, char **argv)
 {
+  cout << endl;
   char path[PATH_MAX];
 
   if (argc > 1)
@@ -64,9 +66,11 @@ int main(int argc, char **argv)
 
   Tree ast = generate_ast(tokens);
 
-  print_tokens(tokens);
+  run(ast);
 
-  print_ast(ast);
+  // print_tokens(tokens);
+
+  // print_ast(ast);
 
   return 0;
 }
