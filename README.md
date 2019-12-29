@@ -38,6 +38,17 @@ yabl file.ybl
 
 ## Progress
 
+This example will be using the following as the input file:
+
+```
+while(5 < 6) {
+  if(2 < 1) {
+    print("not gonna happen");
+  }
+  print("always gonna happen");
+}
+```
+
 ### Lexer
 
 Currently, the lexer is pretty simple. It takes an array of lines, which is an array of characters, and breaks them up into tokens with line numbers, positions, and types/values.
