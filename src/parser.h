@@ -31,7 +31,8 @@ enum Node_Types
   sep = 6,
   eol = 7,
   function_call = 8,
-  lit = 9
+  lit = 9,
+  let = 10
 };
 
 struct Condition
@@ -49,6 +50,16 @@ struct Then
   vector<Token> tokens;
 };
 
+struct Number
+{
+  int value;
+};
+
+struct String
+{
+  string value;
+};
+
 struct Node
 {
   int type;
@@ -57,12 +68,15 @@ struct Node
   string print_value;
   Parser::Node *parent;
   int skip = 0;
-  int number_value;
+  int number_value = -9999;
   string string_value;
   string op;
   string sep;
   vector<Parser::Node> parameters;
   string function_call_name;
+  string variable_name;
+  Parser::Number variable_value_number;
+  Parser::String variable_value_string;
 };
 
 struct Tree
@@ -129,6 +143,18 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
       os << node.then.nodes[i] << std::endl;
     }
     os << "-- END THEN --" << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::let)
+  {
+    os << "LET: " << node.variable_name << " = ";
+    if (node.variable_value_string.value.substr(0, 1) == "\"")
+    {
+      os << node.variable_value_string.value << std::endl;
+    }
+    else
+    {
+      os << node.variable_value_number.value << std::endl;
+    }
   }
   return os;
 }

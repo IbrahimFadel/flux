@@ -210,20 +210,20 @@ Node create_eol_node(vector<Token> tokens, int i)
 
 Node create_literal_node(Token token)
 {
-  Node literal_token;
+  Node literal_node;
 
-  literal_token.type = Node_Types::lit;
+  literal_node.type = Node_Types::lit;
 
   if (token.value.substr(0, 1) == "\"" && token.type == Types::lit)
   {
-    literal_token.string_value = token.value;
+    literal_node.string_value = token.value;
   }
   else if (is_number(token.value))
   {
-    literal_token.number_value = std::stoi(token.value);
+    literal_node.number_value = std::stoi(token.value);
   }
 
-  return literal_token;
+  return literal_node;
 }
 
 Node create_function_call_node(vector<Token> tokens, int i)
@@ -254,6 +254,55 @@ Node create_function_call_node(vector<Token> tokens, int i)
   function_call_node.skip = parameters.size() + 2;
 
   return function_call_node;
+}
+
+// Node create_let_node(vector<Token> tokens, int i)
+// {
+//   Node let_node;
+
+//   let_node.type = Node_Types::let;
+
+//   let_node.variable_name = tokens[i + 1].value;
+
+//   Node parent;
+//   Node value = check_token(tokens, i + 3, &parent);
+//   let_node.variable_value = &value;
+
+//   // let_node.variable_value-
+
+//   // std::string test = "mytest";
+//   // let_node.variable_value->string_value = test;
+
+//   return let_node;
+// }
+
+Node create_let_node(vector<Token> tokens, int i)
+{
+  Node let_node;
+
+  let_node.type = Node_Types::let;
+  let_node.variable_name = tokens[i + 1].value;
+
+  Node parent;
+  Node value = check_token(tokens, i + 3, &parent);
+
+  if (value.type == Node_Types::lit)
+  {
+    if (value.string_value.substr(0, 1) == "\"")
+    {
+      String string_value;
+      string_value.value = value.string_value;
+      let_node.variable_value_string = string_value;
+    }
+    else
+    {
+      Number number_value;
+      number_value.value = value.number_value;
+      let_node.variable_value_number = number_value;
+    }
+  }
+
+  return let_node;
 }
 
 Node check_token(vector<Token> tokens, int i, Node *parent)
@@ -294,6 +343,11 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "print")
     {
       node = create_function_call_node(tokens, i);
+    }
+    else if (tokens[i].value == "let")
+    {
+      node = create_let_node(tokens, i);
+      node.skip = 4;
     }
   }
   else if (tokens[i].type == Types::lit)
@@ -343,11 +397,16 @@ Tree generate_ast(vector<Token> tokens)
     token = tokens[i];
 
     node = check_token(tokens, i, &parent);
+    // cout << node.string_value << endl;
+    // cout << node.variable_value->string_value << endl;
     ast.nodes.push_back(node);
     skip = node.skip;
 
   end:;
   }
+
+  // cout << ast.nodes[0].variable_name << endl;
+  // cout << ast.nodes[0].variable_value->type << endl;
 
   return ast;
 }
