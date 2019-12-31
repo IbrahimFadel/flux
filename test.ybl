@@ -1,6 +1,6 @@
 let x = 100;
 let word = "hey";
 
-if("hello" == "hi") {
-  print("hi");
+while(x < 101) {
+  print("less");
 }
