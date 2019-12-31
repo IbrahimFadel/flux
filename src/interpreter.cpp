@@ -55,7 +55,7 @@ bool condition_true(Token left, Token op, Token right)
   else if (!is_number(left.value))
   {
     variables_it = variables.find(left.value);
-    if (!is_number(variables_it->second.string_value))
+    if (variables_it->second.string_value.length() > 0)
     {
       left_string = variables_it->second.string_value;
     }
@@ -76,7 +76,7 @@ bool condition_true(Token left, Token op, Token right)
   else if (!is_number(right.value))
   {
     variables_it = variables.find(right.value);
-    if (!is_number(variables_it->second.string_value))
+    if (variables_it->second.string_value.length() > 0)
     {
       right_string = variables_it->second.string_value;
     }
@@ -161,6 +161,110 @@ void Interpreter::let(Node node)
   variables.insert({node.variable_name, var});
 };
 
+int add(int a, int b)
+{
+  return a + b;
+}
+
+int multiply(int a, int b)
+{
+  return a * b;
+}
+
+void Interpreter::assign(Node node)
+{
+  vector<int> vals;
+  for (int i = 0; i < node.assignment_values.size(); i++)
+  {
+    Node value = node.assignment_values[i];
+    // x = 3 + 4 + 5 + x * 2
+    if (value.op == "+")
+    {
+      if (node.assignment_values[i + 2].op == "*")
+      {
+        int a, b, c;
+        if (node.assignment_values[i - 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i - 1].id_name);
+          a = variables_it->second.number_value;
+        }
+        else
+        {
+          a = node.assignment_values[i - 1].number_value;
+        }
+        if (node.assignment_values[i + 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 1].id_name);
+          b = variables_it->second.number_value;
+        }
+        else
+        {
+          b = node.assignment_values[i + 1].number_value;
+        }
+        if (node.assignment_values[i + 3].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 3].id_name);
+          c = variables_it->second.number_value;
+        }
+        else
+        {
+          c = node.assignment_values[i + 3].number_value;
+        }
+
+        if (vals.size() > 0)
+        {
+          vals[vals.size() - 1] = vals[vals.size() - 1] + b * c;
+          continue;
+        }
+        int val = a + b * c;
+        vals.push_back(val);
+      }
+      else
+      {
+        int a, b;
+        if (node.assignment_values[i - 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i - 1].id_name);
+          a = variables_it->second.number_value;
+        }
+        else
+        {
+          a = node.assignment_values[i - 1].number_value;
+        }
+        if (node.assignment_values[i + 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 1].id_name);
+          b = variables_it->second.number_value;
+        }
+        else
+        {
+          b = node.assignment_values[i + 1].number_value;
+        }
+
+        if (vals.size() > 0)
+        {
+          vals[vals.size() - 1] = vals[vals.size() - 1] + b;
+          continue;
+        }
+
+        int val = a + b;
+        vals.push_back(val);
+      }
+    }
+    else if (value.op == "*")
+    {
+    }
+  }
+
+  // for (int i = 0; i < vals.size(); i++)
+  // {
+  //   cout << vals[i] << endl;
+  // }
+
+  variables_it = variables.find(node.id_name);
+  variables_it->second.number_value = vals[0];
+}
+
 void interpret(Node node)
 {
   switch (node.type)
@@ -179,6 +283,9 @@ void interpret(Node node)
     break;
   case Node_Types::let:
     Interpreter::let(node);
+    break;
+  case Node_Types::assign:
+    Interpreter::assign(node);
     break;
   default:
     break;

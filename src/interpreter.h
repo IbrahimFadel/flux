@@ -17,6 +17,7 @@ struct Variable
 void _while(Node node);
 void _if(Node node);
 void let(Node node);
+void assign(Node node);
 } // namespace Interpreter
 
 // inline bool operator<(const Variable &var) const

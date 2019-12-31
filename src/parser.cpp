@@ -303,6 +303,32 @@ Node create_let_node(vector<Token> tokens, int i)
   return let_node;
 }
 
+Node create_assignment_node(vector<Token> tokens, int i)
+{
+  Node assignment_node;
+  Node parent;
+
+  assignment_node.type = Node_Types::assign;
+  assignment_node.id_name = tokens[i].value;
+
+  vector<Node> assignment_values;
+  for (int j = i + 2; j < tokens.size(); j++)
+  {
+    if (tokens[j].type == Types::eol)
+    {
+      break;
+    }
+    Node val = check_token(tokens, j, &parent);
+    assignment_values.push_back(val);
+  }
+
+  assignment_node.assignment_values = assignment_values;
+
+  // assignment_node.skip = 2 + assignment_values.size() - 1;
+
+  return assignment_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -355,6 +381,18 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
   else if (tokens[i].type == Types::op)
   {
     node = create_operator_node(tokens, i);
+  }
+  else if (tokens[i].type == Types::id)
+  {
+    if (tokens[i+1].value == "=")
+    {
+      node = create_assignment_node(tokens, i);
+      node.skip = 2 + node.assignment_values.size() - 1;
+    }
+    else
+    {
+      node = create_identifier_node(tokens[i]);
+    }
   }
   else if (tokens[i].type == Types::sep)
   {
