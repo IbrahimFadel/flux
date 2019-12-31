@@ -171,16 +171,15 @@ int multiply(int a, int b)
   return a * b;
 }
 
-void Interpreter::assign(Node node)
+int evaluate_expression(Node node)
 {
   vector<int> vals;
   for (int i = 0; i < node.assignment_values.size(); i++)
   {
     Node value = node.assignment_values[i];
-    // x = 3 + 4 + 5 + x * 2
-    if (value.op == "+")
+    if (value.op == "+" || value.op == "-")
     {
-      if (node.assignment_values[i + 2].op == "*")
+      if (node.assignment_values[i + 2].op == "*" || node.assignment_values[i + 2].op == "/")
       {
         int a, b, c;
         if (node.assignment_values[i - 1].id_name.length() > 0)
@@ -213,10 +212,55 @@ void Interpreter::assign(Node node)
 
         if (vals.size() > 0)
         {
-          vals[vals.size() - 1] = vals[vals.size() - 1] + b * c;
+          if (node.assignment_values[i + 2].op == "*")
+          {
+            if (value.op == "+")
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] + b * c;
+            }
+            else
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] - b * c;
+            }
+          }
+          else
+          {
+            if (value.op == "+")
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] + b / c;
+            }
+            else
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] - b / c;
+            }
+          }
+
           continue;
         }
-        int val = a + b * c;
+        int val;
+        if (node.assignment_values[i + 2].op == "*")
+        {
+          if (value.op == "+")
+          {
+            val = a + b * c;
+          }
+          else
+          {
+            val = a - b * c;
+          }
+        }
+        else
+        {
+          if (value.op == "+")
+          {
+            val = a + b / c;
+          }
+          else
+          {
+            val = a - b / c;
+          }
+        }
+
         vals.push_back(val);
       }
       else
@@ -243,11 +287,28 @@ void Interpreter::assign(Node node)
 
         if (vals.size() > 0)
         {
-          vals[vals.size() - 1] = vals[vals.size() - 1] + b;
+          if (value.op == "+")
+          {
+            vals[vals.size() - 1] = vals[vals.size() - 1] + b;
+          }
+          else
+          {
+            vals[vals.size() - 1] = vals[vals.size() - 1] - b;
+          }
+
           continue;
         }
 
-        int val = a + b;
+        int val;
+        if (value.op == "+")
+        {
+          val = a + b;
+        }
+        else
+        {
+          val = a - b;
+        }
+
         vals.push_back(val);
       }
     }
@@ -256,13 +317,56 @@ void Interpreter::assign(Node node)
     }
   }
 
-  // for (int i = 0; i < vals.size(); i++)
-  // {
-  //   cout << vals[i] << endl;
-  // }
+  return vals[0];
+}
 
+string evaluate_string_expression(Node node)
+{
+  string val = "";
+  for (int i = 0; i < node.assignment_values.size(); i++)
+  {
+    if (node.assignment_values[i].string_value.length() > 0)
+    {
+      node.assignment_values[i].string_value = node.assignment_values[i].string_value.substr(1, node.assignment_values[i].string_value.length() - 2);
+    }
+  }
+  for (int i = 0; i < node.assignment_values.size(); i++)
+  {
+    if (node.assignment_values.size() == 1)
+    {
+      return node.assignment_values[0].string_value;
+    }
+    if (node.assignment_values[i + 1].op == "+" || node.assignment_values[i + 1].op == "-")
+    {
+      if (val.length() == 0)
+      {
+        val = node.assignment_values[i].string_value + node.assignment_values[i + 2].string_value;
+      }
+      else
+      {
+        val = val + node.assignment_values[i + 2].string_value;
+      }
+    }
+  }
+
+  return val;
+}
+
+void Interpreter::assign(Node node)
+{
+  int val_number;
   variables_it = variables.find(node.id_name);
-  variables_it->second.number_value = vals[0];
+  if (variables_it->second.string_value.length() > 0)
+  {
+    // string val = node.assignment_values[0].string_value;
+    string val = evaluate_string_expression(node);
+    variables_it->second.string_value = val;
+  }
+  else
+  {
+    int val = evaluate_expression(node);
+    variables_it->second.number_value = val;
+  }
 }
 
 void interpret(Node node)

@@ -217,6 +217,7 @@ Node create_literal_node(Token token)
   if (token.value.substr(0, 1) == "\"" && token.type == Types::lit)
   {
     literal_node.string_value = token.value;
+    // cout << literal_node.string_value << endl;
   }
   else if (is_number(token.value))
   {
@@ -384,7 +385,7 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
   }
   else if (tokens[i].type == Types::id)
   {
-    if (tokens[i+1].value == "=")
+    if (tokens[i + 1].value == "=")
     {
       node = create_assignment_node(tokens, i);
       node.skip = 2 + node.assignment_values.size() - 1;
