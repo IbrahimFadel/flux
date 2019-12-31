@@ -1,3 +1,6 @@
-let x = 560;
-let y = "hello, world";
-print(x, y, "hi", 10);
+let x = 100;
+let word = "hey";
+
+if("hello" == "hi") {
+  print("hi");
+}

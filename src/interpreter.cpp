@@ -11,6 +11,7 @@ using std::vector;
 using Parser::Node_Types;
 
 std::map<string, Interpreter::Variable> variables;
+std::map<string, Interpreter::Variable>::iterator variables_it;
 
 void _print(Node node)
 {
@@ -26,14 +27,14 @@ void _print(Node node)
     }
     else
     {
-      std::map<string, Interpreter::Variable>::iterator it = variables.find(node.parameters[i].id_name);
-      if (it->second.string_value.length() > 0)
+      variables_it = variables.find(node.parameters[i].id_name);
+      if (variables_it->second.string_value.length() > 0)
       {
-        cout << it->second.string_value << ' ';
+        cout << variables_it->second.string_value << ' ';
       }
       else
       {
-        cout << it->second.number_value << ' ';
+        cout << variables_it->second.number_value << ' ';
       }
     }
   }
@@ -42,16 +43,74 @@ void _print(Node node)
 
 void Interpreter::_if(Node node)
 {
-  int left = std::stoi(node.condition.left.value);
-  int right = std::stoi(node.condition.right.value);
+  string left_string;
+  string right_string;
+  int left;
+  int right;
+
+  if (node.condition.left.value.substr(0, 1) == "\"" && node.condition.left.type == Types::lit)
+  {
+    left_string = node.condition.left.value.substr(1, node.condition.left.value.length() - 2);
+  }
+  else if (!is_number(node.condition.left.value))
+  {
+    variables_it = variables.find(node.condition.left.value);
+    left = variables_it->second.number_value;
+  }
+  else
+  {
+    left = std::stoi(node.condition.left.value);
+  }
+
+  if (node.condition.right.value.substr(0, 1) == "\"" && node.condition.right.type == Types::lit)
+  {
+    right_string = node.condition.right.value.substr(1, node.condition.right.value.length() - 2);
+  }
+  else if (!is_number(node.condition.right.value))
+  {
+    variables_it = variables.find(node.condition.right.value);
+    right = variables_it->second.number_value;
+  }
+  else
+  {
+    right = std::stoi(node.condition.right.value);
+  }
+
   string op = node.condition.op.value;
 
   if (op == ">")
   {
+    if (left > right)
+    {
+      for (int i = 0; i < node.then.nodes.size(); i++)
+      {
+        interpret(node.then.nodes[i]);
+      }
+    }
   }
   else if (op == "<")
   {
     if (left < right)
+    {
+      for (int i = 0; i < node.then.nodes.size(); i++)
+      {
+        interpret(node.then.nodes[i]);
+      }
+    }
+  }
+  else if (op == "==")
+  {
+    if (left_string.length() > 0)
+    {
+      if (left_string == right_string)
+      {
+        for (int i = 0; i < node.then.nodes.size(); i++)
+        {
+          interpret(node.then.nodes[i]);
+        }
+      }
+    }
+    else if (left == right)
     {
       for (int i = 0; i < node.then.nodes.size(); i++)
       {

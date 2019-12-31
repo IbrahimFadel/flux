@@ -252,7 +252,6 @@ Node create_function_call_node(vector<Token> tokens, int i)
     {
       break;
     }
-    // cout << tokens[j].value << endl;
     if (comma % 2 == 0)
     {
       if (tokens[j].value.substr(0, 1) == "\"" || is_number(tokens[j].value))
