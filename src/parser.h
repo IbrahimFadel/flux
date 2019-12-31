@@ -16,8 +16,8 @@ struct Then;
 
 struct Position
 {
-  int line_number;
-  int line_position;
+  int line_number = -1;
+  int line_position = -1;
 };
 
 enum Node_Types
@@ -32,7 +32,8 @@ enum Node_Types
   eol = 7,
   function_call = 8,
   lit = 9,
-  let = 10
+  let = 10,
+  id = 11
 };
 
 struct Condition
@@ -77,6 +78,7 @@ struct Node
   string variable_name;
   Parser::Number variable_value_number;
   Parser::String variable_value_string;
+  string id_name;
 };
 
 struct Tree
@@ -156,6 +158,11 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
       os << node.variable_value_number.value << std::endl;
     }
   }
+  else if (node.type == Parser::Node_Types::id)
+  {
+    os << "IDENTIFIER: " << node.id_name << std::endl;
+  }
+
   return os;
 }
 

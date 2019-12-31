@@ -7,9 +7,21 @@ using namespace Parser;
 
 namespace Interpreter
 {
+
+struct Variable
+{
+  int number_value;
+  string string_value;
+};
+
 void _while(Node node);
 void _if(Node node);
+void let(Node node);
 } // namespace Interpreter
+
+// inline bool operator<(const Variable &var) const
+// {
+// }
 
 void interpret(Node node);
 void run(Tree ast);

@@ -48,7 +48,7 @@ void print_ast(Tree ast)
 
 int main(int argc, char **argv)
 {
-  cout << endl;
+  // cout << endl;
   char path[PATH_MAX];
 
   if (argc > 1)
@@ -64,13 +64,13 @@ int main(int argc, char **argv)
   vector<string> input = get_file_input(path);
   vector<Token> tokens = generate_tokens(input);
 
-  Tree ast = generate_ast(tokens);
-
-  run(ast);
-
   // print_tokens(tokens);
 
+  Tree ast = generate_ast(tokens);
+
   // print_ast(ast);
+
+  run(ast);
 
   return 0;
 }

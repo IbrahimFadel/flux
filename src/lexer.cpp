@@ -89,7 +89,7 @@ vector<Token> generate_tokens(vector<string> input)
           token += c;
           continue;
         }
-        if (token.length() > 1)
+        if (token.length() > 0)
         {
           tokens.push_back(create_token(Types::id, token, line_position - token.length()));
           tokens.push_back(create_token(Types::sep, ",", line_position - token.length()));
@@ -104,7 +104,7 @@ vector<Token> generate_tokens(vector<string> input)
           token += c;
           continue;
         }
-        if (token.length() > 1)
+        if (token.length() > 0)
         {
           tokens.push_back(create_token(Types::id, token.substr(0, token.length()), line_position - token.length()));
           tokens.push_back(create_token(Types::sep, ")", line_position - token.length()));

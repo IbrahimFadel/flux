@@ -226,6 +226,16 @@ Node create_literal_node(Token token)
   return literal_node;
 }
 
+Node create_identifier_node(Token token)
+{
+  Node identifier_node;
+
+  identifier_node.type = Node_Types::id;
+  identifier_node.id_name = token.value;
+
+  return identifier_node;
+}
+
 Node create_function_call_node(vector<Token> tokens, int i)
 {
   Node function_call_node;
@@ -242,9 +252,18 @@ Node create_function_call_node(vector<Token> tokens, int i)
     {
       break;
     }
+    // cout << tokens[j].value << endl;
     if (comma % 2 == 0)
     {
-      param = create_literal_node(tokens[j]);
+      if (tokens[j].value.substr(0, 1) == "\"" || is_number(tokens[j].value))
+      {
+        param = create_literal_node(tokens[j]);
+      }
+      else
+      {
+        param = create_identifier_node(tokens[j]);
+      }
+
       parameters.push_back(param);
     }
     comma++;
@@ -255,26 +274,6 @@ Node create_function_call_node(vector<Token> tokens, int i)
 
   return function_call_node;
 }
-
-// Node create_let_node(vector<Token> tokens, int i)
-// {
-//   Node let_node;
-
-//   let_node.type = Node_Types::let;
-
-//   let_node.variable_name = tokens[i + 1].value;
-
-//   Node parent;
-//   Node value = check_token(tokens, i + 3, &parent);
-//   let_node.variable_value = &value;
-
-//   // let_node.variable_value-
-
-//   // std::string test = "mytest";
-//   // let_node.variable_value->string_value = test;
-
-//   return let_node;
-// }
 
 Node create_let_node(vector<Token> tokens, int i)
 {
@@ -397,16 +396,11 @@ Tree generate_ast(vector<Token> tokens)
     token = tokens[i];
 
     node = check_token(tokens, i, &parent);
-    // cout << node.string_value << endl;
-    // cout << node.variable_value->string_value << endl;
     ast.nodes.push_back(node);
     skip = node.skip;
 
   end:;
   }
-
-  // cout << ast.nodes[0].variable_name << endl;
-  // cout << ast.nodes[0].variable_value->type << endl;
 
   return ast;
 }
