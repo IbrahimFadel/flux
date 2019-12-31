@@ -1,6 +1,7 @@
 let x = 100;
 let word = "hey";
+let other_word = "hey";
 
-while(x < 101) {
-  print("less");
+if("hey" == word) {
+  print("if is true");
 }

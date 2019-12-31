@@ -55,7 +55,14 @@ bool condition_true(Token left, Token op, Token right)
   else if (!is_number(left.value))
   {
     variables_it = variables.find(left.value);
-    left_number = variables_it->second.number_value;
+    if (!is_number(variables_it->second.string_value))
+    {
+      left_string = variables_it->second.string_value;
+    }
+    else
+    {
+      left_number = variables_it->second.number_value;
+    }
   }
   else
   {
@@ -69,8 +76,14 @@ bool condition_true(Token left, Token op, Token right)
   else if (!is_number(right.value))
   {
     variables_it = variables.find(right.value);
-    //! assumes it's a number
-    right_number = variables_it->second.number_value;
+    if (!is_number(variables_it->second.string_value))
+    {
+      right_string = variables_it->second.string_value;
+    }
+    else
+    {
+      right_number = variables_it->second.number_value;
+    }
   }
   else
   {
