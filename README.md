@@ -121,4 +121,4 @@ SEPERATOR: }
 
 ### Interpereter
 
-TODO
+So far, i've implimented while loops, if statements(pretty hard coded), and print statements(print string/int literals, or variables).
