@@ -121,4 +121,6 @@ SEPERATOR: }
 
 ### Interpereter
 
-So far, i've implimented while loops, if statements(pretty hard coded), and print statements(print string/int literals, or variables).
+So far, i've implimented while loops, if statements, and print statements(print string/int literals, or variables).
+
+Variables can be reassigned
