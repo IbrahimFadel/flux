@@ -39,9 +39,6 @@ enum Node_Types
 
 struct Condition
 {
-  Token left;
-  Token op;
-  Token right;
   vector<Token> lefts;
   vector<Token> ops;
   vector<Token> rights;
@@ -133,7 +130,12 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   else if (node.type == Parser::Node_Types::_if)
   {
     os << "IF STATEMENT: " << std::endl;
-    os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
+    os << "CONDITION(s): " << std::endl;
+    for (int i = 0; i < node.condition.lefts.size(); i++)
+    {
+      os << node.condition.lefts[i].value << ' ' << node.condition.ops[i].value << ' ' << node.condition.rights[i].value << std::endl;
+    }
+    // os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
     os << "THEN: " << std::endl;
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
@@ -144,7 +146,12 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   else if (node.type == Parser::Node_Types::_while)
   {
     os << "WHILE LOOP: " << std::endl;
-    os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
+    os << "CONDITION(s): " << std::endl;
+    for (int i = 0; i < node.condition.lefts.size(); i++)
+    {
+      os << node.condition.lefts[i].value << ' ' << node.condition.ops[i].value << ' ' << node.condition.rights[i].value << std::endl;
+    }
+    // os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
     os << "THEN: " << std::endl;
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
