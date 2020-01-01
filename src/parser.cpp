@@ -104,6 +104,55 @@ Node create_if_node(vector<Token> tokens, int i)
 {
   Node if_node;
   if_node.type = Node_Types::_if;
+
+  vector<Token> lefts;
+  vector<Token> ops;
+  vector<Token> rights;
+  vector<Token> condition_seperators;
+  int condition_counter = 0;
+  for (int j = i + 2; j < tokens.size(); j++)
+  {
+    if (tokens[j].value == "&&" || tokens[j].value == "||")
+    {
+      condition_counter = 0;
+      condition_seperators.push_back(tokens[j]);
+      continue;
+    }
+    if (tokens[j].value == ")" && tokens[j].type == Types::sep)
+    {
+      break;
+    }
+
+    if (condition_counter % 3 == 0)
+    {
+      lefts.push_back(tokens[j]);
+    }
+    else if (condition_counter % 2 == 0)
+    {
+      rights.push_back(tokens[j]);
+    }
+    else if (condition_counter % 1 == 0)
+    {
+      ops.push_back(tokens[j]);
+    }
+
+    condition_counter++;
+  }
+
+  if_node.condition.lefts = lefts;
+  if_node.condition.ops = ops;
+  if_node.condition.rights = rights;
+  if_node.condition.condition_seperators = condition_seperators;
+
+  // for (int j = 0; j < lefts.size(); j++)
+  // {
+  //   cout << lefts[j].value << ' ' << ops[j].value << ' ' << rights[j].value << ' ' << endl;
+  // }
+  // for (int j = 0; j < condition_seperators.size(); j++)
+  // {
+  //   cout << condition_seperators[j].value << endl;
+  // }
+
   if_node.condition.left = tokens[i + 2];
   if_node.condition.op = tokens[i + 3];
   if_node.condition.right = tokens[i + 4];

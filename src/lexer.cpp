@@ -195,8 +195,15 @@ vector<Token> generate_tokens(vector<string> input)
         token.clear();
         continue;
       }
-      else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==")
+      else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==" || token == "%" || token == "&&" || token == "||")
       {
+        if (token == "<" || token == ">")
+        {
+          if (line[j + 1] == '=')
+          {
+            continue;
+          }
+        }
         tokens.push_back(create_token(Types::op, token, line_position));
         token.clear();
         continue;

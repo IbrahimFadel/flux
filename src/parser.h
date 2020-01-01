@@ -42,6 +42,10 @@ struct Condition
   Token left;
   Token op;
   Token right;
+  vector<Token> lefts;
+  vector<Token> ops;
+  vector<Token> rights;
+  vector<Token> condition_seperators;
 };
 
 struct Then
@@ -170,16 +174,16 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
     // for (int i = 0; i < node.assignment_values.size(); i++)
     // {
 
-      // if(node.assignment_values[i].id_name.length() > )
-      // os << node.assignment_values[i].string_value << ' ' << node.assignment_values[i].number_value << std::endl;
-      // if (node.assignment_values[i].string_value.length() > 0)
-      // {
-      //   os << node.assignment_values[i].string_value;
-      // }
-      // else
-      // {
-      //   os << node.assignment_values[i].number_value;
-      // }
+    // if(node.assignment_values[i].id_name.length() > )
+    // os << node.assignment_values[i].string_value << ' ' << node.assignment_values[i].number_value << std::endl;
+    // if (node.assignment_values[i].string_value.length() > 0)
+    // {
+    //   os << node.assignment_values[i].string_value;
+    // }
+    // else
+    // {
+    //   os << node.assignment_values[i].number_value;
+    // }
     // }
     // os << std::endl;
   }

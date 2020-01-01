@@ -41,91 +41,178 @@ void _print(Node node)
   cout << endl;
 };
 
-bool condition_true(Token left, Token op, Token right)
+bool condition_true(Condition condition)
 {
   string left_string;
   string right_string;
   int left_number;
   int right_number;
 
-  if (left.value.substr(0, 1) == "\"" && left.type == Types::lit)
-  {
-    left_string = left.value.substr(1, left.value.length() - 2);
-  }
-  else if (!is_number(left.value))
-  {
-    variables_it = variables.find(left.value);
-    if (variables_it->second.string_value.length() > 0)
-    {
-      left_string = variables_it->second.string_value;
-    }
-    else
-    {
-      left_number = variables_it->second.number_value;
-    }
-  }
-  else
-  {
-    left_number = std::stoi(left.value);
-  }
+  vector<bool> condition_returns;
 
-  if (right.value.substr(0, 1) == "\"" && right.type == Types::lit)
+  for (int i = 0; i < condition.lefts.size(); i++)
   {
-    right_string = right.value.substr(1, right.value.length() - 2);
-  }
-  else if (!is_number(right.value))
-  {
-    variables_it = variables.find(right.value);
-    if (variables_it->second.string_value.length() > 0)
-    {
-      right_string = variables_it->second.string_value;
-    }
-    else
-    {
-      right_number = variables_it->second.number_value;
-    }
-  }
-  else
-  {
-    right_number = std::stoi(right.value);
-  }
+    Token left = condition.lefts[i];
+    Token right = condition.rights[i];
+    Token op = condition.ops[i];
 
-  if (op.value == ">")
-  {
-    if (left_number > right_number)
+    if (left.value.substr(0, 1) == "\"" && left.type == Types::lit)
     {
-      return true;
+      left_string = left.value.substr(1, left.value.length() - 2);
     }
-  }
-  else if (op.value == "<")
-  {
-    if (left_number < right_number)
+    else if (!is_number(left.value))
     {
-      return true;
-    }
-  }
-  else if (op.value == "==")
-  {
-    if (left_string.length() > 0)
-    {
-      if (left_string == right_string)
+      variables_it = variables.find(left.value);
+      if (variables_it->second.string_value.length() > 0)
       {
-        return true;
+        left_string = variables_it->second.string_value;
+      }
+      else
+      {
+        left_number = variables_it->second.number_value;
       }
     }
-    else if (left_number == right_number)
+    else
     {
-      return true;
+      left_number = std::stoi(left.value);
+    }
+
+    if (right.value.substr(0, 1) == "\"" && right.type == Types::lit)
+    {
+      right_string = right.value.substr(1, right.value.length() - 2);
+    }
+    else if (!is_number(right.value))
+    {
+      variables_it = variables.find(right.value);
+      if (variables_it->second.string_value.length() > 0)
+      {
+        right_string = variables_it->second.string_value;
+      }
+      else
+      {
+        right_number = variables_it->second.number_value;
+      }
+    }
+    else
+    {
+      right_number = std::stoi(right.value);
+    }
+
+    if (op.value == ">")
+    {
+      if (left_number > right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
+    else if (op.value == "<")
+    {
+      if (left_number < right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
+    else if (op.value == "==")
+    {
+      if (left_string.length() > 0)
+      {
+        if (left_string == right_string)
+        {
+          condition_returns.push_back(true);
+        }
+        else
+        {
+          condition_returns.push_back(false);
+        }
+      }
+      else if (left_number == right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
+    else if (op.value == ">=")
+    {
+      if (left_number >= right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
+    else if (op.value == "<=")
+    {
+      if (left_number <= right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
+    else
+    {
+      condition_returns.push_back(false);
     }
   }
 
-  return false;
+  vector<bool> evaluate_returns;
+  for (int j = 0; j < condition.condition_seperators.size(); j++)
+  {
+    Token seperator = condition.condition_seperators[j];
+    if (seperator.value == "&&")
+    {
+      if (condition_returns[j] == true && condition_returns[j + 1] == true)
+      {
+        evaluate_returns.push_back(true);
+      }
+      else
+      {
+        evaluate_returns.push_back(false);
+      }
+    }
+    else if (seperator.value == "||")
+    {
+      if (condition_returns[j] == true || condition_returns[j + 1] == true)
+      {
+        evaluate_returns.push_back(true);
+      }
+      else
+      {
+        evaluate_returns.push_back(false);
+      }
+    }
+  }
+
+  for (int i = 0; i < evaluate_returns.size(); i++)
+  {
+    if (!evaluate_returns[i])
+    {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void Interpreter::_if(Node node)
 {
 
-  if (condition_true(node.condition.left, node.condition.op, node.condition.right))
+  if (condition_true(node.condition))
   {
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
@@ -136,7 +223,7 @@ void Interpreter::_if(Node node)
 
 void Interpreter::_while(Node node)
 {
-  while (condition_true(node.condition.left, node.condition.op, node.condition.right))
+  while (condition_true(node.condition))
   {
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
