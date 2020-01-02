@@ -186,7 +186,7 @@ Node create_if_node(vector<Token> tokens, int i)
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  int start_index = i + 3 + 11;
+  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size();
   for (int j = start_index; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)

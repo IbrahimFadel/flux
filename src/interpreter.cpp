@@ -170,37 +170,51 @@ bool condition_true(Condition condition)
     }
   }
 
-  vector<bool> evaluate_returns;
-  for (int j = 0; j < condition.condition_seperators.size(); j++)
+  if (condition.condition_seperators.size() > 0)
   {
-    Token seperator = condition.condition_seperators[j];
-    if (seperator.value == "&&")
+    vector<bool> evaluate_returns;
+    for (int j = 0; j < condition.condition_seperators.size(); j++)
     {
-      if (condition_returns[j] == true && condition_returns[j + 1] == true)
+      Token seperator = condition.condition_seperators[j];
+      if (seperator.value == "&&")
       {
-        evaluate_returns.push_back(true);
+        if (condition_returns[j] == true && condition_returns[j + 1] == true)
+        {
+          evaluate_returns.push_back(true);
+        }
+        else
+        {
+          evaluate_returns.push_back(false);
+        }
       }
-      else
+      else if (seperator.value == "||")
       {
-        evaluate_returns.push_back(false);
+        if (condition_returns[j] == true || condition_returns[j + 1] == true)
+        {
+          evaluate_returns.push_back(true);
+        }
+        else
+        {
+          evaluate_returns.push_back(false);
+        }
       }
     }
-    else if (seperator.value == "||")
+
+    for (int i = 0; i < evaluate_returns.size(); i++)
     {
-      if (condition_returns[j] == true || condition_returns[j + 1] == true)
+      if (!evaluate_returns[i])
       {
-        evaluate_returns.push_back(true);
-      }
-      else
-      {
-        evaluate_returns.push_back(false);
+        return false;
       }
     }
   }
-
-  for (int i = 0; i < evaluate_returns.size(); i++)
+  else
   {
-    if (!evaluate_returns[i])
+    if (condition_returns[0])
+    {
+      return true;
+    }
+    else
     {
       return false;
     }
