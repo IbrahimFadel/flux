@@ -150,6 +150,10 @@ vector<Token> generate_tokens(vector<string> input)
 
       if (isdigit(c))
       {
+        if (line[j - 1] == '-')
+        {
+          number += "-";
+        }
         for (int x = 0; x < line.length() - j; x++)
         {
           if (isdigit(line[j + x]))
@@ -200,6 +204,13 @@ vector<Token> generate_tokens(vector<string> input)
         if (token == "<" || token == ">")
         {
           if (line[j + 1] == '=')
+          {
+            continue;
+          }
+        }
+        else if (token == "-")
+        {
+          if (isdigit(line[j + 1]))
           {
             continue;
           }

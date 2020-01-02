@@ -25,9 +25,48 @@ Node create_while_node(vector<Token> tokens, int i)
 {
   Node while_node;
   while_node.type = Node_Types::_while;
-  while_node.condition.left = tokens[i + 2];
-  while_node.condition.op = tokens[i + 3];
-  while_node.condition.right = tokens[i + 4];
+  // while_node.condition.left = tokens[i + 2];
+  // while_node.condition.op = tokens[i + 3];
+  // while_node.condition.right = tokens[i + 4];
+
+  vector<Token> lefts;
+  vector<Token> ops;
+  vector<Token> rights;
+  vector<Token> condition_seperators;
+  int condition_counter = 0;
+  for (int j = i + 2; j < tokens.size(); j++)
+  {
+    if (tokens[j].value == "&&" || tokens[j].value == "||")
+    {
+      condition_counter = 0;
+      condition_seperators.push_back(tokens[j]);
+      continue;
+    }
+    if (tokens[j].value == ")" && tokens[j].type == Types::sep)
+    {
+      break;
+    }
+
+    if (condition_counter % 3 == 0)
+    {
+      lefts.push_back(tokens[j]);
+    }
+    else if (condition_counter % 2 == 0)
+    {
+      rights.push_back(tokens[j]);
+    }
+    else if (condition_counter % 1 == 0)
+    {
+      ops.push_back(tokens[j]);
+    }
+
+    condition_counter++;
+  }
+
+  while_node.condition.lefts = lefts;
+  while_node.condition.ops = ops;
+  while_node.condition.rights = rights;
+  while_node.condition.condition_seperators = condition_seperators;
 
   Position start_position;
   start_position.line_number = tokens[i + 6].line_number;
@@ -144,23 +183,11 @@ Node create_if_node(vector<Token> tokens, int i)
   if_node.condition.rights = rights;
   if_node.condition.condition_seperators = condition_seperators;
 
-  // for (int j = 0; j < lefts.size(); j++)
-  // {
-  //   cout << lefts[j].value << ' ' << ops[j].value << ' ' << rights[j].value << ' ' << endl;
-  // }
-  // for (int j = 0; j < condition_seperators.size(); j++)
-  // {
-  //   cout << condition_seperators[j].value << endl;
-  // }
-
-  if_node.condition.left = tokens[i + 2];
-  if_node.condition.op = tokens[i + 3];
-  if_node.condition.right = tokens[i + 4];
-
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  for (int j = i + 1; j < tokens.size(); j++)
+  int start_index = i + 3 + 11;
+  for (int j = start_index; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
     {
@@ -194,7 +221,7 @@ Node create_if_node(vector<Token> tokens, int i)
 
   Node node;
   int closed_curly_brackets_found = 0;
-  int skip = 6;
+  int skip = 0;
   int skipped = 0;
   for (int j = 0; j < then_tokens.size(); j++)
   {
@@ -266,7 +293,6 @@ Node create_literal_node(Token token)
   if (token.value.substr(0, 1) == "\"" && token.type == Types::lit)
   {
     literal_node.string_value = token.value;
-    // cout << literal_node.string_value << endl;
   }
   else if (is_number(token.value))
   {
@@ -319,7 +345,6 @@ Node create_function_call_node(vector<Token> tokens, int i)
   }
 
   function_call_node.parameters = parameters;
-  function_call_node.skip = parameters.size() + 2;
 
   return function_call_node;
 }
@@ -412,11 +437,12 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "if")
     {
       node = create_if_node(tokens, i);
-      node.skip = node.then.tokens.size();
+      node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size();
     }
     else if (tokens[i].value == "print")
     {
       node = create_function_call_node(tokens, i);
+      node.skip = node.parameters.size() + 3;
     }
     else if (tokens[i].value == "let")
     {
