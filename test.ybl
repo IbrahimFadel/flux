@@ -1,4 +1,6 @@
-let word = "hello";
-if(word == "hello" || "hhi" == "hi") {
-  print("True!");
+let x = 0;
+
+while(x < 5 && x >= 3) {
+  x = x + 1;
+  print(x);
 }

@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 
   Tree ast = generate_ast(tokens);
 
-  // print_ast(ast);
+  print_ast(ast);
 
   run(ast);
 

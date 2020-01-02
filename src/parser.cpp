@@ -25,9 +25,6 @@ Node create_while_node(vector<Token> tokens, int i)
 {
   Node while_node;
   while_node.type = Node_Types::_while;
-  // while_node.condition.left = tokens[i + 2];
-  // while_node.condition.op = tokens[i + 3];
-  // while_node.condition.right = tokens[i + 4];
 
   vector<Token> lefts;
   vector<Token> ops;
@@ -76,7 +73,9 @@ Node create_while_node(vector<Token> tokens, int i)
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  for (int j = i + 1; j < tokens.size(); j++)
+  //while(x < 5 && x >= 3) {
+  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size();
+  for (int j = start_index; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
     {
@@ -109,7 +108,7 @@ Node create_while_node(vector<Token> tokens, int i)
 
   Node node;
   int closed_curly_brackets_found = 0;
-  int skip = 6;
+  int skip = 0;
   int skipped = 0;
 
   /**
@@ -432,7 +431,7 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     if (tokens[i].value == "while")
     {
       node = create_while_node(tokens, i);
-      node.skip = node.then.tokens.size();
+      node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size();
     }
     else if (tokens[i].value == "if")
     {
