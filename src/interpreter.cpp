@@ -45,8 +45,10 @@ bool condition_true(Condition condition)
 {
   string left_string;
   string right_string;
+  string result_string;
   int left_number;
   int right_number;
+  int result_number;
 
   vector<bool> condition_returns;
 
@@ -55,6 +57,15 @@ bool condition_true(Condition condition)
     Token left = condition.lefts[i];
     Token right = condition.rights[i];
     Token op = condition.ops[i];
+    Token result;
+    Token result_operator;
+    bool result_exists = false;
+    if (condition.results.size() >= i)
+    {
+      result_exists = true;
+      result = condition.results[i];
+      result_operator = condition.results_operators[i];
+    }
 
     if (left.value.substr(0, 1) == "\"" && left.type == Types::lit)
     {
@@ -96,6 +107,33 @@ bool condition_true(Condition condition)
     else
     {
       right_number = std::stoi(right.value);
+    }
+
+    if(result_exists)
+    {
+      if(!is_number(result.value))
+      {
+        variables_it = variables.find(result.value);
+        if(variables_it->second.string_value.length() > 0)
+        {
+          result_string = variables_it->second.string_value;
+        }
+        else
+        {
+          result_number = variables_it->second.number_value;
+        }
+      }
+      else
+      {
+        if(result.value.substr(0, 1) == "\"")
+        {
+          result_string = result.value;
+        }
+        else
+        {
+          result_number = std::stoi(result.value);
+        }
+      }
     }
 
     if (op.value == ">")
@@ -162,6 +200,20 @@ bool condition_true(Condition condition)
       else
       {
         condition_returns.push_back(false);
+      }
+    }
+    else if(op.value == "/")
+    {
+      if(result_exists)
+      {
+        if(left_number / right_number == result_number)
+        {
+          condition_returns.push_back(true);
+        }
+        else
+        {
+          condition_returns.push_back(false);
+        }
       }
     }
     else
@@ -459,7 +511,6 @@ void Interpreter::assign(Node node)
   variables_it = variables.find(node.id_name);
   if (variables_it->second.string_value.length() > 0)
   {
-    // string val = node.assignment_values[0].string_value;
     string val = evaluate_string_expression(node);
     variables_it->second.string_value = val;
   }

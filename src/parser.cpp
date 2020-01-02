@@ -147,9 +147,27 @@ Node create_if_node(vector<Token> tokens, int i)
   vector<Token> ops;
   vector<Token> rights;
   vector<Token> condition_seperators;
+  vector<Token> results_operators;
+  vector<Token> results;
   int condition_counter = 0;
+
+  int skip_conditions = 0;
+  int skipped_conditions = 0;
+
   for (int j = i + 2; j < tokens.size(); j++)
   {
+    for (int x = 0; x < skip_conditions; x++)
+    {
+      if (skipped_conditions + 1 == skip_conditions)
+      {
+        skipped_conditions = 0;
+        skip_conditions = 0;
+        goto end_conditions;
+      }
+      skipped_conditions++;
+      goto end_conditions;
+    }
+
     if (tokens[j].value == "&&" || tokens[j].value == "||")
     {
       condition_counter = 0;
@@ -168,6 +186,12 @@ Node create_if_node(vector<Token> tokens, int i)
     else if (condition_counter % 2 == 0)
     {
       rights.push_back(tokens[j]);
+      if (tokens[j + 1].value == "==")
+      {
+        results_operators.push_back(tokens[j + 1]);
+        results.push_back(tokens[j + 2]);
+        skip_conditions = 2;
+      }
     }
     else if (condition_counter % 1 == 0)
     {
@@ -175,17 +199,21 @@ Node create_if_node(vector<Token> tokens, int i)
     }
 
     condition_counter++;
+
+  end_conditions:;
   }
 
   if_node.condition.lefts = lefts;
   if_node.condition.ops = ops;
   if_node.condition.rights = rights;
   if_node.condition.condition_seperators = condition_seperators;
+  if_node.condition.results = results;
+  if_node.condition.results_operators = results_operators;
 
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size();
+  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size() + results_operators.size() + results.size();
   for (int j = start_index; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
@@ -436,7 +464,7 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "if")
     {
       node = create_if_node(tokens, i);
-      node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size();
+      node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size() + node.condition.results_operators.size() + node.condition.results.size();
     }
     else if (tokens[i].value == "print")
     {

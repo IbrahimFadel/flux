@@ -42,6 +42,8 @@ struct Condition
   vector<Token> lefts;
   vector<Token> ops;
   vector<Token> rights;
+  vector<Token> results;
+  vector<Token> results_operators;
   vector<Token> condition_seperators;
 };
 
