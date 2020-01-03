@@ -1,4 +1,5 @@
 # yabl
+
 Yet Another Bad (Programming) Language
 
 This is my attempt at making a programming language.
@@ -9,24 +10,32 @@ Basically, i wan't to try to make something atleast somewhat functional, that's 
 
 ## Example yabl file
 
-```
-while(5 < 6) {
-  if(2 < 1) {
-    print("not gonna happen");
-  }
-  print("always gonna happen");
+```cpp
+let x = 0;
+let word = "rick astley";
+let other_word = "gonna give you up";
+
+while(x < 100) {
+  print(x);
+  x = x + 1;
+}
+
+if(word != other_word) {
+  print(word, "never", other_word);
 }
 ```
 
 ## Install
 
-```
+```bash
 git clone https://github.com/IbrahimFadel/yabl.git
 ```
-```
+
+```bash
 cd yabl
 ```
-```
+
+```bash
 make && make install
 ```
 
@@ -40,7 +49,7 @@ yabl file.ybl
 
 This example will be using the following as the input file:
 
-```
+```cpp
 let x = 0;
 while(x < 50) {
   if(x == 10) {
@@ -101,12 +110,12 @@ LET: x = 0
 
 ------ END NODE ------
 ------ NODE ------
-WHILE LOOP: 
+WHILE LOOP:
 CONDITION: x < 50
-THEN: 
-IF STATEMENT: 
+THEN:
+IF STATEMENT:
 CONDITION: x == 10
-THEN: 
+THEN:
 FUNCTION_CALL: print
 -- PARAMETERS --
 IDENTIFIER: x
@@ -133,6 +142,30 @@ SEPERATOR: }
 
 ### Interpereter
 
-So far, i've implimented while loops, if statements, and print statements(print string/int literals, or variables).
+Here are the nodes that are currently being handled:
 
-Variables can be reassigned
+```cpp
+switch (node.type)
+{
+  case Node_Types::function_call:
+    if (node.function_call_name == "print")
+    {
+      _print(node);
+    }
+    break;
+  case Node_Types::_while:
+    Interpreter::_while(node);
+    break;
+  case Node_Types::_if:
+    Interpreter::_if(node);
+    break;
+  case Node_Types::let:
+    Interpreter::let(node);
+    break;
+  case Node_Types::assign:
+    Interpreter::assign(node);
+    break;
+  default:
+    break;
+}
+```
