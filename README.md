@@ -41,6 +41,12 @@ warning("My warning message");
 ```python
 let in = input("Enter input: ");
 ```
+* String formatting
+```
+let time = "afternoon";
+let name = "Rick Astley";
+let phrase = f"Good {time}, {name}!";
+```
 
 ## Install
 
