@@ -46,29 +46,50 @@ void print_ast(Tree ast)
   }
 }
 
+void create_project(string name)
+{
+  string command = "mkdir -p " + name + "/src && touch " + name + "/{README.md,src/main.ybl} && echo '# New Yabl Project' >> " + name + "/README.md";
+  system(command.c_str());
+}
+
 int main(int argc, char **argv)
 {
-  // cout << endl;
   char path[PATH_MAX];
+  std::string new_project_name;
+  bool verbose = false;
 
   if (argc > 1)
   {
-    realpath(argv[1], path);
-  }
-  else
-  {
-    std::cerr << "Please supply input file" << endl;
-    return 0;
+    std::vector<std::string> args(argv, argv + argc);
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+      if (args[i] == "new")
+      {
+        new_project_name = args[i + 1];
+        create_project(new_project_name);
+        break;
+      }
+      else if (args[i] == "-v" || args[i] == "--verbose")
+      {
+        verbose = true;
+      }
+      else
+      {
+        realpath(argv[i], path);
+      }
+    }
   }
 
   vector<string> input = get_file_input(path);
   vector<Token> tokens = generate_tokens(input);
 
-  // print_tokens(tokens);
-
   Tree ast = generate_ast(tokens);
 
-  print_ast(ast);
+  if (verbose)
+  {
+    print_tokens(tokens);
+    print_ast(ast);
+  }
 
   run(ast);
 

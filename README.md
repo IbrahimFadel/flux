@@ -27,25 +27,38 @@ if(word != other_word) {
 
 ## Goals
 
-* Optional entry/exit functions
+- Optional entry/exit functions
+
 ```cpp
 #ENTRY my_entry_fn
 #EXIT my_exit_fn
 ```
-* Error/Warning logs
+
+- Error/Warning logs
+
 ```python
 error("My error message");
 warning("My warning message");
 ```
-* Easy input
+
+- Easy input
+
 ```python
 let in = input("Enter input: ");
 ```
-* String formatting
+
+- String formatting
+
 ```
 let time = "afternoon";
 let name = "Rick Astley";
 let phrase = f"Good {time}, {name}!";
+```
+
+- Maybe?? A project manager sort of thing - like cargo(rust-lang)
+
+```bash
+yabl new hello_word_project
 ```
 
 ## Install
