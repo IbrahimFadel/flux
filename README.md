@@ -25,6 +25,23 @@ if(word != other_word) {
 }
 ```
 
+## Goals
+
+* Optional entry/exit functions
+```cpp
+#ENTRY my_entry_fn
+#EXIT my_exit_fn
+```
+* Error/Warning logs
+```python
+error("My error message");
+warning("My warning message");
+```
+* Easy input
+```python
+let in = input("Enter input: ");
+```
+
 ## Install
 
 ```bash
