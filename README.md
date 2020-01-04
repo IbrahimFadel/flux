@@ -21,7 +21,7 @@ while(x < 100) {
 }
 
 if(word != other_word) {
-  print(word, "never", other_word);
+  print(word, "is never", other_word);
 }
 ```
 
@@ -36,7 +36,7 @@ cd yabl
 ```
 
 ```bash
-make && make install
+mkdir -p build/parts && make && make install
 ```
 
 ## Usage
