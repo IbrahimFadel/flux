@@ -30,9 +30,27 @@ Node create_while_node(vector<Token> tokens, int i)
   vector<Token> ops;
   vector<Token> rights;
   vector<Token> condition_seperators;
+  vector<Token> results_operators;
+  vector<Token> results;
   int condition_counter = 0;
+
+  int skip_conditions = 0;
+  int skipped_conditions = 0;
+
   for (int j = i + 2; j < tokens.size(); j++)
   {
+    for (int x = 0; x < skip_conditions; x++)
+    {
+      if (skipped_conditions + 1 == skip_conditions)
+      {
+        skipped_conditions = 0;
+        skip_conditions = 0;
+        goto end_conditions;
+      }
+      skipped_conditions++;
+      goto end_conditions;
+    }
+
     if (tokens[j].value == "&&" || tokens[j].value == "||")
     {
       condition_counter = 0;
@@ -51,6 +69,12 @@ Node create_while_node(vector<Token> tokens, int i)
     else if (condition_counter % 2 == 0)
     {
       rights.push_back(tokens[j]);
+      if (tokens[j + 1].value == "==")
+      {
+        results_operators.push_back(tokens[j + 1]);
+        results.push_back(tokens[j + 2]);
+        skip_conditions = 2;
+      }
     }
     else if (condition_counter % 1 == 0)
     {
@@ -58,23 +82,21 @@ Node create_while_node(vector<Token> tokens, int i)
     }
 
     condition_counter++;
+
+  end_conditions:;
   }
 
   while_node.condition.lefts = lefts;
   while_node.condition.ops = ops;
   while_node.condition.rights = rights;
   while_node.condition.condition_seperators = condition_seperators;
-
-  Position start_position;
-  start_position.line_number = tokens[i + 6].line_number;
-  start_position.line_position = tokens[i + 6].line_position;
-  while_node.then.start = start_position;
+  while_node.condition.results = results;
+  while_node.condition.results_operators = results_operators;
 
   int open_curly_brackets = 0;
   int closed_curly_brackets = 0;
   vector<Token> then_tokens;
-  //while(x < 5 && x >= 3) {
-  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size();
+  int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size() + results_operators.size() + results.size();
   for (int j = start_index; j < tokens.size(); j++)
   {
     if (tokens[j].value == "{" && tokens[j].type == Types::sep)
@@ -85,6 +107,7 @@ Node create_while_node(vector<Token> tokens, int i)
     {
       closed_curly_brackets++;
     }
+
     then_tokens.push_back(tokens[j]);
 
     if (open_curly_brackets == closed_curly_brackets && open_curly_brackets != 0)
@@ -110,11 +133,6 @@ Node create_while_node(vector<Token> tokens, int i)
   int closed_curly_brackets_found = 0;
   int skip = 0;
   int skipped = 0;
-
-  /**
-   *  Make sure we skip over the tokens inside the 'Then' of any nodes it may find
-   *  Those tokens should be children of the node itself
-  */
   for (int j = 0; j < then_tokens.size(); j++)
   {
     for (int x = 0; x < skip; x++)
@@ -134,8 +152,113 @@ Node create_while_node(vector<Token> tokens, int i)
 
   end:;
   }
-
   return while_node;
+  // int condition_counter = 0;
+  // for (int j = i + 2; j < tokens.size(); j++)
+  // {
+  //   if (tokens[j].value == "&&" || tokens[j].value == "||")
+  //   {
+  //     condition_counter = 0;
+  //     condition_seperators.push_back(tokens[j]);
+  //     continue;
+  //   }
+  //   if (tokens[j].value == ")" && tokens[j].type == Types::sep)
+  //   {
+  //     break;
+  //   }
+
+  //   if (condition_counter % 3 == 0)
+  //   {
+  //     lefts.push_back(tokens[j]);
+  //   }
+  //   else if (condition_counter % 2 == 0)
+  //   {
+  //     rights.push_back(tokens[j]);
+  //   }
+  //   else if (condition_counter % 1 == 0)
+  //   {
+  //     ops.push_back(tokens[j]);
+  //   }
+
+  //   condition_counter++;
+  // }
+
+  // while_node.condition.lefts = lefts;
+  // while_node.condition.ops = ops;
+  // while_node.condition.rights = rights;
+  // while_node.condition.condition_seperators = condition_seperators;
+
+  // Position start_position;
+  // start_position.line_number = tokens[i + 6].line_number;
+  // start_position.line_position = tokens[i + 6].line_position;
+  // while_node.then.start = start_position;
+
+  // int open_curly_brackets = 0;
+  // int closed_curly_brackets = 0;
+  // vector<Token> then_tokens;
+  // //while(x < 5 && x >= 3) {
+  // int start_index = i + 3 + lefts.size() + rights.size() + ops.size() + condition_seperators.size();
+  // for (int j = start_index; j < tokens.size(); j++)
+  // {
+  //   if (tokens[j].value == "{" && tokens[j].type == Types::sep)
+  //   {
+  //     open_curly_brackets++;
+  //   }
+  //   else if (tokens[j].value == "}" && tokens[j].type == Types::sep)
+  //   {
+  //     closed_curly_brackets++;
+  //   }
+  //   then_tokens.push_back(tokens[j]);
+
+  //   if (open_curly_brackets == closed_curly_brackets && open_curly_brackets != 0)
+  //   {
+  //     break;
+  //   }
+  // }
+
+  // if (open_curly_brackets != closed_curly_brackets)
+  // {
+  //   std::cerr << "Are you missing a '}' ?" << endl;
+  //   return while_node;
+  // }
+
+  // while_node.then.tokens = then_tokens;
+
+  // Position end_position;
+  // end_position.line_number = then_tokens[then_tokens.size() - 1].line_number;
+  // end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
+  // while_node.then.end = end_position;
+
+  // Node node;
+  // int closed_curly_brackets_found = 0;
+  // int skip = 0;
+  // int skipped = 0;
+
+  // /**
+  //  *  Make sure we skip over the tokens inside the 'Then' of any nodes it may find
+  //  *  Those tokens should be children of the node itself
+  // */
+  // for (int j = 0; j < then_tokens.size(); j++)
+  // {
+  //   for (int x = 0; x < skip; x++)
+  //   {
+  //     if (skipped + 1 == skip)
+  //     {
+  //       skipped = 0;
+  //       skip = 0;
+  //       goto end;
+  //     }
+  //     skipped++;
+  //     goto end;
+  //   }
+  //   node = check_token(then_tokens, j, &while_node);
+  //   while_node.then.nodes.push_back(node);
+  //   skip = node.skip;
+
+  // end:;
+  // }
+
+  // return while_node;
 }
 
 Node create_if_node(vector<Token> tokens, int i)

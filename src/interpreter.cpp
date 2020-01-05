@@ -60,7 +60,7 @@ bool condition_true(Condition condition)
     Token result;
     Token result_operator;
     bool result_exists = false;
-    if (condition.results.size() >= i)
+    if (condition.results.size() > 0)
     {
       result_exists = true;
       result = condition.results[i];
@@ -109,12 +109,12 @@ bool condition_true(Condition condition)
       right_number = std::stoi(right.value);
     }
 
-    if(result_exists)
+    if (result_exists)
     {
-      if(!is_number(result.value))
+      if (!is_number(result.value))
       {
         variables_it = variables.find(result.value);
-        if(variables_it->second.string_value.length() > 0)
+        if (variables_it->second.string_value.length() > 0)
         {
           result_string = variables_it->second.string_value;
         }
@@ -125,7 +125,7 @@ bool condition_true(Condition condition)
       }
       else
       {
-        if(result.value.substr(0, 1) == "\"")
+        if (result.value.substr(0, 1) == "\"")
         {
           result_string = result.value;
         }
@@ -202,11 +202,25 @@ bool condition_true(Condition condition)
         condition_returns.push_back(false);
       }
     }
-    else if(op.value == "/")
+    else if (op.value == "/")
     {
-      if(result_exists)
+      if (result_exists)
       {
-        if(left_number / right_number == result_number)
+        if (left_number / right_number == result_number)
+        {
+          condition_returns.push_back(true);
+        }
+        else
+        {
+          condition_returns.push_back(false);
+        }
+      }
+    }
+    else if (op.value == "%")
+    {
+      if (result_exists)
+      {
+        if (left_number % right_number == result_number)
         {
           condition_returns.push_back(true);
         }

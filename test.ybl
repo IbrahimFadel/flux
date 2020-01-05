@@ -1,3 +1,14 @@
-if(5 / 5 == 1 && 1 > 2) {
-  print("hello");
+let x = 0;
+
+while(x < 50) {
+  if(x % 3 == 0 && x % 5 == 0) {
+    print("fizz buzz:", x);
+  }
+  if(x % 3 == 0) {
+    print("fizz:", x);
+  }
+  if(x % 5 == 0) {
+    print("buzz:", x);
+  }
+  x = x + 1;
 }
