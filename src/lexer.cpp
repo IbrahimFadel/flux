@@ -33,7 +33,7 @@ vector<Token> generate_tokens(vector<string> input)
   int chars_skipped = 0;
   int number_chars_skipped = 0;
   bool is_string = false;
-  string keywords[11] = {"fn", "main", "let", "print", "int", "float", "string", "object", "class", "while", "if"};
+  string keywords[12] = {"fn", "main", "let", "print", "int", "float", "string", "object", "class", "while", "if", "continue"};
 
   for (int i = 0; i < input.size(); i++)
   {
