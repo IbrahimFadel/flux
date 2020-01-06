@@ -1,14 +1,9 @@
 let x = 0;
 
-while(x < 50) {
-  if(x % 3 == 0 && x % 5 == 0) {
-    print("fizz buzz:", x);
-  }
+while(x < 6) {
   if(x % 3 == 0) {
-    print("fizz:", x);
+    continue;
   }
-  if(x % 5 == 0) {
-    print("buzz:", x);
-  }
+  print("fizz:", x);
   x = x + 1;
 }

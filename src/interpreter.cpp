@@ -13,33 +13,186 @@ using Parser::Node_Types;
 std::map<string, Interpreter::Variable> variables;
 std::map<string, Interpreter::Variable>::iterator variables_it;
 
-void _print(Node node)
+string evaluate_string_expression(Node node)
 {
-  for (int i = 0; i < node.parameters.size(); i++)
+  string val = "";
+  for (int i = 0; i < node.assignment_values.size(); i++)
   {
-    if (node.parameters[i].string_value.length() > 0)
+    if (node.assignment_values[i].string_value.length() > 0)
     {
-      cout << node.parameters[i].string_value.substr(1, node.parameters[i].string_value.length() - 2) << ' ';
+      node.assignment_values[i].string_value = node.assignment_values[i].string_value.substr(1, node.assignment_values[i].string_value.length() - 2);
     }
-    else if (node.parameters[i].number_value != -9999)
+  }
+  for (int i = 0; i < node.assignment_values.size(); i++)
+  {
+    if (node.assignment_values.size() == 1)
     {
-      cout << node.parameters[i].number_value << ' ';
+      return node.assignment_values[0].string_value;
     }
-    else
+    if (node.assignment_values[i + 1].op == "+" || node.assignment_values[i + 1].op == "-")
     {
-      variables_it = variables.find(node.parameters[i].id_name);
-      if (variables_it->second.string_value.length() > 0)
+      if (val.length() == 0)
       {
-        cout << variables_it->second.string_value << ' ';
+        val = node.assignment_values[i].string_value + node.assignment_values[i + 2].string_value;
       }
       else
       {
-        cout << variables_it->second.number_value << ' ';
+        val = val + node.assignment_values[i + 2].string_value;
       }
     }
   }
-  cout << endl;
-};
+
+  return val;
+}
+
+int evaluate_expression(Node node)
+{
+  vector<int> vals;
+  for (int i = 0; i < node.assignment_values.size(); i++)
+  {
+    Node value = node.assignment_values[i];
+    if (value.op == "+" || value.op == "-")
+    {
+      if (node.assignment_values[i + 2].op == "*" || node.assignment_values[i + 2].op == "/")
+      {
+        int a, b, c;
+        if (node.assignment_values[i - 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i - 1].id_name);
+          a = variables_it->second.number_value;
+        }
+        else
+        {
+          a = node.assignment_values[i - 1].number_value;
+        }
+        if (node.assignment_values[i + 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 1].id_name);
+          b = variables_it->second.number_value;
+        }
+        else
+        {
+          b = node.assignment_values[i + 1].number_value;
+        }
+        if (node.assignment_values[i + 3].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 3].id_name);
+          c = variables_it->second.number_value;
+        }
+        else
+        {
+          c = node.assignment_values[i + 3].number_value;
+        }
+
+        if (vals.size() > 0)
+        {
+          if (node.assignment_values[i + 2].op == "*")
+          {
+            if (value.op == "+")
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] + b * c;
+            }
+            else
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] - b * c;
+            }
+          }
+          else
+          {
+            if (value.op == "+")
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] + b / c;
+            }
+            else
+            {
+              vals[vals.size() - 1] = vals[vals.size() - 1] - b / c;
+            }
+          }
+
+          continue;
+        }
+        int val;
+        if (node.assignment_values[i + 2].op == "*")
+        {
+          if (value.op == "+")
+          {
+            val = a + b * c;
+          }
+          else
+          {
+            val = a - b * c;
+          }
+        }
+        else
+        {
+          if (value.op == "+")
+          {
+            val = a + b / c;
+          }
+          else
+          {
+            val = a - b / c;
+          }
+        }
+
+        vals.push_back(val);
+      }
+      else
+      {
+        int a, b;
+        if (node.assignment_values[i - 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i - 1].id_name);
+          a = variables_it->second.number_value;
+        }
+        else
+        {
+          a = node.assignment_values[i - 1].number_value;
+        }
+        if (node.assignment_values[i + 1].id_name.length() > 0)
+        {
+          variables_it = variables.find(node.assignment_values[i + 1].id_name);
+          b = variables_it->second.number_value;
+        }
+        else
+        {
+          b = node.assignment_values[i + 1].number_value;
+        }
+
+        if (vals.size() > 0)
+        {
+          if (value.op == "+")
+          {
+            vals[vals.size() - 1] = vals[vals.size() - 1] + b;
+          }
+          else
+          {
+            vals[vals.size() - 1] = vals[vals.size() - 1] - b;
+          }
+
+          continue;
+        }
+
+        int val;
+        if (value.op == "+")
+        {
+          val = a + b;
+        }
+        else
+        {
+          val = a - b;
+        }
+
+        vals.push_back(val);
+      }
+    }
+    else if (value.op == "*")
+    {
+    }
+  }
+
+  return vals[0];
+}
 
 bool condition_true(Condition condition)
 {
@@ -289,25 +442,73 @@ bool condition_true(Condition condition)
   return true;
 }
 
-void Interpreter::_if(Node node)
+void _print(Node node)
+{
+  for (int i = 0; i < node.parameters.size(); i++)
+  {
+    if (node.parameters[i].string_value.length() > 0)
+    {
+      cout << node.parameters[i].string_value.substr(1, node.parameters[i].string_value.length() - 2) << ' ';
+    }
+    else if (node.parameters[i].number_value != -9999)
+    {
+      cout << node.parameters[i].number_value << ' ';
+    }
+    else
+    {
+      variables_it = variables.find(node.parameters[i].id_name);
+      if (variables_it->second.string_value.length() > 0)
+      {
+        cout << variables_it->second.string_value << ' ';
+      }
+      else
+      {
+        cout << variables_it->second.number_value << ' ';
+      }
+    }
+  }
+  cout << endl;
+};
+
+void Interpreter::_if(Node node, Node &parent)
 {
 
   if (condition_true(node.condition))
   {
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
-      interpret(node.then.nodes[i]);
+      if (parent.type == -1)
+      {
+        interpret(node.then.nodes, i, node);
+      }
+      else
+      {
+        interpret(node.then.nodes, i, parent);
+      }
     }
   }
 }
 
-void Interpreter::_while(Node node)
+void Interpreter::_while(Node node, Node &parent)
 {
   while (condition_true(node.condition))
   {
+    cout << node.should_continue << " <-- test" << endl;
+    if (node.should_continue)
+    {
+      node.should_continue = false;
+      continue;
+    }
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
-      interpret(node.then.nodes[i]);
+      if (parent.type == -1)
+      {
+        interpret(node.then.nodes, i, node);
+      }
+      else
+      {
+        interpret(node.then.nodes, i, parent);
+      }
     }
   }
 };
@@ -338,187 +539,6 @@ int multiply(int a, int b)
   return a * b;
 }
 
-int evaluate_expression(Node node)
-{
-  vector<int> vals;
-  for (int i = 0; i < node.assignment_values.size(); i++)
-  {
-    Node value = node.assignment_values[i];
-    if (value.op == "+" || value.op == "-")
-    {
-      if (node.assignment_values[i + 2].op == "*" || node.assignment_values[i + 2].op == "/")
-      {
-        int a, b, c;
-        if (node.assignment_values[i - 1].id_name.length() > 0)
-        {
-          variables_it = variables.find(node.assignment_values[i - 1].id_name);
-          a = variables_it->second.number_value;
-        }
-        else
-        {
-          a = node.assignment_values[i - 1].number_value;
-        }
-        if (node.assignment_values[i + 1].id_name.length() > 0)
-        {
-          variables_it = variables.find(node.assignment_values[i + 1].id_name);
-          b = variables_it->second.number_value;
-        }
-        else
-        {
-          b = node.assignment_values[i + 1].number_value;
-        }
-        if (node.assignment_values[i + 3].id_name.length() > 0)
-        {
-          variables_it = variables.find(node.assignment_values[i + 3].id_name);
-          c = variables_it->second.number_value;
-        }
-        else
-        {
-          c = node.assignment_values[i + 3].number_value;
-        }
-
-        if (vals.size() > 0)
-        {
-          if (node.assignment_values[i + 2].op == "*")
-          {
-            if (value.op == "+")
-            {
-              vals[vals.size() - 1] = vals[vals.size() - 1] + b * c;
-            }
-            else
-            {
-              vals[vals.size() - 1] = vals[vals.size() - 1] - b * c;
-            }
-          }
-          else
-          {
-            if (value.op == "+")
-            {
-              vals[vals.size() - 1] = vals[vals.size() - 1] + b / c;
-            }
-            else
-            {
-              vals[vals.size() - 1] = vals[vals.size() - 1] - b / c;
-            }
-          }
-
-          continue;
-        }
-        int val;
-        if (node.assignment_values[i + 2].op == "*")
-        {
-          if (value.op == "+")
-          {
-            val = a + b * c;
-          }
-          else
-          {
-            val = a - b * c;
-          }
-        }
-        else
-        {
-          if (value.op == "+")
-          {
-            val = a + b / c;
-          }
-          else
-          {
-            val = a - b / c;
-          }
-        }
-
-        vals.push_back(val);
-      }
-      else
-      {
-        int a, b;
-        if (node.assignment_values[i - 1].id_name.length() > 0)
-        {
-          variables_it = variables.find(node.assignment_values[i - 1].id_name);
-          a = variables_it->second.number_value;
-        }
-        else
-        {
-          a = node.assignment_values[i - 1].number_value;
-        }
-        if (node.assignment_values[i + 1].id_name.length() > 0)
-        {
-          variables_it = variables.find(node.assignment_values[i + 1].id_name);
-          b = variables_it->second.number_value;
-        }
-        else
-        {
-          b = node.assignment_values[i + 1].number_value;
-        }
-
-        if (vals.size() > 0)
-        {
-          if (value.op == "+")
-          {
-            vals[vals.size() - 1] = vals[vals.size() - 1] + b;
-          }
-          else
-          {
-            vals[vals.size() - 1] = vals[vals.size() - 1] - b;
-          }
-
-          continue;
-        }
-
-        int val;
-        if (value.op == "+")
-        {
-          val = a + b;
-        }
-        else
-        {
-          val = a - b;
-        }
-
-        vals.push_back(val);
-      }
-    }
-    else if (value.op == "*")
-    {
-    }
-  }
-
-  return vals[0];
-}
-
-string evaluate_string_expression(Node node)
-{
-  string val = "";
-  for (int i = 0; i < node.assignment_values.size(); i++)
-  {
-    if (node.assignment_values[i].string_value.length() > 0)
-    {
-      node.assignment_values[i].string_value = node.assignment_values[i].string_value.substr(1, node.assignment_values[i].string_value.length() - 2);
-    }
-  }
-  for (int i = 0; i < node.assignment_values.size(); i++)
-  {
-    if (node.assignment_values.size() == 1)
-    {
-      return node.assignment_values[0].string_value;
-    }
-    if (node.assignment_values[i + 1].op == "+" || node.assignment_values[i + 1].op == "-")
-    {
-      if (val.length() == 0)
-      {
-        val = node.assignment_values[i].string_value + node.assignment_values[i + 2].string_value;
-      }
-      else
-      {
-        val = val + node.assignment_values[i + 2].string_value;
-      }
-    }
-  }
-
-  return val;
-}
-
 void Interpreter::assign(Node node)
 {
   int val_number;
@@ -535,8 +555,28 @@ void Interpreter::assign(Node node)
   }
 }
 
-void interpret(Node node)
+// Node *get_parent(Node node)
+// {
+//   return node.parent;
+// }
+
+void Interpreter::_continue(vector<Node> nodes, int i, Node &parent)
 {
+
+  // cout << parent.type << " <-- type" << endl;
+  // cout << parent.should_continue << endl;
+  parent.should_continue = true;
+  // cout << parent.should_continue << endl;
+  // cout << parent.condition.rights[0].value << endl;
+
+  // cout << parent.should_continue << ' ' <<
+}
+
+void interpret(vector<Node> nodes, int i, Node &parent)
+{
+
+  Node node = nodes[i];
+  // cout << node.type << " <-- tedst" << endl;
   switch (node.type)
   {
   case Node_Types::function_call:
@@ -546,10 +586,10 @@ void interpret(Node node)
     }
     break;
   case Node_Types::_while:
-    Interpreter::_while(node);
+    Interpreter::_while(node, parent);
     break;
   case Node_Types::_if:
-    Interpreter::_if(node);
+    Interpreter::_if(node, parent);
     break;
   case Node_Types::let:
     Interpreter::let(node);
@@ -557,15 +597,23 @@ void interpret(Node node)
   case Node_Types::assign:
     Interpreter::assign(node);
     break;
+  case Node_Types::_continue:
+    Interpreter::_continue(nodes, i, parent);
   default:
     break;
   }
 }
 void run(Tree ast)
 {
+  // for (int j = 0; j < ast.nodes.size(); j++)
+  // {
+  // cout << ast.nodes.size() << endl;
+  // }
+  Node parent;
+  parent.type = -1;
   for (int i = 0; i < ast.nodes.size(); i++)
   {
-    interpret(ast.nodes[i]);
+    interpret(ast.nodes, i, parent);
   }
 
   // std::map<string, Interpreter::Variable>::iterator it = variables.find("i");

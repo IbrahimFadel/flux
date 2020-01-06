@@ -22,19 +22,20 @@ struct Position
 
 enum Node_Types
 {
-  number = 0,
-  _while = 1,
-  _if = 2,
-  print = 3,
-  _string = 4,
-  op = 5,
-  sep = 6,
-  eol = 7,
-  function_call = 8,
-  lit = 9,
-  let = 10,
-  id = 11,
-  assign = 12
+  number,
+  _while,
+  _if,
+  print,
+  _string,
+  op,
+  sep,
+  eol,
+  function_call,
+  lit,
+  let,
+  id,
+  assign,
+  _continue
 };
 
 struct Condition
@@ -84,6 +85,9 @@ struct Node
   Parser::String variable_value_string;
   string id_name;
   vector<Parser::Node> assignment_values;
+  bool should_continue;
+  int line_number;
+  int line_position;
 };
 
 struct Tree
@@ -180,21 +184,10 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   else if (node.type == Parser::Node_Types::assign)
   {
     os << "ASSIGN: " << node.id_name;
-    // for (int i = 0; i < node.assignment_values.size(); i++)
-    // {
-
-    // if(node.assignment_values[i].id_name.length() > )
-    // os << node.assignment_values[i].string_value << ' ' << node.assignment_values[i].number_value << std::endl;
-    // if (node.assignment_values[i].string_value.length() > 0)
-    // {
-    //   os << node.assignment_values[i].string_value;
-    // }
-    // else
-    // {
-    //   os << node.assignment_values[i].number_value;
-    // }
-    // }
-    // os << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::_continue)
+  {
+    os << "CONTINUE" << std::endl;
   }
 
   return os;

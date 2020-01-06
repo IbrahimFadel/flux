@@ -14,17 +14,14 @@ struct Variable
   string string_value;
 };
 
-void _while(Node node);
-void _if(Node node);
+void _while(Node node, Node &parent);
+void _if(Node node, Node &parent);
 void let(Node node);
 void assign(Node node);
+void _continue(std::vector<Node> nodes, int i, Node &parent);
 } // namespace Interpreter
 
-// inline bool operator<(const Variable &var) const
-// {
-// }
-
-void interpret(Node node);
+void interpret(vector<Node> nodes, int i, Node &parent);
 void run(Tree ast);
 
 #endif

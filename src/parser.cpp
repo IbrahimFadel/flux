@@ -166,6 +166,7 @@ Node create_while_node(vector<Token> tokens, int i)
       skipped++;
       goto end;
     }
+    // cout << then.tokens[j].value << endl;
     node = check_token(then.tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
     skip = node.skip;
@@ -205,6 +206,7 @@ Node create_if_node(vector<Token> tokens, int i)
       goto end;
     }
     node = check_token(then.tokens, j, &if_node);
+    // cout << node.parent->type << ' ' << node.type << endl;
     if_node.then.nodes.push_back(node);
     skip = node.skip;
 
@@ -372,10 +374,17 @@ Node create_assignment_node(vector<Token> tokens, int i)
   return assignment_node;
 }
 
+Node create_continue_node(vector<Token> tokens, int i)
+{
+  Node continue_node;
+  continue_node.type = Node_Types::_continue;
+
+  return continue_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
-  node.parent = parent;
 
   /**
    * Make sure we don't look at tokens already checked(eg. inside a while loop or an if statement)
@@ -417,6 +426,10 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
       node = create_let_node(tokens, i);
       node.skip = 4;
     }
+    else if (tokens[i].value == "continue")
+    {
+      node = create_continue_node(tokens, i);
+    }
   }
   else if (tokens[i].type == Types::lit)
   {
@@ -450,6 +463,10 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
   {
     node.type = -1;
   }
+
+  node.parent = parent;
+  node.line_number = tokens[i].line_number;
+  node.line_position = tokens[i].line_position;
 
   return node;
 }
