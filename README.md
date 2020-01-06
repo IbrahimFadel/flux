@@ -11,6 +11,11 @@ Basically, i wan't to try to make something atleast somewhat functional, that's 
 ## Example yabl file
 
 ```cpp
+
+let my_fn = (a, b) -> {
+  return a + b;
+}
+
 let x = 0;
 let word = "rick astley";
 let other_word = "gonna give you up";
