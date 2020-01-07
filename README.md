@@ -82,8 +82,22 @@ mkdir -p build/parts && make && make install
 
 ## Usage
 
+Run a file
+
 ```
 yabl file.ybl
+```
+
+Output the tokens, and parse tree before hand (verbose output)
+
+```
+yabl file.ybl -v
+```
+
+Create new project (not sure if this is gonna stay... feels a bit useless)
+
+```
+yabl new my_project_name
 ```
 
 ## Progress

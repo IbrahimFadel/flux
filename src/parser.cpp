@@ -386,7 +386,6 @@ Node create_break_node(vector<Token> tokens, int i)
 {
   Node break_node;
   break_node.type = Node_Types::_break;
-  // break_node.should_break = false;
 
   return break_node;
 }
