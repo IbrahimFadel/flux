@@ -1,9 +1,16 @@
 let x = 0;
 
-while(x < 6) {
-  if(x % 3 == 0) {
+while(x < 100) {
+  if(x % 3 == 0 && x % 5 == 0) {
+    print("Fizz buzz!", x);
+    x = x + 1;
     continue;
   }
-  print("fizz:", x);
+  if(x % 3 == 0) {
+    print("Fizz!", x);
+  }
+  if(x % 5 == 0) {
+    print("Buzz!", x);
+  }
   x = x + 1;
 }
