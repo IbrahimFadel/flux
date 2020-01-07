@@ -493,14 +493,13 @@ void Interpreter::_while(Node node, Node &parent)
 {
   while (condition_true(node.condition))
   {
-    cout << node.should_continue << " <-- test" << endl;
-    if (node.should_continue)
-    {
-      node.should_continue = false;
-      continue;
-    }
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
+      if (node.should_continue)
+      {
+        node.should_continue = false;
+        continue;
+      }
       if (parent.type == -1)
       {
         interpret(node.then.nodes, i, node);
@@ -555,28 +554,15 @@ void Interpreter::assign(Node node)
   }
 }
 
-// Node *get_parent(Node node)
-// {
-//   return node.parent;
-// }
-
 void Interpreter::_continue(vector<Node> nodes, int i, Node &parent)
 {
-
-  // cout << parent.type << " <-- type" << endl;
-  // cout << parent.should_continue << endl;
   parent.should_continue = true;
-  // cout << parent.should_continue << endl;
-  // cout << parent.condition.rights[0].value << endl;
-
-  // cout << parent.should_continue << ' ' <<
 }
 
 void interpret(vector<Node> nodes, int i, Node &parent)
 {
 
   Node node = nodes[i];
-  // cout << node.type << " <-- tedst" << endl;
   switch (node.type)
   {
   case Node_Types::function_call:
@@ -586,6 +572,7 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     }
     break;
   case Node_Types::_while:
+    cout << node.type << " <-- called" << endl;
     Interpreter::_while(node, parent);
     break;
   case Node_Types::_if:
@@ -605,19 +592,10 @@ void interpret(vector<Node> nodes, int i, Node &parent)
 }
 void run(Tree ast)
 {
-  // for (int j = 0; j < ast.nodes.size(); j++)
-  // {
-  // cout << ast.nodes.size() << endl;
-  // }
   Node parent;
   parent.type = -1;
   for (int i = 0; i < ast.nodes.size(); i++)
   {
     interpret(ast.nodes, i, parent);
   }
-
-  // std::map<string, Interpreter::Variable>::iterator it = variables.find("i");
-  // cout << it->first << " = " << it->second.string_value << endl;
-  // it = variables.find("x");
-  // cout << it->first << " = " << it->second.number_value << endl;
 }
