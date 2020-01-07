@@ -8,6 +8,9 @@ Hopefully it will be compiled, but that's probably not gonna happen - So i'll de
 
 Basically, i wan't to try to make something atleast somewhat functional, that's the goal.
 
+### I've decided to try to get something functional, then take what i've learnt and create a new language that's more unique
+### My own syntax and stuff. For now i', gonna keep it more C like
+
 ## Example yabl file
 
 ```cpp
