@@ -202,25 +202,31 @@ Here are the nodes that are currently being handled:
 ```cpp
 switch (node.type)
 {
-  case Node_Types::function_call:
-    if (node.function_call_name == "print")
-    {
-      _print(node);
-    }
-    break;
-  case Node_Types::_while:
-    Interpreter::_while(node);
-    break;
-  case Node_Types::_if:
-    Interpreter::_if(node);
-    break;
-  case Node_Types::let:
-    Interpreter::let(node);
-    break;
-  case Node_Types::assign:
-    Interpreter::assign(node);
-    break;
-  default:
-    break;
+case Node_Types::function_call:
+  if (node.function_call_name == "print")
+  {
+    _print(node);
+  }
+  break;
+case Node_Types::_while:
+  Interpreter::_while(node, parent);
+  break;
+case Node_Types::_if:
+  Interpreter::_if(node, parent);
+  break;
+case Node_Types::let:
+  Interpreter::let(node);
+  break;
+case Node_Types::assign:
+  Interpreter::assign(node);
+  break;
+case Node_Types::_continue:
+  Interpreter::_continue(nodes, i, parent);
+  break;
+case Node_Types::_break:
+  Interpreter::_break(nodes, i, parent);
+  break;
+default:
+  break;
 }
 ```
