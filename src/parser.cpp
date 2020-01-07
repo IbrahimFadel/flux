@@ -382,6 +382,15 @@ Node create_continue_node(vector<Token> tokens, int i)
   return continue_node;
 }
 
+Node create_break_node(vector<Token> tokens, int i)
+{
+  Node break_node;
+  break_node.type = Node_Types::_break;
+  // break_node.should_break = false;
+
+  return break_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -429,6 +438,11 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "continue")
     {
       node = create_continue_node(tokens, i);
+    }
+    else if (tokens[i].value == "break")
+    {
+      node = create_break_node(tokens, i);
+      // node.should_break = false;
     }
   }
   else if (tokens[i].type == Types::lit)

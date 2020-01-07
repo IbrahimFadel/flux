@@ -493,6 +493,11 @@ void Interpreter::_while(Node node, Node &parent)
 {
   while (condition_true(node.condition))
   {
+    if (node.should_break == true)
+    {
+      node.should_break = false;
+      break;
+    }
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
       if (node.should_continue)
@@ -559,6 +564,11 @@ void Interpreter::_continue(vector<Node> nodes, int i, Node &parent)
   parent.should_continue = true;
 }
 
+void Interpreter::_break(vector<Node> nodes, int i, Node &parent)
+{
+  parent.should_break = true;
+}
+
 void interpret(vector<Node> nodes, int i, Node &parent)
 {
 
@@ -572,7 +582,6 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     }
     break;
   case Node_Types::_while:
-    cout << node.type << " <-- called" << endl;
     Interpreter::_while(node, parent);
     break;
   case Node_Types::_if:
@@ -586,6 +595,10 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     break;
   case Node_Types::_continue:
     Interpreter::_continue(nodes, i, parent);
+    break;
+  case Node_Types::_break:
+    Interpreter::_break(nodes, i, parent);
+    break;
   default:
     break;
   }

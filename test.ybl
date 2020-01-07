@@ -1,6 +1,10 @@
 let x = 0;
 
 while(x < 100) {
+  if(x == 30) {
+    print("BREAKING");
+    break;
+  }
   if(x % 3 == 0 && x % 5 == 0) {
     print("Fizz buzz!", x);
     x = x + 1;

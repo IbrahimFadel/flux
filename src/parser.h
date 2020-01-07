@@ -35,7 +35,8 @@ enum Node_Types
   let,
   id,
   assign,
-  _continue
+  _continue,
+  _break
 };
 
 struct Condition
@@ -85,9 +86,10 @@ struct Node
   Parser::String variable_value_string;
   string id_name;
   vector<Parser::Node> assignment_values;
-  bool should_continue;
+  bool should_continue = false;
   int line_number;
   int line_position;
+  bool should_break = false;
 };
 
 struct Tree
