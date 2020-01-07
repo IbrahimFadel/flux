@@ -199,7 +199,7 @@ vector<Token> generate_tokens(vector<string> input)
         token.clear();
         continue;
       }
-      else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==" || token == "%" || token == "&&" || token == "||" || token == "%")
+      else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==" || token == "%" || token == "&&" || token == "||" || token == "%" || token == "!=")
       {
         if (token == "<" || token == ">")
         {

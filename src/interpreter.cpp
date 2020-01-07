@@ -333,6 +333,28 @@ bool condition_true(Condition condition)
         condition_returns.push_back(false);
       }
     }
+    else if (op.value == "!=")
+    {
+      if (left_string.length() > 0)
+      {
+        if (left_string != right_string)
+        {
+          condition_returns.push_back(true);
+        }
+        else
+        {
+          condition_returns.push_back(false);
+        }
+      }
+      else if (left_number != right_number)
+      {
+        condition_returns.push_back(true);
+      }
+      else
+      {
+        condition_returns.push_back(false);
+      }
+    }
     else if (op.value == ">=")
     {
       if (left_number >= right_number)
@@ -491,12 +513,10 @@ void Interpreter::_if(Node node, Node &parent)
 
 void Interpreter::_while(Node node, Node &parent)
 {
-  cout << node.should_break << " <-- other" << endl;
   while (condition_true(node.condition))
   {
     if (node.should_break)
     {
-      cout << "TEST4" << endl;
       node.should_break = false;
       break;
     }
@@ -568,7 +588,6 @@ void Interpreter::_continue(vector<Node> nodes, int i, Node &parent)
 
 void Interpreter::_break(vector<Node> nodes, int i, Node &parent)
 {
-  cout << "TEST" << endl;
   parent.should_break = true;
 }
 
@@ -600,7 +619,6 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     Interpreter::_continue(nodes, i, parent);
     break;
   case Node_Types::_break:
-    cout << "TEST2" << endl;
     Interpreter::_break(nodes, i, parent);
     break;
   default:
@@ -611,10 +629,8 @@ void run(Tree ast)
 {
   Node parent;
   parent.type = -1;
-  cout << ast.nodes[1].should_break << " <--tes" << endl;
   for (int i = 0; i < ast.nodes.size(); i++)
   {
-    cout << "TEST3" << endl;
     interpret(ast.nodes, i, parent);
   }
 }
