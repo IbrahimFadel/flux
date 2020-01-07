@@ -2,20 +2,22 @@ CC = g++
 CFLAGS = -std=c++11
 PREFIX = /usr/local
 
-yabl : main.o lexer.o parser.o interpreter.o
+yabl : build/parts/main.o build/parts/lexer.o build/parts/parser.o build/parts/interpreter.o
 		$(CC) $(CFLAGS) -o build/yabl build/parts/main.o build/parts/lexer.o build/parts/parser.o build/parts/interpreter.o
 
-main.o : src/main.cpp
+build/parts/main.o : src/main.cpp
 		$(CC) $(CFLAGS) -c src/main.cpp -o build/parts/main.o
 
-lexer.o : src/lexer.cpp src/lexer.h
+build/parts/lexer.o : src/lexer.cpp src/lexer.h
 		$(CC) $(CFLAGS) -c src/lexer.cpp -o build/parts/lexer.o
 
-parser.o : src/parser.cpp src/parser.h
+build/parts/parser.o : src/parser.cpp src/parser.h
 		$(CC) $(CFLAGS) -c src/parser.cpp -o build/parts/parser.o
 
-interpreter.o : src/interpreter.cpp src/interpreter.h
+build/parts/interpreter.o : src/interpreter.cpp src/interpreter.h
 		$(CC) $(CFLAGS) -c src/interpreter.cpp -o build/parts/interpreter.o
+
+.PHONY: yabl
 
 clean :
 		-rm build/parts/*.o
