@@ -1,5 +1,13 @@
 let x = 0;
 
-if("hello" != "hello") {
-  print("good");
+while(x < 100) {
+  if(x % 5 == 0 && x % 3 == 0) {
+    print("Fizz buzz!", x);
+  }
+  if(x % 3 == 0) {
+    print("Fizz", x);
+  }
+  if(x % 5 == 0) {
+    print("Fizz", x);
+  }
 }
