@@ -166,7 +166,6 @@ Node create_while_node(vector<Token> tokens, int i)
       skipped++;
       goto end;
     }
-    // cout << then.tokens[j].value << endl;
     node = check_token(then.tokens, j, &while_node);
     while_node.then.nodes.push_back(node);
     skip = node.skip;
@@ -206,7 +205,6 @@ Node create_if_node(vector<Token> tokens, int i)
       goto end;
     }
     node = check_token(then.tokens, j, &if_node);
-    // cout << node.parent->type << ' ' << node.type << endl;
     if_node.then.nodes.push_back(node);
     skip = node.skip;
 
@@ -418,6 +416,7 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     {
       node = create_while_node(tokens, i);
       node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size();
+      node.should_break = false;
     }
     else if (tokens[i].value == "if")
     {
@@ -441,7 +440,6 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "break")
     {
       node = create_break_node(tokens, i);
-      // node.should_break = false;
     }
   }
   else if (tokens[i].type == Types::lit)
@@ -512,6 +510,11 @@ Tree generate_ast(vector<Token> tokens)
 
   end:;
   }
+
+  // for (int i = 0; i < ast.nodes[1].then.nodes.size(); i++)
+  // {
+  //   cout << ast.nodes[1].then.nodes[i] << endl;
+  // }
 
   return ast;
 }

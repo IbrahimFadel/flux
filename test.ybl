@@ -1,13 +1,20 @@
 let x = 0;
 
-while(x < 100) {
+while(x < 30) {
+  if(x == 20) {
+    print("Breaking!");
+    break;
+  }
   if(x % 5 == 0 && x % 3 == 0) {
     print("Fizz buzz!", x);
+    x = x + 1;
+    continue;
   }
   if(x % 3 == 0) {
     print("Fizz", x);
   }
   if(x % 5 == 0) {
-    print("Fizz", x);
+    print("Buzz", x);
   }
+  x = x + 1;
 }

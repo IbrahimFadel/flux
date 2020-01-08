@@ -191,6 +191,10 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   {
     os << "CONTINUE" << std::endl;
   }
+  else if (node.type == Parser::Node_Types::_break)
+  {
+    os << "BREAK" << std::endl;
+  }
 
   return os;
 }

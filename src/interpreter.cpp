@@ -513,15 +513,17 @@ void Interpreter::_if(Node node, Node &parent)
 
 void Interpreter::_while(Node node, Node &parent)
 {
+  node.should_break = false;
+  parent.should_break = false;
   while (condition_true(node.condition))
   {
-    if (node.should_break)
-    {
-      node.should_break = false;
-      break;
-    }
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
+      if (node.should_break)
+      {
+        node.should_break = false;
+        goto end_while;
+      }
       if (node.should_continue)
       {
         node.should_continue = false;
@@ -537,6 +539,7 @@ void Interpreter::_while(Node node, Node &parent)
       }
     }
   }
+end_while:;
 };
 
 void Interpreter::let(Node node)
