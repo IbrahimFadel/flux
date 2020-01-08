@@ -1,11 +1,14 @@
-let x = 0;
+let x = 1;
 
-if(x == 1) {
-  print("x == 1");
-} else if(x == 2 && 2 > 1) {
-  print("Not actually");
-} else if(x == 4) {
-  print("Finally!");
-} else {
-  print("arrived at else");
+while(x < 101) {
+  if(x % 5 == 0 && x % 3 == 0) {
+    print("Fizz buzz:", x);
+  } else if(x % 3 == 0) {
+    print("Fizz:", x);
+  } else if(x % 3 == 0) {
+    print("Buzz:", x);
+  } else {
+    print(x);
+  }
+  x = x + 1;
 }
