@@ -36,7 +36,9 @@ enum Node_Types
   id,
   assign,
   _continue,
-  _break
+  _break,
+  _else,
+  else_if
 };
 
 struct Condition
@@ -100,7 +102,6 @@ struct Tree
 
 inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
 {
-
   if (node.type == Parser::Node_Types::eol)
   {
     os << "EOL";
@@ -143,7 +144,6 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
     {
       os << node.condition.lefts[i].value << ' ' << node.condition.ops[i].value << ' ' << node.condition.rights[i].value << std::endl;
     }
-    // os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
     os << "THEN: " << std::endl;
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
@@ -159,7 +159,6 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
     {
       os << node.condition.lefts[i].value << ' ' << node.condition.ops[i].value << ' ' << node.condition.rights[i].value << std::endl;
     }
-    // os << "CONDITION: " << node.condition.left.value << ' ' << node.condition.op.value << ' ' << node.condition.right.value << std::endl;
     os << "THEN: " << std::endl;
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
@@ -194,6 +193,28 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   else if (node.type == Parser::Node_Types::_break)
   {
     os << "BREAK" << std::endl;
+  }
+  else if (node.type == Parser::Node_Types::_else)
+  {
+    os << "ELSE: " << std::endl;
+    for (int i = 0; i < node.then.nodes.size(); i++)
+    {
+      os << node.then.nodes[i];
+    }
+  }
+  else if (node.type == Parser::Node_Types::else_if)
+  {
+    os << "ELSE IF: " << std::endl;
+    os << "CONDITION(s): " << std::endl;
+    for (int i = 0; i < node.condition.lefts.size(); i++)
+    {
+      os << node.condition.lefts[i].value << ' ' << node.condition.ops[i].value << ' ' << node.condition.rights[i].value << std::endl;
+    }
+    os << "THEN: " << std::endl;
+    for (int i = 0; i < node.then.nodes.size(); i++)
+    {
+      os << node.then.nodes[i];
+    }
   }
 
   return os;

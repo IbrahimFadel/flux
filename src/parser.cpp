@@ -138,6 +138,48 @@ Then get_then(vector<Token> tokens, int i, Condition condition)
   return then;
 }
 
+Then get_else_then(vector<Token> tokens, int i)
+{
+  Then then;
+
+  int open_curly_brackets = 0;
+  int closed_curly_brackets = 0;
+  vector<Token> then_tokens;
+  for (int j = i + 1; j < tokens.size(); j++)
+  {
+    if (tokens[j].value == "{" && tokens[j].type == Types::sep)
+    {
+      open_curly_brackets++;
+    }
+    else if (tokens[j].value == "}" && tokens[j].type == Types::sep)
+    {
+      closed_curly_brackets++;
+    }
+
+    then_tokens.push_back(tokens[j]);
+
+    if (open_curly_brackets == closed_curly_brackets && open_curly_brackets != 0)
+    {
+      break;
+    }
+  }
+
+  then.tokens = then_tokens;
+
+  Position end_position;
+  end_position.line_number = then_tokens[then_tokens.size() - 1].line_number;
+  end_position.line_position = then_tokens[then_tokens.size() - 1].line_position;
+  then.end = end_position;
+
+  if (open_curly_brackets != closed_curly_brackets)
+  {
+    std::cerr << "Are you missing a '}' ?" << endl;
+    return then;
+  }
+
+  return then;
+}
+
 Node create_while_node(vector<Token> tokens, int i)
 {
   Node while_node;
@@ -388,6 +430,84 @@ Node create_break_node(vector<Token> tokens, int i)
   return break_node;
 }
 
+Node create_else_if_node(vector<Token> tokens, int i)
+{
+  Node else_if_node;
+  else_if_node.type = Node_Types::else_if;
+
+  Condition condition = get_condition(tokens, i + 1);
+  else_if_node.condition = condition;
+
+  Then then = get_then(tokens, i + 1, condition);
+  else_if_node.then = then;
+
+  Node node;
+  int closed_curly_brackets_found = 0;
+  int skip = 0;
+  int skipped = 0;
+  for (int j = 0; j < then.tokens.size(); j++)
+  {
+    for (int x = 0; x < skip; x++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skipped = 0;
+        skip = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+    node = check_token(then.tokens, j, &else_if_node);
+    else_if_node.then.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
+  }
+
+  return else_if_node;
+}
+
+Node create_else_node(vector<Token> tokens, int i)
+{
+  if (tokens[i + 1].value == "if" && tokens[i + 1].type == Types::kw)
+  {
+    return create_else_if_node(tokens, i);
+  }
+
+  Node else_node;
+  else_node.type = Node_Types::_else;
+
+  Then then = get_else_then(tokens, i);
+  else_node.then = then;
+
+  Node node;
+  int closed_curly_brackets_found = 0;
+  int skip = 0;
+  int skipped = 0;
+  for (int j = 0; j < then.tokens.size(); j++)
+  {
+    for (int x = 0; x < skip; x++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skipped = 0;
+        skip = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+    node = check_token(then.tokens, j, &else_node);
+    else_node.then.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
+  }
+
+  return else_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -422,6 +542,18 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     {
       node = create_if_node(tokens, i);
       node.skip = node.then.tokens.size() + 2 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size() + node.condition.results_operators.size() + node.condition.results.size();
+    }
+    else if (tokens[i].value == "else")
+    {
+      node = create_else_node(tokens, i);
+      if (tokens[i + 1].value == "if" && tokens[i + 1].type == Types::kw)
+      {
+        node.skip = node.then.tokens.size() + 3 + node.condition.lefts.size() + node.condition.ops.size() + node.condition.rights.size() + node.condition.condition_seperators.size() + node.condition.results_operators.size() + node.condition.results.size();
+      }
+      else
+      {
+        node.skip = node.then.tokens.size();
+      }
     }
     else if (tokens[i].value == "print")
     {
@@ -510,11 +642,6 @@ Tree generate_ast(vector<Token> tokens)
 
   end:;
   }
-
-  // for (int i = 0; i < ast.nodes[1].then.nodes.size(); i++)
-  // {
-  //   cout << ast.nodes[1].then.nodes[i] << endl;
-  // }
 
   return ast;
 }
