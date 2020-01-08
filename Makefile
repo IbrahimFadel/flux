@@ -1,27 +1,43 @@
+TARGET_EXEC ?= yabl
+
+BUILD_DIR ?= ./build
+SRC_DIRS ?= ./src
+
+SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
+OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
+DEPS := $(OBJS:.o=.d)
+
+INC_DIRS := $(shell find $(SRC_DIRS) -type d)
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -std=c++11
+
 CC = g++
-CFLAGS = -std=c++11
-PREFIX = /usr/local
 
-build/yabl : build/parts/main.o build/parts/lexer.o build/parts/parser.o build/parts/interpreter.o
-		$(CC) $(CFLAGS) -o build/yabl build/parts/main.o build/parts/lexer.o build/parts/parser.o build/parts/interpreter.o
+$(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
-build/parts/main.o : src/main.cpp
-		$(CC) $(CFLAGS) -c src/main.cpp -o build/parts/main.o
+# assembly
+$(BUILD_DIR)/%.s.o: %.s
+	$(MKDIR_P) $(dir $@)
+	$(AS) $(ASFLAGS) -c $< -o $@
 
-build/parts/lexer.o : src/lexer.cpp src/lexer.h
-		$(CC) $(CFLAGS) -c src/lexer.cpp -o build/parts/lexer.o
+# c source
+$(BUILD_DIR)/%.c.o: %.c
+	$(MKDIR_P) $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-build/parts/parser.o : src/parser.cpp src/parser.h
-		$(CC) $(CFLAGS) -c src/parser.cpp -o build/parts/parser.o
+# c++ source
+$(BUILD_DIR)/%.cpp.o: %.cpp
+	$(MKDIR_P) $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-build/parts/interpreter.o : src/interpreter.cpp src/interpreter.h
-		$(CC) $(CFLAGS) -c src/interpreter.cpp -o build/parts/interpreter.o
 
-clean :
-		-rm build/parts/*.o
+.PHONY: clean
 
-install : build/yabl
-		install -m 0755 build/yabl $(PREFIX)/bin
+clean:
+	$(RM) -r $(BUILD_DIR)
 
-uninstall : yabl
-		sudo rm $(PREFIX)/bin/yabl
+-include $(DEPS)
+
+MKDIR_P ?= mkdir -p
