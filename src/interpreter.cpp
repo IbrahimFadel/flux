@@ -492,6 +492,25 @@ void _print(Node node)
   cout << endl;
 };
 
+void Interpreter::_else(vector<Node> nodes, int i, Node &parent)
+{
+  if (condition_true(nodes[i - 1].condition))
+  {
+    return;
+  }
+  for (int j = 0; j < nodes[i].then.nodes.size(); j++)
+  {
+    if (parent.type == -1)
+    {
+      interpret(nodes[i].then.nodes, j, nodes[i]);
+    }
+    else
+    {
+      interpret(nodes[i].then.nodes, j, parent);
+    }
+  }
+}
+
 void Interpreter::else_if(vector<Node> nodes, int i, Node &parent)
 {
   if (condition_true(nodes[i - 1].condition))
@@ -635,6 +654,9 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     break;
   case Node_Types::else_if:
     Interpreter::else_if(nodes, i, parent);
+    break;
+  case Node_Types::_else:
+    Interpreter::_else(nodes, i, parent);
     break;
   case Node_Types::let:
     Interpreter::let(node);
