@@ -20,7 +20,7 @@ build/parts/interpreter.o : src/interpreter.cpp src/interpreter.h
 clean :
 		-rm build/parts/*.o
 
-install : yabl
+install : build/yabl
 		install -m 0755 build/yabl $(PREFIX)/bin
 
 uninstall : yabl
