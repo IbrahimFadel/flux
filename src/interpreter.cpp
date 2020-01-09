@@ -494,10 +494,18 @@ void _print(Node node)
 
 void Interpreter::_else(vector<Node> nodes, int i, Node &parent)
 {
-  if (condition_true(nodes[i - 1].condition))
+
+  for (int j = i; j > 0; j--)
   {
-    return;
+    if (nodes[j].condition.lefts.size() > 0)
+    {
+      if (condition_true(nodes[j].condition))
+      {
+        return;
+      }
+    }
   }
+
   for (int j = 0; j < nodes[i].then.nodes.size(); j++)
   {
     if (parent.type == -1)
@@ -634,6 +642,14 @@ void Interpreter::_break(vector<Node> nodes, int i, Node &parent)
   parent.should_break = true;
 }
 
+string Interpreter::_input(Node node)
+{
+  _print(node);
+  string input;
+  std::cin >> input;
+  return input;
+}
+
 void interpret(vector<Node> nodes, int i, Node &parent)
 {
 
@@ -644,6 +660,10 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     if (node.function_call_name == "print")
     {
       _print(node);
+    }
+    else if (node.function_call_name == "input")
+    {
+      string input = Interpreter::_input(node);
     }
     break;
   case Node_Types::_while:
