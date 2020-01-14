@@ -384,6 +384,13 @@ Node create_let_node(vector<Token> tokens, int i)
       let_node.variable_value_number = number_value;
     }
   }
+  else if (value.type == Node_Types::function_call)
+  {
+    if (value.function_call_name == "input")
+    {
+      // let_node.variable_value_string = create_function_call_node(tokens, i + 3 + value.parameters.size());
+    }
+  }
 
   return let_node;
 }
@@ -508,6 +515,32 @@ Node create_else_node(vector<Token> tokens, int i)
   return else_node;
 }
 
+Action get_action(vector<Token> tokens, int i)
+{
+  Action action;
+
+  cout << tokens[i].value << endl;
+
+  return action;
+}
+
+Node create_for_node(vector<Token> tokens, int i)
+{
+  Node for_node;
+  // for_node.type = Node_Types::_for;
+
+  // Node var = create_let_node(tokens, i + 2);
+
+  // cout << tokens[i + 8].value << endl;
+  // Condition condition = get_condition(tokens, i + 7);
+  // cout << condition.lefts[0].value << endl;
+  // int condition_skip = condition.lefts.size() + condition.rights.size() + condition.ops.size() + condition.condition_seperators.size() + condition.results.size() + condition.results_operators.size();
+  // cout << condition_skip << endl;
+  // Action action = get_action(tokens, i + 7 + condition_skip);
+
+  return for_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -560,6 +593,11 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
       node = create_function_call_node(tokens, i);
       node.skip = node.parameters.size() + 3;
     }
+    else if (tokens[i].value == "input")
+    {
+      node = create_function_call_node(tokens, i);
+      node.skip = node.parameters.size() + 3;
+    }
     else if (tokens[i].value == "let")
     {
       node = create_let_node(tokens, i);
@@ -572,6 +610,10 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "break")
     {
       node = create_break_node(tokens, i);
+    }
+    else if (tokens[i].value == "for")
+    {
+      node = create_for_node(tokens, i);
     }
   }
   else if (tokens[i].type == Types::lit)

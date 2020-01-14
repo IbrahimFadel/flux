@@ -38,7 +38,18 @@ enum Node_Types
   _continue,
   _break,
   _else,
-  else_if
+  else_if,
+  _for
+};
+
+struct Number
+{
+  int value;
+};
+
+struct String
+{
+  string value;
 };
 
 struct Condition
@@ -59,14 +70,19 @@ struct Then
   vector<Token> tokens;
 };
 
-struct Number
+struct Action
 {
-  int value;
+  vector<Parser::Node> nodes;
+  vector<Token> tokens;
 };
 
-struct String
+struct For
 {
-  string value;
+  string variable_name;
+  Parser::Number variable_value_number;
+  Parser::Condition condition;
+  Parser::Action action;
+  Parser::Then then;
 };
 
 struct Node

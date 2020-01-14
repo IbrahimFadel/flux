@@ -1,0 +1,3 @@
+let [identifying name] = [value]
+while ([condition]) {}
+if ([condition]) {}
