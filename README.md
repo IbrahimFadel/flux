@@ -8,17 +8,19 @@ Hopefully it will be compiled, but that's probably not gonna happen - So i'll de
 
 Basically, i wan't to try to make something atleast somewhat functional, that's the goal.
 
-### I've decided to try to get something functional, then take what i've learnt and create a new language that's more unique
-
-### My own syntax and stuff. For now i', gonna keep it more C like
+### I've decided to try to get something functional, then take what i've learnt and create a new language that's more unique, with my own syntax and stuff. For now i'm, gonna keep it more C like
 
 ## Example yabl file
 
 ```cpp
 
-let my_fn = (a, b) -> {
-  return a + b;
+fn my_function(param1, param2) {
+  let local_variable = "hi";
+
+  print(local_variable);
 }
+
+my_function(2, "hello");
 
 let x = 0;
 let word = "rick astley";
@@ -35,13 +37,6 @@ if(word != other_word) {
 ```
 
 ## Goals
-
-- Optional entry/exit functions
-
-```cpp
-#ENTRY my_entry_fn
-#EXIT my_exit_fn
-```
 
 - Error/Warning logs
 
@@ -68,6 +63,13 @@ let phrase = f"Good {time}, {name}!";
 
 ```bash
 yabl new hello_word_project
+```
+
+- Type casting
+
+```python
+let string_var = "10"
+let int_var = int(string_var);
 ```
 
 ## Install
@@ -109,20 +111,26 @@ yabl new my_project_name
 This example will be using the following as the input file:
 
 ```cpp
-let x = 1;
 
-while(x < 101) {
-  if(x % 5 == 0 && x % 3 == 0) {
-    print("Fizz buzz:", x);
-  } else if(x % 3 == 0) {
-    print("Fizz:", x);
-  } else if(x % 3 == 0) {
-    print("Buzz:", x);
-  } else {
-    print(x);
+fn fizz_buzz() {
+  let x = 1;
+
+  while(x < 101) {
+    if(x % 5 == 0 && x % 3 == 0) {
+      print("Fizz buzz:", x);
+    } else if(x % 3 == 0) {
+      print("Fizz:", x);
+    } else if(x % 3 == 0) {
+      print("Buzz:", x);
+    } else {
+      print(x);
+    }
+    x = x + 1;
   }
-  x = x + 1;
 }
+
+fizz_buzz();
+
 ```
 
 ### Lexer
