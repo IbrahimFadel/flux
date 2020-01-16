@@ -39,7 +39,8 @@ enum Node_Types
   _break,
   _else,
   else_if,
-  _for
+  _for,
+  function
 };
 
 struct Number
@@ -108,6 +109,7 @@ struct Node
   int line_number;
   int line_position;
   bool should_break = false;
+  string function_name;
 };
 
 struct Tree

@@ -1,21 +1,3 @@
-let x = 1;
-
-while(x < 101) {
-  if(x % 5 == 0 && x % 3 == 0) {
-    print("Fizz buzz:", x);
-  } else if(x % 3 == 0) {
-    print("Fizz:", x);
-  } else if(x % 5 == 0) {
-    print("Buzz:", x);
-  } else {
-    print(x);
-  }
-  x = x + 1;
-}
-
-let person = "rick astley";
-let action = "gonna give you up";
-
-if(person != action) {
-  print(person, "never", action);
+fn test(param1, param2) {
+  print("test");
 }

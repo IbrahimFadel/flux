@@ -541,6 +541,69 @@ Node create_for_node(vector<Token> tokens, int i)
   return for_node;
 }
 
+vector<Node> get_parameters(vector<Token> tokens, int i)
+{
+  Node param;
+  vector<Node> params;
+  int comma = 0;
+  for (int j = i; j < tokens.size(); j++)
+  {
+    if (tokens[j].type == Types::sep && tokens[j].value == ")")
+    {
+      break;
+    }
+
+    if (comma % 2 == 0)
+    {
+      param = create_identifier_node(tokens[j]);
+
+      params.push_back(param);
+    }
+    comma++;
+  }
+
+  return params;
+}
+
+Node create_fn_node(vector<Token> tokens, int i)
+{
+  Node fn_node;
+
+  fn_node.type = Node_Types::function;
+
+  fn_node.function_name = tokens[i + 1].value;
+
+  fn_node.parameters = get_parameters(tokens, i + 3);
+
+  Then then = get_else_then(tokens, i + 4 + fn_node.parameters.size());
+
+  Node node;
+  int closed_curly_brackets_found = 0;
+  int skip = 0;
+  int skipped = 0;
+  for (int j = 0; j < then.tokens.size(); j++)
+  {
+    for (int x = 0; x < skip; x++)
+    {
+      if (skipped + 1 == skip)
+      {
+        skipped = 0;
+        skip = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+    node = check_token(then.tokens, j, &fn_node);
+    then.nodes.push_back(node);
+    skip = node.skip;
+
+  end:;
+  }
+
+  return fn_node;
+}
+
 Node check_token(vector<Token> tokens, int i, Node *parent)
 {
   Node node;
@@ -614,6 +677,10 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "for")
     {
       node = create_for_node(tokens, i);
+    }
+    else if (tokens[i].value == "fn")
+    {
+      node = create_fn_node(tokens, i);
     }
   }
   else if (tokens[i].type == Types::lit)
