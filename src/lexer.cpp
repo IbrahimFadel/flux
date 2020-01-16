@@ -154,6 +154,11 @@ vector<Token> generate_tokens(vector<string> input)
         {
           number += "-";
         }
+        else if (line[j - 1] != '-' && !isdigit(line[j - 1]))
+        {
+          continue;
+        }
+
         for (int x = 0; x < line.length() - j; x++)
         {
           if (isdigit(line[j + x]))
