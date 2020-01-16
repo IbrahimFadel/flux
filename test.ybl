@@ -1,6 +1,20 @@
-let x = 1;
+let x = 0;
 
+fn test() {
 while(x < 100) {
-  print(x);
+  if(x % 5 == 0 && x % 3 == 0) {
+    print("Fizz buzz:", x);
+  } else if(x % 3 == 0) {
+    print("Fizz:", x);
+  } else if(x % 5 == 0) {
+    print("Buzz:", x);
+  } else {
+    print(x);
+  }
+
   x = x + 1;
 }
+}
+
+
+test();

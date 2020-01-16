@@ -733,7 +733,6 @@ void run(Tree ast)
   parent.type = -1;
   for (int i = 0; i < ast.nodes.size(); i++)
   {
-    // cout << ast.nodes[i] << endl;
     interpret(ast.nodes, i, parent);
   }
 }
