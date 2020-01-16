@@ -16,6 +16,8 @@ std::map<string, Interpreter::Variable>::iterator variables_it;
 std::map<string, Interpreter::Function> functions;
 std::map<string, Interpreter::Function>::iterator functions_it;
 
+std::map<string, Interpreter::Variable>::iterator function_variables_it;
+
 string evaluate_string_expression(Node node)
 {
   string val = "";
@@ -467,7 +469,7 @@ bool condition_true(Condition condition)
   return true;
 }
 
-void _print(Node node)
+void _print(Node node, Node &parent)
 {
   for (int i = 0; i < node.parameters.size(); i++)
   {
@@ -481,14 +483,46 @@ void _print(Node node)
     }
     else
     {
-      variables_it = variables.find(node.parameters[i].id_name);
-      if (variables_it->second.string_value.length() > 0)
+      if (parent.type == Node_Types::function_call)
       {
-        cout << variables_it->second.string_value << ' ';
+        functions_it = functions.find(parent.function_name);
+        if (functions_it != functions.end())
+        {
+          function_variables_it = functions_it->second.variables.find(node.parameters[i].id_name);
+          if (function_variables_it != functions_it->second.variables.end())
+          {
+            if (function_variables_it->second.string_value.length() > 0)
+            {
+              cout << function_variables_it->second.string_value << ' ';
+            }
+            else
+            {
+              cout << function_variables_it->second.number_value << ' ';
+            }
+          }
+          else
+          {
+            std::cerr << "Cannot print undefined variable: " << node.parameters[i].id_name << endl;
+            return;
+          }
+        }
       }
       else
       {
-        cout << variables_it->second.number_value << ' ';
+        variables_it = variables.find(node.parameters[i].id_name);
+        if (variables_it == variables.end())
+        {
+          std::cerr << "Cannot print undefined variable: " << node.parameters[i].id_name << endl;
+          return;
+        }
+        if (variables_it->second.string_value.length() > 0)
+        {
+          cout << variables_it->second.string_value << ' ';
+        }
+        else
+        {
+          cout << variables_it->second.number_value << ' ';
+        }
       }
     }
   }
@@ -593,7 +627,7 @@ void Interpreter::_while(Node node, Node &parent)
 end_while:;
 };
 
-void Interpreter::let(Node node)
+void Interpreter::let(Node node, Node &parent)
 {
   Variable var;
 
@@ -606,7 +640,18 @@ void Interpreter::let(Node node)
     var.number_value = node.variable_value_number.value;
   }
 
-  variables.insert({node.variable_name, var});
+  if (parent.type == Node_Types::function_call)
+  {
+    functions_it = functions.find(parent.function_name);
+    if (functions_it != functions.end())
+    {
+      functions_it->second.variables.insert({node.variable_name, var});
+    }
+  }
+  else
+  {
+    variables.insert({node.variable_name, var});
+  }
 };
 
 int add(int a, int b)
@@ -647,7 +692,8 @@ void Interpreter::_break(vector<Node> nodes, int i, Node &parent)
 
 string Interpreter::_input(Node node)
 {
-  _print(node);
+  Node parent;
+  _print(node, parent);
   string input;
   std::cin >> input;
   return input;
@@ -671,7 +717,7 @@ void Interpreter::call_function(vector<Node> nodes, int i)
   Node parent;
   for (int j = 0; j < functions_it->second.then.nodes.size(); j++)
   {
-    interpret(functions_it->second.then.nodes, j, parent);
+    interpret(functions_it->second.then.nodes, j, nodes[i]);
   }
 }
 
@@ -684,7 +730,7 @@ void interpret(vector<Node> nodes, int i, Node &parent)
   case Node_Types::function_call:
     if (node.function_call_name == "print")
     {
-      _print(node);
+      _print(node, parent);
     }
     else if (node.function_call_name == "input")
     {
@@ -709,7 +755,7 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     Interpreter::_else(nodes, i, parent);
     break;
   case Node_Types::let:
-    Interpreter::let(node);
+    Interpreter::let(node, parent);
     break;
   case Node_Types::assign:
     Interpreter::assign(node);

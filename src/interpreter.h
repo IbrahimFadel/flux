@@ -1,6 +1,7 @@
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
+#include <map>
 #include "parser.h"
 
 using namespace Parser;
@@ -18,11 +19,12 @@ struct Function
 {
   vector<Node> parameters;
   Then then;
+  std::map<std::string, Interpreter::Variable> variables;
 };
 
 void _while(Node node, Node &parent);
 void _if(Node node, Node &parent);
-void let(Node node);
+void let(Node node, Node &parent);
 void assign(Node node);
 void _continue(std::vector<Node> nodes, int i, Node &parent);
 void _break(std::vector<Node> nodes, int i, Node &parent);
