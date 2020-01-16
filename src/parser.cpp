@@ -519,8 +519,6 @@ Action get_action(vector<Token> tokens, int i)
 {
   Action action;
 
-  cout << tokens[i].value << endl;
-
   return action;
 }
 
@@ -575,7 +573,8 @@ Node create_fn_node(vector<Token> tokens, int i)
 
   fn_node.parameters = get_parameters(tokens, i + 3);
 
-  Then then = get_else_then(tokens, i + 4 + fn_node.parameters.size());
+  Then then = get_else_then(tokens, i + 3 + fn_node.parameters.size());
+  fn_node.then = then;
 
   Node node;
   int closed_curly_brackets_found = 0;
@@ -594,8 +593,8 @@ Node create_fn_node(vector<Token> tokens, int i)
       skipped++;
       goto end;
     }
-    node = check_token(then.tokens, j, &fn_node);
-    then.nodes.push_back(node);
+    node = check_token(fn_node.then.tokens, j, &fn_node);
+    fn_node.then.nodes.push_back(node);
     skip = node.skip;
 
   end:;
@@ -681,6 +680,7 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     else if (tokens[i].value == "fn")
     {
       node = create_fn_node(tokens, i);
+      node.skip = 3 + node.parameters.size() + node.then.tokens.size();
     }
   }
   else if (tokens[i].type == Types::lit)
@@ -697,6 +697,11 @@ Node check_token(vector<Token> tokens, int i, Node *parent)
     {
       node = create_assignment_node(tokens, i);
       node.skip = 2 + node.assignment_values.size() - 1;
+    }
+    else if (tokens[i + 1].value == "(")
+    {
+      node = create_function_call_node(tokens, i);
+      node.skip = 2 + node.parameters.size();
     }
     else
     {

@@ -13,6 +13,9 @@ using Parser::Node_Types;
 std::map<string, Interpreter::Variable> variables;
 std::map<string, Interpreter::Variable>::iterator variables_it;
 
+std::map<string, Interpreter::Function> functions;
+std::map<string, Interpreter::Function>::iterator functions_it;
+
 string evaluate_string_expression(Node node)
 {
   string val = "";
@@ -650,6 +653,28 @@ string Interpreter::_input(Node node)
   return input;
 }
 
+void Interpreter::function(vector<Node> nodes, int i)
+{
+
+  Function function;
+
+  function.parameters = nodes[i].parameters;
+  function.then = nodes[i].then;
+
+  functions.insert({nodes[i].function_call_name, function});
+}
+
+void Interpreter::call_function(vector<Node> nodes, int i)
+{
+  functions_it = functions.find(nodes[i].function_name);
+
+  Node parent;
+  for (int j = 0; j < functions_it->second.then.nodes.size(); j++)
+  {
+    interpret(functions_it->second.then.nodes, j, parent);
+  }
+}
+
 void interpret(vector<Node> nodes, int i, Node &parent)
 {
 
@@ -665,6 +690,11 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     {
       string input = Interpreter::_input(node);
     }
+    else
+    {
+      Interpreter::call_function(nodes, i);
+    }
+
     break;
   case Node_Types::_while:
     Interpreter::_while(node, parent);
@@ -690,6 +720,9 @@ void interpret(vector<Node> nodes, int i, Node &parent)
   case Node_Types::_break:
     Interpreter::_break(nodes, i, parent);
     break;
+  case Node_Types::function:
+    Interpreter::function(nodes, i);
+    break;
   default:
     break;
   }
@@ -700,6 +733,7 @@ void run(Tree ast)
   parent.type = -1;
   for (int i = 0; i < ast.nodes.size(); i++)
   {
+    // cout << ast.nodes[i] << endl;
     interpret(ast.nodes, i, parent);
   }
 }

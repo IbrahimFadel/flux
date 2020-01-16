@@ -14,6 +14,12 @@ struct Variable
   string string_value;
 };
 
+struct Function
+{
+  vector<Node> parameters;
+  Then then;
+};
+
 void _while(Node node, Node &parent);
 void _if(Node node, Node &parent);
 void let(Node node);
@@ -23,6 +29,8 @@ void _break(std::vector<Node> nodes, int i, Node &parent);
 void else_if(vector<Node> nodes, int i, Node &parent);
 void _else(vector<Node> nodes, int i, Node &parent);
 std::string _input(Node node);
+void function(vector<Node> nodes, int i);
+void call_function(vector<Node> nodes, int i);
 } // namespace Interpreter
 
 void interpret(vector<Node> nodes, int i, Node &parent);
