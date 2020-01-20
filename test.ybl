@@ -1,10 +1,7 @@
-fn fizz_buzz() {
-  let x = 0;
+let x = 0;
 
-  while(x < 5) {
-    print(x);
-    x = x + 1;
-  }
+fn main(){
+  print(x);
 }
 
-fizz_buzz();
+main();

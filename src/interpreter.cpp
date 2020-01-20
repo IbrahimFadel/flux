@@ -486,6 +486,7 @@ void _print(Node node, Node &parent)
       if (parent.type == Node_Types::function_call)
       {
         functions_it = functions.find(parent.function_name);
+        variables_it = variables.find(node.parameters[i].id_name);
         if (functions_it != functions.end())
         {
           function_variables_it = functions_it->second.variables.find(node.parameters[i].id_name);
@@ -498,6 +499,17 @@ void _print(Node node, Node &parent)
             else
             {
               cout << function_variables_it->second.number_value << ' ';
+            }
+          }
+          else if(variables_it != variables.end())
+          {
+            if (variables_it->second.string_value.length() > 0)
+            {
+              cout << variables_it->second.string_value << ' ';
+            }
+            else
+            {
+              cout << variables_it->second.number_value << ' ';
             }
           }
           else

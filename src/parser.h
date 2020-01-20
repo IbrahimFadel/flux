@@ -236,7 +236,11 @@ inline std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   }
   else if (node.type == Parser::Node_Types::function)
   {
-    os << "FUNCTION: " << node.function_name << std::endl;
+    os << "FUNCTION: " << node.function_name << std::endl << "THEN: " << std::endl;
+    for(int i = 0; i < node.then.nodes.size(); i++)
+    {
+      os << node.then.nodes[i] << std::endl;
+    }
   }
 
   return os;
