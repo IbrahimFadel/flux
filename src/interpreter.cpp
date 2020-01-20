@@ -664,19 +664,48 @@ int multiply(int a, int b)
   return a * b;
 }
 
-void Interpreter::assign(Node node)
+void Interpreter::assign(Node node, Node &parent)
 {
-  int val_number;
-  variables_it = variables.find(node.id_name);
-  if (variables_it->second.string_value.length() > 0)
+  if (parent.type == Node_Types::function_call)
   {
-    string val = evaluate_string_expression(node);
-    variables_it->second.string_value = val;
+    cout << "Test" << endl;
+    functions_it = functions.find(parent.function_name);
+    if (functions_it != functions.end())
+    {
+      function_variables_it = functions_it->second.variables.find(node.id_name);
+      if (function_variables_it != functions_it->second.variables.end())
+      {
+        if (function_variables_it->second.string_value.length() > 0)
+        {
+          string val = evaluate_string_expression(node);
+          function_variables_it->second.string_value = val;
+        }
+        else
+        {
+          int val = evaluate_expression(node);
+          function_variables_it->second.number_value = val;
+        }
+      }
+      else
+      {
+        std::cerr << "Could not assign new value to undefined variable: " << node.id_name << endl;
+        return;
+      }
+    }
   }
   else
   {
-    int val = evaluate_expression(node);
-    variables_it->second.number_value = val;
+    variables_it = variables.find(node.id_name);
+    if (variables_it->second.string_value.length() > 0)
+    {
+      string val = evaluate_string_expression(node);
+      variables_it->second.string_value = val;
+    }
+    else
+    {
+      int val = evaluate_expression(node);
+      variables_it->second.number_value = val;
+    }
   }
 }
 
@@ -758,7 +787,7 @@ void interpret(vector<Node> nodes, int i, Node &parent)
     Interpreter::let(node, parent);
     break;
   case Node_Types::assign:
-    Interpreter::assign(node);
+    Interpreter::assign(node, parent);
     break;
   case Node_Types::_continue:
     Interpreter::_continue(nodes, i, parent);

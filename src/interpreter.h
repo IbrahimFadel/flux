@@ -25,7 +25,7 @@ struct Function
 void _while(Node node, Node &parent);
 void _if(Node node, Node &parent);
 void let(Node node, Node &parent);
-void assign(Node node);
+void assign(Node node, Node &parent);
 void _continue(std::vector<Node> nodes, int i, Node &parent);
 void _break(std::vector<Node> nodes, int i, Node &parent);
 void else_if(vector<Node> nodes, int i, Node &parent);
