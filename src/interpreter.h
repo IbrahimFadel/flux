@@ -22,6 +22,14 @@ struct Function
   std::map<std::string, Interpreter::Variable> variables;
 };
 
+struct If
+{
+  Condition condition;
+  Then then;
+  std::map<std::string, Interpreter::Variable> variables;
+  int id;
+};
+
 void _while(Node node, Node &parent);
 void _if(Node node, Node &parent);
 void let(Node node, Node &parent);

@@ -110,6 +110,7 @@ struct Node
   int line_position;
   bool should_break = false;
   string function_name;
+  int if_id;
 };
 
 struct Tree

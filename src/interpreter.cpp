@@ -15,8 +15,10 @@ std::map<string, Interpreter::Variable>::iterator variables_it;
 
 std::map<string, Interpreter::Function> functions;
 std::map<string, Interpreter::Function>::iterator functions_it;
-
 std::map<string, Interpreter::Variable>::iterator function_variables_it;
+
+vector<Interpreter::If> ifs; 
+std::map<string, Interpreter::Variable>::iterator ifs_variables_it;
 
 string evaluate_string_expression(Node node)
 {
@@ -519,6 +521,34 @@ void _print(Node node, Node &parent)
           }
         }
       }
+      else if(parent.type == Node_Types::_if)
+      {
+        for(int i = 0; i < ifs.size(); i++)
+        {
+          cout << ifs[i].id << ' ' << parent.if_id << endl;
+          if(ifs[i].id == parent.if_id)
+          {
+            for(int j = 0; j < ifs[i].variables.size(); j++)
+            {
+              ifs_variables_it = ifs[i].variables.find(node.variable_name);
+              cout << ifs_variables_it->second.number_value << endl;
+              if(ifs_variables_it != ifs[i].variables.end())
+              {
+                Interpreter::Variable var = ifs_variables_it->second;
+                cout << "TEST" << endl;
+                if(var.string_value.length() > 0)
+                {
+                  cout << var.string_value << ' ';
+                }
+                else
+                {
+                  cout << var.number_value << ' ';
+                } 
+              }
+            }
+          }
+        }
+      }
       else
       {
         variables_it = variables.find(node.parameters[i].id_name);
@@ -592,18 +622,26 @@ void Interpreter::else_if(vector<Node> nodes, int i, Node &parent)
 
 void Interpreter::_if(Node node, Node &parent)
 {
+  Interpreter::If _if;
+  _if.then = node.then;
+  _if.condition = node.condition;
+  _if.id = ifs.size();
+  node.if_id = ifs.size();
+  ifs.push_back(_if);
+
   if (condition_true(node.condition))
   {
     for (int i = 0; i < node.then.nodes.size(); i++)
     {
-      if (parent.type == -1)
-      {
-        interpret(node.then.nodes, i, node);
-      }
-      else
-      {
-        interpret(node.then.nodes, i, parent);
-      }
+      interpret(node.then.nodes, i, node);
+      // if (parent.type == -1)
+      // {
+      //   interpret(node.then.nodes, i, node);
+      // }
+      // else
+      // {
+      //   interpret(node.then.nodes, i, parent);
+      // }
     }
   }
 }
@@ -660,6 +698,11 @@ void Interpreter::let(Node node, Node &parent)
       functions_it->second.variables.insert({node.variable_name, var});
     }
   }
+  else if(parent.type == Node_Types::_if)
+  {
+    cout << ifs.size() << endl;
+    ifs[ifs.size() - 1].variables.insert({node.variable_name, var});
+  }
   else
   {
     variables.insert({node.variable_name, var});
@@ -680,7 +723,6 @@ void Interpreter::assign(Node node, Node &parent)
 {
   if (parent.type == Node_Types::function_call)
   {
-    cout << "Test" << endl;
     functions_it = functions.find(parent.function_name);
     if (functions_it != functions.end())
     {
