@@ -9,27 +9,6 @@ using namespace Parser;
 namespace Interpreter
 {
 
-struct Variable
-{
-  int number_value;
-  string string_value;
-};
-
-struct Function
-{
-  vector<Node> parameters;
-  Then then;
-  std::map<std::string, Interpreter::Variable> variables;
-};
-
-struct If
-{
-  Condition condition;
-  Then then;
-  std::map<std::string, Interpreter::Variable> variables;
-  int id;
-};
-
 void _while(Node node, Node &parent);
 void _if(Node node, Node &parent);
 void let(Node node, Node &parent);
