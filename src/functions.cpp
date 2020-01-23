@@ -1,7 +1,9 @@
 #include "functions.h"
-#include "variables.h"
 
-void Print::print(Node node, Node &parent)
+
+std::vector<Variables::If> t_ifs;
+
+void Print::print(Parser::Node node, Parser::Node &parent)
 {
   for (int i = 0; i < node.parameters.size(); i++)
   {
@@ -22,13 +24,13 @@ void Print::print(Node node, Node &parent)
   std::cout << std::endl;
 }
 
-void Print::print_variable(Node node, Node &parent, int i)
+void Print::print_variable(Parser::Node node, Parser::Node &parent, int i)
 {
-  if (parent.type == Node_Types::function_call)
+  if (parent.type == Parser::Node_Types::function_call)
   {
     Print::print_function_variable(node, parent, i);
   }
-  else if (parent.type == Node_Types::_if)
+  else if (parent.type == Parser::Node_Types::_if)
   {
     Print::print_if_variable(node, parent);
   }
@@ -38,7 +40,7 @@ void Print::print_variable(Node node, Node &parent, int i)
   }
 }
 
-void print_global_variable(std::string variable_name)
+void Print::print_global_variable(std::string variable_name)
 {
   bool global_variable_exists = Variables::global_variable_exists(variable_name);
   if (!global_variable_exists)
@@ -57,17 +59,17 @@ void print_global_variable(std::string variable_name)
   }
 }
 
-void Print::print_if_variable(Node node, Node &parent)
+void Print::print_if_variable(Parser::Node node, Parser::Node &parent)
 {
   //! This does not look at global variables, or outer scopes(functions, or if statements, etc. ) hmmmm something to think about
-  for (int i = 0; i < Variables::ifs.size(); i++)
+  for (int i = 0; i < t_ifs.size(); i++)
   {
-    if (Variables::ifs[i].id == parent.if_id)
+    if (t_ifs[i].id == parent.if_id)
     {
-      bool if_variable_exists = Variables::if_variable_exists(Variables::ifs[i], node.variable_name);
+      bool if_variable_exists = Variables::if_variable_exists(t_ifs[i], node.variable_name);
       if (if_variable_exists)
       {
-        Variables::Variable var = get_if_variable(Variables::ifs[i], node.variable_name);
+        Variables::Variable var = get_if_variable(t_ifs[i], node.variable_name);
         if (var.string_value.length() > 0)
         {
           Print::print_string(var.string_value);
@@ -81,7 +83,7 @@ void Print::print_if_variable(Node node, Node &parent)
   }
 }
 
-void Print::print_function_variable(Node node, Node &parent, int i)
+void Print::print_function_variable(Parser::Node node, Parser::Node &parent, int i)
 {
   bool global_variable_exists = Variables::global_variable_exists(node.parameters[i].id_name);
   bool function_exists = Variables::function_exists(parent.function_name);
@@ -125,7 +127,7 @@ void Print::print_number(int number)
   std::cout << number << ' ';
 }
 
-void print_undefined_variable(std::string variable_name)
+void Print::print_undefined_variable(std::string variable_name)
 {
   std::cerr << "Cannot print undefined variable: " << variable_name << std::endl;
   return;

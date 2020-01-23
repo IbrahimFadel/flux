@@ -1,11 +1,11 @@
 #ifndef VARIABLES_H
 #define VARIABLES_H
 
-#include "parser.h"
-
 #include <iostream>
 #include <map>
 #include <vector>
+
+#include "parser.h"
 
 namespace Variables
 {
@@ -30,15 +30,15 @@ struct If
   int id;
 };
 
-std::map<std::string, Variables::Variable> variables;
-std::map<std::string, Variables::Variable>::iterator variables_it;
+// extern std::map<std::string, Variables::Variable> variables;
+// extern std::map<std::string, Variables::Variable>::iterator variables_it;
 
-std::map<std::string, Variables::Function> functions;
-std::map<std::string, Variables::Function>::iterator functions_it;
-std::map<std::string, Variables::Variable>::iterator function_variables_it;
+// extern std::map<std::string, Variables::Function> functions;
+// extern std::map<std::string, Variables::Function>::iterator functions_it;
+// extern std::map<std::string, Variables::Variable>::iterator function_variables_it;
 
-std::vector<Variables::If> ifs;
-std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
+// extern std::vector<Variables::If> ifs;
+// extern std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
 
 bool global_variable_exists(std::string variable_name);
 bool function_exists(std::string function_name);

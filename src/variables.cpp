@@ -1,39 +1,47 @@
 #include "variables.h"
 
-using namespace Variables;
+std::map<std::string, Variables::Variable> _variables;
+std::map<std::string, Variables::Variable>::iterator _variables_it;
 
-bool global_variable_exists(std::string variable_name)
+std::map<std::string, Variables::Function> _functions;
+std::map<std::string, Variables::Function>::iterator _functions_it;
+std::map<std::string, Variables::Variable>::iterator _function_variables_it;
+
+std::vector<Variables::If> _ifs;
+std::map<std::string, Variables::Variable>::iterator _ifs_variables_it;
+
+bool Variables::global_variable_exists(std::string variable_name)
 {
-  variables_it = variables.find(variable_name);
-  return variables_it != variables.end();
+  _variables_it = _variables.find(variable_name);
+  return _variables_it != _variables.end();
 }
 
-bool function_exists(std::string function_name)
+bool Variables::function_exists(std::string function_name)
 {
-  functions_it = functions.find(function_name);
-  return functions_it != functions.end();
+  _functions_it = _functions.find(function_name);
+  return _functions_it != _functions.end();
 }
 
-bool if_variable_exists(If _if, std::string variable_name)
+bool Variables::if_variable_exists(Variables::If _if, std::string variable_name)
 {
-  ifs_variables_it = _if.variables.find(variable_name);
-  return ifs_variables_it != _if.variables.end();
+  _ifs_variables_it = _if.variables.find(variable_name);
+  return _ifs_variables_it != _if.variables.end();
 }
 
-Variable get_global_variable(std::string variable_name)
+Variables::Variable Variables::get_global_variable(std::string variable_name)
 {
-  variables_it = variables.find(variable_name);
-  return variables_it->second;
+  _variables_it = _variables.find(variable_name);
+  return _variables_it->second;
 }
 
-Variable get_function_variable(std::string function_name, std::string variable_name)
+Variables::Variable Variables::get_function_variable(std::string function_name, std::string variable_name)
 {
-  functions_it = functions.find(function_name);
-  return functions_it->second.variables.find(variable_name)->second;
+  _functions_it = _functions.find(function_name);
+  return _functions_it->second.variables.find(variable_name)->second;
 }
 
-Variable get_if_variable(Variables::If _if, std::string variable_name)
+Variables::Variable Variables::get_if_variable(Variables::If _if, std::string variable_name)
 {
-  ifs_variables_it = _if.variables.find(variable_name);
-  return ifs_variables_it->second;
+  _ifs_variables_it = _if.variables.find(variable_name);
+  return _ifs_variables_it->second;
 }

@@ -3,6 +3,9 @@
 
 #include <map>
 #include "parser.h"
+#include "functions.h"
+
+#include "variables.h"
 
 using namespace Parser;
 
