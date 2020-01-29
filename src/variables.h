@@ -43,6 +43,7 @@ extern std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
 bool global_variable_exists(std::string variable_name);
 bool function_exists(std::string function_name);
 bool if_variable_exists(Variables::If _if, std::string variable_name);
+bool function_var_exists(std::string function_name, std::string variable_name);
 
 Variables::Variable get_global_variable(std::string variable_name);
 Variables::Variable get_function_variable(std::string function_name, std::string variable_name);

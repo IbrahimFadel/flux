@@ -92,7 +92,8 @@ void Print::print_function_variable(Parser::Node node, Parser::Node &parent, int
 {
   bool global_variable_exists = Variables::global_variable_exists(node.parameters[i].id_name);
   bool function_exists = Variables::function_exists(parent.function_name);
-  if (function_exists)
+  bool function_var_exists = Variables::function_var_exists(parent.function_name, node.parameters[i].id_name);
+  if (function_exists && function_var_exists)
   {
     Variables::Variable var = Variables::get_function_variable(parent.function_name, node.parameters[i].id_name);
     if (var.string_value.length() > 0)

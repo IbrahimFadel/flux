@@ -22,6 +22,12 @@ bool Variables::if_variable_exists(Variables::If _if, std::string variable_name)
   return Variables::ifs_variables_it != _if.variables.end();
 }
 
+bool Variables::function_var_exists(std::string function_name, std::string variable_name)
+{
+  Variables::functions_it = Variables::functions.find(function_name);
+  return functions_it->second.variables.find(variable_name) != functions_it->second.variables.end();
+}
+
 Variables::Variable Variables::get_global_variable(std::string variable_name)
 {
   Variables::variables_it = Variables::variables.find(variable_name);

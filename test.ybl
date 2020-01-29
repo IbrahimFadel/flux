@@ -1,5 +1,10 @@
-let x = "variable";
+let x = "my variable";
 
-print("hi");
-print(x);
-print(102);
+fn main() {
+  print(x);
+  if(x == "my variable") {
+    print("it's equal!");
+  }
+}
+
+main();
