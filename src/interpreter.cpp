@@ -9,15 +9,15 @@ using std::vector;
 
 using Parser::Node_Types;
 
-std::map<std::string, Variables::Variable> variables;
-std::map<std::string, Variables::Variable>::iterator variables_it;
+std::map<std::string, Variables::Variable> Variables::variables;
+std::map<std::string, Variables::Variable>::iterator Variables::variables_it;
 
-std::map<std::string, Variables::Function> functions;
-std::map<std::string, Variables::Function>::iterator functions_it;
-std::map<std::string, Variables::Variable>::iterator function_variables_it;
+std::map<std::string, Variables::Function> Variables::functions;
+std::map<std::string, Variables::Function>::iterator Variables::functions_it;
+std::map<std::string, Variables::Variable>::iterator Variables::function_variables_it;
 
-std::vector<Variables::If> ifs;
-std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
+std::vector<Variables::If> Variables::ifs;
+std::map<std::string, Variables::Variable>::iterator Variables::ifs_variables_it;
 
 string evaluate_string_expression(Node node)
 {
@@ -64,8 +64,8 @@ int evaluate_expression(Node node)
         int a, b, c;
         if (node.assignment_values[i - 1].id_name.length() > 0)
         {
-          variables_it = variables.find(node.assignment_values[i - 1].id_name);
-          a = variables_it->second.number_value;
+          Variables::variables_it = Variables::variables.find(node.assignment_values[i - 1].id_name);
+          a = Variables::variables_it->second.number_value;
         }
         else
         {
@@ -73,8 +73,8 @@ int evaluate_expression(Node node)
         }
         if (node.assignment_values[i + 1].id_name.length() > 0)
         {
-          variables_it = variables.find(node.assignment_values[i + 1].id_name);
-          b = variables_it->second.number_value;
+          Variables::variables_it = Variables::variables.find(node.assignment_values[i + 1].id_name);
+          b = Variables::variables_it->second.number_value;
         }
         else
         {
@@ -82,8 +82,8 @@ int evaluate_expression(Node node)
         }
         if (node.assignment_values[i + 3].id_name.length() > 0)
         {
-          variables_it = variables.find(node.assignment_values[i + 3].id_name);
-          c = variables_it->second.number_value;
+          Variables::variables_it = Variables::variables.find(node.assignment_values[i + 3].id_name);
+          c = Variables::variables_it->second.number_value;
         }
         else
         {
@@ -148,8 +148,8 @@ int evaluate_expression(Node node)
         int a, b;
         if (node.assignment_values[i - 1].id_name.length() > 0)
         {
-          variables_it = variables.find(node.assignment_values[i - 1].id_name);
-          a = variables_it->second.number_value;
+          Variables::variables_it = Variables::variables.find(node.assignment_values[i - 1].id_name);
+          a = Variables::variables_it->second.number_value;
         }
         else
         {
@@ -157,8 +157,8 @@ int evaluate_expression(Node node)
         }
         if (node.assignment_values[i + 1].id_name.length() > 0)
         {
-          variables_it = variables.find(node.assignment_values[i + 1].id_name);
-          b = variables_it->second.number_value;
+          Variables::variables_it = Variables::variables.find(node.assignment_values[i + 1].id_name);
+          b = Variables::variables_it->second.number_value;
         }
         else
         {
@@ -232,14 +232,14 @@ bool condition_true(Condition condition)
     }
     else if (!is_number(left.value))
     {
-      variables_it = variables.find(left.value);
-      if (variables_it->second.string_value.length() > 0)
+      Variables::variables_it = Variables::variables.find(left.value);
+      if (Variables::variables_it->second.string_value.length() > 0)
       {
-        left_string = variables_it->second.string_value;
+        left_string = Variables::variables_it->second.string_value;
       }
       else
       {
-        left_number = variables_it->second.number_value;
+        left_number = Variables::variables_it->second.number_value;
       }
     }
     else
@@ -253,14 +253,14 @@ bool condition_true(Condition condition)
     }
     else if (!is_number(right.value))
     {
-      variables_it = variables.find(right.value);
-      if (variables_it->second.string_value.length() > 0)
+      Variables::variables_it = Variables::variables.find(right.value);
+      if (Variables::variables_it->second.string_value.length() > 0)
       {
-        right_string = variables_it->second.string_value;
+        right_string = Variables::variables_it->second.string_value;
       }
       else
       {
-        right_number = variables_it->second.number_value;
+        right_number = Variables::variables_it->second.number_value;
       }
     }
     else
@@ -272,14 +272,14 @@ bool condition_true(Condition condition)
     {
       if (!is_number(result.value))
       {
-        variables_it = variables.find(result.value);
-        if (variables_it->second.string_value.length() > 0)
+        Variables::variables_it = Variables::variables.find(result.value);
+        if (Variables::variables_it->second.string_value.length() > 0)
         {
-          result_string = variables_it->second.string_value;
+          result_string = Variables::variables_it->second.string_value;
         }
         else
         {
-          result_number = variables_it->second.number_value;
+          result_number = Variables::variables_it->second.number_value;
         }
       }
       else
@@ -470,102 +470,6 @@ bool condition_true(Condition condition)
   return true;
 }
 
-void _print(Node node, Node &parent)
-{
-  for (int i = 0; i < node.parameters.size(); i++)
-  {
-    if (node.parameters[i].string_value.length() > 0)
-    {
-      cout << node.parameters[i].string_value.substr(1, node.parameters[i].string_value.length() - 2) << ' ';
-    }
-    else if (node.parameters[i].number_value != -9999)
-    {
-      cout << node.parameters[i].number_value << ' ';
-    }
-    else
-    {
-      if (parent.type == Node_Types::function_call)
-      {
-        functions_it = functions.find(parent.function_name);
-        variables_it = variables.find(node.parameters[i].id_name);
-        if (functions_it != functions.end())
-        {
-          function_variables_it = functions_it->second.variables.find(node.parameters[i].id_name);
-          if (function_variables_it != functions_it->second.variables.end())
-          {
-            if (function_variables_it->second.string_value.length() > 0)
-            {
-              cout << function_variables_it->second.string_value << ' ';
-            }
-            else
-            {
-              cout << function_variables_it->second.number_value << ' ';
-            }
-          }
-          else if (variables_it != variables.end())
-          {
-            if (variables_it->second.string_value.length() > 0)
-            {
-              cout << variables_it->second.string_value << ' ';
-            }
-            else
-            {
-              cout << variables_it->second.number_value << ' ';
-            }
-          }
-          else
-          {
-            std::cerr << "Cannot print undefined variable: " << node.parameters[i].id_name << endl;
-            return;
-          }
-        }
-      }
-      else if (parent.type == Node_Types::_if)
-      {
-        for (int i = 0; i < ifs.size(); i++)
-        {
-          if (ifs[i].id == parent.if_id)
-          {
-            ifs_variables_it = ifs[i].variables.find(node.variable_name);
-            cout << ifs_variables_it->first << endl;
-            if (ifs_variables_it != ifs[i].variables.end())
-            {
-              Variables::Variable var = ifs_variables_it->second;
-              cout << "TEST" << endl;
-              if (var.string_value.length() > 0)
-              {
-                cout << var.string_value << ' ';
-              }
-              else
-              {
-                cout << var.number_value << ' ';
-              }
-            }
-          }
-        }
-      }
-      else
-      {
-        variables_it = variables.find(node.parameters[i].id_name);
-        if (variables_it == variables.end())
-        {
-          std::cerr << "Cannot print undefined variable: " << node.parameters[i].id_name << endl;
-          return;
-        }
-        if (variables_it->second.string_value.length() > 0)
-        {
-          cout << variables_it->second.string_value << ' ';
-        }
-        else
-        {
-          cout << variables_it->second.number_value << ' ';
-        }
-      }
-    }
-  }
-  cout << endl;
-};
-
 void Interpreter::_else(vector<Node> nodes, int i, Node &parent)
 {
 
@@ -620,9 +524,9 @@ void Interpreter::_if(Node node, Node &parent)
   Variables::If _if;
   _if.then = node.then;
   _if.condition = node.condition;
-  _if.id = ifs.size();
-  node.if_id = ifs.size();
-  ifs.push_back(_if);
+  _if.id = Variables::ifs.size();
+  node.if_id = Variables::ifs.size();
+  Variables::ifs.push_back(_if);
 
   if (condition_true(node.condition))
   {
@@ -687,28 +591,28 @@ void Interpreter::let(Node node, Node &parent)
 
   if (parent.type == Node_Types::function_call)
   {
-    functions_it = functions.find(parent.function_name);
-    if (functions_it != functions.end())
+    Variables::functions_it = Variables::functions.find(parent.function_name);
+    if (Variables::functions_it != Variables::functions.end())
     {
-      functions_it->second.variables.insert({node.variable_name, var});
+      Variables::functions_it->second.variables.insert({node.variable_name, var});
     }
   }
   else if (parent.type == Node_Types::_if)
   {
-    cout << "IF" << endl;
-    cout << ifs.size() - 1 << endl;
-    for (int i = 0; i < ifs.size(); i++)
+    // cout << "IF" << endl;
+    // cout << Variables::ifs.size() - 1 << endl;
+    for (int i = 0; i < Variables::ifs.size(); i++)
     {
-      if (ifs[i].id == parent.if_id)
+      if (Variables::ifs[i].id == parent.if_id)
       {
-        cout << node.variable_name << ' ' << var.number_value << endl;
-        ifs[i].variables.insert({node.variable_name, var});
+        // cout << node.variable_name << ' ' << var.number_value << endl;
+        Variables::ifs[i].variables.insert({node.variable_name, var});
       }
     }
   }
   else
   {
-    variables.insert({node.variable_name, var});
+    Variables::variables.insert({node.variable_name, var});
   }
 };
 
@@ -726,21 +630,21 @@ void Interpreter::assign(Node node, Node &parent)
 {
   if (parent.type == Node_Types::function_call)
   {
-    functions_it = functions.find(parent.function_name);
-    if (functions_it != functions.end())
+    Variables::functions_it = Variables::functions.find(parent.function_name);
+    if (Variables::functions_it != Variables::functions.end())
     {
-      function_variables_it = functions_it->second.variables.find(node.id_name);
-      if (function_variables_it != functions_it->second.variables.end())
+      Variables::function_variables_it = Variables::functions_it->second.variables.find(node.id_name);
+      if (Variables::function_variables_it != Variables::functions_it->second.variables.end())
       {
-        if (function_variables_it->second.string_value.length() > 0)
+        if (Variables::function_variables_it->second.string_value.length() > 0)
         {
           string val = evaluate_string_expression(node);
-          function_variables_it->second.string_value = val;
+          Variables::function_variables_it->second.string_value = val;
         }
         else
         {
           int val = evaluate_expression(node);
-          function_variables_it->second.number_value = val;
+          Variables::function_variables_it->second.number_value = val;
         }
       }
       else
@@ -752,16 +656,16 @@ void Interpreter::assign(Node node, Node &parent)
   }
   else
   {
-    variables_it = variables.find(node.id_name);
-    if (variables_it->second.string_value.length() > 0)
+    Variables::variables_it = Variables::variables.find(node.id_name);
+    if (Variables::variables_it->second.string_value.length() > 0)
     {
       string val = evaluate_string_expression(node);
-      variables_it->second.string_value = val;
+      Variables::variables_it->second.string_value = val;
     }
     else
     {
       int val = evaluate_expression(node);
-      variables_it->second.number_value = val;
+      Variables::variables_it->second.number_value = val;
     }
   }
 }
@@ -779,8 +683,8 @@ void Interpreter::_break(vector<Node> nodes, int i, Node &parent)
 string Interpreter::_input(Node node)
 {
   Node parent;
-  // Print::print(node, parent);
-  _print(node, parent);
+  Print::print(node, parent);
+  // _print(node, parent);
   string input;
   std::cin >> input;
   return input;
@@ -794,17 +698,17 @@ void Interpreter::function(vector<Node> nodes, int i)
   function.parameters = nodes[i].parameters;
   function.then = nodes[i].then;
 
-  functions.insert({nodes[i].function_call_name, function});
+  Variables::functions.insert({nodes[i].function_call_name, function});
 }
 
 void Interpreter::call_function(vector<Node> nodes, int i)
 {
-  functions_it = functions.find(nodes[i].function_name);
+  Variables::functions_it = Variables::functions.find(nodes[i].function_name);
 
   Node parent;
-  for (int j = 0; j < functions_it->second.then.nodes.size(); j++)
+  for (int j = 0; j < Variables::functions_it->second.then.nodes.size(); j++)
   {
-    interpret(functions_it->second.then.nodes, j, nodes[i]);
+    interpret(Variables::functions_it->second.then.nodes, j, nodes[i]);
   }
 }
 

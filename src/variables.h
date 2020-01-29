@@ -30,15 +30,15 @@ struct If
   int id;
 };
 
-// extern std::map<std::string, Variables::Variable> variables;
-// extern std::map<std::string, Variables::Variable>::iterator variables_it;
+extern std::map<std::string, Variables::Variable> variables;
+extern std::map<std::string, Variables::Variable>::iterator variables_it;
 
-// extern std::map<std::string, Variables::Function> functions;
-// extern std::map<std::string, Variables::Function>::iterator functions_it;
-// extern std::map<std::string, Variables::Variable>::iterator function_variables_it;
+extern std::map<std::string, Variables::Function> functions;
+extern std::map<std::string, Variables::Function>::iterator functions_it;
+extern std::map<std::string, Variables::Variable>::iterator function_variables_it;
 
-// extern std::vector<Variables::If> ifs;
-// extern std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
+extern std::vector<Variables::If> ifs;
+extern std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
 
 bool global_variable_exists(std::string variable_name);
 bool function_exists(std::string function_name);

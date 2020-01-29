@@ -1,4 +1,5 @@
-let x = 0;
-print("test");
-print(1);
+let x = "variable";
+
+print("hi");
 print(x);
+print(102);

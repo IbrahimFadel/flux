@@ -1,7 +1,10 @@
 #include "functions.h"
+#include <iostream>
 
+using std::cout;
+using std::endl;
 
-std::vector<Variables::If> t_ifs;
+std::vector<Variables::If> ifs;
 
 void Print::print(Parser::Node node, Parser::Node &parent)
 {
@@ -9,10 +12,12 @@ void Print::print(Parser::Node node, Parser::Node &parent)
   {
     if (node.parameters[i].string_value.length() > 0)
     {
-      Print::print_string(node.parameters[i].string_value);
+      std::string print_value = node.parameters[i].string_value.substr(1, node.parameters[i].string_value.length() - 2);
+      Print::print_string(print_value);
     }
     else if (node.parameters[i].number_value != -9999)
     {
+      // std::cout << node.parameters[i].number_value << std::endl;
       Print::print_number(node.parameters[i].number_value);
     }
     else
@@ -62,14 +67,14 @@ void Print::print_global_variable(std::string variable_name)
 void Print::print_if_variable(Parser::Node node, Parser::Node &parent)
 {
   //! This does not look at global variables, or outer scopes(functions, or if statements, etc. ) hmmmm something to think about
-  for (int i = 0; i < t_ifs.size(); i++)
+  for (int i = 0; i < ifs.size(); i++)
   {
-    if (t_ifs[i].id == parent.if_id)
+    if (ifs[i].id == parent.if_id)
     {
-      bool if_variable_exists = Variables::if_variable_exists(t_ifs[i], node.variable_name);
+      bool if_variable_exists = Variables::if_variable_exists(ifs[i], node.variable_name);
       if (if_variable_exists)
       {
-        Variables::Variable var = get_if_variable(t_ifs[i], node.variable_name);
+        Variables::Variable var = get_if_variable(ifs[i], node.variable_name);
         if (var.string_value.length() > 0)
         {
           Print::print_string(var.string_value);
@@ -119,7 +124,7 @@ void Print::print_function_variable(Parser::Node node, Parser::Node &parent, int
 
 void Print::print_string(std::string string)
 {
-  std::cout << string.substr(1, string.length() - 2) << ' ';
+  std::cout << string << ' ';
 }
 
 void Print::print_number(int number)

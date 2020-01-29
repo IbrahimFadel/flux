@@ -154,7 +154,7 @@ vector<Token> generate_tokens(vector<string> input)
         {
           number += "-";
         }
-        else if (line[j - 1] != '-' && !isdigit(line[j - 1]) && line[j - 1] != ' ')
+        else if (line[j - 1] != '-' && !isdigit(line[j - 1]) && line[j - 1] != ' ' && line[j - 1] != '(')
         {
           continue;
         }
