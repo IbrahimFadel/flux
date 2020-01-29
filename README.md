@@ -75,15 +75,7 @@ let int_var = int(string_var);
 ## Install
 
 ```bash
-git clone https://github.com/IbrahimFadel/yabl.git
-```
-
-```bash
-cd yabl
-```
-
-```bash
-mkdir -p build/parts && make && make install
+git clone https://github.com/IbrahimFadel/yabl.git && cd yabl && sudo make install
 ```
 
 ## Usage
