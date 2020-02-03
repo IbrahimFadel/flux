@@ -4,6 +4,7 @@ fn main() {
   print(x);
   if(x == "my variable") {
     print("it's equal!");
+    print(x);
   }
 }
 

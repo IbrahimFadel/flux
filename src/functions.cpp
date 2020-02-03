@@ -4,8 +4,6 @@
 using std::cout;
 using std::endl;
 
-std::vector<Variables::If> ifs;
-
 void Print::print(Parser::Node node, Parser::Node &parent)
 {
   for (int i = 0; i < node.parameters.size(); i++)
@@ -31,6 +29,7 @@ void Print::print(Parser::Node node, Parser::Node &parent)
 
 void Print::print_variable(Parser::Node node, Parser::Node &parent, int i)
 {
+  // cout << parent.type << endl;
   if (parent.type == Parser::Node_Types::function_call)
   {
     Print::print_function_variable(node, parent, i);
@@ -67,14 +66,19 @@ void Print::print_global_variable(std::string variable_name)
 void Print::print_if_variable(Parser::Node node, Parser::Node &parent)
 {
   //! This does not look at global variables, or outer scopes(functions, or if statements, etc. ) hmmmm something to think about
-  for (int i = 0; i < ifs.size(); i++)
+  // cout << Variables::ifs.size() << endl;
+  for (int i = 0; i < Variables::ifs.size(); i++)
   {
-    if (ifs[i].id == parent.if_id)
+    // cout << "tes" << endl;
+    if (Variables::ifs[i].id == parent.if_id)
     {
-      bool if_variable_exists = Variables::if_variable_exists(ifs[i], node.variable_name);
+      bool global_variable_exists = Variables::global_variable_exists(node.variable_name);
+      bool if_variable_exists = Variables::if_variable_exists(Variables::ifs[i], node.variable_name);
+      //! node.variable_name doesn't exist apparently? wtf pls fix this soon ibrahim - past ibrahim with high expectations of you :)
+      cout << if_variable_exists << ' ' << global_variable_exists << ' ' << node.variable_name << endl;
       if (if_variable_exists)
       {
-        Variables::Variable var = get_if_variable(ifs[i], node.variable_name);
+        Variables::Variable var = get_if_variable(Variables::ifs[i], node.variable_name);
         if (var.string_value.length() > 0)
         {
           Print::print_string(var.string_value);
@@ -83,6 +87,10 @@ void Print::print_if_variable(Parser::Node node, Parser::Node &parent)
         {
           Print::print_number(var.number_value);
         }
+      }
+      else if (global_variable_exists)
+      {
+        Print::print_global_variable(node.variable_name);
       }
     }
   }
