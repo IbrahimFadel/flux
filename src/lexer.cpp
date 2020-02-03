@@ -33,7 +33,9 @@ vector<Token> generate_tokens(vector<string> input)
   int chars_skipped = 0;
   int number_chars_skipped = 0;
   bool is_string = false;
-  string keywords[15] = {"fn", "let", "print", "int", "float", "string", "object", "class", "while", "if", "continue", "break", "else", "for", "input"};
+  string operators[14] = {"+", "-", "*", "/", "==", "!=", ">", "<", ">=", "<=", "->", "%", "&&", "||"};
+
+  string keywords[8] = {"fn", "const", "int", "string", "float", "obj", "return", "print"};
 
   for (int i = 0; i < input.size(); i++)
   {
@@ -204,7 +206,7 @@ vector<Token> generate_tokens(vector<string> input)
         token.clear();
         continue;
       }
-      else if (token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==" || token == "%" || token == "&&" || token == "||" || token == "%" || token == "!=")
+      else if (token == "->" || token == "*" || token == "/" || token == "+" || token == "-" || token == "<" || token == ">" || token == "==" || token == "%" || token == "&&" || token == "||" || token == "%" || token == "!=")
       {
         if (token == "<" || token == ">")
         {
@@ -216,6 +218,10 @@ vector<Token> generate_tokens(vector<string> input)
         else if (token == "-")
         {
           if (isdigit(line[j + 1]))
+          {
+            continue;
+          }
+          else if (line[j + 1] == '>')
           {
             continue;
           }

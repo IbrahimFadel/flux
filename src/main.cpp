@@ -5,11 +5,8 @@
 #include <limits.h>
 
 #include "lexer.h"
-#include "parser.h"
-#include "interpreter.h"
 
 using namespace Lexer;
-using namespace Parser;
 
 using std::cout;
 using std::endl;
@@ -34,16 +31,6 @@ void print_tokens(vector<Token> tokens)
     cout << "[ " << tokens[i].type << ":"
          << " '" << tokens[i].value << "' ]"
          << " - ln:" << tokens[i].line_number << " pos:" << tokens[i].line_position << endl;
-  }
-}
-
-void print_ast(Tree ast)
-{
-  for (int i = 0; i < ast.nodes.size(); i++)
-  {
-    cout << "------ NODE ------" << endl;
-    cout << ast.nodes[i] << endl;
-    cout << "------ END NODE ------" << endl;
   }
 }
 
@@ -84,15 +71,10 @@ int main(int argc, char **argv)
   vector<string> input = get_file_input(path);
   vector<Token> tokens = generate_tokens(input);
 
-  Tree ast = generate_ast(tokens);
-
   if (verbose)
   {
     print_tokens(tokens);
-    print_ast(ast);
   }
-
-  run(ast);
 
   return 0;
 }
