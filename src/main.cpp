@@ -5,6 +5,7 @@
 #include <limits.h>
 
 #include "lexer.h"
+#include "parser.h"
 
 using namespace Lexer;
 
@@ -75,6 +76,8 @@ int main(int argc, char **argv)
   {
     print_tokens(tokens);
   }
+
+  Parser::parse_tokens(tokens);
 
   return 0;
 }
