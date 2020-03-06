@@ -77,7 +77,8 @@ int main(int argc, char **argv)
     print_tokens(tokens);
   }
 
-  Parser::parse_tokens(tokens);
+  std::vector<Parser::Node> nodes = Parser::parse_tokens(tokens);
+  Parser::print_nodes(nodes);
 
   return 0;
 }
