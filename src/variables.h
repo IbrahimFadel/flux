@@ -2,52 +2,37 @@
 #define VARIABLES_H
 
 #include <iostream>
-#include <map>
 #include <vector>
+#include <stack>
+#include "lexer.h"
 
-#include "parser.h"
+using std::cout;
+using std::endl;
 
 namespace Variables
 {
-struct Variable
+
+typedef enum Variable_Types
 {
-  int number_value;
-  std::string string_value;
-};
+  integer
+} Variable_Types;
 
-struct Function
+typedef struct Expression
 {
-  std::vector<Parser::Node> parameters;
-  Parser::Then then;
-  std::map<std::string, Variables::Variable> variables;
-};
+  int int_value;
+  int skip = 0;
+} Expression;
 
-struct If
+typedef struct Variable
 {
-  Parser::Condition condition;
-  Parser::Then then;
-  std::map<std::string, Variables::Variable> variables;
-  int id;
-};
+  int type;
+  std::string name;
+  Variables::Expression int_value;
+} Variable;
 
-extern std::map<std::string, Variables::Variable> variables;
-extern std::map<std::string, Variables::Variable>::iterator variables_it;
-
-extern std::map<std::string, Variables::Function> functions;
-extern std::map<std::string, Variables::Function>::iterator functions_it;
-extern std::map<std::string, Variables::Variable>::iterator function_variables_it;
-
-extern std::vector<Variables::If> ifs;
-extern std::map<std::string, Variables::Variable>::iterator ifs_variables_it;
-
-bool global_variable_exists(std::string variable_name);
-bool function_exists(std::string function_name);
-bool if_variable_exists(Variables::If _if, std::string variable_name);
-bool function_var_exists(std::string function_name, std::string variable_name);
-
-Variables::Variable get_global_variable(std::string variable_name);
-Variables::Variable get_function_variable(std::string function_name, std::string variable_name);
-Variables::Variable get_if_variable(Variables::If _if, std::string variable_name);
+Variables::Expression evaluate_expression(std::vector<Lexer::Token> tokens, int i);
+int apply_operation(int a, int b, char op);
+int get_precedence(char op);
 } // namespace Variables
 
 #endif

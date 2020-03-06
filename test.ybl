@@ -1,11 +1,2 @@
-let x = "my variable";
-
-fn main() {
-  print(x);
-  if(x == "my variable") {
-    print("it's equal!");
-    print(x);
-  }
-}
-
-main();
+int num1 = 100 * (2 + 12);
+int num2 = 100 * (4 + 12);

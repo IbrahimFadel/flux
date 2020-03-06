@@ -17,7 +17,7 @@ struct Token
   int line_position;
 };
 
-enum Types
+enum Token_Types
 {
   id = 0,
   kw = 1,
