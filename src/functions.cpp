@@ -34,14 +34,12 @@ int Functions::get_fn_return_type(std::vector<Lexer::Token> tokens, int i)
 Parser::Then Functions::get_fn_then(std::vector<Lexer::Token> tokens, int i)
 {
   Parser::Then then;
-  // cout << tokens[i].value << endl;
   int open_curly_brackets = 1;
   int closed_curly_brackets = 0;
   for(int x = i; x < tokens.size(); x++)
   {
     if(open_curly_brackets == closed_curly_brackets)
     {
-      cout << "HI " << tokens[x].value << endl;
       break;
     }
     if(tokens[x].type == Lexer::Token_Types::sep && tokens[x].value == "{")

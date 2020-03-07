@@ -9,22 +9,15 @@
 namespace Parser
 {
 
-typedef struct Node;
-typedef struct Then;
-typedef struct Function;
+struct Node;
+struct Then;
+struct Function;
 
-typedef enum Node_Types
+
+enum Node_Types
 {
   var,
   fn
-} Node_Types;
-
-struct Node
-{
-  int type;
-  Variables::Variable variable;
-  int skip;
-  Parser::Function fn;
 };
 
 struct Then
@@ -41,6 +34,15 @@ struct Function
   Parser::Then then;
 };
 
+struct Node
+{
+  int type;
+  Variables::Variable variable;
+  int skip;
+  Parser::Function fn;
+  Parser::Node *parent;
+};
+
 void print_nodes(std::vector<Parser::Node> nodes);
 std::vector<Parser::Node> parse_tokens(std::vector<Lexer::Token> tokens);
 Parser::Node parse_token(std::vector<Lexer::Token> tokens, int i);
@@ -49,5 +51,7 @@ Parser::Node create_fn_node(std::vector<Lexer::Token> tokens, int i);
 } // namespace Parser
 
 std::ostream &operator<<(std::ostream &os, const Parser::Node &node);
+
+#include "functions.h"
 
 #endif

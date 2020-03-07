@@ -30,10 +30,12 @@ std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
     {
       os << "PARAM " << i << ": " << node.fn.parameters[i] << endl;
     }
-    for(int i = 0; i < node.fn.then.tokens.size(); i++)
+    os << "---- THEN ----" << endl;
+    for(int i = 0; i < node.fn.then.nodes.size(); i++)
     {
-      os << "TOKEN " << i << ": " << node.fn.then.tokens[i].value << endl;
+      os << node.fn.then.nodes[i] << endl;
     }
+    os << "---- END THEN ----" << endl;
   }
   return os;
 }
@@ -83,6 +85,8 @@ Parser::Node Parser::parse_token(std::vector<Token> tokens, int i)
       node = create_fn_node(tokens, i);
     }
   }
+      cout << tokens[i].value << endl;
+
   return node;
 }
 
@@ -107,7 +111,7 @@ Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
   Parser::Node node;
   node.type = Parser::Node_Types::fn;
 
-  Functions::Function fn;
+  Parser::Function fn;
   fn.name = tokens[i + 1].value;
   fn.parameters = Functions::get_fn_parameters(tokens, i + 4);
   int skip;
@@ -122,12 +126,32 @@ Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
   fn.return_type = Functions::get_fn_return_type(tokens, i + 3 + skip + 3);
   fn.then = Functions::get_fn_then(tokens, i + 3 + skip + 5);
 
-  for(int x = 0; x < fn.then.tokens.size(); x++)
+  int _skip = 0;
+  int skipped = 0;
+  Parser::Node child_node;
+  for(int x = 0; x < fn.then.tokens.size() - 1; x++)
   {
-    Parser::Node child_node = Parser::parse_token(fn.then.tokens, x);
+    for (int j = 0; j < _skip; j++)
+    {
+      if (skipped + 1 == _skip)
+      {
+        _skip = 0;
+        skipped = 0;
+        goto end;
+      }
+      skipped++;
+      goto end;
+    }
+
+    child_node = Parser::parse_token(fn.then.tokens, x);
+    child_node.parent = &node;
+    _skip = child_node.skip;
+    fn.then.nodes.push_back(child_node);
+
+    end:;
   }
 
   node.fn = fn;
-  node.skip = skip + fn.then.tokens.size() + 1;
+  node.skip = skip + fn.then.tokens.size() + 4 + 4;
   return node;
 }
