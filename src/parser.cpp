@@ -1,7 +1,6 @@
 #include "parser.h"
 
 using namespace Lexer;
-// using namespace Parser;
 
 using std::cout;
 using std::endl;
@@ -20,7 +19,20 @@ std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
   {
     if(node.variable.type == Variables::integer)
     {
-      os << "(INT) VAR = " << node.variable.int_value.int_value << endl;
+      os << "(INT) " << node.variable.name << " = " << node.variable.int_value.int_value << endl;
+    }
+  }
+  else if(node.type == Parser::Node_Types::fn)
+  {
+    os << "FN: " << node.fn.name << endl;
+    os << "RETURN: " << node.fn.return_type << endl;
+    for(int i = 0; i < node.fn.parameters.size(); i++)
+    {
+      os << "PARAM " << i << ": " << node.fn.parameters[i] << endl;
+    }
+    for(int i = 0; i < node.fn.then.tokens.size(); i++)
+    {
+      os << "TOKEN " << i << ": " << node.fn.then.tokens[i].value << endl;
     }
   }
   return os;
@@ -66,6 +78,10 @@ Parser::Node Parser::parse_token(std::vector<Token> tokens, int i)
     {
       node = create_int_node(tokens, i);
     }
+    else if(token.value == "fn")
+    {
+      node = create_fn_node(tokens, i);
+    }
   }
   return node;
 }
@@ -83,5 +99,35 @@ Parser::Node Parser::create_int_node(std::vector<Token> tokens, int i)
   node.skip = var.int_value.skip + 3;
   node.variable = var;
 
+  return node;
+}
+
+Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
+{
+  Parser::Node node;
+  node.type = Parser::Node_Types::fn;
+
+  Functions::Function fn;
+  fn.name = tokens[i + 1].value;
+  fn.parameters = Functions::get_fn_parameters(tokens, i + 4);
+  int skip;
+  if(fn.parameters.size() == 0)
+  {
+    skip = 0;
+  }
+  else {
+    skip = fn.parameters.size() + fn.parameters.size() - 1;
+  }
+
+  fn.return_type = Functions::get_fn_return_type(tokens, i + 3 + skip + 3);
+  fn.then = Functions::get_fn_then(tokens, i + 3 + skip + 5);
+
+  for(int x = 0; x < fn.then.tokens.size(); x++)
+  {
+    Parser::Node child_node = Parser::parse_token(fn.then.tokens, x);
+  }
+
+  node.fn = fn;
+  node.skip = skip + fn.then.tokens.size() + 1;
   return node;
 }
