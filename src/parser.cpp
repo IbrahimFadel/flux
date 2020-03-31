@@ -15,23 +15,23 @@ void Parser::print_nodes(std::vector<Parser::Node> nodes)
 
 std::ostream &operator<<(std::ostream &os, const Parser::Node &node)
 {
-  if(node.type == Parser::Node_Types::var)
+  if (node.type == Parser::Node_Types::var)
   {
-    if(node.variable.type == Variables::integer)
+    if (node.variable.type == Variables::integer)
     {
       os << "(INT) " << node.variable.name << " = " << node.variable.int_value.int_value << endl;
     }
   }
-  else if(node.type == Parser::Node_Types::fn)
+  else if (node.type == Parser::Node_Types::fn)
   {
     os << "FN: " << node.fn.name << endl;
     os << "RETURN: " << node.fn.return_type << endl;
-    for(int i = 0; i < node.fn.parameters.size(); i++)
+    for (int i = 0; i < node.fn.parameters.size(); i++)
     {
       os << "PARAM " << i << ": " << node.fn.parameters[i] << endl;
     }
     os << "---- THEN ----" << endl;
-    for(int i = 0; i < node.fn.then.nodes.size(); i++)
+    for (int i = 0; i < node.fn.then.nodes.size(); i++)
     {
       os << node.fn.then.nodes[i] << endl;
     }
@@ -80,12 +80,11 @@ Parser::Node Parser::parse_token(std::vector<Token> tokens, int i)
     {
       node = create_int_node(tokens, i);
     }
-    else if(token.value == "fn")
+    else if (token.value == "fn")
     {
       node = create_fn_node(tokens, i);
     }
   }
-      cout << tokens[i].value << endl;
 
   return node;
 }
@@ -115,11 +114,12 @@ Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
   fn.name = tokens[i + 1].value;
   fn.parameters = Functions::get_fn_parameters(tokens, i + 4);
   int skip;
-  if(fn.parameters.size() == 0)
+  if (fn.parameters.size() == 0)
   {
     skip = 0;
   }
-  else {
+  else
+  {
     skip = fn.parameters.size() + fn.parameters.size() - 1;
   }
 
@@ -129,7 +129,7 @@ Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
   int _skip = 0;
   int skipped = 0;
   Parser::Node child_node;
-  for(int x = 0; x < fn.then.tokens.size() - 1; x++)
+  for (int x = 0; x < fn.then.tokens.size() - 1; x++)
   {
     for (int j = 0; j < _skip; j++)
     {
@@ -148,10 +148,10 @@ Parser::Node Parser::create_fn_node(std::vector<Lexer::Token> tokens, int i)
     _skip = child_node.skip;
     fn.then.nodes.push_back(child_node);
 
-    end:;
+  end:;
   }
 
   node.fn = fn;
-  node.skip = skip + fn.then.tokens.size() + 4 + 4;
+  node.skip = 7 + skip + fn.then.tokens.size();
   return node;
 }
