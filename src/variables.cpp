@@ -1,21 +1,27 @@
 #include "variables.h"
 
-int Variables::get_precedence(char op){
-    if(op == '+'||op == '-')
+int Variables::get_precedence(char op)
+{
+  if (op == '+' || op == '-')
     return 1;
-    if(op == '*'||op == '/')
+  if (op == '*' || op == '/')
     return 2;
-    return 0;
+  return 0;
 }
 
 int Variables::apply_operation(int a, int b, char op)
 {
-  switch(op){
-        case '+': return a + b;
-        case '-': return a - b;
-        case '*': return a * b;
-        case '/': return a / b;
-    }
+  switch (op)
+  {
+  case '+':
+    return a + b;
+  case '-':
+    return a - b;
+  case '*':
+    return a * b;
+  case '/':
+    return a / b;
+  }
 }
 
 /**
@@ -31,11 +37,11 @@ Variables::Expression Variables::evaluate_expression(std::vector<Lexer::Token> t
   std::stack<int> values;
   std::stack<char> ops;
 
-  for(int x = i; x < tokens.size(); x++)
+  for (int x = i; x < tokens.size(); x++)
   {
-    if(tokens[x].type == Lexer::Token_Types::eol)
+    if (tokens[x].type == Lexer::Token_Types::eol)
     {
-      while(!ops.empty())
+      while (!ops.empty())
       {
         int val2 = values.top();
         values.pop();
@@ -48,15 +54,15 @@ Variables::Expression Variables::evaluate_expression(std::vector<Lexer::Token> t
       expression.int_value = values.top();
       return expression;
     }
-    else if(tokens[x].type == Lexer::Token_Types::sep)
+    else if (tokens[x].type == Lexer::Token_Types::sep)
     {
-      if(tokens[x].value == "(")
+      if (tokens[x].value == "(")
       {
         ops.push(tokens[x].value.c_str()[0]);
       }
-      else if(tokens[x].value == ")")
+      else if (tokens[x].value == ")")
       {
-        while(!ops.empty() && ops.top() != '(')
+        while (!ops.empty() && ops.top() != '(')
         {
           int val2 = values.top();
           values.pop();
@@ -70,13 +76,13 @@ Variables::Expression Variables::evaluate_expression(std::vector<Lexer::Token> t
           values.push(Variables::apply_operation(val1, val2, op));
         }
 
-        if(!ops.empty())
+        if (!ops.empty())
           ops.pop();
       }
     }
-    else if(tokens[x].type == Lexer::Token_Types::op)
+    else if (tokens[x].type == Lexer::Token_Types::op)
     {
-      while(!ops.empty() && Variables::get_precedence(ops.top()) >= Variables::get_precedence(tokens[x].value.c_str()[0]))
+      while (!ops.empty() && Variables::get_precedence(ops.top()) >= Variables::get_precedence(tokens[x].value.c_str()[0]))
       {
         int val2 = values.top();
         values.pop();
@@ -94,13 +100,35 @@ Variables::Expression Variables::evaluate_expression(std::vector<Lexer::Token> t
     }
     else
     {
+      // char *p;
+      // double converted = std::strtod(tokens[x].value.c_str(), &p);
+      // if (*p)
+      // {
+      //   // It's a variable
+      //   cout << "Var: " << tokens[x].value << endl;
+      //   Variables::Variable *var = Variables::get_variable(tokens[x].value);
+      //   switch (var->type)
+      //   {
+      //   case Variables::Variable_Types::integer:
+      //     cout << var->int_value.int_value << endl;
+      //     values.push(var->int_value.int_value);
+      //     break;
+      //   default:
+      //     break;
+      //   }
+      //   // values.push(var->)
+      // }
+      // else
+      // {
       values.push(std::stoi(tokens[x].value));
+      // }
     }
 
     expression.skip++;
   }
 
-  while(!ops.empty()){
+  while (!ops.empty())
+  {
     int val2 = values.top();
     values.pop();
     int val1 = values.top();
@@ -112,4 +140,16 @@ Variables::Expression Variables::evaluate_expression(std::vector<Lexer::Token> t
 
   expression.int_value = values.top();
   return expression;
+}
+
+Variables::Variable *Variables::get_variable(std::string name)
+{
+  for (int i = 0; i < Variables::variables.size(); i++)
+  {
+    Variables::Variable *var = Variables::variables[i];
+    if (var->name == name)
+    {
+      return var;
+    }
+  }
 }

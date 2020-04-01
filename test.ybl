@@ -11,3 +11,5 @@ fn main = (param1) -> void {
 fn sum = (num1, num2) -> int {
   int result = 30 * 4;
 }
+
+sum(20, 30);

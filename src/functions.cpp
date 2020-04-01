@@ -56,3 +56,17 @@ Parser::Then Functions::get_fn_then(std::vector<Lexer::Token> tokens, int i)
   }
   return then;
 }
+
+Parser::Function *Functions::get_fn(std::string name)
+{
+  Parser::Function *function = new Parser::Function();
+  for (int i = 0; i < Functions::functions.size(); i++)
+  {
+    if (Functions::functions[i]->name == name)
+    {
+      return Functions::functions[i];
+    }
+  }
+
+  return function;
+}

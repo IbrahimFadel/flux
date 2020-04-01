@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <limits.h>
 
+// #include "declarations.h"
+
 #include "lexer.h"
 #include "parser.h"
 
@@ -40,6 +42,28 @@ void create_project(string name)
   string command = "mkdir -p " + name + "/src && touch " + name + "/{README.md,src/main.ybl} && echo '# New Yabl Project' >> " + name + "/README.md";
   system(command.c_str());
 }
+
+// struct Foo
+// {
+//   int val;
+// };
+
+// struct Test
+// {
+//   Foo *bar;
+// };
+
+// Test get_test()
+// {
+//   Test test;
+//   Foo *foo = new Foo();
+//   foo->val = 10;
+//   test.bar = foo;
+
+//   cout << "INIT: " << test.bar->val << endl;
+
+//   return test;
+// }
 
 int main(int argc, char **argv)
 {
@@ -79,6 +103,12 @@ int main(int argc, char **argv)
 
   std::vector<Parser::Node> nodes = Parser::parse_tokens(tokens);
   Parser::print_nodes(nodes);
+
+  // Test test = get_test();
+
+  // cout << "AFTER: " << test.bar->val << endl;
+  // Test test;
+  // test.bar =
 
   return 0;
 }
