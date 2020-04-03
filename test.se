@@ -1,3 +1,8 @@
-const x: u8 = -255.0;
-let y: u8 = 155;
-const word = "const hi = 10;";
+const x: int = -255.0;
+let y: int = 155;
+const word: string = 'const "hi" = 10;';
+const numbers: array<int> = [0, 1, 2, 3, 4, 5];
+
+fn main = () -> void {
+
+}

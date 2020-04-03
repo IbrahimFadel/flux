@@ -3,19 +3,34 @@
 using std::cout;
 using std::endl;
 
+//TODO Comments
+//? Much like strings, just have a comment state
+//? Comment state will overpower string state ofc
+//? State enum?
+
+bool is_seperator(std::string token)
+{
+  return std::find(seperators.begin(), seperators.end(), token) != seperators.end();
+}
+
+bool is_type(std::string token)
+{
+  return std::find(types.begin(), types.end(), token) != types.end();
+}
+
 bool is_number(std::string string)
 {
   std::string acceptable_chars = "-0123456789.";
   return (string.find_first_not_of(acceptable_chars.substr(0, 13)) == std::string::npos);
 }
 
-bool is_literal(std::string token, bool is_string)
+bool is_literal(std::string token, int lexer_state)
 {
-  if(!is_string)
+  if (lexer_state != Lexer_State::string)
   {
     return is_number(token);
   }
-  return is_string;
+  return lexer_state == Lexer_State::string;
 }
 
 bool is_operator(std::string token)
@@ -34,20 +49,24 @@ std::shared_ptr<Token> create_token(std::string value, int type, int row, int st
   return tok;
 }
 
-void add_token(std::string &token, std::vector<std::shared_ptr<Token>> &tokens, int row, int column, bool is_string)
+void add_token(std::string &token, std::vector<std::shared_ptr<Token>> &tokens, int row, int column, int lexer_state)
 {
   std::shared_ptr<Token> tok;
-  if(is_keyword(token))
+  if (is_keyword(token))
   {
     tok = create_token(token, Token_Types::kw, row, column - token.size(), column);
   }
-  else if(is_operator(token))
+  else if (is_operator(token))
   {
     tok = create_token(token, Token_Types::op, row, column - token.size(), column);
   }
-  else if(is_literal(token, is_string))
+  else if (is_literal(token, lexer_state))
   {
     tok = create_token(token, Token_Types::lit, row, column - token.size(), column);
+  }
+  else if (is_seperator(token))
+  {
+    tok = create_token(token, Token_Types::sep, row, column - token.size(), column);
   }
   else
   {
@@ -55,32 +74,187 @@ void add_token(std::string &token, std::vector<std::shared_ptr<Token>> &tokens, 
   }
 
   tokens.push_back(std::move(tok));
+
   token.clear();
 }
 
 std::vector<std::shared_ptr<Token>> get_tokens(const std::string buffer)
 {
-  int row = -1;
-  int column = -1;
+  int row = 0;
+  int column = 0;
 
   std::vector<std::shared_ptr<Token>> tokens;
   std::string token = "";
 
-  bool is_string = false;
-  bool double_quotes = false;
+  int lexer_state = Lexer_State::normal;
+  int string_state = String_State::none;
 
   int i = 0;
-  for(char const &c : buffer)
+  for (char const &c : buffer)
   {
     switch (c)
     {
-    case ' ':
-      if(is_string)
+    case '{':
+    {
+      if (lexer_state == Lexer_State::string)
       {
         token += c;
         break;
       }
-      add_token(token, tokens, row, column, is_string);
+      std::shared_ptr<Token> tok = create_token("{", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case '}':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      if (token.length() > 0)
+      {
+        add_token(token, tokens, row, column, lexer_state);
+      }
+      std::shared_ptr<Token> tok = create_token("}", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case '(':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      std::shared_ptr<Token> tok = create_token("(", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case ')':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      if (token.length() > 0)
+      {
+        add_token(token, tokens, row, column, lexer_state);
+      }
+      std::shared_ptr<Token> tok = create_token(")", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case ',':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      add_token(token, tokens, row, column, lexer_state);
+      std::shared_ptr<Token> tok = create_token(",", Token_Types::eol, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case '[':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      std::shared_ptr<Token> tok = create_token("[", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case ']':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      add_token(token, tokens, row, column, lexer_state);
+      std::shared_ptr<Token> tok = create_token("]", Token_Types::sep, row, column - token.length(), column);
+      tokens.push_back(tok);
+
+      token.clear();
+      break;
+    }
+    case '<':
+    {
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      if (token == "array")
+      {
+        std::shared_ptr<Token> tok = create_token(token, Token_Types::kw, row, column - token.length(), column);
+        tokens.push_back(tok);
+
+        token.clear();
+        tok = create_token("<", Token_Types::sep, row, column - token.length(), column);
+        tokens.push_back(tok);
+      }
+      else
+      {
+        token += c;
+        if (i == buffer.length() - 1)
+        {
+          add_token(token, tokens, row, column, lexer_state);
+        }
+      }
+      break;
+    }
+    case '>':
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      if (is_keyword(token) && is_type(token))
+      {
+        std::shared_ptr<Token> tok = create_token(token, Token_Types::kw, row, column - token.length(), column);
+        tokens.push_back(tok);
+
+        token.clear();
+        tok = create_token(">", Token_Types::sep, row, column - token.length(), column);
+        tokens.push_back(tok);
+      }
+      else
+      {
+        token += c;
+        if (i == buffer.length() - 1)
+        {
+          add_token(token, tokens, row, column, lexer_state);
+        }
+      }
+      break;
+    case ' ':
+      if (lexer_state == Lexer_State::string)
+      {
+        token += c;
+        break;
+      }
+      if (token.length() > 0)
+      {
+        add_token(token, tokens, row, column, lexer_state);
+      }
       break;
     case '\n':
       row++;
@@ -88,85 +262,101 @@ std::vector<std::shared_ptr<Token>> get_tokens(const std::string buffer)
       break;
     case '\t':
       break;
-    case ':': {
-      if(is_string)
+    case ':':
+    {
+      if (lexer_state == Lexer_State::string)
       {
         token += c;
         break;
       }
       std::shared_ptr<Token> tok = create_token(token, Token_Types::id, row, column - token.size(), column);
       tokens.push_back(std::move(tok));
+
       token.clear();
       token += c;
       break;
     }
-    case ';': {
-      if(is_string)
+    case ';':
+    {
+      if (lexer_state == Lexer_State::string)
       {
         token += c;
         break;
       }
-      if(token.size() > 0)
+      if (token.size() > 0)
       {
-        add_token(token, tokens, row, column, is_string);
+        add_token(token, tokens, row, column, lexer_state);
       }
       token += c;
       std::shared_ptr<Token> tok2 = create_token(token, Token_Types::eol, row, column, column);
       tokens.push_back(std::move(tok2));
+
       token.clear();
       break;
     }
     case '"':
-      if (double_quotes)
+      if (string_state == String_State::none)
       {
-        if(!is_string)
+        string_state = String_State::double_quotes;
+      }
+
+      if (string_state == String_State::double_quotes)
+      {
+        if (lexer_state != Lexer_State::string)
         {
-          double_quotes = true;
-          is_string = true;
+          string_state = String_State::double_quotes;
+          lexer_state = Lexer_State::string;
         }
         else
         {
-          add_token(token, tokens, row, column, is_string);
-          is_string = !is_string;
+          add_token(token, tokens, row, column, lexer_state);
+          lexer_state = Lexer_State::normal;
         }
       }
       else
       {
-        if(!is_string)
+        token += c;
+        if (lexer_state != Lexer_State::string)
         {
-          double_quotes = true;
-          is_string = true;
+          string_state = String_State::double_quotes;
+          lexer_state = Lexer_State::string;
         }
       }
       break;
     case '\'':
-      if (!double_quotes)
+      if (string_state == String_State::none)
       {
-        if(!is_string)
+        string_state = String_State::single_quotes;
+      }
+
+      if (string_state != String_State::double_quotes)
+      {
+        if (lexer_state != Lexer_State::string)
         {
-          double_quotes = false;
-          is_string = true;
+          string_state == String_State::single_quotes;
+          lexer_state = Lexer_State::string;
         }
         else
         {
-          add_token(token, tokens, row, column, is_string);
-          is_string = !is_string;
+          add_token(token, tokens, row, column, lexer_state);
+          lexer_state = Lexer_State::normal;
         }
       }
       else
       {
-        if(!is_string)
+        token += c;
+        if (lexer_state != Lexer_State::string)
         {
-          double_quotes = true;
-          is_string = true;
+          string_state = String_State::double_quotes;
+          lexer_state = Lexer_State::string;
         }
       }
       break;
     default:
       token += c;
-      if(i == buffer.length() - 1)
+      if (i == buffer.length() - 1)
       {
-        add_token(token, tokens, row, column, is_string);
+        add_token(token, tokens, row, column, lexer_state);
       }
       break;
     }
@@ -180,9 +370,9 @@ std::vector<std::shared_ptr<Token>> get_tokens(const std::string buffer)
 void print_tokens(std::vector<std::shared_ptr<Token>> &tokens)
 {
   cout << "-------------" << endl;
-  for(auto& token : tokens)
+  for (auto &token : tokens)
   {
-    cout << "['" << token->value << "' : " << token->type << "]" << endl;
+    cout << "['" << token->value << "' : " << token->type << "] - " << token->start_row << ' ' << token->start_col << endl;
   }
   cout << "-------------" << endl;
 }
