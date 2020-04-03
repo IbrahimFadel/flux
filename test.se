@@ -1,0 +1,3 @@
+const x: u8 = -255.0;
+let y: u8 = 155;
+const word = "const hi = 10;";

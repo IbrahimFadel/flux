@@ -1,4 +1,4 @@
-TARGET_EXEC ?= yabl
+TARGET_EXEC ?= se
 
 BUILD_DIR ?= ./build
 SRC_DIRS ?= ./src

@@ -1,114 +1,26 @@
 #include <iostream>
 #include <fstream>
-#include <vector>
-#include <stdlib.h>
-#include <limits.h>
-
-// #include "declarations.h"
+#include <istream>
 
 #include "lexer.h"
-#include "parser.h"
-
-using namespace Lexer;
 
 using std::cout;
 using std::endl;
-using std::string;
-using std::vector;
 
-vector<string> get_file_input(const char *path)
+std::string get_file_content(const char *path)
 {
-  vector<string> content;
-  std::ifstream input(path);
-  for (std::string line; getline(input, line);)
-  {
-    content.push_back(line);
-  }
-  return content;
+  std::ifstream in(path);
+  std::string contents((std::istreambuf_iterator<char>(in)),
+  std::istreambuf_iterator<char>());
+  return contents;
 }
 
-void print_tokens(vector<Token> tokens)
+int main()
 {
-  for (int i = 0; i < tokens.size(); i++)
-  {
-    cout << "[ " << tokens[i].type << ":"
-         << " '" << tokens[i].value << "' ]"
-         << " - ln:" << tokens[i].line_number << " pos:" << tokens[i].line_position << endl;
-  }
-}
+  std::string file_content = get_file_content("test.se");
 
-void create_project(string name)
-{
-  string command = "mkdir -p " + name + "/src && touch " + name + "/{README.md,src/main.ybl} && echo '# New Yabl Project' >> " + name + "/README.md";
-  system(command.c_str());
-}
-
-// struct Foo
-// {
-//   int val;
-// };
-
-// struct Test
-// {
-//   Foo *bar;
-// };
-
-// Test get_test()
-// {
-//   Test test;
-//   Foo *foo = new Foo();
-//   foo->val = 10;
-//   test.bar = foo;
-
-//   cout << "INIT: " << test.bar->val << endl;
-
-//   return test;
-// }
-
-int main(int argc, char **argv)
-{
-  char path[PATH_MAX];
-  std::string new_project_name;
-  bool verbose = false;
-
-  if (argc > 1)
-  {
-    std::vector<std::string> args(argv, argv + argc);
-    for (size_t i = 1; i < args.size(); ++i)
-    {
-      if (args[i] == "new")
-      {
-        new_project_name = args[i + 1];
-        create_project(new_project_name);
-        break;
-      }
-      else if (args[i] == "-v" || args[i] == "--verbose")
-      {
-        verbose = true;
-      }
-      else
-      {
-        realpath(argv[i], path);
-      }
-    }
-  }
-
-  vector<string> input = get_file_input(path);
-  vector<Token> tokens = generate_tokens(input);
-
-  if (verbose)
-  {
-    print_tokens(tokens);
-  }
-
-  std::vector<Parser::Node> nodes = Parser::parse_tokens(tokens);
-  Parser::print_nodes(nodes);
-
-  // Test test = get_test();
-
-  // cout << "AFTER: " << test.bar->val << endl;
-  // Test test;
-  // test.bar =
+  auto tokens = get_tokens(file_content);
+  print_tokens(tokens);
 
   return 0;
 }

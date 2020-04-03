@@ -3,33 +3,57 @@
 
 #include <iostream>
 #include <vector>
-
-using std::string;
-using std::vector;
-
-namespace Lexer
-{
-struct Token
-{
-  int type;
-  string value;
-  int line_number;
-  int line_position;
-};
+#include <memory>
 
 enum Token_Types
 {
-  id = 0,
-  kw = 1,
-  op = 2,
-  lit = 3,
-  sep = 4,
-  eol = 5
+  kw,
+  id,
+  op,
+  lit,
+  sep,
+  eol
 };
 
-} // namespace Lexer
+struct Token
+{
+  std::string value;
+  int type;
+  int start_row;
+  int start_col;
+  int end_row;
+  int end_col;
+};
 
-vector<Lexer::Token> generate_tokens(vector<string> input);
-Lexer::Token create_token(int type, string value, int line_position);
+static const std::vector<std::string> keywords = {
+  "const",
+  "let",
+  "u8"
+};
+
+static const std::vector<std::string> operators = {
+  "+",
+  "-",
+  "*",
+  "/",
+  ":",
+  "&&",
+  "||",
+  ">",
+  "<",
+  "=",
+  "==",
+  "<=",
+  ">="
+};
+
+void print_tokens(std::vector<std::shared_ptr<Token>> &);
+
+std::vector<std::shared_ptr<Token>> get_tokens(std::string);
+void add_token(std::string &, std::vector<std::shared_ptr<Token>> &, int, int, bool);
+std::shared_ptr<Token> create_token(std::string, int, int, int, int);
+bool is_keyword(std::string);
+bool is_operator(std::string);
+bool is_literal(std::string, bool);
 
 #endif
