@@ -4,13 +4,14 @@ Sandscript is a simple declarative programming language
 
 Using LLVM for code generation
 
-```
+```js
 const words: array<string> = ["Apple", "Car", "Toronto", "John"];
 const theMeaningOfLife: int = 42;
 
 let x: float = 1.0;
 
-fn increaseFloat = (num: float) -> {
+fn increaseFloat: float = (num: float) => {
   num += 0.1;
+  return num;
 };
 ```
