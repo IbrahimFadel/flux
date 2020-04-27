@@ -1,13 +1,5 @@
 #include "lexer.h"
 
-using std::cout;
-using std::endl;
-
-//TODO Comments
-//? Much like strings, just have a comment state
-//? Comment state will overpower string state ofc
-//? State enum?
-
 bool is_seperator(std::string token)
 {
   return std::find(seperators.begin(), seperators.end(), token) != seperators.end();
@@ -130,6 +122,10 @@ std::vector<std::shared_ptr<Token>> get_tokens(const std::string buffer)
       {
         token += c;
         break;
+      }
+      if (token.length() > 0)
+      {
+        add_token(token, tokens, row, column, lexer_state);
       }
       std::shared_ptr<Token> tok = create_token("(", Token_Types::sep, row, column - token.length(), column);
       tokens.push_back(tok);

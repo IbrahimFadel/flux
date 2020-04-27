@@ -1,4 +1,4 @@
-TARGET_EXEC ?= se
+TARGET_EXEC ?= sandscript
 
 BUILD_DIR ?= ./build
 SRC_DIRS ?= ./src
@@ -10,7 +10,7 @@ DEPS := $(OBJS:.o=.d)
 INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
-CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -std=c++14 -w
+CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -std=c++17 -w
 
 CC = g++
 

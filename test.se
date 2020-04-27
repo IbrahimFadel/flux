@@ -1,8 +1,10 @@
-const x: int = -255.0;
+const x: int = -255.0 + 10;
 let y: int = 155;
 const word: string = 'const "hi" = 10;';
-const numbers: array<int> = [0, 1, 2, 3, 4, 5];
+const numbers: int = 5 + 13 * 2;
 
 fn main = () -> void {
 
 }
+
+main();

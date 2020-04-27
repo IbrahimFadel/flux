@@ -6,6 +6,9 @@
 #include <memory>
 #include <algorithm>
 
+using std::cout;
+using std::endl;
+
 enum Lexer_State
 {
   normal,

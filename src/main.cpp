@@ -3,6 +3,7 @@
 #include <istream>
 
 #include "lexer.h"
+#include "parser.h"
 
 using std::cout;
 using std::endl;
@@ -21,6 +22,8 @@ int main()
 
   auto tokens = get_tokens(file_content);
   print_tokens(tokens);
+
+  parse_tokens(tokens);
 
   return 0;
 }
