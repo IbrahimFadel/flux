@@ -1,6 +1,6 @@
 # Sandscript
 
-Sandscript is a simple declarative programming language
+Sandscript will hopefully be a simple programming language
 
 Using LLVM for code generation
 
