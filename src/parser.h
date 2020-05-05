@@ -45,7 +45,11 @@ enum Variable_Types
 
 struct Number_Expression_Node
 {
+  int type = 0;
+  std::vector<std::string> numbers;
+  std::vector<std::string> ops;
 };
+
 struct String_Expression_Node
 {
 };
@@ -53,7 +57,14 @@ struct String_Expression_Node
 struct Expression_Node
 {
   Expression_Types type;
-  std::variant<std::unique_ptr<Number_Expression_Node>, std::unique_ptr<String_Expression_Node>> expression;
+  std::variant<Number_Expression_Node, String_Expression_Node> number_expression, string_expression;
+};
+
+struct Binary_Operation_Node
+{
+  Expression_Node *left;
+  std::string op;
+  Expression_Node *right;
 };
 
 struct Constant_Declaration_Node
