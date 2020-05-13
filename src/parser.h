@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <variant>
+#include <llvm/IR/Value.h>
 
 #include "lexer.h"
 
@@ -73,6 +74,7 @@ struct Constant_Declaration_Node
   Variable_Types type;
   Variable_Scope scope;
   std::unique_ptr<Expression_Node> *expression;
+  llvm::Value *code_gen();
 };
 
 struct Variable_Declaration_Node
@@ -86,11 +88,14 @@ struct Variable_Declaration_Node
 struct Node
 {
   Node_Types type;
-  std::variant<std::shared_ptr<Constant_Declaration_Node>, std::shared_ptr<Variable_Declaration_Node>> node;
+  std::variant<Constant_Declaration_Node, Variable_Declaration_Node> constant_declaration_node, variable_declaration_node;
 };
 
-void parse_tokens(std::vector<std::shared_ptr<Token>>);
+std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>>);
 
-std::shared_ptr<Constant_Declaration_Node> create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
+Constant_Declaration_Node create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
 std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int);
+
+void print_nodes(std::vector<Node *>);
+
 #endif
