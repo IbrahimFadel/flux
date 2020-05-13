@@ -15,12 +15,12 @@ CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -std=c++17 -w
 CC = g++
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
-	$(CC) $(OBJS) -o $@ $(LDFLAGS) -L/usr/lib -lLLVM-10 $(llvm-config --cxxflags) 
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 # c++ source
 $(BUILD_DIR)/%.cpp.o: %.cpp
 	$(MKDIR_P) $(dir $@)
-	$(CXX) -L/usr/lib -lLLVM-10 $(llvm-config --cxxflags)  $(llvm-config --ldflags --libs) -lpthread -lncurses $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 
 .PHONY: clean
