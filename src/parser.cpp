@@ -7,16 +7,22 @@ std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
   int i = 0;
   for (auto &token : tokens)
   {
-    Node *node = new Node();
+    // Node *node = new Node();
     switch (token->type)
     {
     case Token_Types::kw:
     {
       if (token->value == "const")
       {
-        Constant_Declaration_Node constant_declaration_node = create_constant_declaration_node(tokens, i);
-        node->constant_declaration_node = constant_declaration_node;
+        Constant_Declaration_Node *constant_declaration_node = create_constant_declaration_node(tokens, i);
+        Node *node = new Node();
         node->type = Node_Types::ConstantDeclarationNode;
+        node->constant_declaration_node = constant_declaration_node;
+        // cout << constant_declaration_node.type << endl;
+        // node->constant_declaration_node = constant_declaration_node;
+        // node->type = Node_Types::ConstantDeclarationNode;
+        // cout << node->type << endl;
+        // Node *node = new
         nodes.push_back(node);
       }
     }
@@ -30,29 +36,30 @@ std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
   return nodes;
 }
 
-Constant_Declaration_Node create_constant_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
+Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
-  Constant_Declaration_Node node;
-  node.name = tokens[i + 1]->value;
+  Constant_Declaration_Node *node = new Constant_Declaration_Node();
+  node->name = tokens[i + 1]->value;
 
   if (tokens[i + 3]->value == "int")
   {
-    node.type = Variable_Types::IntType;
+    node->type = Variable_Types::IntType;
   }
   else if (tokens[i + 3]->value == "float")
   {
-    node.type = Variable_Types::FloatType;
+    node->type = Variable_Types::FloatType;
   }
   else if (tokens[i + 3]->value == "string")
   {
-    node.type = Variable_Types::StringType;
+    node->type = Variable_Types::StringType;
   }
   else if (tokens[i + 3]->value == "array")
   {
-    node.type = Variable_Types::ArrayType;
+    node->type = Variable_Types::ArrayType;
   }
 
   std::unique_ptr<Expression_Node> expr = create_expression_node(tokens, i + 5);
+  node->expression = std::move(expr);
 
   // node.expression;
   return node;
@@ -61,6 +68,7 @@ Constant_Declaration_Node create_constant_declaration_node(std::vector<std::shar
 std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   std::unique_ptr<Expression_Node> expr_node = std::make_unique<Expression_Node>();
+  // expr_node->type = Expression_Types::NumberExpression;
 
   int x = i;
   std::vector<Binary_Operation_Node> bin_op_nodes;
@@ -99,6 +107,7 @@ std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_
       if (is_number_expression)
       {
         left_expr->type = Expression_Types::NumberExpression;
+        expr_node->type = Expression_Types::NumberExpression;
         left_expr->number_expression = left_number_expr;
       }
       else
@@ -130,6 +139,7 @@ std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_
       if (is_number_expression)
       {
         right_expr->type = Expression_Types::NumberExpression;
+        expr_node->type = Expression_Types::NumberExpression;
         right_expr->number_expression = right_number_expr;
       }
       else
@@ -158,8 +168,8 @@ void print_nodes(std::vector<Node *> nodes)
     {
     case Node_Types::ConstantDeclarationNode:
     {
-      Constant_Declaration_Node constant_declaration_node = std::get<Constant_Declaration_Node>(node->constant_declaration_node);
-      cout << "Constant Declaration Node: " << constant_declaration_node.name << endl;
+      // Constant_Declaration_Node constant_declaration_node = std::get<Constant_Declaration_Node>(node->constant_declaration_node);
+      // cout << "Constant Declaration Node: " << constant_declaration_node.name << endl;
       break;
     }
     default:

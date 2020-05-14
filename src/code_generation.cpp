@@ -21,6 +21,9 @@ void generate_llvm_ir(std::vector<Node *> nodes)
   LLVMInitializeNativeTarget();
 
   raw_ostream *os = &outs();
+  StringRef oname = "llvm_ir";
+  std::error_code EC;
+  raw_fd_ostream *out = new raw_fd_ostream(oname, EC);
 
   for (auto &node : nodes)
   {
@@ -30,23 +33,16 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     {
     case Node_Types::ConstantDeclarationNode:
     {
-      v = std::get<Constant_Declaration_Node>(node->constant_declaration_node).code_gen();
+      v = std::get<Constant_Declaration_Node *>(node->constant_declaration_node)->code_gen();
       break;
     }
     default:
       break;
     }
-    v->print(*os, false);
+    Value *sum = Builder.CreateAdd(v, ConstantFP::get(context, APFloat(3.8)), "addtmp");
+    sum->print(*os, false);
+    sum->print(*out, false);
   }
-
-  // Value *num = ConstantFP::get(context, APFloat(2.5));
-  // Value *sum = Builder.CreateAdd(num, num, "addtmp");
-  // cout << "hi" << endl;
-  // // num->dump();
-  // raw_ostream *os = &llvm::outs();
-  // num->print(*os, false);
-  // outs() << "\n";
-  // sum->print(*os, false);
 }
 
 llvm::Value *Constant_Declaration_Node::code_gen()
@@ -55,18 +51,17 @@ llvm::Value *Constant_Declaration_Node::code_gen()
   {
   case Variable_Types::FloatType:
   {
-    cout << expression << endl;
-    // Expression_Node *expr = expression->get();
-    // return ConstantFP::get(context, APFloat(2.5));
-    // if (expr->type == Expression_Types::NumberExpression)
-    // {
-    // cout << std::get<Number_Expression_Node>(expr->number_expression).type;
-    // }
-    return ConstantFP::get(context, APFloat(2.5));
+    float expression_value = evaluate_float_expression(std::move(expression));
+    return ConstantFP::get(context, APFloat(expression_value));
     break;
   }
   default:
     return ConstantFP::get(context, APFloat(2.5));
     break;
   }
+}
+
+float evaluate_float_expression(std::unique_ptr<Expression_Node> expression)
+{
+  return 1.0;
 }

@@ -12,7 +12,7 @@ INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
 CPPFLAGS ?= $(INC_FLAGS) -MMD -MP -std=c++17 -w
 
-CC = g++
+CC = clang++
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS) -L/usr/lib -lLLVM-10 $(llvm-config --cxxflags) 
@@ -20,7 +20,7 @@ $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
 # c++ source
 $(BUILD_DIR)/%.cpp.o: %.cpp
 	$(MKDIR_P) $(dir $@)
-	$(CXX) -L/usr/lib -lLLVM-10 $(llvm-config --cxxflags)  $(llvm-config --ldflags --libs) -lpthread -lncurses $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CC) -L/usr/lib -lLLVM-10 $(llvm-config --cxxflags)  $(llvm-config --ldflags --libs) -lpthread -lncurses $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 
 .PHONY: clean
