@@ -17,18 +17,15 @@ std::string get_file_content(const char *path)
   return contents;
 }
 
-struct foo
-{
-  int test = 0;
-};
-
-struct test
-{
-  std::variant<int, foo> integer, my_foo;
-};
-
 int main()
 {
+  // std::cout << "ss >>> ";
+  // std::string in;
+  // std::getline(std::cin, in);
+
+  // auto tokens = get_tokens(in);
+  // auto nodes = parse_tokens(tokens);
+  // generate_llvm_ir(nodes);
   std::string file_content = get_file_content("test.se");
 
   auto tokens = get_tokens(file_content);
@@ -37,12 +34,6 @@ int main()
   std::vector<Node *> nodes = parse_tokens(tokens);
   print_nodes(nodes);
   generate_llvm_ir(nodes);
-
-  // foo my_foo;
-  // test my_test;
-  // my_test.my_foo = my_foo;
-
-  // cout << std::get<foo>(my_test.my_foo).test << endl;
 
   return 0;
 }

@@ -39,9 +39,13 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     default:
       break;
     }
-    Value *sum = Builder.CreateAdd(v, ConstantFP::get(context, APFloat(3.8)), "addtmp");
-    sum->print(*os, false);
-    sum->print(*out, false);
+
+    
+    // Value *sum = Builder.CreateAdd(v, ConstantFP::get(context, APFloat(3.8)), "addtmp");
+    // Value *sum = Builder.CreateFAdd(v, ConstantFP::get(context, APFloat(4.6)), "x");
+    // sum->print(*os, false);
+    // sum->print(*out, false);
+    // Builder.
   }
 }
 

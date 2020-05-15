@@ -5,12 +5,17 @@
 #include <vector>
 #include <memory>
 #include <variant>
+#include <map>
+
 #include <llvm/IR/Value.h>
 
 #include "lexer.h"
 
 using std::cout;
 using std::endl;
+
+struct Then;
+struct Node;
 
 enum Node_Types
 {
@@ -20,7 +25,8 @@ enum Node_Types
   FunctionCallNode,
   NumberExpressionNode,
   StringExpressionNode,
-  BinaryOperationNode
+  BinaryOperationNode,
+  ReturnNode
 };
 
 enum Variable_Scope
@@ -85,16 +91,47 @@ struct Variable_Declaration_Node
   std::unique_ptr<Expression_Node> expression;
 };
 
+struct Then
+{
+  std::vector<std::shared_ptr<Token>> tokens;
+  std::vector<Node *> nodes;
+};
+
+struct Function_Declaration_Node
+{
+  std::string name;
+  std::map<std::string, Variable_Types> parameters;
+  Variable_Types return_type;
+  Then then;
+  int skip = 0;
+};
+
+struct Return_Node
+{
+  std::unique_ptr<Expression_Node> return_expression;
+};
+
 struct Node
 {
   Node_Types type;
-  std::variant<Constant_Declaration_Node *, Variable_Declaration_Node> constant_declaration_node, variable_declaration_node;
+  Node *parent;
+  int skip = 0;
+  std::variant<Constant_Declaration_Node *, Variable_Declaration_Node *, Function_Declaration_Node *, Return_Node *> constant_declaration_node, variable_declaration_node, function_declaration_node, return_node;
 };
 
 std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>>);
+Node *parse_token(std::vector<std::shared_ptr<Token>>, int);
+
+Return_Node *create_return_node(std::vector<std::shared_ptr<Token>>, int);
+
+Function_Declaration_Node *create_function_declaration_node(std::vector<std::shared_ptr<Token>>, int);
+std::map<std::string, Variable_Types> get_function_declaration_parameters(std::vector<std::shared_ptr<Token>>, int);
+Then get_function_declaration_then(std::vector<std::shared_ptr<Token>>, int);
 
 Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
 std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int);
+
+Variable_Types get_variable_type_from_string(std::string);
 
 void print_nodes(std::vector<Node *>);
 
