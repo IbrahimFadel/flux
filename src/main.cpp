@@ -26,7 +26,7 @@ int main()
   // auto tokens = get_tokens(in);
   // auto nodes = parse_tokens(tokens);
   // generate_llvm_ir(nodes);
-  std::string file_content = get_file_content("test.se");
+  std::string file_content = get_file_content("test.ss");
 
   auto tokens = get_tokens(file_content);
   print_tokens(tokens);
