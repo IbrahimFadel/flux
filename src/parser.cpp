@@ -31,6 +31,7 @@ Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
       Constant_Declaration_Node *constant_declaration_node = create_constant_declaration_node(tokens, i);
       node->type = Node_Types::ConstantDeclarationNode;
       node->constant_declaration_node = constant_declaration_node;
+      constants[constant_declaration_node->name] = constant_declaration_node;
     }
     else if (tokens[i]->value == "fn")
     {
@@ -305,13 +306,18 @@ void print_nodes(std::vector<Node *> nodes)
     }
     case Node_Types::FunctionDeclarationNode:
     {
-      Function_Declaration_Node *node = std::get<Function_Declaration_Node *>(node->function_declaration_node);
-      cout << "Function Declaration Node" << endl;
-      cout << "PARAMS: ";
-      for (int i = 0; i < node->parameters.size(); i++)
+      Function_Declaration_Node *function_declaration_node = std::get<Function_Declaration_Node *>(node->function_declaration_node);
+      cout << "Function Declaration: " << function_declaration_node->name << endl;
+      cout << "PARAMS: " << endl;
+
+      std::map<std::string, Variable_Types>::iterator it;
+      for (it = function_declaration_node->parameters.begin(); it != function_declaration_node->parameters.end(); it++)
       {
-        cout << i + 1 << endl;
+        cout << it->first << ": " << it->second << endl;
       }
+
+      cout << "Return: " << function_declaration_node->return_type << endl;
+
       break;
     }
     default:

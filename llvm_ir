@@ -1,0 +1,4 @@
+define double @sum() {
+entry:
+  ret void
+}

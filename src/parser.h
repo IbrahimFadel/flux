@@ -104,6 +104,9 @@ struct Function_Declaration_Node
   Variable_Types return_type;
   Then then;
   int skip = 0;
+  llvm::Function *code_gen_prototype();
+  llvm::Function *code_gen_function_body(llvm::Function *);
+  llvm::Function *code_gen_finished(llvm::Function *);
 };
 
 struct Return_Node
@@ -118,6 +121,8 @@ struct Node
   int skip = 0;
   std::variant<Constant_Declaration_Node *, Variable_Declaration_Node *, Function_Declaration_Node *, Return_Node *> constant_declaration_node, variable_declaration_node, function_declaration_node, return_node;
 };
+
+inline std::map<std::string, Constant_Declaration_Node *> constants;
 
 std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>>);
 Node *parse_token(std::vector<std::shared_ptr<Token>>, int);
