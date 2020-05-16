@@ -61,10 +61,23 @@ struct String_Expression_Node
 {
 };
 
+enum Number_Types
+{
+  FloatNumber,
+  IntNumber
+};
+
+struct Number
+{
+  Number_Types type;
+  std::variant<float, int> float_number, int_number;
+};
+
 struct Expression_Node
 {
   Expression_Types type;
   std::variant<Number_Expression_Node, String_Expression_Node> number_expression, string_expression;
+  llvm::Value *code_gen();
 };
 
 struct Binary_Operation_Node
@@ -106,12 +119,12 @@ struct Function_Declaration_Node
   int skip = 0;
   llvm::Function *code_gen_prototype();
   llvm::Function *code_gen_function_body(llvm::Function *);
-  llvm::Function *code_gen_finished(llvm::Function *);
 };
 
 struct Return_Node
 {
   std::unique_ptr<Expression_Node> return_expression;
+  llvm::Value *code_gen();
 };
 
 struct Node
@@ -123,6 +136,8 @@ struct Node
 };
 
 inline std::map<std::string, Constant_Declaration_Node *> constants;
+
+Number evaluate_number_expression(Number_Expression_Node);
 
 std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>>);
 Node *parse_token(std::vector<std::shared_ptr<Token>>, int);

@@ -31,7 +31,6 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     llvm::Value *v;
     llvm::Function *prototype;
     llvm::Function *function_body;
-    llvm::Function *finished_function;
 
     switch (node->type)
     {
@@ -51,6 +50,42 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     default:
       break;
     }
+  }
+}
+
+Number evaluate_number_expression(Number_Expression_Node expr)
+{
+  Number num;
+  num.type = Number_Types::FloatNumber;
+  // num.float_number = std::stof(expr.numbers[0]);
+  num.float_number = (float)1.0;
+
+  return num;
+}
+
+llvm::Value *Return_Node::code_gen()
+{
+  if (return_expression->type == Expression_Types::NumberExpression)
+  {
+    // return
+  }
+}
+
+llvm::Value *Expression_Node::code_gen()
+{
+  if (type == Expression_Types::NumberExpression)
+  {
+    Number num = evaluate_number_expression(std::get<Number_Expression_Node>(number_expression));
+    switch (num.type)
+    {
+    case Number_Types::FloatNumber:
+      return llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+    default:
+      break;
+    }
+  }
+  else if (type == Expression_Types::StringExpression)
+  {
   }
 }
 
@@ -100,19 +135,30 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     NamedValues[Arg.getName()] = &Arg;
   }
 
-  // if(llvm::Value *RetValue = then.nodes)
-  Builder.CreateRetVoid();
+  for (auto &node : then.nodes)
+  {
+    switch (node->type)
+    {
+    case Node_Types::ReturnNode:
+    {
+      if (std::get<Return_Node *>(node->return_node)->return_expression->type == Expression_Types::NumberExpression)
+      {
+        llvm::Value *v = std::get<Return_Node *>(node->return_node)->return_expression->code_gen();
+        Builder.CreateRet(v);
+        llvm::verifyFunction(*TheFunction);
 
-  llvm::verifyFunction(*TheFunction);
+        return TheFunction;
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
 
-  // llvm::verify
+  TheFunction->eraseFromParent();
 
-  return TheFunction;
-}
-
-llvm::Function *Function_Declaration_Node::code_gen_finished(llvm::Function *Body)
-{
-  // if(llvm::Value *RetValue = Body->co)
+  return nullptr;
 }
 
 llvm::Value *Constant_Declaration_Node::code_gen()

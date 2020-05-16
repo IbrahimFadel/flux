@@ -324,4 +324,6 @@ void print_nodes(std::vector<Node *> nodes)
       break;
     }
   }
+
+  cout << "-------------" << endl;
 }

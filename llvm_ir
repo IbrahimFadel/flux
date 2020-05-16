@@ -1,4 +1,4 @@
 define double @sum() {
 entry:
-  ret void
+  ret float 1.000000e+00
 }
