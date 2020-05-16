@@ -16,6 +16,7 @@ using std::endl;
 
 struct Then;
 struct Node;
+struct Binary_Operation_Node;
 
 enum Node_Types
 {
@@ -50,17 +51,6 @@ enum Variable_Types
   ArrayType
 };
 
-struct Number_Expression_Node
-{
-  int type = 0;
-  std::vector<std::string> numbers;
-  std::vector<std::string> ops;
-};
-
-struct String_Expression_Node
-{
-};
-
 enum Number_Types
 {
   FloatNumber,
@@ -71,6 +61,23 @@ struct Number
 {
   Number_Types type;
   std::variant<float, int> float_number, int_number;
+};
+
+struct Term
+{
+  std::vector<std::string> numbers;
+  std::vector<std::string> ops;
+};
+
+struct Number_Expression_Node
+{
+  int type = 0;
+  std::vector<std::string> ops;
+  std::vector<Term> terms;
+};
+
+struct String_Expression_Node
+{
 };
 
 struct Expression_Node

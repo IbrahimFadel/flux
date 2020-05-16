@@ -10,8 +10,6 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/IR/Verifier.h>
 
-// using namespace llvm;
-
 static llvm::LLVMContext context;
 static llvm::Module *TheModule = new llvm::Module("example", context);
 static llvm::IRBuilder<> Builder(context);
@@ -37,6 +35,11 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     case Node_Types::ConstantDeclarationNode:
     {
       v = std::get<Constant_Declaration_Node *>(node->constant_declaration_node)->code_gen();
+      v->print(*os);
+      cout << endl;
+      v->print(*out);
+      out->write('\n');
+
       break;
     }
     case Node_Types::FunctionDeclarationNode:
@@ -44,7 +47,9 @@ void generate_llvm_ir(std::vector<Node *> nodes)
       prototype = std::get<Function_Declaration_Node *>(node->function_declaration_node)->code_gen_prototype();
       function_body = std::get<Function_Declaration_Node *>(node->function_declaration_node)->code_gen_function_body(prototype);
       prototype->print(*os);
+      cout << endl;
       prototype->print(*out);
+      out->write('\n');
       break;
     }
     default:
@@ -57,8 +62,62 @@ Number evaluate_number_expression(Number_Expression_Node expr)
 {
   Number num;
   num.type = Number_Types::FloatNumber;
-  // num.float_number = std::stof(expr.numbers[0]);
-  num.float_number = (float)1.0;
+
+  std::vector<float> term_values;
+  std::vector<float> term_values_values;
+  float value = 0;
+  for (auto &term : expr.terms)
+  {
+    float term_value = 0;
+    int i = 0;
+    if (term.ops.size() > 0)
+    {
+      for (auto &op : term.ops)
+      {
+        if (op == "*")
+        {
+          if (term_values.size() > 0)
+          {
+            term_value = term_values[term_values.size() - 1] * std::stof(term.numbers[i + 1]);
+          }
+          else
+          {
+            term_value = std::stof(term.numbers[i]) * std::stof(term.numbers[i + 1]);
+          }
+
+          term_values.push_back(term_value);
+        }
+        else if (op == "/")
+        {
+          if (term_values.size() > 0)
+          {
+            term_value = term_values[term_values.size() - 1] / std::stof(term.numbers[i + 1]);
+          }
+          else
+          {
+            term_value = std::stof(term.numbers[i]) / std::stof(term.numbers[i + 1]);
+          }
+
+          term_values.push_back(term_value);
+        }
+        i++;
+      }
+      term_values_values.push_back(term_values[term_values.size() - 1]);
+      term_values.clear();
+    }
+    else
+    {
+      term_value = std::stof(term.numbers[0]);
+      term_values_values.push_back(term_value);
+    }
+  }
+
+  for (auto &val : term_values_values)
+  {
+    value += val;
+  }
+
+  num.float_number = value;
 
   return num;
 }
@@ -67,7 +126,6 @@ llvm::Value *Return_Node::code_gen()
 {
   if (return_expression->type == Expression_Types::NumberExpression)
   {
-    // return
   }
 }
 
@@ -143,7 +201,10 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     {
       if (std::get<Return_Node *>(node->return_node)->return_expression->type == Expression_Types::NumberExpression)
       {
-        llvm::Value *v = std::get<Return_Node *>(node->return_node)->return_expression->code_gen();
+        Return_Node *return_node = std::get<Return_Node *>(node->return_node);
+        Expression_Node *expr = return_node->return_expression.get();
+
+        llvm::Value *v = expr->code_gen();
         Builder.CreateRet(v);
         llvm::verifyFunction(*TheFunction);
 
@@ -167,8 +228,8 @@ llvm::Value *Constant_Declaration_Node::code_gen()
   {
   case Variable_Types::FloatType:
   {
-    float expression_value = evaluate_float_expression(std::move(expression));
-    return llvm::ConstantFP::get(context, llvm::APFloat(expression_value));
+    Number num = evaluate_number_expression(std::get<Number_Expression_Node>(expression->number_expression));
+    return llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
     break;
   }
   default:
