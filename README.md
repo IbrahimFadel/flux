@@ -16,6 +16,8 @@ fn sum: float = () -> {
 
 This gets tokenized by `src/lexer.cpp`
 
+Format: [token : Token_Type] - line_number line_position
+
 ```
 ['const' : 0] - 0 0
 ['x' : 1] - 0 6
