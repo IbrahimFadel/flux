@@ -54,6 +54,7 @@ Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
       Return_Node *return_node = create_return_node(tokens, i);
       node->type = Node_Types::ReturnNode;
       node->return_node = return_node;
+      node->skip = return_node->skip;
     }
     break;
   }
@@ -70,6 +71,26 @@ Return_Node *create_return_node(std::vector<std::shared_ptr<Token>> tokens, int 
 
   std::unique_ptr<Expression_Node> return_expr = create_expression_node(tokens, i + 1);
   node->return_expression = std::move(return_expr);
+
+  int skip = 3;
+  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->return_expression->number_expression);
+  for (auto &term : num_node.terms)
+  {
+    for (auto &num : term.numbers)
+    {
+      skip += 1;
+    }
+    for (auto &op : term.ops)
+    {
+      skip += 1;
+    }
+  }
+  for (auto &op : num_node.ops)
+  {
+    skip += 1;
+  }
+
+  node->skip = skip;
 
   return node;
 }
@@ -99,6 +120,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   auto parameters = get_function_declaration_parameters(tokens, i + 6);
   node->parameters = parameters;
 
+  int parameter_skip = 0;
   int then_start = i + 5;
   if (parameters.size() == 0)
   {
@@ -107,6 +129,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   else
   {
     then_start += (parameters.size() * 3) + parameters.size() - 1 + 4;
+    parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
   }
 
   Then then = get_function_declaration_then(tokens, then_start);
@@ -116,7 +139,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   }
   node->then = then;
 
-  node->skip = node->then.tokens.size() + then_start;
+  node->skip = node->then.tokens.size() + 10 + parameter_skip;
 
   return node;
 }
@@ -133,6 +156,16 @@ Then get_function_declaration_then(std::vector<std::shared_ptr<Token>> tokens, i
     Node *node = parse_token(tokens, x);
     then.nodes.push_back(node);
     then.tokens.push_back(tokens[x]);
+    if (node->skip > 0)
+    {
+      int initial_x = x;
+      x += node->skip;
+      for (int y = initial_x + 1; y <= x; y++)
+      {
+        then.tokens.push_back(tokens[y]);
+      }
+      continue;
+    }
   }
 
   return then;
@@ -249,7 +282,7 @@ std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_
         term.ops.push_back(tok->value);
       }
     }
-    else if (tok->type == Token_Types::lit) //! When implementing variables, || Token_Types::id
+    else if (tok->type == Token_Types::lit || tok->type == Token_Types::id)
     {
       term.numbers.push_back(tok->value);
       if (tokens[x + 1]->value == ";" || tokens[x + 1]->value == ")")
@@ -338,7 +371,9 @@ void print_nodes(std::vector<Node *> nodes)
         cout << it->first << ": " << it->second << endl;
       }
 
-      cout << "Return: " << function_declaration_node->return_type << endl;
+      cout << "Return Type: " << function_declaration_node->return_type << endl;
+      cout << "Then: " << endl;
+      print_nodes(function_declaration_node->then.nodes);
 
       break;
     }

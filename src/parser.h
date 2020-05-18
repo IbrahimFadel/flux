@@ -134,6 +134,7 @@ struct Function_Declaration_Node
 struct Return_Node
 {
   std::unique_ptr<Expression_Node> return_expression;
+  int skip = 0;
   llvm::Value *code_gen();
 };
 
