@@ -9,11 +9,15 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
 
 static llvm::LLVMContext context;
-static llvm::Module *TheModule = new llvm::Module("example", context);
+static llvm::Module *TheModule = new llvm::Module("Module", context);
 static llvm::IRBuilder<> Builder(context);
 static std::map<std::string, llvm::Value *> NamedValues;
+// static std::map<std::string, llvm::AllocaInst *> NamedValues;
 
 void generate_llvm_ir(std::vector<Node *> nodes)
 {
@@ -24,9 +28,13 @@ void generate_llvm_ir(std::vector<Node *> nodes)
   std::error_code EC;
   llvm::raw_fd_ostream *out = new llvm::raw_fd_ostream(oname, EC);
 
+  llvm::StringRef source_file_name("test.ss");
+  TheModule->setSourceFileName(source_file_name);
+
   for (auto &node : nodes)
   {
-    llvm::Value *v;
+    llvm::Constant *constant;
+    llvm::Value *variable;
     llvm::Function *prototype;
     llvm::Function *function_body;
 
@@ -34,12 +42,21 @@ void generate_llvm_ir(std::vector<Node *> nodes)
     {
     case Node_Types::ConstantDeclarationNode:
     {
-      v = std::get<Constant_Declaration_Node *>(node->constant_declaration_node)->code_gen();
-      v->print(*os);
+      constant = std::get<Constant_Declaration_Node *>(node->constant_declaration_node)->code_gen();
+      constant->print(*os);
       cout << endl;
-      v->print(*out);
+      constant->print(*out);
       out->write('\n');
 
+      break;
+    }
+    case Node_Types::VariableDeclarationNode:
+    {
+      variable = std::get<Variable_Declaration_Node *>(node->variable_declaration_node)->code_gen();
+      variable->print(*os);
+      cout << endl;
+      variable->print(*out);
+      out->write('\n');
       break;
     }
     case Node_Types::FunctionDeclarationNode:
@@ -56,6 +73,44 @@ void generate_llvm_ir(std::vector<Node *> nodes)
       break;
     }
   }
+
+  std::error_code My_EC;
+  llvm::raw_fd_ostream bc_out("module", EC, llvm::sys::fs::F_None);
+  llvm::WriteBitcodeToFile(*TheModule, bc_out);
+
+  bc_out.flush();
+}
+
+// static llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *TheFunction, const std::string &VarName)
+// {
+//   llvm::IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
+//   return TmpB.CreateAlloca(llvm::Type::getDoubleTy(context), 0, VarName.c_str());
+// }
+
+llvm::Value *Variable_Declaration_Node::code_gen()
+{
+  auto *ai = new llvm::AllocaInst(llvm::Type::getInt32Ty(context), 0, "indexLoc");
+  return ai;
+  // auto *L = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 41);
+  // auto *R = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 42);
+  // Builder.Insert(L);
+  // Builder.Insert(R);
+  // return Builder.CreateAdd(L, R, "addtmp");
+  // switch (type)
+  // {
+  // case Variable_Types::FloatType:
+  // {
+  //   Number num = evaluate_number_expression(std::get<Number_Expression_Node>(expression->number_expression));
+  //   // llvm::Value *test = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+  //   // llvm::Value *test = llvm::V
+  //   // return test;
+  //   return llvm::ConstantFP::get(context, llvm::APFloat(1.0));
+  //   break;
+  // }
+  // default:
+  //   return llvm::ConstantFP::get(context, llvm::APFloat(2.5));
+  //   break;
+  // }
 }
 
 Number evaluate_number_expression(Number_Expression_Node expr)
@@ -149,9 +204,34 @@ llvm::Value *Expression_Node::code_gen()
 
 llvm::Function *Function_Declaration_Node::code_gen_prototype()
 {
-  std::vector<llvm::Type *> Doubles(parameters.size(), llvm::Type::getDoubleTy(context));
+  // std::vector<llvm::Type *> Doubles(parameters.size(), llvm::Type::getDoubleTy(context));
+  std::vector<llvm::Type *> params;
+  for (auto &param : parameters)
+  {
+    switch (param.second)
+    {
+    case Variable_Types::FloatType:
+      params.push_back(llvm::Type::getFloatTy(context));
+      break;
+    case Variable_Types::IntType:
+      params.push_back(llvm::Type::getInt32Ty(context));
+    default:
+      break;
+    }
+  }
 
-  llvm::FunctionType *FT = llvm::FunctionType::get(llvm::Type::getDoubleTy(context), Doubles, false);
+  llvm::Type *function_return_type = llvm::Type::getFloatTy(context);
+  switch (return_type)
+  {
+  case Variable_Types::FloatType:
+    function_return_type = llvm::Type::getFloatTy(context);
+    break;
+  case Variable_Types::IntType:
+    function_return_type = llvm::Type::getInt32Ty(context);
+  default:
+    break;
+  }
+  llvm::FunctionType *FT = llvm::FunctionType::get(function_return_type, params, false);
 
   llvm::Function *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, name, TheModule);
 
@@ -165,6 +245,7 @@ llvm::Function *Function_Declaration_Node::code_gen_prototype()
   for (auto &Arg : F->args())
   {
     Arg.setName(names[Idx]);
+    Idx++;
   }
 
   return F;
@@ -206,10 +287,16 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
 
         llvm::Value *v = expr->code_gen();
         Builder.CreateRet(v);
-        llvm::verifyFunction(*TheFunction);
-
-        return TheFunction;
       }
+      break;
+    }
+    case Node_Types::VariableDeclarationNode:
+    {
+      // llvm::Value *v = std::get<Variable_Declaration_Node *>(node->variable_declaration_node)->code_gen();
+      // llvm::Instruction *pi = llvm::Instruction(llvm::Type::getInt32Ty(context));
+      // Builder.
+      // BB->
+      // Builder.Insert(v);
       break;
     }
     default:
@@ -217,18 +304,20 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     }
   }
 
-  TheFunction->eraseFromParent();
+  llvm::verifyFunction(*TheFunction);
 
-  return nullptr;
+  return TheFunction;
 }
 
-llvm::Value *Constant_Declaration_Node::code_gen()
+llvm::Constant *Constant_Declaration_Node::code_gen()
 {
   switch (type)
   {
   case Variable_Types::FloatType:
   {
     Number num = evaluate_number_expression(std::get<Number_Expression_Node>(expression->number_expression));
+    llvm::Constant *test = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+    return test;
     return llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
     break;
   }

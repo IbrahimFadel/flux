@@ -99,8 +99,9 @@ struct Constant_Declaration_Node
   std::string name;
   Variable_Types type;
   Variable_Scope scope;
+  int skip = 0;
   std::unique_ptr<Expression_Node> expression;
-  llvm::Value *code_gen();
+  llvm::Constant *code_gen();
 };
 
 struct Variable_Declaration_Node
@@ -108,7 +109,9 @@ struct Variable_Declaration_Node
   std::string name;
   Variable_Types type;
   Variable_Scope scope;
+  int skip = 0;
   std::unique_ptr<Expression_Node> expression;
+  llvm::Value *code_gen();
 };
 
 struct Then
@@ -143,6 +146,7 @@ struct Node
 };
 
 inline std::map<std::string, Constant_Declaration_Node *> constants;
+inline std::map<std::string, Variable_Declaration_Node *> variables;
 
 Number evaluate_number_expression(Number_Expression_Node);
 
@@ -157,6 +161,8 @@ Then get_function_declaration_then(std::vector<std::shared_ptr<Token>>, int);
 
 Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
 std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int);
+
+Variable_Declaration_Node *create_variable_declaration_node(std::vector<std::shared_ptr<Token>>, int);
 
 Variable_Types get_variable_type_from_string(std::string);
 

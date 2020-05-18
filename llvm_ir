@@ -1,5 +1,4 @@
-float 1.440000e+02
-define double @sum() {
+define float @test(i32 %number1, float %number2) {
 entry:
-  ret float 6.000000e+00
+  ret float 5.000000e+00
 }

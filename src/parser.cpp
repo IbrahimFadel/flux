@@ -31,7 +31,16 @@ Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
       Constant_Declaration_Node *constant_declaration_node = create_constant_declaration_node(tokens, i);
       node->type = Node_Types::ConstantDeclarationNode;
       node->constant_declaration_node = constant_declaration_node;
+      node->skip = constant_declaration_node->skip;
       constants[constant_declaration_node->name] = constant_declaration_node;
+    }
+    else if (tokens[i]->value == "let")
+    {
+      Variable_Declaration_Node *variable_declaration_node = create_variable_declaration_node(tokens, i);
+      node->type = Node_Types::VariableDeclarationNode;
+      node->variable_declaration_node = variable_declaration_node;
+      node->skip = variable_declaration_node->skip;
+      variables[variable_declaration_node->name] = variable_declaration_node;
     }
     else if (tokens[i]->value == "fn")
     {
@@ -107,7 +116,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   }
   node->then = then;
 
-  node->skip = node->then.tokens.size();
+  node->skip = node->then.tokens.size() + then_start;
 
   return node;
 }
@@ -193,14 +202,33 @@ Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::sha
   std::unique_ptr<Expression_Node> expr = create_expression_node(tokens, i + 5);
   node->expression = std::move(expr);
 
-  // node.expression;
+  int skip = 5;
+  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->expression->number_expression);
+  for (auto &term : num_node.terms)
+  {
+    for (auto &num : term.numbers)
+    {
+      skip += 1;
+    }
+    for (auto &op : term.ops)
+    {
+      skip += 1;
+    }
+  }
+  for (auto &op : num_node.ops)
+  {
+    skip += 1;
+  }
+
+  node->skip = skip;
+
   return node;
 }
 
 std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   std::unique_ptr<Expression_Node> expr_node = std::make_unique<Expression_Node>();
-
+  expr_node->type = Expression_Types::NumberExpression;
   int x = i;
   Term term;
   Number_Expression_Node number_expression;
@@ -237,129 +265,54 @@ std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_
   return expr_node;
 };
 
-// std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-// {
-//   std::unique_ptr<Expression_Node> expr_node = std::make_unique<Expression_Node>();
+Variable_Declaration_Node *create_variable_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
+{
+  Variable_Declaration_Node *node = new Variable_Declaration_Node();
 
-//   int x = i;
-//   std::vector<Binary_Operation_Node *> bin_op_nodes;
-//   bool no_ops = true;
-//   bool left_no_ops = true;
-//   bool right_no_ops = true;
-//   bool is_number_expression = false;
-//   while (tokens[x]->value != ";" && tokens[x]->type != Token_Types::eol)
-//   {
-//     if (tokens[x]->type == Token_Types::op)
-//     {
-//       no_ops = false;
-//       Binary_Operation_Node *bin_op_node = new Binary_Operation_Node();
-//       Expression_Node *left_expr = new Expression_Node();
-//       Expression_Node *right_expr = new Expression_Node();
-//       Number_Expression_Node left_number_expr;
-//       String_Expression_Node left_string_expr;
-//       Number_Expression_Node right_number_expr;
-//       String_Expression_Node right_string_expr;
+  node->name = tokens[i + 1]->value;
 
-//       for (int j = x - 1; j >= i; j--)
-//       {
-//         std::shared_ptr<Token> left = tokens[j];
-//         if (left->type == Token_Types::op)
-//         {
-//           left_no_ops = false;
-//           left_number_expr.ops.push_back(left->value);
-//         }
-//         else if (is_number(left->value))
-//         {
-//           is_number_expression = true;
-//           left_number_expr.numbers.push_back(left->value);
-//         }
-//         else
-//         {
-//           is_number_expression = false;
-//         }
-//       }
+  if (tokens[i + 3]->value == "int")
+  {
+    node->type = Variable_Types::IntType;
+  }
+  else if (tokens[i + 3]->value == "float")
+  {
+    node->type = Variable_Types::FloatType;
+  }
+  else if (tokens[i + 3]->value == "string")
+  {
+    node->type = Variable_Types::StringType;
+  }
+  else if (tokens[i + 3]->value == "array")
+  {
+    node->type = Variable_Types::ArrayType;
+  }
 
-//       if (is_number_expression)
-//       {
-//         left_expr->type = Expression_Types::NumberExpression;
-//         expr_node->type = Expression_Types::NumberExpression;
-//         left_expr->number_expression = left_number_expr;
-//       }
-//       else
-//       {
-//         left_expr->type = Expression_Types::StringExpression;
-//         left_expr->string_expression = left_string_expr;
-//       }
+  std::unique_ptr<Expression_Node> expr = create_expression_node(tokens, i + 5);
+  node->expression = std::move(expr);
 
-//       int j = x + 1;
-//       while (tokens[j]->type != Token_Types::eol && tokens[j]->value != ";")
-//       {
-//         std::shared_ptr<Token> right = tokens[j];
-//         if (right->type == Token_Types::op)
-//         {
-//           right_no_ops = false;
-//           right_number_expr.ops.push_back(right->value);
-//         }
-//         else if (is_number(right->value))
-//         {
-//           is_number_expression = true;
-//           right_number_expr.numbers.push_back(right->value);
-//           cout << tokens[j]->value << " " << no_ops << endl;
-//         }
-//         else
-//         {
-//           is_number_expression = false;
-//         }
-//         j++;
-//       }
+  int skip = 5;
+  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->expression->number_expression);
+  for (auto &term : num_node.terms)
+  {
+    for (auto &num : term.numbers)
+    {
+      skip += 1;
+    }
+    for (auto &op : term.ops)
+    {
+      skip += 1;
+    }
+  }
+  for (auto &op : num_node.ops)
+  {
+    skip += 1;
+  }
 
-//       if (is_number_expression)
-//       {
-//         right_expr->type = Expression_Types::NumberExpression;
-//         expr_node->type = Expression_Types::NumberExpression;
-//         right_expr->number_expression = right_number_expr;
-//       }
-//       else
-//       {
-//         right_expr->type = Expression_Types::StringExpression;
-//         right_expr->string_expression = right_string_expr;
-//       }
+  node->skip = skip;
 
-//       bin_op_node->left = left_expr;
-//       bin_op_node->right = right_expr;
-//       bin_op_node->op = tokens[x]->value;
-
-//       bin_op_nodes.push_back(bin_op_node);
-//     }
-//     x++;
-//   }
-
-//   if (no_ops)
-//   {
-//     cout << "NO_OPS: " << tokens[i + 1]->value << endl;
-//     if (is_number(tokens[i + 1]->value))
-//     {
-//       Number_Expression_Node number_expr;
-//       std::vector<std::string> nums;
-//       nums.push_back(tokens[i + 1]->value);
-//       number_expr.numbers = nums;
-//       expr_node->number_expression = number_expr;
-//     }
-//     else
-//     {
-//     }
-//   }
-//   else if (!left_no_ops || !right_no_ops)
-//   {
-//   }
-//   else
-//   {
-//     // expr_node->binary_operator_nodes = bin_op_nodes;
-//     std::get<Number_Expression_Node>(expr_node->number_expression).binary_operator_nodes = bin_op_nodes;
-//   }
-
-//   return expr_node;
-// };
+  return node;
+}
 
 void print_nodes(std::vector<Node *> nodes)
 {
@@ -387,6 +340,12 @@ void print_nodes(std::vector<Node *> nodes)
 
       cout << "Return: " << function_declaration_node->return_type << endl;
 
+      break;
+    }
+    case Node_Types::VariableDeclarationNode:
+    {
+      Variable_Declaration_Node *variable_declaration_node = std::get<Variable_Declaration_Node *>(node->variable_declaration_node);
+      cout << "Variable Declaration Node: " << variable_declaration_node->name << endl;
       break;
     }
     default:
