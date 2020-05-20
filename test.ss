@@ -1,4 +1,4 @@
-fn test: float = (number1: int, number2: float) -> {
+fn main: float = (number1: int, number2: float) -> {
   let sum: float = 1 + 2;
-  return(5.0);
+  return(3.0);
 }

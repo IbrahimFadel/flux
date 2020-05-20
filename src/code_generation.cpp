@@ -73,44 +73,12 @@ void generate_llvm_ir(std::vector<Node *> nodes)
       break;
     }
   }
-
-  std::error_code My_EC;
-  llvm::raw_fd_ostream bc_out("module.bc", EC, llvm::sys::fs::F_None);
-  llvm::WriteBitcodeToFile(*TheModule, bc_out);
-
-  bc_out.flush();
 }
-
-// static llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *TheFunction, const std::string &VarName)
-// {
-//   llvm::IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
-//   return TmpB.CreateAlloca(llvm::Type::getDoubleTy(context), 0, VarName.c_str());
-// }
 
 llvm::Value *Variable_Declaration_Node::code_gen()
 {
-  auto *ai = new llvm::AllocaInst(llvm::Type::getInt32Ty(context), 0, "indexLoc");
+  auto ai = new llvm::AllocaInst(llvm::Type::getInt32Ty(context), 0, "indexLoc");
   return ai;
-  // auto *L = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 41);
-  // auto *R = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 42);
-  // Builder.Insert(L);
-  // Builder.Insert(R);
-  // return Builder.CreateAdd(L, R, "addtmp");
-  // switch (type)
-  // {
-  // case Variable_Types::FloatType:
-  // {
-  //   Number num = evaluate_number_expression(std::get<Number_Expression_Node>(expression->number_expression));
-  //   // llvm::Value *test = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
-  //   // llvm::Value *test = llvm::V
-  //   // return test;
-  //   return llvm::ConstantFP::get(context, llvm::APFloat(1.0));
-  //   break;
-  // }
-  // default:
-  //   return llvm::ConstantFP::get(context, llvm::APFloat(2.5));
-  //   break;
-  // }
 }
 
 Number evaluate_number_expression(Number_Expression_Node expr)
@@ -251,6 +219,36 @@ llvm::Function *Function_Declaration_Node::code_gen_prototype()
   return F;
 }
 
+void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_node, llvm::BasicBlock *BB)
+{
+  llvm::Type *variable_type;
+
+  switch (variable_declaration_node->type)
+  {
+  case Variable_Types::FloatType:
+  {
+    variable_type = llvm::Type::getFloatTy(context);
+    break;
+  }
+  default:
+    break;
+  }
+
+  auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+
+  Number num = evaluate_number_expression(std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression));
+  llvm::Value *variable_value;
+  switch (num.type)
+  {
+  case Number_Types::FloatNumber:
+    variable_value = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+  default:
+    break;
+  }
+
+  auto SI = new llvm::StoreInst(variable_value, AI, BB);
+}
+
 llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function *proto)
 {
   llvm::Function *TheFunction = TheModule->getFunction(proto->getName());
@@ -267,18 +265,6 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
 
   llvm::BasicBlock *BB = llvm::BasicBlock::Create(context, "entry", TheFunction);
   Builder.SetInsertPoint(BB);
-
-  // llvm::Type *Ty = llvm::Type::getFloatTy(context);
-  // auto AI = new llvm::AllocaInst(Ty, NULL, "tmp", BB);
-
-  // llvm::Value *v = llvm::ConstantFP::get(context, llvm::APFloat(2.5));
-  // auto SI = new llvm::StoreInst(llvm::ConstantFP::get(context, llvm::APFloat(2.5)), AI, BB);
-
-  // %a = alloca i32, align 4
-  // %b = alloca i32, align 4
-  // store i32 5, i32* %a, align 4
-  // %0 = load i32* %a, align 4
-  // store i32 %0, i32* %b, align 4
 
   NamedValues.clear();
   for (auto &Arg : TheFunction->args())
@@ -304,36 +290,8 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     }
     case Node_Types::VariableDeclarationNode:
     {
-      //! Abstract this case to Variable_Declaration_Node::code_gen();
-      //! Do the same abstraction for each case, this is so ugly and confusing to read
       Variable_Declaration_Node *variable_declaration_node = std::get<Variable_Declaration_Node *>(node->variable_declaration_node);
-      llvm::Type *variable_type;
-
-      switch (variable_declaration_node->type)
-      {
-      case Variable_Types::FloatType:
-      {
-        variable_type = llvm::Type::getFloatTy(context);
-        break;
-      }
-      default:
-        break;
-      }
-
-      auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
-
-      Number num = evaluate_number_expression(std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression));
-      llvm::Value *variable_value;
-      switch (num.type)
-      {
-      case Number_Types::FloatNumber:
-        variable_value = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
-      default:
-        break;
-      }
-
-      auto SI = new llvm::StoreInst(variable_value, AI, BB);
-
+      function_variable_code_gen(variable_declaration_node, BB);
       break;
     }
     default:
