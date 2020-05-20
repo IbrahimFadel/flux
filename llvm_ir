@@ -1,4 +1,6 @@
 define float @test(i32 %number1, float %number2) {
 entry:
+  %sum = alloca float
+  store float 3.000000e+00, float* %sum
   ret float 5.000000e+00
 }

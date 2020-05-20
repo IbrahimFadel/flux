@@ -75,7 +75,7 @@ void generate_llvm_ir(std::vector<Node *> nodes)
   }
 
   std::error_code My_EC;
-  llvm::raw_fd_ostream bc_out("module", EC, llvm::sys::fs::F_None);
+  llvm::raw_fd_ostream bc_out("module.bc", EC, llvm::sys::fs::F_None);
   llvm::WriteBitcodeToFile(*TheModule, bc_out);
 
   bc_out.flush();
@@ -268,6 +268,18 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
   llvm::BasicBlock *BB = llvm::BasicBlock::Create(context, "entry", TheFunction);
   Builder.SetInsertPoint(BB);
 
+  // llvm::Type *Ty = llvm::Type::getFloatTy(context);
+  // auto AI = new llvm::AllocaInst(Ty, NULL, "tmp", BB);
+
+  // llvm::Value *v = llvm::ConstantFP::get(context, llvm::APFloat(2.5));
+  // auto SI = new llvm::StoreInst(llvm::ConstantFP::get(context, llvm::APFloat(2.5)), AI, BB);
+
+  // %a = alloca i32, align 4
+  // %b = alloca i32, align 4
+  // store i32 5, i32* %a, align 4
+  // %0 = load i32* %a, align 4
+  // store i32 %0, i32* %b, align 4
+
   NamedValues.clear();
   for (auto &Arg : TheFunction->args())
   {
@@ -292,11 +304,36 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     }
     case Node_Types::VariableDeclarationNode:
     {
-      // llvm::Value *v = std::get<Variable_Declaration_Node *>(node->variable_declaration_node)->code_gen();
-      // llvm::Instruction *pi = llvm::Instruction(llvm::Type::getInt32Ty(context));
-      // Builder.
-      // BB->
-      // Builder.Insert(v);
+      //! Abstract this case to Variable_Declaration_Node::code_gen();
+      //! Do the same abstraction for each case, this is so ugly and confusing to read
+      Variable_Declaration_Node *variable_declaration_node = std::get<Variable_Declaration_Node *>(node->variable_declaration_node);
+      llvm::Type *variable_type;
+
+      switch (variable_declaration_node->type)
+      {
+      case Variable_Types::FloatType:
+      {
+        variable_type = llvm::Type::getFloatTy(context);
+        break;
+      }
+      default:
+        break;
+      }
+
+      auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+
+      Number num = evaluate_number_expression(std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression));
+      llvm::Value *variable_value;
+      switch (num.type)
+      {
+      case Number_Types::FloatNumber:
+        variable_value = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+      default:
+        break;
+      }
+
+      auto SI = new llvm::StoreInst(variable_value, AI, BB);
+
       break;
     }
     default:
@@ -309,12 +346,54 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
   return TheFunction;
 }
 
+llvm::Value *Then::code_gen()
+{
+  for (auto &node : nodes)
+  {
+  }
+}
+
+llvm::Value *Term::code_gen()
+{
+  std::vector<std::vector<std::string>> pairs;
+  std::vector<std::string> pair;
+  int i = 1;
+  for (auto &num : numbers)
+  {
+    pair.push_back(num);
+    if (i == numbers.size())
+    {
+      pairs.push_back(pair);
+      pair.clear();
+    }
+    if (i % 2 == 0 && i != 0)
+    {
+      pairs.push_back(pair);
+      pair.clear();
+    }
+    i++;
+  }
+
+  for (auto &bin_op : pairs)
+  {
+    llvm::Value *L = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(bin_op[0])));
+    llvm::Value *R = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(bin_op[1])));
+    return Builder.CreateAdd(L, R, "addtmp");
+  }
+}
+
 llvm::Constant *Constant_Declaration_Node::code_gen()
 {
   switch (type)
   {
   case Variable_Types::FloatType:
   {
+
+    Number_Expression_Node node = std::get<Number_Expression_Node>(expression->number_expression);
+    for (auto &term : node.terms)
+    {
+      llvm::Value *v = term.code_gen();
+    }
     Number num = evaluate_number_expression(std::get<Number_Expression_Node>(expression->number_expression));
     llvm::Constant *test = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
     return test;

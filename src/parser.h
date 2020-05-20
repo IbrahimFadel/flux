@@ -67,6 +67,7 @@ struct Term
 {
   std::vector<std::string> numbers;
   std::vector<std::string> ops;
+  llvm::Value *code_gen();
 };
 
 struct Number_Expression_Node
@@ -118,6 +119,7 @@ struct Then
 {
   std::vector<std::shared_ptr<Token>> tokens;
   std::vector<Node *> nodes;
+  llvm::Value *code_gen();
 };
 
 struct Function_Declaration_Node
