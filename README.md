@@ -7,16 +7,16 @@ Here's how it works:
 file.ss
 
 ```ts
-const x: float = 3 * 1.0 * 3 + 5 * 9 * 3;
-
-fn sum: float = () -> {
-  return(6.0);
+fn test: float = (number1: int, number2: float) -> {
+  let sum: float = 1 + 2;
+  return(5.0);
 }
 ```
 
 This gets tokenized by `src/lexer.cpp`
 
-Format: [token : Token_Type] - line_number line_position
+Format 
+[token : Token_Type] - line_number line_position
 
 ```
 ['const' : 0] - 0 0
@@ -56,19 +56,23 @@ Format: [token : Token_Type] - line_number line_position
 Next, the tokens are parsed into an AST with `src/parser.cpp`
 
 ```
-Constant Declaration Node: x
-Function Declaration: sum
+Function Declaration: test
 PARAMS:
-Return: 3
+PARAM 0: 0
+PARAM 1: 3
+Return Type: 3
+THEN:
+Variable Declaration: sum
 ```
 
 The AST gets generated into LLVM IR (basically an assembly language) in `src/code_generation.cpp`.
 
 ```
-float 1.440000e+02
-define double @sum() {
+define float @test(i32 %number1, float %number2) {
 entry:
-  ret float 6.000000e+00
+  %sum = alloca float
+  store float 3.000000e+00, float* %sum
+  ret float 5.000000e+00
 }
 ```
 
