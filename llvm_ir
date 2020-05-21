@@ -1,6 +1,21 @@
 define float @main(i32 %number1, float %number2) {
 entry:
   %sum = alloca float
-  store float 3.000000e+00, float* %sum
+  %sum1 = alloca float
+  %sum2 = alloca float
+  store float mul (float 8.000000e+00, float 3.000000e+00), float* %sum2
+  %sum3 = load float, float* %sum2
+  %sum4 = alloca float
+  %sum5 = mul float %sum3, 4.000000e+00
+  store float %sum5, float* %sum4
+  %sum6 = load float, float* %sum4
+  store float %sum6, float* %sum
+  %sum_loaded = load float, float* %sum
+  %sum7 = alloca float
+  %sum8 = alloca float
+  store float mul (float 6.000000e+00, float 9.000000e+00), float* %sum8
+  %sum9 = load float, float* %sum8
+  store float %sum9, float* %sum
+  %sum_loaded10 = load float, float* %sum
   ret float 3.000000e+00
 }

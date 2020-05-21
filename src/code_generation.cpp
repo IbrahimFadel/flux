@@ -17,7 +17,7 @@ static llvm::LLVMContext context;
 static llvm::Module *TheModule = new llvm::Module("Module", context);
 static llvm::IRBuilder<> Builder(context);
 static std::map<std::string, llvm::Value *> NamedValues;
-// static std::map<std::string, llvm::AllocaInst *> NamedValues;
+static std::map<std::string, llvm::LoadInst *> LoadedVariables;
 
 void generate_llvm_ir(std::vector<Node *> nodes)
 {
@@ -230,23 +230,62 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
     variable_type = llvm::Type::getFloatTy(context);
     break;
   }
+  case Variable_Types::IntType:
+  {
+    variable_type = llvm::Type::getInt32Ty(context);
+  }
   default:
     break;
   }
 
   auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
 
-  Number num = evaluate_number_expression(std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression));
-  llvm::Value *variable_value;
-  switch (num.type)
-  {
-  case Number_Types::FloatNumber:
-    variable_value = llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
-  default:
-    break;
-  }
+  // (8 * 3 * 4) + (6 * 9)
 
-  auto SI = new llvm::StoreInst(variable_value, AI, BB);
+  Number_Expression_Node number_expression = std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression);
+  for (auto &term : number_expression.terms)
+  {
+    auto AllocateTerm = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+    std::map<llvm::LoadInst *, llvm::Value *> BinOpInsts;
+    int i = 0;
+    for (auto &op : term.ops)
+    {
+      if (i > 0)
+      {
+        auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+        std::map<llvm::LoadInst *, llvm::Value *>::iterator itr;
+        itr = BinOpInsts.end();
+        --itr;
+        auto BinOpInst = Builder.CreateMul(
+            itr->first,
+            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
+            variable_declaration_node->name);
+        auto StoreInst = new llvm::StoreInst(BinOpInst, BinOpInstAlloc, BB);
+        auto LoadInst = new llvm::LoadInst(BinOpInstAlloc, variable_declaration_node->name, BB);
+        BinOpInsts[LoadInst] = BinOpInst;
+      }
+      else
+      {
+        auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+        auto BinOpInst = Builder.CreateMul(
+            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i]))),
+            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
+            variable_declaration_node->name);
+        auto StoreInst = new llvm::StoreInst(BinOpInst, BinOpInstAlloc, BB);
+        auto LoadInst = new llvm::LoadInst(BinOpInstAlloc, variable_declaration_node->name, BB);
+        BinOpInsts[LoadInst] = BinOpInst;
+      }
+      i++;
+    }
+
+    std::map<llvm::LoadInst *, llvm::Value *>::iterator itr;
+    itr = BinOpInsts.end();
+    --itr;
+    // auto ALLOC = new llvm::AllocaInst(variable_type, NULL, "FINAL", BB);
+    auto StoreInst = new llvm::StoreInst(itr->first, AI, BB);
+    auto LoadInst = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
+    LoadedVariables[variable_declaration_node->name] = LoadInst;
+  }
 }
 
 llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function *proto)
@@ -271,6 +310,24 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
   {
     NamedValues[Arg.getName()] = &Arg;
   }
+
+  // llvm::Type *Ty = llvm::Type::getFloatTy(context);
+  // llvm::Type *Ty2 = llvm::Type::getDoubleTy(context);
+  // llvm::Value *LHS = llvm::ConstantFP::get(context, llvm::APFloat(10.0));
+  // llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(250.0));
+
+  // auto VAR1 = new llvm::AllocaInst(Ty2, NULL, "var1", BB);
+  // auto StoreVar1 = new llvm::StoreInst(LHS, VAR1, BB);
+  // auto LoadVar1 = new llvm::LoadInst(VAR1, "load_var1", BB);
+  // auto VAR2 = new llvm::AllocaInst(Ty2, NULL, "var2", BB);
+  // auto StoreVar2 = new llvm::StoreInst(VAR1, VAR2, BB);
+
+  // auto AI = new llvm::AllocaInst(Ty, NULL, "new", BB);
+
+  // auto test = new llvm::AddIn
+  // auto SI = new llvm::Add
+  // auto SI = Builder.CreateAdd(LHS, RHS, "addition", true, true);
+  // auto Store = new llvm::StoreInst(SI, AI, BB);
 
   for (auto &node : then.nodes)
   {
