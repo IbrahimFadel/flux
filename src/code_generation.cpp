@@ -256,7 +256,7 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
         std::map<llvm::LoadInst *, llvm::Value *>::iterator itr;
         itr = BinOpInsts.end();
         --itr;
-        auto BinOpInst = Builder.CreateMul(
+        auto BinOpInst = Builder.CreateFMul(
             itr->first,
             llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
             variable_declaration_node->name);
@@ -267,7 +267,7 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
       else
       {
         auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
-        auto BinOpInst = Builder.CreateMul(
+        auto BinOpInst = Builder.CreateFMul(
             llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i]))),
             llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
             variable_declaration_node->name);
