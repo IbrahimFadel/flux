@@ -219,73 +219,135 @@ llvm::Function *Function_Declaration_Node::code_gen_prototype()
   return F;
 }
 
-void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_node, llvm::BasicBlock *BB)
+llvm::Type *get_llvm_variable_type(int type)
 {
-  llvm::Type *variable_type;
-
-  switch (variable_declaration_node->type)
+  switch (type)
   {
   case Variable_Types::FloatType:
   {
-    variable_type = llvm::Type::getFloatTy(context);
+    return llvm::Type::getFloatTy(context);
     break;
   }
   case Variable_Types::IntType:
   {
-    variable_type = llvm::Type::getInt32Ty(context);
+    return llvm::Type::getInt32Ty(context);
   }
   default:
-    break;
+    return nullptr;
   }
+}
+
+llvm::Value *create_bin_op_instruction(Variable_Types type, llvm::Value *LHS, llvm::Value *RHS, std::string name, std::string op)
+{
+  llvm::Value *BinOpInst;
+  if (op == "*")
+  {
+    if (type == Variable_Types::FloatType)
+    {
+      BinOpInst = Builder.CreateFMul(LHS, RHS, name);
+    }
+    else
+    {
+      BinOpInst = Builder.CreateMul(LHS, RHS, name);
+    }
+  }
+  else if (op == "+")
+  {
+    if (type == Variable_Types::FloatType)
+    {
+      BinOpInst = Builder.CreateFAdd(LHS, RHS, name);
+    }
+    else
+    {
+      BinOpInst = Builder.CreateAdd(LHS, RHS, name);
+    }
+  }
+
+  return BinOpInst;
+}
+
+void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_node, llvm::BasicBlock *BB)
+{
+  llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
 
   auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
 
-  // (8 * 3 * 4) + (6 * 9)
-
   Number_Expression_Node number_expression = std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression);
+
+  std::vector<llvm::Value *> TermValues;
+
   for (auto &term : number_expression.terms)
   {
     auto AllocateTerm = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
-    std::map<llvm::LoadInst *, llvm::Value *> BinOpInsts;
+    std::vector<llvm::LoadInst *> BinOpInsts;
     int i = 0;
     for (auto &op : term.ops)
     {
       if (i > 0)
       {
+        llvm::Value *LHS = BinOpInsts[BinOpInsts.size() - 1];
+        llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+
         auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
-        std::map<llvm::LoadInst *, llvm::Value *>::iterator itr;
-        itr = BinOpInsts.end();
-        --itr;
-        auto BinOpInst = Builder.CreateFMul(
-            itr->first,
-            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
-            variable_declaration_node->name);
+        auto BinOpInst = create_bin_op_instruction(variable_declaration_node->type, LHS, RHS, variable_declaration_node->name, op);
         auto StoreInst = new llvm::StoreInst(BinOpInst, BinOpInstAlloc, BB);
         auto LoadInst = new llvm::LoadInst(BinOpInstAlloc, variable_declaration_node->name, BB);
-        BinOpInsts[LoadInst] = BinOpInst;
+
+        BinOpInsts.push_back(LoadInst);
       }
       else
       {
+        llvm::Value *LHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i])));
+        llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+
         auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
-        auto BinOpInst = Builder.CreateFMul(
-            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i]))),
-            llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1]))),
-            variable_declaration_node->name);
+        auto BinOpInst = Builder.CreateFMul(LHS, RHS, variable_declaration_node->name);
         auto StoreInst = new llvm::StoreInst(BinOpInst, BinOpInstAlloc, BB);
         auto LoadInst = new llvm::LoadInst(BinOpInstAlloc, variable_declaration_node->name, BB);
-        BinOpInsts[LoadInst] = BinOpInst;
+
+        BinOpInsts.push_back(LoadInst);
       }
+
+      if (i == term.ops.size() - 1)
+      {
+        TermValues.push_back(BinOpInsts[BinOpInsts.size() - 1]);
+      }
+
       i++;
     }
-
-    std::map<llvm::LoadInst *, llvm::Value *>::iterator itr;
-    itr = BinOpInsts.end();
-    --itr;
-    // auto ALLOC = new llvm::AllocaInst(variable_type, NULL, "FINAL", BB);
-    auto StoreInst = new llvm::StoreInst(itr->first, AI, BB);
-    auto LoadInst = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
-    LoadedVariables[variable_declaration_node->name] = LoadInst;
   }
+
+  std::vector<llvm::LoadInst *> BinOpInsts;
+  int i = 0;
+  for (auto &op : number_expression.ops)
+  {
+    if (i > 0)
+    {
+      llvm::Value *LHS = BinOpInsts[BinOpInsts.size() - 1];
+      llvm::Value *RHS = TermValues[i + 1];
+
+      auto ALLOC = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+      auto BINOP = create_bin_op_instruction(variable_declaration_node->type, LHS, RHS, variable_declaration_node->name, op);
+      auto STORE = new llvm::StoreInst(BINOP, ALLOC, BB);
+      auto LOAD = new llvm::LoadInst(ALLOC, variable_declaration_node->name, BB);
+      BinOpInsts.push_back(LOAD);
+    }
+    else
+    {
+      llvm::Value *LHS = TermValues[i];
+      llvm::Value *RHS = TermValues[i + 1];
+
+      auto ALLOC = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+      auto BINOP = create_bin_op_instruction(variable_declaration_node->type, LHS, RHS, variable_declaration_node->name, op);
+      auto STORE = new llvm::StoreInst(BINOP, ALLOC, BB);
+      auto LOAD = new llvm::LoadInst(ALLOC, variable_declaration_node->name, BB);
+      BinOpInsts.push_back(LOAD);
+    }
+    i++;
+  }
+
+  auto STORE = new llvm::StoreInst(BinOpInsts[BinOpInsts.size() - 1], AI, BB);
+  auto LOAD = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
 }
 
 llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function *proto)

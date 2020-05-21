@@ -3,19 +3,17 @@ entry:
   %sum = alloca float
   %sum1 = alloca float
   %sum2 = alloca float
-  store float 2.400000e+01, float* %sum2
+  store float 3.200000e+01, float* %sum2
   %sum3 = load float, float* %sum2
   %sum4 = alloca float
-  %sum5 = fmul float %sum3, 4.000000e+00
-  store float %sum5, float* %sum4
-  %sum6 = load float, float* %sum4
-  store float %sum6, float* %sum
-  %sum_loaded = load float, float* %sum
+  %sum5 = alloca float
+  store float 5.400000e+01, float* %sum5
+  %sum6 = load float, float* %sum5
   %sum7 = alloca float
-  %sum8 = alloca float
-  store float 5.400000e+01, float* %sum8
-  %sum9 = load float, float* %sum8
+  %sum8 = fadd float %sum3, %sum6
+  store float %sum8, float* %sum7
+  %sum9 = load float, float* %sum7
   store float %sum9, float* %sum
-  %sum_loaded10 = load float, float* %sum
+  %sum_loaded = load float, float* %sum
   ret float 3.000000e+00
 }
