@@ -8,3 +8,5 @@
 
 void generate_llvm_ir(std::vector<Node *>);
 float evaluate_float_expression(std::unique_ptr<Expression_Node>);
+
+bool is_float(std::string myString);

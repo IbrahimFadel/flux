@@ -75,6 +75,7 @@ struct Number_Expression_Node
   int type = 0;
   std::vector<std::string> ops;
   std::vector<Term> terms;
+  llvm::Value *code_gen();
 };
 
 struct String_Expression_Node

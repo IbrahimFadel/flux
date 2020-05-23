@@ -15,5 +15,5 @@ entry:
   %sum9 = load float, float* %sum7
   store float %sum9, float* %sum
   %sum_loaded = load float, float* %sum
-  ret float 3.000000e+00
+  ret i32 8
 }

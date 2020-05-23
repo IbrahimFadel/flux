@@ -1,5 +1,7 @@
 #include "code_generation.h"
 
+#include <sstream>
+
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
@@ -84,11 +86,11 @@ llvm::Value *Variable_Declaration_Node::code_gen()
 Number evaluate_number_expression(Number_Expression_Node expr)
 {
   Number num;
-  num.type = Number_Types::FloatNumber;
 
   std::vector<float> term_values;
   std::vector<float> term_values_values;
   float value = 0;
+  bool is_int = true;
   for (auto &term : expr.terms)
   {
     float term_value = 0;
@@ -101,10 +103,19 @@ Number evaluate_number_expression(Number_Expression_Node expr)
         {
           if (term_values.size() > 0)
           {
+            //TODO Check if it's a variable.
+            if (is_float(term.numbers[i + 1]))
+            {
+              is_int = false;
+            }
             term_value = term_values[term_values.size() - 1] * std::stof(term.numbers[i + 1]);
           }
           else
           {
+            if (is_float(term.numbers[i]) || is_float(term.numbers[i + 1]))
+            {
+              is_int = false;
+            }
             term_value = std::stof(term.numbers[i]) * std::stof(term.numbers[i + 1]);
           }
 
@@ -114,10 +125,18 @@ Number evaluate_number_expression(Number_Expression_Node expr)
         {
           if (term_values.size() > 0)
           {
+            if (is_float(term.numbers[i + 1]))
+            {
+              is_int = false;
+            }
             term_value = term_values[term_values.size() - 1] / std::stof(term.numbers[i + 1]);
           }
           else
           {
+            if (is_float(term.numbers[i]) || is_float(term.numbers[i + 1]))
+            {
+              is_int = false;
+            }
             term_value = std::stof(term.numbers[i]) / std::stof(term.numbers[i + 1]);
           }
 
@@ -130,6 +149,10 @@ Number evaluate_number_expression(Number_Expression_Node expr)
     }
     else
     {
+      if (is_float(term.numbers[0]))
+      {
+        is_int = false;
+      }
       term_value = std::stof(term.numbers[0]);
       term_values_values.push_back(term_value);
     }
@@ -140,15 +163,42 @@ Number evaluate_number_expression(Number_Expression_Node expr)
     value += val;
   }
 
-  num.float_number = value;
+  if (is_int)
+  {
+    num.int_number = (int)value;
+    num.type = Number_Types::IntNumber;
+  }
+  else
+  {
+    num.float_number = value;
+    num.type = Number_Types::FloatNumber;
+  }
 
   return num;
 }
 
 llvm::Value *Return_Node::code_gen()
 {
-  if (return_expression->type == Expression_Types::NumberExpression)
+  Expression_Node *expr = return_expression.get();
+  return expr->code_gen();
+}
+
+llvm::Value *Number_Expression_Node::code_gen()
+{
+  Number num = evaluate_number_expression(*this);
+  switch (num.type)
   {
+  case Number_Types::IntNumber:
+  {
+    uint64_t v = (uint64_t)std::get<int>(num.int_number);
+    auto integer = llvm::ConstantInt::get(context, llvm::APInt(32, v, true));
+    return integer;
+    break;
+  }
+  case Number_Types::FloatNumber:
+    return llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
+  default:
+    break;
   }
 }
 
@@ -156,14 +206,7 @@ llvm::Value *Expression_Node::code_gen()
 {
   if (type == Expression_Types::NumberExpression)
   {
-    Number num = evaluate_number_expression(std::get<Number_Expression_Node>(number_expression));
-    switch (num.type)
-    {
-    case Number_Types::FloatNumber:
-      return llvm::ConstantFP::get(context, llvm::APFloat(std::get<float>(num.float_number)));
-    default:
-      break;
-    }
+    return std::get<Number_Expression_Node>(number_expression).code_gen();
   }
   else if (type == Expression_Types::StringExpression)
   {
@@ -373,24 +416,6 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     NamedValues[Arg.getName()] = &Arg;
   }
 
-  // llvm::Type *Ty = llvm::Type::getFloatTy(context);
-  // llvm::Type *Ty2 = llvm::Type::getDoubleTy(context);
-  // llvm::Value *LHS = llvm::ConstantFP::get(context, llvm::APFloat(10.0));
-  // llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(250.0));
-
-  // auto VAR1 = new llvm::AllocaInst(Ty2, NULL, "var1", BB);
-  // auto StoreVar1 = new llvm::StoreInst(LHS, VAR1, BB);
-  // auto LoadVar1 = new llvm::LoadInst(VAR1, "load_var1", BB);
-  // auto VAR2 = new llvm::AllocaInst(Ty2, NULL, "var2", BB);
-  // auto StoreVar2 = new llvm::StoreInst(VAR1, VAR2, BB);
-
-  // auto AI = new llvm::AllocaInst(Ty, NULL, "new", BB);
-
-  // auto test = new llvm::AddIn
-  // auto SI = new llvm::Add
-  // auto SI = Builder.CreateAdd(LHS, RHS, "addition", true, true);
-  // auto Store = new llvm::StoreInst(SI, AI, BB);
-
   for (auto &node : then.nodes)
   {
     switch (node->type)
@@ -400,9 +425,7 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
       if (std::get<Return_Node *>(node->return_node)->return_expression->type == Expression_Types::NumberExpression)
       {
         Return_Node *return_node = std::get<Return_Node *>(node->return_node);
-        Expression_Node *expr = return_node->return_expression.get();
-
-        llvm::Value *v = expr->code_gen();
+        llvm::Value *v = return_node->code_gen();
         Builder.CreateRet(v);
       }
       break;
@@ -486,4 +509,22 @@ llvm::Constant *Constant_Declaration_Node::code_gen()
 float evaluate_float_expression(std::unique_ptr<Expression_Node> expression)
 {
   return 1.0;
+}
+
+bool is_float(std::string myString)
+{
+  int decimals_found = 0;
+  for (auto &c : myString)
+  {
+    if (c == '.')
+    {
+      decimals_found++;
+    }
+    else if (!isdigit(c))
+    {
+      return false;
+    }
+  }
+
+  return decimals_found == 1;
 }
