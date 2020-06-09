@@ -332,9 +332,19 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
     if (term.ops.size() == 0)
     {
       single_number = true;
-      llvm::Value *Value = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[0])));
+      llvm::Value *Value;
+      if (is_number(term.numbers[0]))
+      {
+        Value = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[0])));
+      }
+      else
+      {
+        Value = LoadedVariables[term.numbers[0]];
+      }
+
       auto StorInst = new llvm::StoreInst(Value, AI, BB);
       auto LoadInst = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
+      LoadedVariables[variable_declaration_node->name] = LoadInst;
     }
     else
     {

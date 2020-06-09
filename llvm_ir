@@ -3,4 +3,7 @@ entry:
   %sum = alloca i32
   store float 1.000000e+00, i32* %sum
   %sum_loaded = load i32, i32* %sum
+  %x = alloca i32
+  store i32 %sum_loaded, i32* %x
+  %x_loaded = load i32, i32* %x
 }
