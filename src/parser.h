@@ -130,6 +130,8 @@ struct Function_Declaration_Node
   Variable_Types return_type;
   Then then;
   int skip = 0;
+  std::map<std::string, llvm::Value *> loaded_variables;
+  std::map<std::string, llvm::Value *> loaded_constants;
   llvm::Function *code_gen_prototype();
   llvm::Function *code_gen_function_body(llvm::Function *);
 };

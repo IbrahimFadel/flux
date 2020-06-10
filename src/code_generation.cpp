@@ -316,7 +316,7 @@ llvm::Value *create_bin_op_instruction(Variable_Types type, llvm::Value *LHS, ll
   return BinOpInst;
 }
 
-void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_node, llvm::BasicBlock *BB)
+void function_variable_code_gen(Function_Declaration_Node *function_declaration_node, Variable_Declaration_Node *variable_declaration_node, llvm::BasicBlock *BB)
 {
   llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
 
@@ -325,13 +325,11 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
   Number_Expression_Node number_expression = std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression);
 
   std::vector<llvm::Value *> TermValues;
-  bool single_number = false;
 
   for (auto &term : number_expression.terms)
   {
-    if (term.ops.size() == 0)
+    if (term.ops.size() == 0 && number_expression.terms.size() == 1)
     {
-      single_number = true;
       llvm::Value *Value;
       if (is_number(term.numbers[0]))
       {
@@ -339,12 +337,29 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
       }
       else
       {
-        Value = LoadedVariables[term.numbers[0]];
+        Value = function_declaration_node->loaded_variables[term.numbers[0]];
       }
-
       auto StorInst = new llvm::StoreInst(Value, AI, BB);
       auto LoadInst = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
-      LoadedVariables[variable_declaration_node->name] = LoadInst;
+      function_declaration_node->loaded_variables[variable_declaration_node->name] = LoadInst;
+      return;
+    }
+    if (term.ops.size() == 0)
+    {
+      llvm::Value *Value;
+      if (is_number(term.numbers[0]))
+      {
+        Value = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[0])));
+      }
+      else
+      {
+        Value = function_declaration_node->loaded_variables[term.numbers[0]];
+      }
+
+      auto AllocInst = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+      auto StorInst = new llvm::StoreInst(Value, AllocInst, BB);
+      auto LoadInst = new llvm::LoadInst(AllocInst, variable_declaration_node->name, BB);
+      TermValues.push_back(LoadInst);
     }
     else
     {
@@ -356,7 +371,15 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
         if (i > 0)
         {
           llvm::Value *LHS = BinOpInsts[BinOpInsts.size() - 1];
-          llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+          llvm::Value *RHS;
+          if (is_number(term.numbers[i + 1]))
+          {
+            RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+          }
+          else
+          {
+            RHS = function_declaration_node->loaded_variables[variable_declaration_node->name];
+          }
 
           auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
           auto BinOpInst = create_bin_op_instruction(variable_declaration_node->type, LHS, RHS, variable_declaration_node->name, op);
@@ -367,8 +390,25 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
         }
         else
         {
-          llvm::Value *LHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i])));
-          llvm::Value *RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+          llvm::Value *LHS;
+          llvm::Value *RHS;
+          if (is_number(term.numbers[i]))
+          {
+            LHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i])));
+          }
+          else
+          {
+            LHS = function_declaration_node->loaded_variables[variable_declaration_node->name];
+          }
+
+          if (is_number(term.numbers[i + 1]))
+          {
+            RHS = llvm::ConstantFP::get(context, llvm::APFloat(std::stof(term.numbers[i + 1])));
+          }
+          else
+          {
+            RHS = function_declaration_node->loaded_variables[variable_declaration_node->name];
+          }
 
           auto BinOpInstAlloc = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
           auto BinOpInst = Builder.CreateFMul(LHS, RHS, variable_declaration_node->name);
@@ -386,11 +426,6 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
         i++;
       }
     }
-  }
-
-  if (single_number)
-  {
-    return;
   }
 
   std::vector<llvm::LoadInst *> BinOpInsts;
@@ -424,6 +459,7 @@ void function_variable_code_gen(Variable_Declaration_Node *variable_declaration_
 
   auto STORE = new llvm::StoreInst(BinOpInsts[BinOpInsts.size() - 1], AI, BB);
   llvm::Value *LOAD = new llvm::LoadInst(AI, variable_declaration_node->name + "_loaded", BB);
+  function_declaration_node->loaded_variables[variable_declaration_node->name] = LOAD;
 }
 
 llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function *proto)
@@ -466,7 +502,7 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     case Node_Types::VariableDeclarationNode:
     {
       Variable_Declaration_Node *variable_declaration_node = std::get<Variable_Declaration_Node *>(node->variable_declaration_node);
-      function_variable_code_gen(variable_declaration_node, BB);
+      function_variable_code_gen(this, variable_declaration_node, BB);
       break;
     }
     default:
