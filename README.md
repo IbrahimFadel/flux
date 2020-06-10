@@ -113,6 +113,8 @@ entry:
 }
 ```
 
+I haven't implemented it yet, but llvm comes with some optimization stuff built in which will reaaally shorten this IR. The IR I emit is quite inefficient -- optimization would remove all unnecessary stuff and make everything much nicer and faster.
+
 Parsing and Code generation are both sort of being developed together. I'll add a new feature in parsing, then implement code generation for it.
 
 I don't think i'll touch compiling the LLVM IR into binary for a while, cause it shouldn't be much of an issue? I don't really know. I might experiment with it soon.
