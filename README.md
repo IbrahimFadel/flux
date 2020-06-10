@@ -113,7 +113,14 @@ entry:
 }
 ```
 
-I haven't implemented it yet, but llvm comes with some optimization stuff built in which will reaaally shorten this IR. The IR I emit is quite inefficient -- optimization would remove all unnecessary stuff and make everything much nicer and faster.
+After optimization:
+
+```
+define i32 @main(i32 %number1, float %number2) {
+entry:
+  ret i32 5
+}
+```
 
 Parsing and Code generation are both sort of being developed together. I'll add a new feature in parsing, then implement code generation for it.
 
