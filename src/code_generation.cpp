@@ -14,6 +14,14 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/Pass.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/LegacyPassManagers.h>
+#include <llvm/IR/LegacyPassNameParser.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/GVN.h>
 
 static llvm::LLVMContext context;
 static llvm::Module *TheModule = new llvm::Module("Module", context);
@@ -21,9 +29,25 @@ static llvm::IRBuilder<> Builder(context);
 static std::map<std::string, llvm::Value *> NamedValues;
 static std::map<std::string, llvm::LoadInst *> LoadedVariables;
 
+static std::unique_ptr<llvm::Module> jitModule;
+static std::unique_ptr<llvm::legacy::FunctionPassManager> FPM;
+
+void initialize_optimizer()
+{
+  jitModule = std::make_unique<llvm::Module>("jit", context);
+  FPM = std::make_unique<llvm::legacy::FunctionPassManager>(jitModule.get());
+  FPM->add(llvm::createInstructionCombiningPass());
+  FPM->add(llvm::createReassociatePass());
+  FPM->add(llvm::createGVNPass());
+  FPM->add(llvm::createCFGSimplificationPass());
+  FPM->doInitialization();
+}
+
 void generate_llvm_ir(std::vector<Node *> nodes)
 {
   LLVMInitializeNativeTarget();
+
+  initialize_optimizer();
 
   llvm::raw_ostream *os = &llvm::outs();
   llvm::StringRef oname = "llvm_ir";
@@ -77,8 +101,25 @@ void generate_llvm_ir(std::vector<Node *> nodes)
   }
 }
 
+void code_gen_global_variable(Variable_Declaration_Node *variable_declaration_node)
+{
+  llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
+  auto gvar = new llvm::GlobalVariable(variable_type, false, llvm::GlobalValue::CommonLinkage, 0, variable_declaration_node->name);
+  gvar->setAlignment(4);
+}
+
 llvm::Value *Variable_Declaration_Node::code_gen()
 {
+  switch (scope)
+  {
+  case Variable_Scope::Global:
+  {
+    code_gen_global_variable(this);
+    break;
+  }
+  default:
+    break;
+  }
   auto ai = new llvm::AllocaInst(llvm::Type::getInt32Ty(context), 0, "indexLoc");
   return ai;
 }
@@ -321,6 +362,8 @@ void function_variable_code_gen(Function_Declaration_Node *function_declaration_
   llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
 
   auto AI = new llvm::AllocaInst(variable_type, NULL, variable_declaration_node->name, BB);
+  llvm::MaybeAlign *al = new llvm::MaybeAlign(4);
+  AI->setAlignment(*al);
 
   Number_Expression_Node number_expression = std::get<Number_Expression_Node>(variable_declaration_node->expression->number_expression);
 
@@ -511,6 +554,7 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
   }
 
   llvm::verifyFunction(*TheFunction);
+  FPM->run(*TheFunction);
 
   return TheFunction;
 }
