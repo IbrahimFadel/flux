@@ -62,6 +62,7 @@ Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
       node->type = Node_Types::IfNode;
       node->if_node = if_node;
       node->skip = if_node->skip;
+      // cout << node->skip << endl;
     }
 
     break;
@@ -194,13 +195,7 @@ If_Node *create_if_node(std::vector<std::shared_ptr<Token>> tokens, int i)
   Then then = get_then(tokens, open_bracket_position);
 
   node->then = then;
-
-  int skip = open_bracket_position + 1;
-  for (auto &token : then.tokens)
-  {
-    skip++;
-  }
-
+  int skip = open_bracket_position - i + then.tokens.size();
   node->skip = skip;
 
   return node;
@@ -273,9 +268,12 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
     parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
   }
 
+  // cout << tokens[then_start]->value << endl;
   Then then = get_then(tokens, then_start);
+  // cout << "then" << endl;
   for (auto &node : then.nodes)
   {
+    // cout << "node" << endl;
     node->parent = node;
   }
   node->then = then;
