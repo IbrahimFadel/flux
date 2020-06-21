@@ -72,11 +72,11 @@ int main()
   std::string file_content = get_file_content("test.ss");
 
   auto tokens = get_tokens(file_content);
-  // print_tokens(tokens);
+  print_tokens(tokens);
 
   std::vector<Node *> nodes = parse_tokens(tokens);
-  // print_nodes(nodes);
-  generate_llvm_ir(nodes);
+  print_nodes(nodes);
+  // generate_llvm_ir(nodes);
 
   return 0;
 }

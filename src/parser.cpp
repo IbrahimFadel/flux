@@ -56,11 +56,152 @@ Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
       node->return_node = return_node;
       node->skip = return_node->skip;
     }
+    else if (tokens[i]->value == "if")
+    {
+      If_Node *if_node = create_if_node(tokens, i);
+      node->type = Node_Types::IfNode;
+      node->if_node = if_node;
+      node->skip = if_node->skip;
+    }
+
     break;
   }
   default:
     break;
   }
+
+  return node;
+}
+
+Expression_Node *get_condition_expression(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString)
+{
+  Expression_Node *expr_node = new Expression_Node();
+  expr_node->type = Expression_Types::NumberExpression;
+  int x = i;
+  Term term;
+  Number_Expression_Node number_expression;
+  while (tokens[x]->value != endString)
+  {
+    std::shared_ptr<Token> tok = tokens[x];
+    if (tok->type == Token_Types::op)
+    {
+      if (tok->value == "+" || tok->value == "-")
+      {
+        number_expression.ops.push_back(tok->value);
+        number_expression.terms.push_back(term);
+        term.numbers.clear();
+        term.ops.clear();
+      }
+      else
+      {
+        term.ops.push_back(tok->value);
+      }
+    }
+    else if (tok->type == Token_Types::lit || tok->type == Token_Types::id)
+    {
+      term.numbers.push_back(tok->value);
+      if (tokens[x + 1]->value == endString || tokens[x + 1]->value == ")")
+      {
+        number_expression.terms.push_back(term);
+      }
+    }
+    x++;
+  }
+
+  expr_node->number_expression = number_expression;
+
+  return expr_node;
+}
+
+Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
+{
+  Condition condition;
+
+  Expression_Node *left_expr = get_condition_expression(tokens, i, "=");
+  Number_Expression_Node left_number_node = std::get<Number_Expression_Node>(std::move(left_expr)->number_expression);
+  int op_position = 0;
+
+  for (auto &term : left_number_node.terms)
+  {
+    for (auto &number : term.numbers)
+    {
+      op_position++;
+    }
+
+    for (auto &op : term.ops)
+    {
+      op_position++;
+    }
+  }
+
+  Expression_Node *right_expr = get_condition_expression(tokens, i + op_position + 1, ")");
+
+  condition.left = left_expr;
+  condition.right = right_expr;
+
+  return condition;
+}
+
+If_Node *create_if_node(std::vector<std::shared_ptr<Token>> tokens, int i)
+{
+  If_Node *node = new If_Node();
+  Condition condition = get_condition(tokens, i + 2);
+  node->condition = std::move(condition);
+
+  int open_bracket_offset = 0;
+  Expression_Node *left_expr = condition.left;
+  Number_Expression_Node left_number_expr = std::get<Number_Expression_Node>(left_expr->number_expression);
+  Expression_Node *right_expr = condition.right;
+  Number_Expression_Node right_number_expr = std::get<Number_Expression_Node>(right_expr->number_expression);
+
+  for (auto &term : left_number_expr.terms)
+  {
+    for (auto &number : term.numbers)
+    {
+      open_bracket_offset++;
+    }
+
+    for (auto &op : term.ops)
+    {
+      open_bracket_offset++;
+    }
+  }
+
+  for (auto &op : left_number_expr.ops)
+  {
+    open_bracket_offset++;
+  }
+
+  for (auto &term : right_number_expr.terms)
+  {
+    for (auto &number : term.numbers)
+    {
+      open_bracket_offset++;
+    }
+
+    for (auto &op : term.ops)
+    {
+      open_bracket_offset++;
+    }
+  }
+
+  for (auto &op : right_number_expr.ops)
+  {
+    open_bracket_offset++;
+  }
+  int open_bracket_position = i + open_bracket_offset + 5;
+
+  Then then = get_then(tokens, open_bracket_position);
+
+  node->then = then;
+
+  int skip = open_bracket_position + 1;
+  for (auto &token : then.tokens)
+  {
+    skip++;
+  }
+
+  node->skip = skip;
 
   return node;
 }
@@ -132,7 +273,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
     parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
   }
 
-  Then then = get_function_declaration_then(tokens, then_start);
+  Then then = get_then(tokens, then_start);
   for (auto &node : then.nodes)
   {
     node->parent = node;
@@ -144,7 +285,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   return node;
 }
 
-Then get_function_declaration_then(std::vector<std::shared_ptr<Token>> tokens, int i)
+Then get_then(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   Then then;
 
@@ -258,14 +399,14 @@ Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::sha
   return node;
 }
 
-std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i)
+std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString)
 {
   std::unique_ptr<Expression_Node> expr_node = std::make_unique<Expression_Node>();
   expr_node->type = Expression_Types::NumberExpression;
   int x = i;
   Term term;
   Number_Expression_Node number_expression;
-  while (tokens[x]->value != ";")
+  while (tokens[x]->value != endString)
   {
     std::shared_ptr<Token> tok = tokens[x];
     if (tok->type == Token_Types::op)
@@ -285,7 +426,7 @@ std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_
     else if (tok->type == Token_Types::lit || tok->type == Token_Types::id)
     {
       term.numbers.push_back(tok->value);
-      if (tokens[x + 1]->value == ";" || tokens[x + 1]->value == ")")
+      if (tokens[x + 1]->value == endString || tokens[x + 1]->value == ")")
       {
         number_expression.terms.push_back(term);
       }
@@ -383,10 +524,17 @@ void print_nodes(std::vector<Node *> nodes)
       cout << "Variable Declaration Node: " << variable_declaration_node->name << endl;
       break;
     }
+    case Node_Types::IfNode:
+    {
+      If_Node *if_node = std::get<If_Node *>(node->if_node);
+      Condition condition = if_node->condition;
+      cout << "If Node" << endl;
+      cout << "Then: " << endl;
+      print_nodes(if_node->then.nodes);
+      break;
+    }
     default:
       break;
     }
   }
-
-  cout << "-------------" << endl;
 }

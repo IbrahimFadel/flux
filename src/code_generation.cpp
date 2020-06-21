@@ -1,4 +1,5 @@
 #include "code_generation.h"
+#include "jit.h"
 
 #include <sstream>
 
@@ -22,19 +23,38 @@
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Support/TargetSelect.h>
 
 static llvm::LLVMContext context;
-static llvm::Module *TheModule = new llvm::Module("Module", context);
+static std::unique_ptr<llvm::Module> TheModule = std::make_unique<llvm::Module>("Module", context);
 static llvm::IRBuilder<> Builder(context);
 static std::map<std::string, llvm::Value *> NamedValues;
 static std::map<std::string, llvm::LoadInst *> LoadedVariables;
 
 static std::unique_ptr<llvm::Module> jitModule;
 static std::unique_ptr<llvm::legacy::FunctionPassManager> FPM;
+static std::unique_ptr<llvm::orc::KaleidoscopeJIT> TheJIT;
+static std::map<char, int> BinopPrecedence;
 
-void initialize_optimizer()
+void jit()
+{
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+  llvm::InitializeNativeTargetAsmParser();
+
+  BinopPrecedence['<'] = 10;
+  BinopPrecedence['+'] = 20;
+  BinopPrecedence['-'] = 20;
+  BinopPrecedence['*'] = 40;
+
+  TheJIT = std::make_unique<llvm::orc::KaleidoscopeJIT>();
+}
+
+void InitializeModuleAndPassManager()
 {
   jitModule = std::make_unique<llvm::Module>("jit", context);
+  // jitModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
+
   FPM = std::make_unique<llvm::legacy::FunctionPassManager>(jitModule.get());
   FPM->add(llvm::createInstructionCombiningPass());
   FPM->add(llvm::createReassociatePass());
@@ -43,11 +63,16 @@ void initialize_optimizer()
   FPM->doInitialization();
 }
 
+void initialize_optimizer()
+{
+  // jitModule = std::make_unique<llvm::Module>("jit", context);
+}
+
 void generate_llvm_ir(std::vector<Node *> nodes)
 {
-  LLVMInitializeNativeTarget();
-
-  initialize_optimizer();
+  // LLVMInitializeNativeTarget();
+  InitializeModuleAndPassManager();
+  // initialize_optimizer();
 
   llvm::raw_ostream *os = &llvm::outs();
   llvm::StringRef oname = "llvm_ir";
@@ -93,6 +118,13 @@ void generate_llvm_ir(std::vector<Node *> nodes)
       cout << endl;
       prototype->print(*out);
       out->write('\n');
+
+      // auto H = TheJIT->addModule(std::move(TheModule));
+      // InitializeModuleAndPassManager();
+
+      // auto ExprSymbol = TheJIT->findSymbol("__anon_expr");
+      // assert(ExprSymbol && "Function not found");
+
       break;
     }
     default:
@@ -292,7 +324,7 @@ llvm::Function *Function_Declaration_Node::code_gen_prototype()
   }
   llvm::FunctionType *FT = llvm::FunctionType::get(function_return_type, params, false);
 
-  llvm::Function *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, name, TheModule);
+  llvm::Function *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, name, TheModule.get());
 
   unsigned Idx = 0;
   std::map<std::string, Variable_Types>::iterator it;

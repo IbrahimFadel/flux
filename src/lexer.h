@@ -51,7 +51,8 @@ static const std::vector<std::string> keywords = {
     "string",
     "void",
     "array",
-    "return"};
+    "return",
+    "if"};
 
 static const std::vector<std::string> types = {
     "int",

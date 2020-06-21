@@ -1,5 +1,3 @@
-fn main: int = (number1: int, number2: float) -> {
-  let sum: float = 1 * 3 + 5;
-  let x: float = sum + 2;
-  return(5);
+if(2 * 4 = 2) {
+  let x: int = 5;
 }

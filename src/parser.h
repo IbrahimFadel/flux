@@ -27,7 +27,8 @@ enum Node_Types
   NumberExpressionNode,
   StringExpressionNode,
   BinaryOperationNode,
-  ReturnNode
+  ReturnNode,
+  IfNode
 };
 
 enum Variable_Scope
@@ -143,12 +144,27 @@ struct Return_Node
   llvm::Value *code_gen();
 };
 
+struct Condition
+{
+  Expression_Node *left;
+  Expression_Node *right;
+  std::vector<Expression_Node> expressions;
+  std::vector<std::string> operators;
+};
+
+struct If_Node
+{
+  Condition condition;
+  Then then;
+  int skip = 0;
+};
+
 struct Node
 {
   Node_Types type;
   Node *parent;
   int skip = 0;
-  std::variant<Constant_Declaration_Node *, Variable_Declaration_Node *, Function_Declaration_Node *, Return_Node *> constant_declaration_node, variable_declaration_node, function_declaration_node, return_node;
+  std::variant<Constant_Declaration_Node *, Variable_Declaration_Node *, Function_Declaration_Node *, Return_Node *, If_Node *> constant_declaration_node, variable_declaration_node, function_declaration_node, return_node, if_node;
 };
 
 inline std::map<std::string, Constant_Declaration_Node *> constants;
@@ -163,12 +179,16 @@ Return_Node *create_return_node(std::vector<std::shared_ptr<Token>>, int);
 
 Function_Declaration_Node *create_function_declaration_node(std::vector<std::shared_ptr<Token>>, int);
 std::map<std::string, Variable_Types> get_function_declaration_parameters(std::vector<std::shared_ptr<Token>>, int);
-Then get_function_declaration_then(std::vector<std::shared_ptr<Token>>, int);
+Then get_then(std::vector<std::shared_ptr<Token>>, int);
 
 Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
-std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int);
+std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int, std::string endString = ";");
 
 Variable_Declaration_Node *create_variable_declaration_node(std::vector<std::shared_ptr<Token>>, int);
+
+Expression_Node *get_condition_expression(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString);
+Condition get_condition(std::vector<std::shared_ptr<Token>>, int);
+If_Node *create_if_node(std::vector<std::shared_ptr<Token>>, int);
 
 Variable_Types get_variable_type_from_string(std::string);
 
