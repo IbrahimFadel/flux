@@ -225,10 +225,15 @@ If_Node *create_if_node(std::vector<std::shared_ptr<Token>> tokens, int i)
   node->condition = condition;
 
   int start_index = i + 4 + condition.lefts.size() + condition.rights.size() + condition.ops.size() + condition.condition_seperators.size() + condition.results_operators.size() + condition.results.size();
+
+  // cout << "If start: " << start_index << endl;
+
   Then then = get_then(tokens, start_index);
   node->then = then;
 
-  node->skip = start_index + node->then.tokens.size();
+  node->skip = node->then.tokens.size() + start_index - i;
+  // node->skip = 14;
+  // cout << node->then.tokens.size() << ' ' << start_index - i << endl;
 
   return node;
 }
@@ -289,6 +294,7 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
   node->parameters = parameters;
 
   int parameter_skip = 0;
+  // cout << i << endl;
   int then_start = i + 5;
   if (parameters.size() == 0)
   {
@@ -300,14 +306,21 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
     parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
   }
 
+  // cout << then_start << endl;
+
   Then then = get_then(tokens, then_start);
+
   for (auto &node : then.nodes)
   {
     node->parent = node;
   }
   node->then = then;
 
+  // cout << "Then nodes: " << node->then.nodes.size() << endl;
+
   node->skip = node->then.tokens.size() + 10 + parameter_skip;
+
+  // node->skip = 0;
 
   return node;
 }
@@ -316,12 +329,15 @@ Then get_then(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   Then then;
 
+  // cout << tokens[i]->value << endl;
+
   for (int x = i; x < tokens.size(); x++)
   {
     if (tokens[x]->value == "}")
       break;
 
     Node *node = parse_token(tokens, x);
+    // cout << "Node skip: " << node->skip << endl;
     then.nodes.push_back(node);
     then.tokens.push_back(tokens[x]);
     if (node->skip > 0)
@@ -335,6 +351,8 @@ Then get_then(std::vector<std::shared_ptr<Token>> tokens, int i)
       continue;
     }
   }
+
+  // cout << "end" << endl;
 
   return then;
 }
