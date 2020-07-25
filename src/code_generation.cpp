@@ -24,6 +24,7 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/TargetRegistry.h>
 
 static llvm::LLVMContext context;
 static std::unique_ptr<llvm::Module> TheModule = std::make_unique<llvm::Module>("Module", context);
@@ -63,9 +64,58 @@ void InitializeModuleAndPassManager()
   FPM->doInitialization();
 }
 
-void initialize_optimizer()
+void initialize_object_code_emitter()
 {
-  // jitModule = std::make_unique<llvm::Module>("jit", context);
+  auto TargetTriple = llvm::sys::getDefaultTargetTriple();
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmParsers();
+  llvm::InitializeAllAsmPrinters();
+
+  std::string Error;
+  auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+
+  // Print an error and exit if we couldn't find the requested target.
+  // This generally occurs if we've forgotten to initialise the
+  // TargetRegistry or we have a bogus target triple.
+  if (!Target)
+  {
+    llvm::errs() << Error;
+    return;
+  }
+
+  auto CPU = "generic";
+  auto Features = "";
+
+  llvm::TargetOptions opt;
+  auto RM = llvm::Optional<llvm::Reloc::Model>();
+  auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+
+  TheModule->setDataLayout(TargetMachine->createDataLayout());
+  TheModule->setTargetTriple(TargetTriple);
+
+  auto Filename = "output.asm";
+  std::error_code EC;
+  llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
+
+  if (EC)
+  {
+    llvm::errs() << "Could not open file: " << EC.message();
+    return;
+  }
+
+  llvm::legacy::PassManager pass;
+  auto ASMFILE = llvm::CGFT_AssemblyFile;
+  auto OBJFILE = llvm::CGFT_ObjectFile;
+
+  if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, ASMFILE))
+  {
+    llvm::errs() << "TargetMachine can't emit a file of this type";
+  }
+
+  pass.run(*TheModule);
+  dest.flush();
 }
 
 void generate_llvm_ir(std::vector<Node *> nodes)
@@ -84,6 +134,7 @@ void generate_llvm_ir(std::vector<Node *> nodes)
 
   for (auto &node : nodes)
   {
+    // cout << "hi" << endl;
     llvm::Constant *constant;
     llvm::Value *variable;
     llvm::Function *prototype;
@@ -131,13 +182,17 @@ void generate_llvm_ir(std::vector<Node *> nodes)
       break;
     }
   }
+  initialize_object_code_emitter();
 }
 
 void code_gen_global_variable(Variable_Declaration_Node *variable_declaration_node)
 {
-  llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
-  auto gvar = new llvm::GlobalVariable(variable_type, false, llvm::GlobalValue::CommonLinkage, 0, variable_declaration_node->name);
-  gvar->setAlignment(4);
+  // llvm::Type *variable_type = get_llvm_variable_type(variable_declaration_node->type);
+
+  // llvm::GlobalVariable *gvar = new llvm::GlobalVariable(variable_type, false, llvm::GlobalValue::CommonLinkage, 0, "abv");
+  // gvar->setAlignment(4);
+  // auto gvar = new llvm::GlobalVariable(variable_type, false, llvm::GlobalValue::CommonLinkage, 0, variable_declaration_node->name);
+  // gvar->setAlignment(4);
 }
 
 llvm::Value *Variable_Declaration_Node::code_gen()
@@ -146,7 +201,11 @@ llvm::Value *Variable_Declaration_Node::code_gen()
   {
   case Variable_Scope::Global:
   {
-    code_gen_global_variable(this);
+    llvm::Type *variable_type = get_llvm_variable_type(type);
+
+    llvm::GlobalVariable *gvar = new llvm::GlobalVariable(llvm::Type::getInt32Ty(context), false, llvm::GlobalValue::CommonLinkage, 0, "abv");
+    gvar->setAlignment(4);
+    // code_gen_global_variable(this);
     break;
   }
   default:
@@ -537,6 +596,10 @@ void function_variable_code_gen(Function_Declaration_Node *function_declaration_
   function_declaration_node->loaded_variables[variable_declaration_node->name] = LOAD;
 }
 
+void if_node_code_gen(Function_Declaration_Node *function_declaration_node, If_Node *if_node, llvm::BasicBlock *BB)
+{
+}
+
 llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function *proto)
 {
   llvm::Function *TheFunction = TheModule->getFunction(proto->getName());
@@ -560,6 +623,7 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
     NamedValues[Arg.getName()] = &Arg;
   }
 
+  bool returned = false;
   for (auto &node : then.nodes)
   {
     switch (node->type)
@@ -571,6 +635,7 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
         Return_Node *return_node = std::get<Return_Node *>(node->return_node);
         llvm::Value *v = return_node->code_gen();
         Builder.CreateRet(v);
+        returned = true;
       }
       break;
     }
@@ -580,13 +645,24 @@ llvm::Function *Function_Declaration_Node::code_gen_function_body(llvm::Function
       function_variable_code_gen(this, variable_declaration_node, BB);
       break;
     }
+    case Node_Types::IfNode:
+    {
+      If_Node *if_node = std::get<If_Node *>(node->if_node);
+      if_node_code_gen(this, if_node, BB);
+      break;
+    }
     default:
       break;
     }
   }
 
+  if (!returned)
+  {
+    Builder.CreateRetVoid();
+  }
+
   llvm::verifyFunction(*TheFunction);
-  FPM->run(*TheFunction);
+  // FPM->run(*TheFunction);
 
   return TheFunction;
 }

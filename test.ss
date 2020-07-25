@@ -1,5 +1,4 @@
-fn main: int = () => {
-  if(2 * 4 = 2) {
-    let x: int = 5;
-  }
+fn main: int = (param1: int) => {
+  let x: int = 5;
+  return(5);
 }

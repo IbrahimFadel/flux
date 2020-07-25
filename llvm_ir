@@ -1,4 +1,7 @@
-define i32 @main(i32 %number1, float %number2) {
+define i32 @main(i32 %param1) {
 entry:
+  %x = alloca i32, align 4
+  store float 5.000000e+00, i32* %x
+  %x_loaded = load i32, i32* %x
   ret i32 5
 }
