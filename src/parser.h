@@ -146,10 +146,16 @@ struct Return_Node
 
 struct Condition
 {
-  Expression_Node *left;
-  Expression_Node *right;
-  std::vector<Expression_Node> expressions;
-  std::vector<std::string> operators;
+  std::vector<std::shared_ptr<Token>> lefts;
+  std::vector<std::shared_ptr<Token>> ops;
+  std::vector<std::shared_ptr<Token>> rights;
+  std::vector<std::shared_ptr<Token>> condition_seperators;
+  std::vector<std::shared_ptr<Token>> results_operators;
+  std::vector<std::shared_ptr<Token>> results;
+  // Expression_Node *left;
+  // Expression_Node *right;
+  // std::vector<Expression_Node> expressions;
+  // std::vector<std::string> operators;
 };
 
 struct If_Node

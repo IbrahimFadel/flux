@@ -26,8 +26,8 @@ int main()
   // run();
 
   std::vector<Node *> nodes = parse_tokens(tokens);
-  // print_nodes(nodes);
-  generate_llvm_ir(nodes);
+  print_nodes(nodes);
+  // generate_llvm_ir(nodes);
 
   return 0;
 }

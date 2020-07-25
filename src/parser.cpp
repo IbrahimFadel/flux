@@ -114,31 +114,105 @@ Expression_Node *get_condition_expression(std::vector<std::shared_ptr<Token>> to
   return expr_node;
 }
 
+// Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
+// {
+//   Condition condition;
+
+//   Expression_Node *left_expr = get_condition_expression(tokens, i, "=");
+//   Number_Expression_Node left_number_node = std::get<Number_Expression_Node>(std::move(left_expr)->number_expression);
+//   int op_position = 0;
+
+//   for (auto &term : left_number_node.terms)
+//   {
+//     for (auto &number : term.numbers)
+//     {
+//       op_position++;
+//     }
+
+//     for (auto &op : term.ops)
+//     {
+//       op_position++;
+//     }
+//   }
+
+//   Expression_Node *right_expr = get_condition_expression(tokens, i + op_position + 1, ")");
+
+//   condition.left = left_expr;
+//   condition.right = right_expr;
+
+//   return condition;
+// }
+
 Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   Condition condition;
 
-  Expression_Node *left_expr = get_condition_expression(tokens, i, "=");
-  Number_Expression_Node left_number_node = std::get<Number_Expression_Node>(std::move(left_expr)->number_expression);
-  int op_position = 0;
+  std::vector<std::shared_ptr<Token>> lefts;
+  std::vector<std::shared_ptr<Token>> ops;
+  std::vector<std::shared_ptr<Token>> rights;
+  std::vector<std::shared_ptr<Token>> condition_seperators;
+  std::vector<std::shared_ptr<Token>> results_operators;
+  std::vector<std::shared_ptr<Token>> results;
+  int condition_counter = 0;
 
-  for (auto &term : left_number_node.terms)
+  int skip_conditions = 0;
+  int skipped_conditions = 0;
+
+  for (int j = i; j < tokens.size(); j++)
   {
-    for (auto &number : term.numbers)
+    for (int x = 0; x < skip_conditions; x++)
     {
-      op_position++;
+      if (skipped_conditions + 1 == skip_conditions)
+      {
+        skipped_conditions = 0;
+        skip_conditions = 0;
+        goto end_conditions;
+      }
+      skipped_conditions++;
+      goto end_conditions;
     }
 
-    for (auto &op : term.ops)
+    if (tokens[j]->value == "&&" || tokens[j]->value == "||")
     {
-      op_position++;
+      condition_counter = 0;
+      condition_seperators.push_back(tokens[j]);
+      continue;
     }
+    if (tokens[j]->value == ")" && tokens[j]->type == Token_Types::sep)
+    {
+      break;
+    }
+
+    if (condition_counter % 3 == 0)
+    {
+      lefts.push_back(tokens[j]);
+    }
+    else if (condition_counter % 2 == 0)
+    {
+      rights.push_back(tokens[j]);
+      if (tokens[j + 1]->value == "==")
+      {
+        results_operators.push_back(tokens[j + 1]);
+        results.push_back(tokens[j + 2]);
+        skip_conditions = 2;
+      }
+    }
+    else if (condition_counter % 1 == 0)
+    {
+      ops.push_back(tokens[j]);
+    }
+
+    condition_counter++;
+
+  end_conditions:;
   }
 
-  Expression_Node *right_expr = get_condition_expression(tokens, i + op_position + 1, ")");
-
-  condition.left = left_expr;
-  condition.right = right_expr;
+  condition.lefts = lefts;
+  condition.ops = ops;
+  condition.rights = rights;
+  condition.condition_seperators = condition_seperators;
+  condition.results = results;
+  condition.results_operators = results_operators;
 
   return condition;
 }
@@ -146,57 +220,15 @@ Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
 If_Node *create_if_node(std::vector<std::shared_ptr<Token>> tokens, int i)
 {
   If_Node *node = new If_Node();
+
   Condition condition = get_condition(tokens, i + 2);
-  node->condition = std::move(condition);
+  node->condition = condition;
 
-  int open_bracket_offset = 0;
-  Expression_Node *left_expr = condition.left;
-  Number_Expression_Node left_number_expr = std::get<Number_Expression_Node>(left_expr->number_expression);
-  Expression_Node *right_expr = condition.right;
-  Number_Expression_Node right_number_expr = std::get<Number_Expression_Node>(right_expr->number_expression);
-
-  for (auto &term : left_number_expr.terms)
-  {
-    for (auto &number : term.numbers)
-    {
-      open_bracket_offset++;
-    }
-
-    for (auto &op : term.ops)
-    {
-      open_bracket_offset++;
-    }
-  }
-
-  for (auto &op : left_number_expr.ops)
-  {
-    open_bracket_offset++;
-  }
-
-  for (auto &term : right_number_expr.terms)
-  {
-    for (auto &number : term.numbers)
-    {
-      open_bracket_offset++;
-    }
-
-    for (auto &op : term.ops)
-    {
-      open_bracket_offset++;
-    }
-  }
-
-  for (auto &op : right_number_expr.ops)
-  {
-    open_bracket_offset++;
-  }
-  int open_bracket_position = i + open_bracket_offset + 5;
-
-  Then then = get_then(tokens, open_bracket_position);
-
+  int start_index = i + 4 + condition.lefts.size() + condition.rights.size() + condition.ops.size() + condition.condition_seperators.size() + condition.results_operators.size() + condition.results.size();
+  Then then = get_then(tokens, start_index);
   node->then = then;
-  int skip = open_bracket_position - i + then.tokens.size();
-  node->skip = skip;
+
+  node->skip = start_index + node->then.tokens.size();
 
   return node;
 }
@@ -268,12 +300,9 @@ Function_Declaration_Node *create_function_declaration_node(std::vector<std::sha
     parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
   }
 
-  // cout << tokens[then_start]->value << endl;
   Then then = get_then(tokens, then_start);
-  // cout << "then" << endl;
   for (auto &node : then.nodes)
   {
-    // cout << "node" << endl;
     node->parent = node;
   }
   node->then = then;
