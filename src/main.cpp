@@ -4,7 +4,7 @@
 
 #include "lexer.h"
 #include "parser.h"
-#include "code_generation.h"
+// #include "code_generation.h"
 
 using std::cout;
 using std::endl;
@@ -25,8 +25,8 @@ int main()
   // print_tokens(tokens);
   // run();
 
-  std::vector<Node *> nodes = parse_tokens(tokens);
-  print_nodes(nodes);
+  auto nodes = parse_tokens(tokens);
+  // print_nodes(nodes);
   // generate_llvm_ir(nodes);
 
   return 0;

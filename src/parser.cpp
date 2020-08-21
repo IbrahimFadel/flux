@@ -1,585 +1,325 @@
 #include "parser.h"
 
-std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
+std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> toks)
 {
-  std::vector<Node *> nodes;
+  bin_op_precedence["<"] = 10;
+  bin_op_precedence["+"] = 20;
+  bin_op_precedence["-"] = 30;
+  bin_op_precedence["*"] = 40;
 
-  for (int i = 0; i < tokens.size(); i++)
+  tokens = toks;
+  for (auto &token : toks)
   {
-    Node *node = parse_token(tokens, i);
-    nodes.push_back(node);
-
-    if (node->skip > 0)
+    switch (token->type)
     {
-      i += node->skip;
-      continue;
-    }
-  }
-
-  return nodes;
-}
-
-Node *parse_token(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Node *node = new Node();
-  switch (tokens[i]->type)
-  {
-  case Token_Types::kw:
-  {
-    if (tokens[i]->value == "const")
+    case Token_Types::kw:
     {
-      Constant_Declaration_Node *constant_declaration_node = create_constant_declaration_node(tokens, i);
-      node->type = Node_Types::ConstantDeclarationNode;
-      node->constant_declaration_node = constant_declaration_node;
-      node->skip = constant_declaration_node->skip;
-      constants[constant_declaration_node->name] = constant_declaration_node;
-    }
-    else if (tokens[i]->value == "let")
-    {
-      Variable_Declaration_Node *variable_declaration_node = create_variable_declaration_node(tokens, i);
-      node->type = Node_Types::VariableDeclarationNode;
-      node->variable_declaration_node = variable_declaration_node;
-      node->skip = variable_declaration_node->skip;
-      variables[variable_declaration_node->name] = variable_declaration_node;
-    }
-    else if (tokens[i]->value == "fn")
-    {
-      Function_Declaration_Node *function_declaration_node = create_function_declaration_node(tokens, i);
-      node->type = Node_Types::FunctionDeclarationNode;
-      node->function_declaration_node = function_declaration_node;
-      node->skip = function_declaration_node->skip;
-    }
-    else if (tokens[i]->value == "return")
-    {
-      Return_Node *return_node = create_return_node(tokens, i);
-      node->type = Node_Types::ReturnNode;
-      node->return_node = return_node;
-      node->skip = return_node->skip;
-    }
-    else if (tokens[i]->value == "if")
-    {
-      If_Node *if_node = create_if_node(tokens, i);
-      node->type = Node_Types::IfNode;
-      node->if_node = if_node;
-      node->skip = if_node->skip;
-      // cout << node->skip << endl;
-    }
-
-    break;
-  }
-  default:
-    break;
-  }
-
-  return node;
-}
-
-Expression_Node *get_condition_expression(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString)
-{
-  Expression_Node *expr_node = new Expression_Node();
-  expr_node->type = Expression_Types::NumberExpression;
-  int x = i;
-  Term term;
-  Number_Expression_Node number_expression;
-  while (tokens[x]->value != endString)
-  {
-    std::shared_ptr<Token> tok = tokens[x];
-    if (tok->type == Token_Types::op)
-    {
-      if (tok->value == "+" || tok->value == "-")
+      if (token->value == "let")
       {
-        number_expression.ops.push_back(tok->value);
-        number_expression.terms.push_back(term);
-        term.numbers.clear();
-        term.ops.clear();
+
+        // unique_ptr<Node> variable_declaration_node = variable_declaration();
+
+        // cout << variable_declaration_node->type << endl;
       }
-      else
-      {
-        term.ops.push_back(tok->value);
-      }
-    }
-    else if (tok->type == Token_Types::lit || tok->type == Token_Types::id)
-    {
-      term.numbers.push_back(tok->value);
-      if (tokens[x + 1]->value == endString || tokens[x + 1]->value == ")")
-      {
-        number_expression.terms.push_back(term);
-      }
-    }
-    x++;
-  }
-
-  expr_node->number_expression = number_expression;
-
-  return expr_node;
-}
-
-// Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
-// {
-//   Condition condition;
-
-//   Expression_Node *left_expr = get_condition_expression(tokens, i, "=");
-//   Number_Expression_Node left_number_node = std::get<Number_Expression_Node>(std::move(left_expr)->number_expression);
-//   int op_position = 0;
-
-//   for (auto &term : left_number_node.terms)
-//   {
-//     for (auto &number : term.numbers)
-//     {
-//       op_position++;
-//     }
-
-//     for (auto &op : term.ops)
-//     {
-//       op_position++;
-//     }
-//   }
-
-//   Expression_Node *right_expr = get_condition_expression(tokens, i + op_position + 1, ")");
-
-//   condition.left = left_expr;
-//   condition.right = right_expr;
-
-//   return condition;
-// }
-
-Condition get_condition(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Condition condition;
-
-  std::vector<std::shared_ptr<Token>> lefts;
-  std::vector<std::shared_ptr<Token>> ops;
-  std::vector<std::shared_ptr<Token>> rights;
-  std::vector<std::shared_ptr<Token>> condition_seperators;
-  std::vector<std::shared_ptr<Token>> results_operators;
-  std::vector<std::shared_ptr<Token>> results;
-  int condition_counter = 0;
-
-  int skip_conditions = 0;
-  int skipped_conditions = 0;
-
-  for (int j = i; j < tokens.size(); j++)
-  {
-    for (int x = 0; x < skip_conditions; x++)
-    {
-      if (skipped_conditions + 1 == skip_conditions)
-      {
-        skipped_conditions = 0;
-        skip_conditions = 0;
-        goto end_conditions;
-      }
-      skipped_conditions++;
-      goto end_conditions;
-    }
-
-    if (tokens[j]->value == "&&" || tokens[j]->value == "||")
-    {
-      condition_counter = 0;
-      condition_seperators.push_back(tokens[j]);
-      continue;
-    }
-    if (tokens[j]->value == ")" && tokens[j]->type == Token_Types::sep)
-    {
-      break;
-    }
-
-    if (condition_counter % 3 == 0)
-    {
-      lefts.push_back(tokens[j]);
-    }
-    else if (condition_counter % 2 == 0)
-    {
-      rights.push_back(tokens[j]);
-      if (tokens[j + 1]->value == "==")
-      {
-        results_operators.push_back(tokens[j + 1]);
-        results.push_back(tokens[j + 2]);
-        skip_conditions = 2;
-      }
-    }
-    else if (condition_counter % 1 == 0)
-    {
-      ops.push_back(tokens[j]);
-    }
-
-    condition_counter++;
-
-  end_conditions:;
-  }
-
-  condition.lefts = lefts;
-  condition.ops = ops;
-  condition.rights = rights;
-  condition.condition_seperators = condition_seperators;
-  condition.results = results;
-  condition.results_operators = results_operators;
-
-  return condition;
-}
-
-If_Node *create_if_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  If_Node *node = new If_Node();
-
-  Condition condition = get_condition(tokens, i + 2);
-  node->condition = condition;
-
-  int start_index = i + 4 + condition.lefts.size() + condition.rights.size() + condition.ops.size() + condition.condition_seperators.size() + condition.results_operators.size() + condition.results.size();
-
-  // cout << "If start: " << start_index << endl;
-
-  Then then = get_then(tokens, start_index);
-  node->then = then;
-
-  node->skip = node->then.tokens.size() + start_index - i;
-  // node->skip = 14;
-  // cout << node->then.tokens.size() << ' ' << start_index - i << endl;
-
-  return node;
-}
-
-Return_Node *create_return_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Return_Node *node = new Return_Node();
-
-  std::unique_ptr<Expression_Node> return_expr = create_expression_node(tokens, i + 1);
-  node->return_expression = std::move(return_expr);
-
-  int skip = 3;
-  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->return_expression->number_expression);
-  for (auto &term : num_node.terms)
-  {
-    for (auto &num : term.numbers)
-    {
-      skip += 1;
-    }
-    for (auto &op : term.ops)
-    {
-      skip += 1;
-    }
-  }
-  for (auto &op : num_node.ops)
-  {
-    skip += 1;
-  }
-
-  node->skip = skip;
-
-  return node;
-}
-
-Function_Declaration_Node *create_function_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Function_Declaration_Node *node = new Function_Declaration_Node();
-
-  node->name = tokens[i + 1]->value;
-
-  //! This doesn't work for arrays. Let's implement that later
-  std::string return_type = tokens[i + 3]->value;
-  if (return_type == "float")
-  {
-    node->return_type = Variable_Types::FloatType;
-  }
-  else if (return_type == "int")
-  {
-    node->return_type = Variable_Types::IntType;
-  }
-  else
-  {
-    std::cerr << "Function return type: " << return_type << " not supported yet" << endl;
-    return nullptr;
-  }
-
-  auto parameters = get_function_declaration_parameters(tokens, i + 6);
-  node->parameters = parameters;
-
-  int parameter_skip = 0;
-  // cout << i << endl;
-  int then_start = i + 5;
-  if (parameters.size() == 0)
-  {
-    then_start += 4;
-  }
-  else
-  {
-    then_start += (parameters.size() * 3) + parameters.size() - 1 + 4;
-    parameter_skip += (parameters.size() * 3) + parameters.size() - 1;
-  }
-
-  // cout << then_start << endl;
-
-  Then then = get_then(tokens, then_start);
-
-  for (auto &node : then.nodes)
-  {
-    node->parent = node;
-  }
-  node->then = then;
-
-  // cout << "Then nodes: " << node->then.nodes.size() << endl;
-
-  node->skip = node->then.tokens.size() + 10 + parameter_skip;
-
-  // node->skip = 0;
-
-  return node;
-}
-
-Then get_then(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Then then;
-
-  // cout << tokens[i]->value << endl;
-
-  for (int x = i; x < tokens.size(); x++)
-  {
-    if (tokens[x]->value == "}")
-      break;
-
-    Node *node = parse_token(tokens, x);
-    // cout << "Node skip: " << node->skip << endl;
-    then.nodes.push_back(node);
-    then.tokens.push_back(tokens[x]);
-    if (node->skip > 0)
-    {
-      int initial_x = x;
-      x += node->skip;
-      for (int y = initial_x + 1; y <= x; y++)
-      {
-        then.tokens.push_back(tokens[y]);
-      }
-      continue;
-    }
-  }
-
-  // cout << "end" << endl;
-
-  return then;
-}
-
-std::map<std::string, Variable_Types> get_function_declaration_parameters(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  std::map<std::string, Variable_Types> parameters;
-
-  int comma_interval = 0;
-  int name_type_interval = 0;
-  for (int x = i; x < tokens.size(); x++)
-  {
-    if (tokens[x]->value == ")")
-      break;
-
-    if (comma_interval % 2 == 0)
-    {
-      if (name_type_interval % 2 == 0)
-      {
-        Variable_Types type = get_variable_type_from_string(tokens[x + 2]->value);
-        parameters[tokens[x]->value] = type;
-      }
-      name_type_interval++;
-    }
-
-    comma_interval++;
-  }
-
-  return parameters;
-}
-
-Variable_Types get_variable_type_from_string(std::string type)
-{
-  if (type == "int")
-  {
-    return Variable_Types::IntType;
-  }
-  else if (type == "float")
-  {
-    return Variable_Types::FloatType;
-  }
-}
-
-Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Constant_Declaration_Node *node = new Constant_Declaration_Node();
-  node->name = tokens[i + 1]->value;
-
-  if (tokens[i + 3]->value == "int")
-  {
-    node->type = Variable_Types::IntType;
-  }
-  else if (tokens[i + 3]->value == "float")
-  {
-    node->type = Variable_Types::FloatType;
-  }
-  else if (tokens[i + 3]->value == "string")
-  {
-    node->type = Variable_Types::StringType;
-  }
-  else if (tokens[i + 3]->value == "array")
-  {
-    node->type = Variable_Types::ArrayType;
-  }
-
-  std::unique_ptr<Expression_Node> expr = create_expression_node(tokens, i + 5);
-  node->expression = std::move(expr);
-
-  int skip = 5;
-  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->expression->number_expression);
-  for (auto &term : num_node.terms)
-  {
-    for (auto &num : term.numbers)
-    {
-      skip += 1;
-    }
-    for (auto &op : term.ops)
-    {
-      skip += 1;
-    }
-  }
-  for (auto &op : num_node.ops)
-  {
-    skip += 1;
-  }
-
-  node->skip = skip;
-
-  return node;
-}
-
-std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString)
-{
-  std::unique_ptr<Expression_Node> expr_node = std::make_unique<Expression_Node>();
-  expr_node->type = Expression_Types::NumberExpression;
-  int x = i;
-  Term term;
-  Number_Expression_Node number_expression;
-  while (tokens[x]->value != endString)
-  {
-    std::shared_ptr<Token> tok = tokens[x];
-    if (tok->type == Token_Types::op)
-    {
-      if (tok->value == "+" || tok->value == "-")
-      {
-        number_expression.ops.push_back(tok->value);
-        number_expression.terms.push_back(term);
-        term.numbers.clear();
-        term.ops.clear();
-      }
-      else
-      {
-        term.ops.push_back(tok->value);
-      }
-    }
-    else if (tok->type == Token_Types::lit || tok->type == Token_Types::id)
-    {
-      term.numbers.push_back(tok->value);
-      if (tokens[x + 1]->value == endString || tokens[x + 1]->value == ")")
-      {
-        number_expression.terms.push_back(term);
-      }
-    }
-    x++;
-  }
-
-  expr_node->number_expression = number_expression;
-
-  return expr_node;
-};
-
-Variable_Declaration_Node *create_variable_declaration_node(std::vector<std::shared_ptr<Token>> tokens, int i)
-{
-  Variable_Declaration_Node *node = new Variable_Declaration_Node();
-
-  node->name = tokens[i + 1]->value;
-
-  if (tokens[i + 3]->value == "int")
-  {
-    node->type = Variable_Types::IntType;
-  }
-  else if (tokens[i + 3]->value == "float")
-  {
-    node->type = Variable_Types::FloatType;
-  }
-  else if (tokens[i + 3]->value == "string")
-  {
-    node->type = Variable_Types::StringType;
-  }
-  else if (tokens[i + 3]->value == "array")
-  {
-    node->type = Variable_Types::ArrayType;
-  }
-
-  std::unique_ptr<Expression_Node> expr = create_expression_node(tokens, i + 5);
-  node->expression = std::move(expr);
-
-  int skip = 5;
-  Number_Expression_Node num_node = std::get<Number_Expression_Node>(node->expression->number_expression);
-  for (auto &term : num_node.terms)
-  {
-    for (auto &num : term.numbers)
-    {
-      skip += 1;
-    }
-    for (auto &op : term.ops)
-    {
-      skip += 1;
-    }
-  }
-  for (auto &op : num_node.ops)
-  {
-    skip += 1;
-  }
-
-  node->skip = skip;
-
-  return node;
-}
-
-void print_nodes(std::vector<Node *> nodes)
-{
-  for (auto &node : nodes)
-  {
-    switch (node->type)
-    {
-    case Node_Types::ConstantDeclarationNode:
-    {
-      Constant_Declaration_Node *constant_declaration_node = std::get<Constant_Declaration_Node *>(node->constant_declaration_node);
-      cout << "Constant Declaration Node: " << constant_declaration_node->name << endl;
-      break;
-    }
-    case Node_Types::FunctionDeclarationNode:
-    {
-      Function_Declaration_Node *function_declaration_node = std::get<Function_Declaration_Node *>(node->function_declaration_node);
-      cout << "Function Declaration: " << function_declaration_node->name << endl;
-      cout << "PARAMS: " << endl;
-
-      std::map<std::string, Variable_Types>::iterator it;
-      for (it = function_declaration_node->parameters.begin(); it != function_declaration_node->parameters.end(); it++)
-      {
-        cout << it->first << ": " << it->second << endl;
-      }
-
-      cout << "Return Type: " << function_declaration_node->return_type << endl;
-      cout << "Then: " << endl;
-      print_nodes(function_declaration_node->then.nodes);
-
-      break;
-    }
-    case Node_Types::VariableDeclarationNode:
-    {
-      Variable_Declaration_Node *variable_declaration_node = std::get<Variable_Declaration_Node *>(node->variable_declaration_node);
-      cout << "Variable Declaration Node: " << variable_declaration_node->name << endl;
-      break;
-    }
-    case Node_Types::IfNode:
-    {
-      If_Node *if_node = std::get<If_Node *>(node->if_node);
-      Condition condition = if_node->condition;
-      cout << "If Node" << endl;
-      cout << "Then: " << endl;
-      print_nodes(if_node->then.nodes);
       break;
     }
     default:
       break;
     }
   }
+
+  std::vector<std::unique_ptr<Node>> nodes;
+
+  return nodes;
 }
+
+void consume_token()
+{
+  pos++;
+}
+
+int get_precedence()
+{
+  int prec = bin_op_precedence[tokens[pos]->value];
+  if (prec <= 0)
+    return -1;
+  return prec;
+}
+
+std::unique_ptr<Expression_Node> parse_number_expression()
+{
+  std::unique_ptr<Expression_Node> result = std::make_unique<Number_Expression_Node>(std::stod(tokens[pos]->value));
+  consume_token();
+  return result;
+}
+
+std::unique_ptr<Expression_Node> parse_paren_expression()
+{
+  consume_token();
+  std::unique_ptr<Expression_Node> v = parse_expression();
+  if (!v)
+    return 0;
+
+  if (tokens[pos]->value != ")")
+  {
+    cout << "Expected ')'" << endl;
+    return 0;
+  }
+
+  consume_token();
+  return v;
+}
+
+std::unique_ptr<Expression_Node> parse_identifier_expression()
+{
+  std::string name = tokens[pos]->value;
+
+  consume_token();
+
+  if (tokens[pos]->value != "(")
+    return std::make_unique<Variable_Declaration_Node>(name);
+
+  consume_token();
+  std::vector<std::unique_ptr<Expression_Node>> args;
+  if (tokens[pos]->value != ")")
+  {
+    while (1)
+    {
+      std::unique_ptr<Expression_Node> arg = parse_expression();
+      if (!arg)
+        return 0;
+      args.push_back(arg);
+
+      if (tokens[pos]->value == ")")
+        break;
+
+      if (tokens[pos]->value != ",")
+      {
+        cout << "Expected ')' or ',' in argument list" << endl;
+        return 0;
+      }
+
+      consume_token();
+    }
+  }
+
+  consume_token();
+
+  std::unique_ptr<Call_Node> call_node = std::make_unique<Call_Node>(name, args);
+  return call_node;
+}
+
+std::unique_ptr<Expression_Node> parse_primary()
+{
+  std::shared_ptr<Token> token = tokens[pos];
+  switch (token->type)
+  {
+  case Token_Types::id:
+  {
+    return parse_identifier_expression();
+  }
+  case Token_Types::lit:
+  {
+    return parse_number_expression();
+  }
+  case Token_Types::sep:
+  {
+    return parse_paren_expression();
+  }
+  default:
+    break;
+  }
+}
+
+std::unique_ptr<Expression_Node> parse_expression()
+{
+  std::unique_ptr<Expression_Node> lhs = parse_primary();
+  if (!lhs)
+    return 0;
+
+  return parse_bin_op_rhs(0, std::move(lhs));
+}
+
+std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs)
+{
+  while (1)
+  {
+    int tok_prec = get_precedence();
+
+    if (tok_prec < expr_prec)
+      return lhs;
+
+    std::string bin_op = tokens[pos]->value;
+
+    consume_token();
+
+    std::unique_ptr<Expression_Node> rhs = parse_primary();
+    if (!rhs)
+      return 0;
+
+    int next_prec = get_precedence();
+    if (tok_prec < next_prec)
+    {
+      rhs = parse_bin_op_rhs(tok_prec + 1, std::move(rhs));
+      if (rhs == 0)
+        return 0;
+    }
+
+    lhs = std::make_unique<Binary_Expression_Node>(bin_op, lhs, rhs);
+  }
+}
+
+std::unique_ptr<Expression_Node> parse_prototype()
+{
+  std::string name = tokens[pos]->value;
+  consume_token();
+
+  if (tokens[pos]->value != "(")
+  {
+    cout << "Expected '(' in function prototype" << endl;
+    return 0;
+  }
+
+  std::vector<std::string> arg_names;
+
+  std::string tok = tokens[pos]->value;
+  while (1)
+  {
+    if (tok != ")")
+    {
+      arg_names.push_back(tok);
+    }
+    consume_token();
+  };
+
+  return std::make_unique<Prototype_Node>(name, arg_names);
+}
+
+std::unique_ptr<Expression_Node> parse_definition()
+{
+  consume_token();
+
+  std::unique_ptr<Expression_Node> prototype = parse_prototype();
+  if (prototype == 0)
+    return 0;
+
+  if (std::unique_ptr<Expression_Node> e = parse_expression())
+  {
+    return std::make_unique<Function_Node>(prototype, e);
+  }
+}
+
+// int match_string(std::string match)
+// {
+//   if (match == tokens[pos]->value)
+//   {
+//     pos++;
+//     return 1;
+//   }
+//   std::cerr << "Error -- Expected " << match << " found " << tokens[pos]->value << " instead" << endl;
+//   return -1;
+// }
+
+// RegexMatch *match_regex(std::regex match)
+// {
+//   if (std::regex_match(tokens[pos]->value, match))
+//   {
+//     pos++;
+//     RegexMatch *match = new RegexMatch();
+//     match->result = tokens[pos]->value;
+//     match->error = false;
+//     return match;
+//   }
+
+//   RegexMatch *_match = new RegexMatch();
+//   _match->result = tokens[pos]->value;
+//   _match->error = true;
+//   return _match;
+// }
+
+// unique_ptr<Variable_Declaration_Node> variable_declaration()
+// {
+// }
+
+// std::unique_ptr<Node> variable_declaration()
+// {
+//   unique_ptr<Node> node = std::make_unique<Node>();
+//   int let, colon, equal;
+//   RegexMatch *name, *type;
+
+//   if (!(let = match_string("let")))
+//   {
+//     node->type = NodeTypes::Error;
+//     return node;
+//   }
+
+//   std::regex name_regex("[a-zA-Z_]+");
+//   name = match_regex(name_regex);
+//   if (name->error)
+//   {
+//     node->type = NodeTypes::Error;
+//     return node;
+//   }
+
+//   if (!(colon = match_string(":")))
+//   {
+//     node->type = NodeTypes::Error;
+//     return node;
+//   }
+
+//   std::regex type_regex("int|float");
+//   type = match_regex(type_regex);
+//   if (name->error)
+//   {
+//     node->type = NodeTypes::Error;
+//     return node;
+//   }
+
+//   if (!(equal = match_string("=")))
+//   {
+//     node->type = NodeTypes::Error;
+//     return node;
+//   }
+
+//   std::unique_ptr<Expression_Node> expression_node = parse_expression();
+
+//   node->type = NodeTypes::VariableDeclarationNode;
+
+//   return node;
+// }
+
+// std::unique_ptr<Expression_Node> parse_expression()
+// {
+//   unique_ptr<Expression_Node> expression_node = std::make_unique<Expression_Node>();
+//   std::string val = tokens[pos]->value;
+//   if (is_number(val))
+//   {
+//     std::unique_ptr<Number_Expression_Node> number_expression = parse_number_expression();
+
+//     RegexMatch *op;
+
+//     // std::regex op_regex("");
+//     cout << tokens[pos]->value << endl;
+//     std::regex op_regex("[\+|\-|\/|\*]");
+//     op = match_regex(op_regex);
+
+//     // cout << "Err? " << op->error << endl;
+
+//     return number_expression;
+//   }
+//   else if (val == "(")
+//   {
+//   }
+//   else
+//   {
+//     // parse_identifier_expression();
+//   }
+// }
+
+// std::unique_ptr<Number_Expression_Node> parse_number_expression()
+// {
+//   auto result = std::make_unique<Number_Expression_Node>(std::stod(tokens[pos]->value));
+//   pos++;
+
+//   return std::move(result);
+// }

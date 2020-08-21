@@ -1,203 +1,108 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "lexer.h"
+
 #include <iostream>
 #include <vector>
 #include <memory>
 #include <variant>
 #include <map>
+#include <regex>
 
-#include <llvm/IR/Value.h>
+using std::unique_ptr;
 
-#include "lexer.h"
-
-using std::cout;
-using std::endl;
-
-struct Then;
+struct Number_Expression_Node;
+struct Expression_Node;
+struct Variable_Declaration_Node;
+struct Call_Node;
+struct Binary_Expression_Node;
+struct Prototype_Node;
+struct Function_Node;
 struct Node;
-struct Binary_Operation_Node;
+struct RegexMatch;
 
-enum Node_Types
+enum NodeTypes
 {
-  VariableDeclarationNode,
-  ConstantDeclarationNode,
-  FunctionDeclarationNode,
-  FunctionCallNode,
-  NumberExpressionNode,
-  StringExpressionNode,
-  BinaryOperationNode,
-  ReturnNode,
-  IfNode
-};
-
-enum Variable_Scope
-{
-  Global,
-  Function
-};
-
-enum Expression_Types
-{
-  NumberExpression,
-  StringExpression
-};
-
-enum Variable_Types
-{
-  IntType,
-  StringType,
-  VoidType,
-  FloatType,
-  ArrayType
-};
-
-enum Number_Types
-{
-  FloatNumber,
-  IntNumber
-};
-
-struct Number
-{
-  Number_Types type;
-  std::variant<float, int> float_number, int_number;
-};
-
-struct Term
-{
-  std::vector<std::string> numbers;
-  std::vector<std::string> ops;
-  llvm::Value *code_gen();
-};
-
-struct Number_Expression_Node
-{
-  int type = 0;
-  std::vector<std::string> ops;
-  std::vector<Term> terms;
-  llvm::Value *code_gen();
-};
-
-struct String_Expression_Node
-{
+  Error,
+  VariableDeclarationNode
 };
 
 struct Expression_Node
 {
-  Expression_Types type;
-  std::variant<Number_Expression_Node, String_Expression_Node> number_expression, string_expression;
-  llvm::Value *code_gen();
 };
 
-struct Binary_Operation_Node
+struct Number_Expression_Node : public Expression_Node
 {
-  Expression_Node *left;
+  double value;
+  Number_Expression_Node(double value) : value(value){};
+};
+
+struct Variable_Declaration_Node : public Expression_Node
+{
+  std::string name;
+  Variable_Declaration_Node(std::string name) : name(name){};
+};
+
+struct Call_Node : public Expression_Node
+{
+  std::string name;
+  std::vector<std::unique_ptr<Expression_Node>> args;
+  Call_Node(std::string name, std::vector<std::unique_ptr<Expression_Node>> args) : name(name), args(args){};
+};
+
+struct Binary_Expression_Node : public Expression_Node
+{
   std::string op;
-  Expression_Node *right;
+  std::unique_ptr<Expression_Node> lhs;
+  std::unique_ptr<Expression_Node> rhs;
+  Binary_Expression_Node(std::string op, std::unique_ptr<Expression_Node> lhs, std::unique_ptr<Expression_Node> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
 };
 
-struct Constant_Declaration_Node
+struct Prototype_Node : public Expression_Node
 {
   std::string name;
-  Variable_Types type;
-  Variable_Scope scope;
-  int skip = 0;
+  std::vector<std::string> arg_names;
+  Prototype_Node(std::string name, std::vector<std::string> arg_names) : name(name), arg_names(arg_names){};
+};
+
+struct Function_Node : public Expression_Node
+{
+  std::unique_ptr<Prototype_Node> prototype;
   std::unique_ptr<Expression_Node> expression;
-  llvm::Constant *code_gen();
+  Function_Node(std::unique_ptr<Prototype_Node> prototype, std::unique_ptr<Expression_Node> expression) : prototype(std::move(prototype)), expression(std::move(expression)){};
 };
 
-struct Variable_Declaration_Node
+typedef struct Node
 {
-  std::string name;
-  Variable_Types type;
-  Variable_Scope scope;
-  int skip = 0;
-  std::unique_ptr<Expression_Node> expression;
-  llvm::Value *code_gen();
-};
+  std::variant<Variable_Declaration_Node *> variable_declaration_node;
+  int type;
+} Node;
 
-struct Then
+struct RegexMatch
 {
-  std::vector<std::shared_ptr<Token>> tokens;
-  std::vector<Node *> nodes;
-  llvm::Value *code_gen();
+  bool error;
+  std::string result;
 };
 
-struct Function_Declaration_Node
-{
-  std::string name;
-  std::map<std::string, Variable_Types> parameters;
-  Variable_Types return_type;
-  Then then;
-  int skip = 0;
-  std::map<std::string, llvm::Value *> loaded_variables;
-  std::map<std::string, llvm::Value *> loaded_constants;
-  llvm::Function *code_gen_prototype();
-  llvm::Function *code_gen_function_body(llvm::Function *);
-};
+std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>>);
+int match_string(std::string match);
+RegexMatch *match_regex(std::regex match);
+void consume_token();
+int get_precedence();
 
-struct Return_Node
-{
-  std::unique_ptr<Expression_Node> return_expression;
-  int skip = 0;
-  llvm::Value *code_gen();
-};
+// std::unique_ptr<Node> variable_declaration();
+std::unique_ptr<Expression_Node> parse_expression();
+std::unique_ptr<Expression_Node> parse_number_expression();
+std::unique_ptr<Expression_Node> parse_paren_expression();
+std::unique_ptr<Expression_Node> parse_identifier_expression();
+std::unique_ptr<Expression_Node> parse_primary();
+std::unique_ptr<Expression_Node> parse_bin_op_rhs(int prec, std::unique_ptr<Expression_Node> lhs);
+std::unique_ptr<Expression_Node> parse_prototype();
+std::unique_ptr<Expression_Node> parse_definition();
 
-struct Condition
-{
-  std::vector<std::shared_ptr<Token>> lefts;
-  std::vector<std::shared_ptr<Token>> ops;
-  std::vector<std::shared_ptr<Token>> rights;
-  std::vector<std::shared_ptr<Token>> condition_seperators;
-  std::vector<std::shared_ptr<Token>> results_operators;
-  std::vector<std::shared_ptr<Token>> results;
-  // Expression_Node *left;
-  // Expression_Node *right;
-  // std::vector<Expression_Node> expressions;
-  // std::vector<std::string> operators;
-};
-
-struct If_Node
-{
-  Condition condition;
-  Then then;
-  int skip = 0;
-};
-
-struct Node
-{
-  Node_Types type;
-  Node *parent;
-  int skip = 0;
-  std::variant<Constant_Declaration_Node *, Variable_Declaration_Node *, Function_Declaration_Node *, Return_Node *, If_Node *> constant_declaration_node, variable_declaration_node, function_declaration_node, return_node, if_node;
-};
-
-inline std::map<std::string, Constant_Declaration_Node *> constants;
-inline std::map<std::string, Variable_Declaration_Node *> variables;
-
-Number evaluate_number_expression(Number_Expression_Node);
-
-std::vector<Node *> parse_tokens(std::vector<std::shared_ptr<Token>>);
-Node *parse_token(std::vector<std::shared_ptr<Token>>, int);
-
-Return_Node *create_return_node(std::vector<std::shared_ptr<Token>>, int);
-
-Function_Declaration_Node *create_function_declaration_node(std::vector<std::shared_ptr<Token>>, int);
-std::map<std::string, Variable_Types> get_function_declaration_parameters(std::vector<std::shared_ptr<Token>>, int);
-Then get_then(std::vector<std::shared_ptr<Token>>, int);
-
-Constant_Declaration_Node *create_constant_declaration_node(std::vector<std::shared_ptr<Token>>, int);
-std::unique_ptr<Expression_Node> create_expression_node(std::vector<std::shared_ptr<Token>>, int, std::string endString = ";");
-
-Variable_Declaration_Node *create_variable_declaration_node(std::vector<std::shared_ptr<Token>>, int);
-
-Expression_Node *get_condition_expression(std::vector<std::shared_ptr<Token>> tokens, int i, std::string endString);
-Condition get_condition(std::vector<std::shared_ptr<Token>>, int);
-If_Node *create_if_node(std::vector<std::shared_ptr<Token>>, int);
-
-Variable_Types get_variable_type_from_string(std::string);
-
-void print_nodes(std::vector<Node *>);
+static std::vector<std::shared_ptr<Token>> tokens;
+static int pos = 0;
+static std::map<std::string, int> bin_op_precedence;
 
 #endif

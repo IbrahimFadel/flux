@@ -61,7 +61,7 @@ static const std::vector<std::string> types = {
     "array"};
 
 static const std::vector<std::string>
-    operators = {"+", "-", "*", "/", ":", "&&", "||", ">", "<", "=", "==", "<=", ">="};
+    operators = {"+", "-", "*", "/", ":", "&&", "||", ">", "<", "=", "==", "!=", "<=", ">="};
 
 static const std::vector<std::string> seperators = {
     "(",
