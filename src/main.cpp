@@ -22,10 +22,10 @@ int main()
   std::string file_content = get_file_content("test.ss");
 
   auto tokens = get_tokens(file_content);
-  // print_tokens(tokens);
+  print_tokens(std::move(tokens));
   // run();
 
-  auto nodes = parse_tokens(tokens);
+  // parse_tokens(tokens);
   // print_nodes(nodes);
   // generate_llvm_ir(nodes);
 
