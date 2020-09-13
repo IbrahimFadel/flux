@@ -1,5 +1,3 @@
-fn main: int = () => {
-  if(1 == 1) {
+fn main: int = (param1: int) -> {
     let x: int = 5;
-  }
 }

@@ -4,7 +4,7 @@
 
 #include "lexer.h"
 #include "parser.h"
-#include "code_generation.h"
+// #include "code_generation.h"
 
 using std::cout;
 using std::endl;
@@ -17,16 +17,24 @@ std::string get_file_content(const char *path)
   return contents;
 }
 
-int main()
+int main(int argc, const char **argv)
 {
-  std::string file_content = get_file_content("test.ss");
+  std::string file_content;
+  if (argc > 1)
+  {
+    file_content = get_file_content(argv[1]);
+  }
+  else
+  {
+    file_content = get_file_content("test.ss");
+  }
 
   auto tokens = get_tokens(file_content);
-  // print_tokens(tokens);
+  print_tokens(tokens);
   // run();
 
-  std::vector<Node *> nodes = parse_tokens(tokens);
-  print_nodes(nodes);
+  parse_tokens(tokens);
+  // print_nodes(nodes);
   // generate_llvm_ir(nodes);
 
   return 0;

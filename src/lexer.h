@@ -8,81 +8,80 @@
 
 using std::cout;
 using std::endl;
-
-enum Lexer_State
-{
-  normal,
-  string,
-  comment
-};
-
-enum String_State
-{
-  double_quotes,
-  single_quotes,
-  none
-};
+using std::shared_ptr;
+using std::vector;
 
 enum Token_Types
 {
-  kw,
-  id,
-  op,
-  lit,
-  sep,
-  eol
+  tok_let,
+  tok_fn,
+
+  tok_int,
+
+  tok_colon,
+  tok_semicolon,
+  tok_open_paren,
+  tok_close_paren,
+  tok_open_curly_bracket,
+  tok_close_curly_bracket,
+
+  tok_eq,
+  tok_asterisk,
+  tok_slash,
+  tok_plus,
+  tok_minus,
+  tok_arrow,
+
+  tok_number,
+  tok_identifier
 };
 
 struct Token
 {
+  Token_Types type;
   std::string value;
-  int type;
-  int start_row;
-  int start_col;
-  int end_row;
-  int end_col;
+  unsigned int row;
+  unsigned int col;
 };
 
-static const std::vector<std::string> keywords = {
-    "const",
-    "let",
-    "fn",
-    "int",
-    "string",
-    "void",
-    "array",
-    "return",
-    "if"};
+static vector<std::string> keywords = {
+    "let"};
 
-static const std::vector<std::string> types = {
-    "int",
-    "string",
-    "void",
-    "array"};
+static std::string file_content;
+static unsigned int file_content_pos;
 
-static const std::vector<std::string>
-    operators = {"+", "-", "*", "/", ":", "&&", "||", ">", "<", "=", "==", "<=", ">="};
+vector<shared_ptr<Token>> get_tokens(const std::string content);
+void print_tokens(vector<shared_ptr<Token>> tokens);
 
-static const std::vector<std::string> seperators = {
-    "(",
-    ")",
-    "{",
-    "}",
-    "[",
-    "]",
-    "<",
-    ">"};
+void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok = false);
 
-void print_tokens(std::vector<std::shared_ptr<Token>> &);
+static inline bool is_number(const std::string &s)
+{
+  return !s.empty() && std::find_if(s.begin(),
+                                    s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
+}
 
-std::vector<std::shared_ptr<Token>> get_tokens(std::string);
-void add_token(std::string &, std::vector<std::shared_ptr<Token>> &, int, int, int, int);
-std::shared_ptr<Token> create_token(std::string, int, int, int, int);
-bool is_keyword(std::string);
-bool is_operator(std::string);
-bool is_literal(std::string, int);
-bool is_number(std::string);
-bool is_type(std::string);
-bool is_seperator(std::string);
+static inline void ltrim(std::string &s)
+{
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+            return !std::isspace(ch);
+          }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s)
+{
+  s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+            return !std::isspace(ch);
+          }).base(),
+          s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s)
+{
+  ltrim(s);
+  rtrim(s);
+}
 
 #endif
