@@ -68,7 +68,19 @@ public:
     Call_Expression_Node(const std::string &callee, std::vector<unique_ptr<Expression_Node>> args) : callee(callee), args(std::move(args)){};
 };
 
+class Prototype_Node
+{
+private:
+    std::string name;
+    std::vector<std::string> args;
+
+public:
+    Prototype_Node(const std::string &name, std::vector<std::string> args) : name(name), args(args) {}
+};
+
 void parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
-unique_ptr<Node> parse_token(std::shared_ptr<Token> token);
+unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
+
+// unique_ptr<
 
 #endif

@@ -1,11 +1,11 @@
 #include "lexer.h"
 
-vector<unique_ptr<Token>> get_tokens(const std::string content)
+vector<shared_ptr<Token>> get_tokens(const std::string content)
 {
   file_content_pos = 0;
   file_content = content;
 
-  vector<unique_ptr<Token>> tokens;
+  vector<shared_ptr<Token>> tokens;
 
   std::string token = "";
 
@@ -49,13 +49,13 @@ vector<unique_ptr<Token>> get_tokens(const std::string content)
   return tokens;
 }
 
-void add_token(std::string &token, vector<unique_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok)
+void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok)
 {
   trim(token);
 
   if (token.size() == 0)
     return;
-  unique_ptr<Token> tok = std::make_unique<Token>();
+  shared_ptr<Token> tok = std::make_shared<Token>();
 
   if (single_char_tok)
   {
@@ -142,7 +142,7 @@ void add_token(std::string &token, vector<unique_ptr<Token>> &tokens, unsigned i
   tokens.push_back(std::move(tok));
 }
 
-void print_tokens(vector<unique_ptr<Token>> tokens)
+void print_tokens(vector<shared_ptr<Token>> tokens)
 {
   cout << "------------ Tokens ------------" << endl;
   for (auto &token : tokens)

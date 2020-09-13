@@ -8,7 +8,7 @@
 
 using std::cout;
 using std::endl;
-using std::unique_ptr;
+using std::shared_ptr;
 using std::vector;
 
 enum Token_Types
@@ -50,10 +50,10 @@ static vector<std::string> keywords = {
 static std::string file_content;
 static unsigned int file_content_pos;
 
-vector<unique_ptr<Token>> get_tokens(const std::string content);
-void print_tokens(vector<unique_ptr<Token>> tokens);
+vector<shared_ptr<Token>> get_tokens(const std::string content);
+void print_tokens(vector<shared_ptr<Token>> tokens);
 
-void add_token(std::string &token, vector<unique_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok = false);
+void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok = false);
 
 static inline bool is_number(const std::string &s)
 {
