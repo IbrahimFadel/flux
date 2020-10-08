@@ -117,6 +117,7 @@ static std::unique_ptr<Expression_Node> parse_identifier_expression();
 static std::unique_ptr<Expression_Node> parse_primary();
 static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs);
 static std::unique_ptr<Expression_Node> parse_expression();
+static std::vector<std::unique_ptr<Expression_Node>> parse_fn_body();
 static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();
 

@@ -26,7 +26,8 @@ std::unique_ptr<Function_Node> parse_fn_declaration()
     if (!proto)
         return nullptr;
 
-    auto E = parse_expression();
+    auto expressions = parse_fn_body();
+    // auto E = parse_expression();
     // if (auto E = parse_expression())
     // return std::make_unique<Function_Node>(std::move(proto), std::move(E));
     return nullptr;
@@ -98,12 +99,36 @@ std::unique_ptr<Prototype_Node> parse_prototype()
     return std::make_unique<Prototype_Node>(fn_name, arg_types, arg_names, return_type);
 }
 
+std::vector<std::unique_ptr<Expression_Node>> parse_fn_body()
+{
+    std::vector<std::unique_ptr<Expression_Node>> expressions;
+    while (cur_tok->type != Token_Types::tok_close_curly_bracket)
+    {
+        auto e = parse_expression();
+        if (!e)
+        {
+            error("Error parsing function body");
+            return expressions;
+        }
+
+        cout << "tok_type: " << cur_tok->type << endl;
+        expressions.push_back(std::move(e));
+    }
+
+    return expressions;
+}
+
 std::unique_ptr<Expression_Node> parse_expression()
 {
     auto lhs = parse_primary();
     if (!lhs)
+    {
+        error("Error parsing primary");
         return nullptr;
-    return parse_bin_op_rhs(0, std::move(lhs));
+    };
+    auto bin_op_rhs = parse_bin_op_rhs(0, std::move(lhs));
+    get_next_token();
+    return bin_op_rhs;
 }
 
 std::unique_ptr<Expression_Node> parse_primary()
@@ -135,25 +160,42 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
     while (true)
     {
         int tok_prec = get_tok_precedence();
-
+        // cout << "tok_prec: " << tok_prec << endl;
+        // cout << "expr_prec: " << expr_prec << endl;
+        // cout << (tok_prec < expr_prec) << endl;
         if (tok_prec < expr_prec)
+        {
+            // cout << "less" << endl;
+            // cout << "less before type: " << cur_tok->type << endl;
+            // get_next_token();
+            // cout << "less after type: " << cur_tok->type << endl;
             return lhs;
+        }
 
         std::string bin_op = cur_tok->value;
+        // cout << "bin_op: " << bin_op << endl;
 
         get_next_token();
 
         auto rhs = parse_primary();
         if (!rhs)
+        {
+            error("Error parsing right hand side");
             return nullptr;
+        }
+
+        // cout << "RHS: " << rhs->value << endl;
 
         int next_prec = get_tok_precedence();
+        // cout << "next_prec: " << next_prec << endl;
         if (tok_prec < next_prec)
         {
             rhs = parse_bin_op_rhs(tok_prec + 1, std::move(rhs));
             if (!rhs)
                 return nullptr;
         }
+
+        // cout << "end" << endl;
 
         lhs = std::make_unique<Binary_Expression_Node>(bin_op, std::move(lhs), std::move(rhs));
     }
