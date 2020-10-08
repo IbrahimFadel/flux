@@ -9,8 +9,8 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
 
   std::string token = "";
 
-  unsigned int row = 0;
-  unsigned int col = 0;
+  unsigned int row = 1;
+  unsigned int col = 1;
 
   for (auto &c : content)
   {
@@ -21,10 +21,19 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
     case ' ':
       add_token(token, tokens, row, col);
       break;
+    case '\n':
+      row++;
+      col = 1;
+      break;
+    case '\t':
+      break;
     case ':':
       add_token(token, tokens, row, col, true);
       break;
     case ';':
+      add_token(token, tokens, row, col, true);
+      break;
+    case ',':
       add_token(token, tokens, row, col, true);
       break;
     case '(':
@@ -44,6 +53,7 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
     }
 
     file_content_pos++;
+    col++;
   }
 
   return tokens;
@@ -62,6 +72,7 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
     std::string spliced = token.substr(0, token.size() - 1);
     add_token(spliced, tokens, row, col);
     token = token.back();
+    col++;
   }
 
   if (token == "let")
@@ -83,6 +94,10 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   else if (token == ";")
   {
     tok->type = Token_Types::tok_semicolon;
+  }
+  else if (token == ",")
+  {
+    tok->type = Token_Types::tok_comma;
   }
   else if (token == "=")
   {
@@ -135,8 +150,12 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
     tok->value = token;
   }
 
+  tok->value = token;
+
   tok->row = row;
-  tok->col = col;
+  tok->col = col - tok->value.size();
+
+  // cout << tok->row << ' ' << tok->col << endl;
 
   token.clear();
   tokens.push_back(std::move(tok));
@@ -165,6 +184,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_semicolon:
       cout << ";" << endl;
+      break;
+    case Token_Types::tok_comma:
+      cout << "," << endl;
       break;
     case Token_Types::tok_int:
       cout << "int" << endl;

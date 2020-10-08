@@ -1,5 +1,9 @@
 # Sandscript
 
+### TODO
+
+Fix the line numbering / positioning system in lexer
+
 Ok, here is my attempt at a compiled programming language. I'm gonna be doing lexing and parsing by hand. Gonna generate code with LLVM.
 
 Here's how it works:
@@ -16,7 +20,7 @@ fn main: int = (number1: int, number2: float) -> {
 
 This gets tokenized by `src/lexer.cpp`
 
-Format 
+Format
 [token : Token_Type] - line_number line_position
 
 ```
@@ -68,11 +72,11 @@ Next, the tokens are parsed into an AST with `src/parser.cpp`
 
 ```
 Function Declaration: main
-PARAMS: 
+PARAMS:
 number1: 0
 number2: 3
 Return Type: 0
-Then: 
+Then:
 Variable Declaration Node: sum
 Variable Declaration Node: x
 ```

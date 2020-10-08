@@ -1,1 +1,3 @@
-fn main() 5 + 5;
+fn main(int hi, int hello) -> int {
+    5 + 5;
+}

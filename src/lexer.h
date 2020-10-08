@@ -20,6 +20,7 @@ enum Token_Types
 
   tok_colon,
   tok_semicolon,
+  tok_comma,
   tok_open_paren,
   tok_close_paren,
   tok_open_curly_bracket,
