@@ -144,21 +144,34 @@ std::unique_ptr<Prototype_Node> parse_prototype()
 
 std::vector<std::unique_ptr<Expression_Node>> parse_fn_body()
 {
-    std::vector<std::unique_ptr<Expression_Node>> expressions;
+    std::vector<std::unique_ptr<Expression_Node>> nodes;
+    std::unique_ptr<Expression_Node> node;
+    bool ate_semicolon = false;
     while (cur_tok->type != Token_Types::tok_close_curly_bracket)
     {
-        auto e = parse_expression();
-        if (!e)
+        switch (cur_tok->type)
         {
-            error("Error parsing function body");
-            return expressions;
+        case Token_Types::tok_fn:
+            cout << "Parsing function declaration" << endl;
+            node = parse_fn_declaration();
+            ate_semicolon = false;
+            break;
+        case Token_Types::tok_int:
+            cout << "Parsing variable declaration" << endl;
+            node = parse_variable_declaration();
+            ate_semicolon = true;
+            break;
+        default:
+            break;
         }
-
-        // cout << "tok_type: " << cur_tok->type << endl;
-        expressions.push_back(std::move(e));
+        nodes.push_back(std::move(node));
+        if (!ate_semicolon)
+        {
+            get_next_token();
+        }
     }
 
-    return expressions;
+    return nodes;
 }
 
 std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon)
