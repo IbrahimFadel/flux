@@ -34,7 +34,9 @@ enum Token_Types
   tok_arrow,
 
   tok_number,
-  tok_identifier
+  tok_identifier,
+
+  tok_eof
 };
 
 struct Token

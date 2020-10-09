@@ -56,6 +56,10 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
     col++;
   }
 
+  shared_ptr<Token> eof_tok = std::make_shared<Token>();
+  eof_tok->type = Token_Types::tok_eof;
+  tokens.push_back(std::move(eof_tok));
+
   return tokens;
 }
 
@@ -217,6 +221,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_arrow:
       cout << "->" << endl;
+      break;
+    case Token_Types::tok_eof:
+      cout << "EOF" << endl;
       break;
 
     default:

@@ -10,13 +10,23 @@ void parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
     bin_op_precedence["-"] = 20;
     bin_op_precedence["*"] = 40;
 
-    // Expression_Node node;
-
-    std::unique_ptr<Expression_Node> fn_tok = parse_fn_declaration();
-    // for (auto &token : tokens)
-    // {
-    //     auto node = parse_token(token);
-    // }
+    std::vector<std::unique_ptr<Expression_Node>> nodes;
+    std::unique_ptr<Expression_Node> node;
+    while (cur_tok->type != Token_Types::tok_eof)
+    {
+        switch (cur_tok->type)
+        {
+        case Token_Types::tok_fn:
+            node = parse_fn_declaration();
+            break;
+        // case Token_Types::tok_int:
+        // node = parse_variable
+        default:
+            break;
+        }
+        nodes.push_back(std::move(node));
+        get_next_token();
+    }
 }
 
 std::unique_ptr<Function_Node> parse_fn_declaration()
