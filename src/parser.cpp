@@ -12,21 +12,54 @@ void parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
 
     std::vector<std::unique_ptr<Expression_Node>> nodes;
     std::unique_ptr<Expression_Node> node;
+    bool ate_semicolon = false;
     while (cur_tok->type != Token_Types::tok_eof)
     {
         switch (cur_tok->type)
         {
         case Token_Types::tok_fn:
+            cout << "Parsing function declaration" << endl;
             node = parse_fn_declaration();
+            ate_semicolon = false;
             break;
-        // case Token_Types::tok_int:
-        // node = parse_variable
+        case Token_Types::tok_int:
+            cout << "Parsing variable declaration" << endl;
+            node = parse_variable_declaration();
+            ate_semicolon = true;
+            break;
         default:
             break;
         }
         nodes.push_back(std::move(node));
-        get_next_token();
+        if (!ate_semicolon)
+        {
+            get_next_token();
+        }
     }
+}
+
+std::unique_ptr<Variable_Node> parse_variable_declaration()
+{
+    const char *type_string = cur_tok->value.c_str();
+
+    Variable_Types type = type_string_to_variable_type(type_string);
+
+    get_next_token();
+
+    std::string name = cur_tok->value;
+
+    get_next_token();
+
+    get_next_token();
+
+    auto val = parse_expression();
+    if (!val)
+    {
+        error("Expected expression");
+        return nullptr;
+    }
+
+    return std::make_unique<Variable_Node>(name, type, std::move(val));
 }
 
 std::unique_ptr<Function_Node> parse_fn_declaration()
@@ -247,6 +280,16 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
 
         lhs = std::make_unique<Binary_Expression_Node>(bin_op, std::move(lhs), std::move(rhs));
     }
+}
+
+Variable_Types type_string_to_variable_type(const char *str)
+{
+    if (!strcmp(str, "int"))
+    {
+        return Variable_Types::type_int;
+    }
+
+    return Variable_Types::type_int;
 }
 
 void get_next_token()

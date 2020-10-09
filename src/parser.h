@@ -3,7 +3,7 @@
 
 #include "lexer.h"
 
-#include <string>
+#include <string.h>
 #include <memory>
 #include <vector>
 #include <variant>
@@ -17,6 +17,11 @@ enum Node_Types
     VariableExpressionNode,
     BinaryExpressionNode,
     CallExpressionNode
+};
+
+enum Variable_Types
+{
+    type_int
 };
 
 class Node
@@ -92,6 +97,17 @@ public:
         : proto(std::move(Proto)), body(std::move(Body)) {}
 };
 
+class Variable_Node : public Expression_Node
+{
+private:
+    std::string name;
+    Variable_Types type;
+    std::unique_ptr<Expression_Node> value;
+
+public:
+    Variable_Node(std::string name, Variable_Types type, std::unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
+};
+
 void parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
 
@@ -108,6 +124,7 @@ static void get_next_token();
 // static int get_tok();
 static std::unique_ptr<Expression_Node> error(const char *str);
 static std::unique_ptr<Prototype_Node> error_p(const char *str);
+static Variable_Types type_string_to_variable_type(const char *str);
 // static std::map<char, int> bin_op_precedence;
 // static int get_tok_precedence();
 
@@ -120,5 +137,6 @@ static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = 
 static std::vector<std::unique_ptr<Expression_Node>> parse_fn_body();
 static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();
+static std::unique_ptr<Variable_Node> parse_variable_declaration();
 
 #endif
