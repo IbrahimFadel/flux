@@ -111,14 +111,14 @@ std::vector<std::unique_ptr<Expression_Node>> parse_fn_body()
             return expressions;
         }
 
-        cout << "tok_type: " << cur_tok->type << endl;
+        // cout << "tok_type: " << cur_tok->type << endl;
         expressions.push_back(std::move(e));
     }
 
     return expressions;
 }
 
-std::unique_ptr<Expression_Node> parse_expression()
+std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon)
 {
     auto lhs = parse_primary();
     if (!lhs)
@@ -127,7 +127,8 @@ std::unique_ptr<Expression_Node> parse_expression()
         return nullptr;
     };
     auto bin_op_rhs = parse_bin_op_rhs(0, std::move(lhs));
-    get_next_token();
+    if (needs_semicolon)
+        get_next_token();
     return bin_op_rhs;
 }
 
@@ -146,6 +147,43 @@ std::unique_ptr<Expression_Node> parse_primary()
 
 std::unique_ptr<Expression_Node> parse_identifier_expression()
 {
+    std::string id_name = cur_tok->value;
+
+    get_next_token();
+
+    if (cur_tok->type != Token_Types::tok_open_paren)
+        return std::make_unique<Variable_Expression_Node>(id_name);
+
+    get_next_token();
+
+    std::vector<std::unique_ptr<Expression_Node>> args;
+    if (cur_tok->type != Token_Types::tok_close_paren)
+    {
+        while (true)
+        {
+            if (auto arg = parse_expression(false))
+            {
+                args.push_back(std::move(arg));
+            }
+            else
+            {
+                error("Error parsing function call parameters");
+                return nullptr;
+            }
+
+            if (cur_tok->type == Token_Types::tok_close_paren)
+                break;
+            if (cur_tok->type != Token_Types::tok_comma)
+                return error("Expected ')' or ',' in argument list");
+
+            get_next_token();
+        }
+    }
+
+    get_next_token();
+
+    return std::make_unique<Call_Expression_Node>(id_name, std::move(args));
+    // return nullptr;
 }
 
 std::unique_ptr<Expression_Node> parse_number_expression()

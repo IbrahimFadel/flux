@@ -200,6 +200,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
     case Token_Types::tok_asterisk:
       cout << "*" << endl;
       break;
+    case Token_Types::tok_plus:
+      cout << "+" << endl;
+      break;
     case Token_Types::tok_open_paren:
       cout << "(" << endl;
       break;
