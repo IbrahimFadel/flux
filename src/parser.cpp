@@ -1,6 +1,6 @@
 #include "parser.h"
 
-void parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
+std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
 {
     toks = tokens;
     cur_tok = toks[tok_pointer];
@@ -10,23 +10,30 @@ void parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
     bin_op_precedence["-"] = 20;
     bin_op_precedence["*"] = 40;
 
-    std::vector<std::unique_ptr<Expression_Node>> nodes;
-    std::unique_ptr<Expression_Node> node;
+    std::vector<std::unique_ptr<Node>> nodes;
     bool ate_semicolon = false;
     while (cur_tok->type != Token_Types::tok_eof)
     {
+        std::unique_ptr<Node> node = std::make_unique<Node>();
+
         switch (cur_tok->type)
         {
         case Token_Types::tok_fn:
-            cout << "Parsing function declaration" << endl;
-            node = parse_fn_declaration();
+        {
+            auto fn = parse_fn_declaration();
             ate_semicolon = false;
+            node->type = Node_Types::FunctionDeclarationNode;
+            node->function_node = std::move(fn);
             break;
+        }
         case Token_Types::tok_int:
-            cout << "Parsing variable declaration" << endl;
-            node = parse_variable_declaration();
+        {
+            auto var = parse_variable_declaration();
             ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->expression_node = std::move(var);
             break;
+        }
         default:
             break;
         }
@@ -36,6 +43,8 @@ void parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
             get_next_token();
         }
     }
+
+    return nodes;
 }
 
 std::unique_ptr<Variable_Node> parse_variable_declaration()
@@ -70,11 +79,8 @@ std::unique_ptr<Function_Node> parse_fn_declaration()
         return nullptr;
 
     auto expressions = parse_fn_body();
-    // auto E = parse_expression();
-    // if (auto E = parse_expression())
-    // return std::make_unique<Function_Node>(std::move(proto), std::move(E));
-    return nullptr;
-    // return std::make_unique<Function_Node>(std::move(proto), nullptr);
+
+    return std::make_unique<Function_Node>(std::move(proto), std::move(expressions));
 }
 
 std::unique_ptr<Prototype_Node> parse_prototype()
@@ -90,7 +96,7 @@ std::unique_ptr<Prototype_Node> parse_prototype()
         return error_p("Expected '(' in prototype");
 
     get_next_token();
-    std::vector<Token_Types> arg_types;
+    std::vector<Variable_Types> arg_types;
     std::vector<std::string> arg_names;
 
     int param_counter = 0;
@@ -98,7 +104,7 @@ std::unique_ptr<Prototype_Node> parse_prototype()
     {
         if (param_counter == 0)
         {
-            arg_types.push_back(cur_tok->type);
+            arg_types.push_back(token_type_to_variable_type(cur_tok->type));
         }
         else if (param_counter == 1)
         {
@@ -108,7 +114,7 @@ std::unique_ptr<Prototype_Node> parse_prototype()
         {
             if (cur_tok->type == Token_Types::tok_comma)
             {
-                param_counter = 0;
+                param_counter = -1;
             }
         }
 
@@ -126,7 +132,16 @@ std::unique_ptr<Prototype_Node> parse_prototype()
 
     get_next_token();
 
-    Token_Types return_type = cur_tok->type;
+    // Token_Types return_type = cur_tok->type;
+    Variable_Types return_type;
+    switch (cur_tok->type)
+    {
+    case Token_Types::tok_int:
+        return_type = Variable_Types::type_int;
+        break;
+    default:
+        break;
+    }
 
     get_next_token();
 
@@ -142,25 +157,31 @@ std::unique_ptr<Prototype_Node> parse_prototype()
     return std::make_unique<Prototype_Node>(fn_name, arg_types, arg_names, return_type);
 }
 
-std::vector<std::unique_ptr<Expression_Node>> parse_fn_body()
+std::vector<std::unique_ptr<Node>> parse_fn_body()
 {
-    std::vector<std::unique_ptr<Expression_Node>> nodes;
-    std::unique_ptr<Expression_Node> node;
+    std::vector<std::unique_ptr<Node>> nodes;
+    std::unique_ptr<Node> node = std::make_unique<Node>();
     bool ate_semicolon = false;
     while (cur_tok->type != Token_Types::tok_close_curly_bracket)
     {
         switch (cur_tok->type)
         {
         case Token_Types::tok_fn:
-            cout << "Parsing function declaration" << endl;
-            node = parse_fn_declaration();
+        {
+            auto fn = parse_fn_declaration();
             ate_semicolon = false;
+            node->type = Node_Types::FunctionDeclarationNode;
+            node->function_node = std::move(fn);
             break;
+        }
         case Token_Types::tok_int:
-            cout << "Parsing variable declaration" << endl;
-            node = parse_variable_declaration();
+        {
+            auto var = parse_variable_declaration();
             ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->expression_node = std::move(var);
             break;
+        }
         default:
             break;
         }
@@ -303,6 +324,17 @@ Variable_Types type_string_to_variable_type(const char *str)
     }
 
     return Variable_Types::type_int;
+}
+
+Variable_Types token_type_to_variable_type(Token_Types type)
+{
+    switch (type)
+    {
+    case Token_Types::tok_int:
+        return Variable_Types::type_int;
+    default:
+        break;
+    }
 }
 
 void get_next_token()
