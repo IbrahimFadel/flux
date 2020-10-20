@@ -19,6 +19,7 @@ class Binary_Expression_Node;
 class Call_Expression_Node;
 class Prototype_Node;
 class Function_Node;
+class Variable_Node;
 
 using std::unique_ptr;
 
@@ -34,6 +35,7 @@ enum Node_Types
 
 enum Variable_Types
 {
+    type_null = -1,
     type_int
 };
 
@@ -41,7 +43,7 @@ class Node
 {
 public:
     Node_Types type;
-    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>> expression_node, function_node, prototype_node;
+    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>> expression_node, variable_node, function_node, prototype_node;
 };
 
 class Expression_Node
@@ -54,10 +56,11 @@ public:
 class Number_Expression_Node : public Expression_Node
 {
 private:
+    Variable_Types variable_type;
     double value;
 
 public:
-    Number_Expression_Node(double value) : value(value){};
+    Number_Expression_Node(double value, Variable_Types type) : value(value), variable_type(type){};
     virtual llvm::Value *code_gen();
 };
 
@@ -110,15 +113,18 @@ class Function_Node
 {
     std::unique_ptr<Prototype_Node> proto;
     std::vector<std::unique_ptr<Node>> body;
+    std::map<std::string, llvm::Value *> variables;
 
 public:
     Function_Node(std::unique_ptr<Prototype_Node> proto,
                   std::vector<std::unique_ptr<Node>> body)
-        : proto(std::move(proto)), body(std::move(body)) {}
+        : proto(std::move(proto)), body(std::move(body))
+    {
+    }
     llvm::Function *code_gen();
 };
 
-class Variable_Node : public Expression_Node
+class Variable_Node
 {
 private:
     std::string name;
@@ -151,12 +157,12 @@ static Variable_Types token_type_to_variable_type(Token_Types type);
 // static std::map<char, int> bin_op_precedence;
 // static int get_tok_precedence();
 
-static std::unique_ptr<Expression_Node> parse_number_expression();
+static std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type);
 static std::unique_ptr<Expression_Node> parse_paren_expression();
 static std::unique_ptr<Expression_Node> parse_identifier_expression();
-static std::unique_ptr<Expression_Node> parse_primary();
-static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs);
-static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true);
+static std::unique_ptr<Expression_Node> parse_primary(Variable_Types type = Variable_Types::type_null);
+static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type = Variable_Types::type_null);
+static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true, Variable_Types = Variable_Types::type_int);
 static std::vector<std::unique_ptr<Node>> parse_fn_body();
 static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();

@@ -12,23 +12,26 @@ void code_gen_node(std::unique_ptr<Node> node, bool function_body, llvm::BasicBl
 {
     llvm::raw_ostream *os = &llvm::outs();
 
+    llvm::StringRef o_name = "llvm_ir";
+    std::error_code ec;
+    llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
+
     switch (node->type)
     {
     case Node_Types::FunctionDeclarationNode:
     {
-        cout << "fn codegen" << endl;
         auto function = std::get<std::unique_ptr<Function_Node>>(std::move(node->function_node));
         auto v = function->code_gen();
         v->print(*os);
+        v->print(*out_stream);
         break;
     }
     case Node_Types::VariableDeclarationNode:
     {
-        cout << "var codegen" << endl;
-        auto expr = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        auto expr = std::get<std::unique_ptr<Variable_Node>>(std::move(node->variable_node));
         if (function_body)
         {
-            expr->code_gen(bb);
+            auto v = expr->code_gen(bb);
         }
     }
     default:
@@ -38,7 +41,17 @@ void code_gen_node(std::unique_ptr<Node> node, bool function_body, llvm::BasicBl
 
 llvm::Value *Number_Expression_Node::code_gen()
 {
-    return llvm::ConstantFP::get(context, llvm::APFloat(value));
+    switch (variable_type)
+    {
+    case Variable_Types::type_int:
+        return llvm::ConstantInt::get(context, llvm::APInt(32, (int)value, true));
+        break;
+
+    default:
+        return llvm::ConstantFP::get(context, llvm::APFloat(value));
+        break;
+    }
+    return llvm::ConstantInt::get(context, llvm::APInt(32, (int)value, true));
 }
 
 llvm::Value *Binary_Expression_Node::code_gen()
@@ -48,12 +61,24 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (l == 0 || r == 0)
         return 0;
 
-    if (op == "+")
-        return builder.CreateFAdd(l, r, "addtmp");
-    if (op == "-")
-        return builder.CreateFSub(l, r, "addtmp");
-    if (op == "*")
-        return builder.CreateFMul(l, r, "addtmp");
+    if (lhs->type != Variable_Types::type_int && rhs->type != Variable_Types::type_int)
+    {
+        if (op == "+")
+            return builder.CreateFAdd(l, r, "addtmp");
+        if (op == "-")
+            return builder.CreateFSub(l, r, "addtmp");
+        if (op == "*")
+            return builder.CreateFMul(l, r, "addtmp");
+    }
+    else
+    {
+        if (op == "+")
+            return builder.CreateAdd(l, r, "addtmp");
+        if (op == "-")
+            return builder.CreateSub(l, r, "addtmp");
+        if (op == "*")
+            return builder.CreateMul(l, r, "addtmp");
+    }
 }
 
 llvm::Value *Call_Expression_Node::code_gen()
@@ -129,7 +154,7 @@ llvm::Function *Function_Node::code_gen()
 
     for (auto &node : body)
     {
-        code_gen_node(std::move(node));
+        code_gen_node(std::move(node), true, bb);
     }
 
     // if(llvm::Value *return_value = body)
@@ -142,8 +167,12 @@ llvm::Function *Function_Node::code_gen()
 
 llvm::Value *Variable_Node::code_gen(llvm::BasicBlock *bb)
 {
-    auto var = llvm::AllocaInst(llvm::Type::getDoubleTy(context), NULL, name, bb);
-    // value->code_gen();
+    llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, bb);
+    auto v = value->code_gen();
+    auto store = new llvm::StoreInst(v, alloc, bb);
+    // auto load = new llvm::LoadInst(alloca, name, bb);
+
+    return alloc;
 }
 
 llvm::Value *Variable_Expression_Node::code_gen() {}

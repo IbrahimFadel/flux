@@ -31,7 +31,7 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
             auto var = parse_variable_declaration();
             ate_semicolon = true;
             node->type = Node_Types::VariableDeclarationNode;
-            node->expression_node = std::move(var);
+            node->variable_node = std::move(var);
             break;
         }
         default:
@@ -61,14 +61,16 @@ std::unique_ptr<Variable_Node> parse_variable_declaration()
 
     get_next_token();
 
-    auto val = parse_expression();
+    auto val = parse_expression(true, Variable_Types::type_int);
     if (!val)
     {
         error("Expected expression");
         return nullptr;
     }
 
-    return std::make_unique<Variable_Node>(name, type, std::move(val));
+    // return std::make_unique<Variable_Node>(name, type, std::move(val));
+    std::unique_ptr<Variable_Node> var_node = std::make_unique<Variable_Node>(name, type, std::move(val));
+    return var_node;
 }
 
 std::unique_ptr<Function_Node> parse_fn_declaration()
@@ -179,7 +181,7 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             auto var = parse_variable_declaration();
             ate_semicolon = true;
             node->type = Node_Types::VariableDeclarationNode;
-            node->expression_node = std::move(var);
+            node->variable_node = std::move(var);
             break;
         }
         default:
@@ -195,28 +197,28 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
     return nodes;
 }
 
-std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon)
+std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon, Variable_Types type)
 {
-    auto lhs = parse_primary();
+    auto lhs = parse_primary(type);
     if (!lhs)
     {
         error("Error parsing primary");
         return nullptr;
     };
-    auto bin_op_rhs = parse_bin_op_rhs(0, std::move(lhs));
+    auto bin_op_rhs = parse_bin_op_rhs(0, std::move(lhs), type);
     if (needs_semicolon)
         get_next_token();
     return bin_op_rhs;
 }
 
-std::unique_ptr<Expression_Node> parse_primary()
+std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
 {
     switch (cur_tok->type)
     {
     case Token_Types::tok_identifier:
         return parse_identifier_expression();
     case Token_Types::tok_number:
-        return parse_number_expression();
+        return parse_number_expression(type);
     default:
         break;
     }
@@ -263,14 +265,15 @@ std::unique_ptr<Expression_Node> parse_identifier_expression()
     // return nullptr;
 }
 
-std::unique_ptr<Expression_Node> parse_number_expression()
+std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type)
 {
-    auto number_expression = std::make_unique<Number_Expression_Node>(std::stod(cur_tok->value));
+    auto number_expression = std::make_unique<Number_Expression_Node>(std::stod(cur_tok->value), type);
+    // number_expression->variable_type = type;
     get_next_token();
     return std::move(number_expression);
 }
 
-std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs)
+std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type)
 {
     while (true)
     {
@@ -292,7 +295,7 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
 
         get_next_token();
 
-        auto rhs = parse_primary();
+        auto rhs = parse_primary(type);
         if (!rhs)
         {
             error("Error parsing right hand side");

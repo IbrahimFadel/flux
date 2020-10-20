@@ -1,0 +1,6 @@
+define i32 @main(i32 %hi, i32 %hello) {
+entry:
+  %y = alloca i32
+  store i32 30, i32* %y
+  ret void
+}
