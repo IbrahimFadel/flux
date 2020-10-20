@@ -15,6 +15,7 @@ enum Token_Types
 {
   tok_let,
   tok_fn,
+  tok_return,
 
   tok_int,
 

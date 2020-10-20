@@ -8,7 +8,7 @@ void code_gen(std::vector<std::unique_ptr<Node>> nodes)
     }
 }
 
-void code_gen_node(std::unique_ptr<Node> node, bool function_body, llvm::BasicBlock *bb)
+void code_gen_node(std::unique_ptr<Node> node)
 {
     llvm::raw_ostream *os = &llvm::outs();
 
@@ -29,10 +29,14 @@ void code_gen_node(std::unique_ptr<Node> node, bool function_body, llvm::BasicBl
     case Node_Types::VariableDeclarationNode:
     {
         auto expr = std::get<std::unique_ptr<Variable_Node>>(std::move(node->variable_node));
-        if (function_body)
-        {
-            auto v = expr->code_gen(bb);
-        }
+        auto v = expr->code_gen();
+        break;
+    }
+    case Node_Types::ReturnNode:
+    {
+        auto ret = std::get<std::unique_ptr<Return_Node>>(std::move(node->return_node));
+        ret->code_gen();
+        break;
     }
     default:
         break;
@@ -61,24 +65,24 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (l == 0 || r == 0)
         return 0;
 
-    if (lhs->type != Variable_Types::type_int && rhs->type != Variable_Types::type_int)
-    {
-        if (op == "+")
-            return builder.CreateFAdd(l, r, "addtmp");
-        if (op == "-")
-            return builder.CreateFSub(l, r, "addtmp");
-        if (op == "*")
-            return builder.CreateFMul(l, r, "addtmp");
-    }
-    else
-    {
-        if (op == "+")
-            return builder.CreateAdd(l, r, "addtmp");
-        if (op == "-")
-            return builder.CreateSub(l, r, "addtmp");
-        if (op == "*")
-            return builder.CreateMul(l, r, "addtmp");
-    }
+    // if (lhs->type != Variable_Types::type_int && rhs->type != Variable_Types::type_int)
+    // {
+    //     if (op == "+")
+    //         return builder.CreateFAdd(l, r, "addtmp");
+    //     if (op == "-")
+    //         return builder.CreateFSub(l, r, "addtmp");
+    //     if (op == "*")
+    //         return builder.CreateFMul(l, r, "addtmp");
+    // }
+    // else
+    // {
+    if (op == "+")
+        return builder.CreateAdd(l, r, "addtmp");
+    if (op == "-")
+        return builder.CreateSub(l, r, "addtmp");
+    if (op == "*")
+        return builder.CreateMul(l, r, "addtmp");
+    // }
 }
 
 llvm::Value *Call_Expression_Node::code_gen()
@@ -140,6 +144,8 @@ llvm::Function *Prototype_Node::code_gen()
         // ! remember NamedValues map
     }
 
+    current_function = name;
+
     return f;
 }
 
@@ -154,28 +160,41 @@ llvm::Function *Function_Node::code_gen()
 
     for (auto &node : body)
     {
-        code_gen_node(std::move(node), true, bb);
+        code_gen_node(std::move(node));
     }
 
     // if(llvm::Value *return_value = body)
-    builder.CreateRetVoid();
+    // builder.CreateRet();
 
     llvm::verifyFunction(*the_function);
 
     return the_function;
 }
 
-llvm::Value *Variable_Node::code_gen(llvm::BasicBlock *bb)
+llvm::Value *Return_Node::code_gen()
 {
-    llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, bb);
+    builder.CreateRet(value->code_gen());
+    return 0;
+}
+
+llvm::Value *Variable_Node::code_gen()
+{
+    llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
     auto v = value->code_gen();
-    auto store = new llvm::StoreInst(v, alloc, bb);
+    auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
+    auto load = new llvm::LoadInst(alloc, name, builder.GetInsertBlock());
     // auto load = new llvm::LoadInst(alloca, name, bb);
+    // function->set_variables(name, alloc);
+    function_variables[current_function][name] = load;
 
     return alloc;
 }
 
-llvm::Value *Variable_Expression_Node::code_gen() {}
+llvm::Value *Variable_Expression_Node::code_gen()
+{
+    auto val = function_variables[current_function][name];
+    return val;
+}
 
 llvm::Type *ss_type_to_llvm_type(Variable_Types type)
 {

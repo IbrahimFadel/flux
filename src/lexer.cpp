@@ -87,6 +87,10 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   {
     tok->type = Token_Types::tok_fn;
   }
+  else if (token == "return")
+  {
+    tok->type = Token_Types::tok_return;
+  }
   else if (token == "int")
   {
     tok->type = Token_Types::tok_int;
@@ -179,6 +183,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_fn:
       cout << "fn" << endl;
+      break;
+    case Token_Types::tok_return:
+      cout << "return" << endl;
       break;
     case Token_Types::tok_identifier:
       cout << token->value << endl;

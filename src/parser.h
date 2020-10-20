@@ -20,6 +20,7 @@ class Call_Expression_Node;
 class Prototype_Node;
 class Function_Node;
 class Variable_Node;
+class Return_Node;
 
 using std::unique_ptr;
 
@@ -30,7 +31,8 @@ enum Node_Types
     BinaryExpressionNode,
     CallExpressionNode,
     FunctionDeclarationNode,
-    VariableDeclarationNode
+    VariableDeclarationNode,
+    ReturnNode
 };
 
 enum Variable_Types
@@ -43,7 +45,7 @@ class Node
 {
 public:
     Node_Types type;
-    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>> expression_node, variable_node, function_node, prototype_node;
+    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>, std::unique_ptr<Return_Node>> expression_node, variable_node, function_node, prototype_node, return_node;
 };
 
 class Expression_Node
@@ -122,6 +124,8 @@ public:
     {
     }
     llvm::Function *code_gen();
+
+    void set_variables(std::string name, llvm::Value *var);
 };
 
 class Variable_Node
@@ -133,10 +137,21 @@ private:
 
 public:
     Variable_Node(std::string name, Variable_Types type, std::unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
-    virtual llvm::Value *code_gen(llvm::BasicBlock *bb);
+    virtual llvm::Value *code_gen();
 };
 
-std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
+class Return_Node
+{
+private:
+    std::unique_ptr<Expression_Node> value;
+
+public:
+    Return_Node(std::unique_ptr<Expression_Node> value) : value(std::move(value)) {}
+    llvm::Value *code_gen();
+};
+
+std::vector<std::unique_ptr<Node>>
+parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
 
 static std::vector<std::shared_ptr<Token>> toks;
@@ -167,5 +182,6 @@ static std::vector<std::unique_ptr<Node>> parse_fn_body();
 static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();
 static std::unique_ptr<Variable_Node> parse_variable_declaration();
+static std::unique_ptr<Return_Node> parse_return_statement();
 
 #endif

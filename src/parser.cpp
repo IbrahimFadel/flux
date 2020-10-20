@@ -162,10 +162,10 @@ std::unique_ptr<Prototype_Node> parse_prototype()
 std::vector<std::unique_ptr<Node>> parse_fn_body()
 {
     std::vector<std::unique_ptr<Node>> nodes;
-    std::unique_ptr<Node> node = std::make_unique<Node>();
     bool ate_semicolon = false;
     while (cur_tok->type != Token_Types::tok_close_curly_bracket)
     {
+        std::unique_ptr<Node> node = std::make_unique<Node>();
         switch (cur_tok->type)
         {
         case Token_Types::tok_fn:
@@ -182,6 +182,14 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             ate_semicolon = true;
             node->type = Node_Types::VariableDeclarationNode;
             node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_return:
+        {
+            auto ret = parse_return_statement();
+            ate_semicolon = true;
+            node->type = Node_Types::ReturnNode;
+            node->return_node = std::move(ret);
             break;
         }
         default:
@@ -319,6 +327,20 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
     }
 }
 
+std::unique_ptr<Return_Node> parse_return_statement()
+{
+    get_next_token();
+    auto expr = parse_expression(true, Variable_Types::type_int);
+
+    if (expr == 0)
+    {
+        error("Error parsing return expression");
+        return nullptr;
+    }
+
+    return std::make_unique<Return_Node>(std::move(expr));
+}
+
 Variable_Types type_string_to_variable_type(const char *str)
 {
     if (!strcmp(str, "int"))
@@ -364,4 +386,9 @@ int get_tok_precedence()
     if (tok_prec <= 0)
         return -1;
     return tok_prec;
+}
+
+void Function_Node::set_variables(std::string name, llvm::Value *var)
+{
+    variables[name] = var;
 }
