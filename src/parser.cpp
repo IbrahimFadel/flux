@@ -192,6 +192,14 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             node->return_node = std::move(ret);
             break;
         }
+        case Token_Types::tok_identifier:
+        {
+            auto call = parse_identifier_expression();
+            ate_semicolon = false;
+            node->type = Node_Types::CallExpressionNode;
+            node->expression_node = std::move(call);
+            break;
+        }
         default:
             break;
         }

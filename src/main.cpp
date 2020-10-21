@@ -30,7 +30,7 @@ int main(int argc, const char **argv)
   }
 
   auto tokens = get_tokens(file_content);
-  print_tokens(tokens);
+  // print_tokens(tokens);
   // run();
 
   auto nodes = parse_tokens(tokens);

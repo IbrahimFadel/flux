@@ -1,29 +1,97 @@
 #include "code_generation.h"
 
+#include <lld/Common/Driver.h>
+
+void module_to_bin()
+{
+    auto TargetTriple = llvm::sys::getDefaultTargetTriple();
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string Error;
+    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+
+    if (!Target)
+    {
+        llvm::errs() << Error;
+        return;
+    }
+
+    auto CPU = "generic";
+    auto Features = "";
+
+    llvm::TargetOptions opt;
+    auto RM = llvm::Optional<llvm::Reloc::Model>();
+    llvm::TargetMachine *TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+
+    module->setDataLayout(TargetMachine->createDataLayout());
+    module->setTargetTriple(TargetTriple);
+
+    auto Filename = "out";
+    std::error_code EC;
+    llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
+
+    if (EC)
+    {
+        llvm::errs() << "Could not open file: " << EC.message();
+        return;
+    }
+
+    llvm::legacy::PassManager pass;
+    auto ASMFILE = llvm::CGFT_AssemblyFile;
+    auto OBJFILE = llvm::CGFT_ObjectFile;
+    // auto bin = llvm::CGFT
+
+    if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, OBJFILE))
+    {
+        llvm::errs() << "TargetMachine can't emit a file of this type";
+    }
+
+    pass.run(*module);
+    dest.flush();
+
+    // const char *emu_argv[] = {
+    //     "ld.lld",
+    //     "objfile.o",
+    //     "-o",
+    //     "exec",
+    // };
+    // int argc = sizeof(emu_argv) / sizeof(emu_argv[0]);
+    // const char **argv = (const char **)emu_argv;
+    // std::vector<const char *> args(argv, argv + argc);
+    // lld::elf::link(args, false, llvm::outs(), llvm::outs());
+    // lld::elf::link(args, false, llvm::outs(), llvm::outs());
+}
+
 void code_gen(std::vector<std::unique_ptr<Node>> nodes)
 {
+    llvm::raw_ostream *os = &llvm::outs();
+    llvm::StringRef o_name = "out.ll";
+    std::error_code ec;
+    llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
+
     for (auto &node : nodes)
     {
         code_gen_node(std::move(node));
     }
+    module_to_bin();
+
+    auto writer = new llvm::AssemblyAnnotationWriter();
+    module->print(*os, writer);
+    module->print(*out_stream, writer);
 }
 
 void code_gen_node(std::unique_ptr<Node> node)
 {
-    llvm::raw_ostream *os = &llvm::outs();
-
-    llvm::StringRef o_name = "llvm_ir";
-    std::error_code ec;
-    llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
-
     switch (node->type)
     {
     case Node_Types::FunctionDeclarationNode:
     {
         auto function = std::get<std::unique_ptr<Function_Node>>(std::move(node->function_node));
         auto v = function->code_gen();
-        v->print(*os);
-        v->print(*out_stream);
         break;
     }
     case Node_Types::VariableDeclarationNode:
@@ -36,6 +104,12 @@ void code_gen_node(std::unique_ptr<Node> node)
     {
         auto ret = std::get<std::unique_ptr<Return_Node>>(std::move(node->return_node));
         ret->code_gen();
+        break;
+    }
+    case Node_Types::CallExpressionNode:
+    {
+        auto call = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        call->code_gen();
         break;
     }
     default:
@@ -87,6 +161,8 @@ llvm::Value *Binary_Expression_Node::code_gen()
 
 llvm::Value *Call_Expression_Node::code_gen()
 {
+    // cout << callee << endl;
+    // return 0;
     llvm::Function *callee_f = module->getFunction(callee);
     if (callee_f == 0)
         return error_v("Unknown function referenced");
@@ -141,7 +217,6 @@ llvm::Function *Prototype_Node::code_gen()
     for (llvm::Function::arg_iterator ai = f->arg_begin(); idx != arg_names.size(); ai++, idx++)
     {
         ai->setName(arg_names[idx]);
-        // ! remember NamedValues map
     }
 
     current_function = name;
@@ -163,9 +238,6 @@ llvm::Function *Function_Node::code_gen()
         code_gen_node(std::move(node));
     }
 
-    // if(llvm::Value *return_value = body)
-    // builder.CreateRet();
-
     llvm::verifyFunction(*the_function);
 
     return the_function;
@@ -183,8 +255,6 @@ llvm::Value *Variable_Node::code_gen()
     auto v = value->code_gen();
     auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
     auto load = new llvm::LoadInst(alloc, name, builder.GetInsertBlock());
-    // auto load = new llvm::LoadInst(alloca, name, bb);
-    // function->set_variables(name, alloc);
     function_variables[current_function][name] = load;
 
     return alloc;
@@ -212,3 +282,31 @@ llvm::Value *error_v(const char *str)
     cout << "LogError: " << str << endl;
     return 0;
 }
+
+namespace
+{
+    struct SkeletonPass : public llvm::FunctionPass
+    {
+        static char ID;
+        SkeletonPass() : FunctionPass(ID) {}
+
+        virtual bool runOnFunction(llvm::Function &F)
+        {
+            llvm::errs() << "I saw a function called " << F.getName() << "!\n";
+            return false;
+        }
+    };
+} // namespace
+
+char SkeletonPass::ID = 0;
+
+// Automatically enable the pass.
+// http://adriansampson.net/blog/clangpass.html
+static void registerSkeletonPass(const llvm::PassManagerBuilder &,
+                                 llvm::legacy::PassManagerBase &PM)
+{
+    PM.add(new SkeletonPass());
+}
+static llvm::RegisterStandardPasses
+    RegisterMyPass(llvm::PassManagerBuilder::EP_EarlyAsPossible,
+                   registerSkeletonPass);

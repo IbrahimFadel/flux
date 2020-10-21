@@ -45,7 +45,7 @@ class Node
 {
 public:
     Node_Types type;
-    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>, std::unique_ptr<Return_Node>> expression_node, variable_node, function_node, prototype_node, return_node;
+    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>, std::unique_ptr<Return_Node>, std::unique_ptr<Call_Expression_Node>> expression_node, variable_node, function_node, prototype_node, return_node, call_node;
 };
 
 class Expression_Node
