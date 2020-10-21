@@ -8,5 +8,5 @@ fn main(int hi, int hello) -> int {
 
     int res = add();
 
-    return y + x;
+    return y + x * res;
 }

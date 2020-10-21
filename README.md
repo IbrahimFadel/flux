@@ -17,7 +17,7 @@ fn main(int hi, int hello) -> int {
 
     int res = add();
 
-    return y + x;
+    return y + x * res;
 }
 ```
 
@@ -42,10 +42,10 @@ entry:
   %calltmp = call i32 @add()
   store i32 %calltmp, i32* %res
   %res3 = load i32, i32* %res
-  %addtmp4 = add i32 %y1, %x2
-  ret i32 %addtmp4
+  %addtmp4 = mul i32 %x2, %res3
+  %addtmp5 = add i32 %y1, %addtmp4
+  ret i32 %addtmp5
 }
-
 ```
 
 And that gets optimized and compiled to a binary
