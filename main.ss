@@ -1,9 +1,8 @@
-fn add(int num) -> int {
-    int test = 30;
-    return test + num;
+fn add(int num1, int num2) -> int {
+    return num1 + num2;
 }
 
 fn main() -> int {
-    int res = add(12);
+    int res = add(12, 5);
     return res;
 }

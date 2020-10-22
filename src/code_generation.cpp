@@ -66,6 +66,16 @@ void module_to_bin()
     // lld::elf::link(args, false, llvm::outs(), llvm::outs());
 }
 
+void initialize_fpm()
+{
+    function_pass_manager = std::make_unique<llvm::legacy::FunctionPassManager>(module.get());
+    function_pass_manager->add(llvm::createInstructionCombiningPass());
+    function_pass_manager->add(llvm::createReassociatePass());
+    function_pass_manager->add(llvm::createGVNPass());
+    function_pass_manager->add(llvm::createCFGSimplificationPass());
+    function_pass_manager->doInitialization();
+}
+
 void code_gen(std::vector<std::unique_ptr<Node>> nodes)
 {
     llvm::raw_ostream *os = &llvm::outs();
@@ -73,11 +83,13 @@ void code_gen(std::vector<std::unique_ptr<Node>> nodes)
     std::error_code ec;
     llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
 
+    initialize_fpm();
+
     for (auto &node : nodes)
     {
         code_gen_node(std::move(node));
     }
-    module_to_bin();
+    // module_to_bin();
 
     auto writer = new llvm::AssemblyAnnotationWriter();
     module->print(*os, writer);
@@ -166,10 +178,16 @@ llvm::Value *Call_Expression_Node::code_gen()
 {
     llvm::Function *callee_f = module->getFunction(callee);
     if (callee_f == 0)
-        return error_v("Unknown function referenced");
+    {
+        error_v("Unknown function referenced");
+        exit(-1);
+    }
 
     if (callee_f->arg_size() != args.size())
-        return error_v("Incorrect number of arguments passed");
+    {
+        error_v("Incorrect number of arguments passed");
+        exit(-1);
+    }
 
     std::vector<llvm::Value *> args_v;
     for (unsigned int i = 0, e = args.size(); i != e; i++)
@@ -205,13 +223,13 @@ llvm::Function *Prototype_Node::code_gen()
         if (!f->empty())
         {
             error_v("Redefinition of function");
-            return 0;
+            exit(-1);
         }
 
         if (f->arg_size() != arg_names.size())
         {
             error_v("Redefinition of function with different number of arguments");
-            return 0;
+            exit(-1);
         }
     }
 
@@ -246,6 +264,8 @@ llvm::Function *Function_Node::code_gen()
 
     llvm::verifyFunction(*the_function);
 
+    function_pass_manager->run(*the_function);
+
     return the_function;
 }
 
@@ -267,6 +287,13 @@ llvm::Value *Variable_Node::code_gen()
 llvm::Value *Variable_Expression_Node::code_gen()
 {
     auto ptr = functions[current_function]->get_variable(name);
+    if (ptr == 0)
+    {
+        char err_msg[150];
+        sprintf(err_msg, "Reference to undefined variable: %s", name.c_str());
+        error_v(err_msg);
+        exit(-1);
+    }
     return builder.CreateLoad(ptr, ptr->getName().str());
 }
 

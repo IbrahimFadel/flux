@@ -18,14 +18,19 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 
-#include "llvm/Pass.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/IR/Function.h"
+#include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/GVN.h>
+
+// #include "llvm/Pass.h"
+// #include "llvm/IR/LegacyPassManager.h"
+// #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+// #include "llvm/IR/Function.h"
 
 static llvm::LLVMContext context;
 static std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>("Module", context);
 static llvm::IRBuilder<> builder(context);
+static std::unique_ptr<llvm::legacy::FunctionPassManager> function_pass_manager;
 
 static std::map<std::string, std::map<std::string, llvm::Value *>> function_variables;
 static std::string current_function;
@@ -35,6 +40,7 @@ static std::map<std::string, Function_Node *> functions;
 void module_to_bin();
 void code_gen(std::vector<std::unique_ptr<Node>> nodes);
 void code_gen_node(std::unique_ptr<Node> node);
+void initialize_fpm();
 static llvm::Type *ss_type_to_llvm_type(Variable_Types type);
 static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
                                                    const std::string &VarName);
