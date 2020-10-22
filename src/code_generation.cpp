@@ -4,66 +4,53 @@
 
 void module_to_bin()
 {
-    auto TargetTriple = llvm::sys::getDefaultTargetTriple();
+    auto target_triple = llvm::sys::getDefaultTargetTriple();
+
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
     llvm::InitializeAllTargetMCs();
     llvm::InitializeAllAsmParsers();
     llvm::InitializeAllAsmPrinters();
 
-    std::string Error;
-    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
-
-    if (!Target)
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(target_triple, error);
+    if (!target)
     {
-        llvm::errs() << Error;
+        llvm::errs() << error;
         return;
     }
 
-    auto CPU = "generic";
-    auto Features = "";
+    auto cpu = "generic";
+    auto features = "";
 
     llvm::TargetOptions opt;
-    auto RM = llvm::Optional<llvm::Reloc::Model>();
-    llvm::TargetMachine *TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+    auto rm = llvm::Optional<llvm::Reloc::Model>();
+    auto target_machine = target->createTargetMachine(target_triple, cpu, features, opt, rm);
 
-    module->setDataLayout(TargetMachine->createDataLayout());
-    module->setTargetTriple(TargetTriple);
+    module->setDataLayout(target_machine->createDataLayout());
+    module->setTargetTriple(target_triple);
 
-    auto Filename = "out";
-    std::error_code EC;
-    llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
+    auto filename = "out.o";
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(filename, ec, llvm::sys::fs::F_None);
 
-    if (EC)
+    if (ec)
     {
-        llvm::errs() << "Could not open file: " << EC.message();
+        llvm::errs() << "Could not open file: " << ec.message();
         return;
     }
 
     llvm::legacy::PassManager pass;
-    auto ASMFILE = llvm::CGFT_AssemblyFile;
-    auto OBJFILE = llvm::CGFT_ObjectFile;
-    // auto bin = llvm::CGFT
+    auto file_type = llvm::CGFT_ObjectFile;
 
-    if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, OBJFILE))
+    if (target_machine->addPassesToEmitFile(pass, dest, nullptr, file_type))
     {
         llvm::errs() << "TargetMachine can't emit a file of this type";
+        return;
     }
 
     pass.run(*module);
     dest.flush();
-
-    // const char *emu_argv[] = {
-    //     "ld.lld",
-    //     "objfile.o",
-    //     "-o",
-    //     "exec",
-    // };
-    // int argc = sizeof(emu_argv) / sizeof(emu_argv[0]);
-    // const char **argv = (const char **)emu_argv;
-    // std::vector<const char *> args(argv, argv + argc);
-    // lld::elf::link(args, false, llvm::outs(), llvm::outs());
-    // lld::elf::link(args, false, llvm::outs(), llvm::outs());
 }
 
 void initialize_fpm()
@@ -246,7 +233,15 @@ llvm::Function *Prototype_Node::code_gen()
 
 llvm::Function *Function_Node::code_gen()
 {
-    llvm::Function *the_function = proto->code_gen();
+
+    auto fn = std::make_unique<Function_Node>(std::move(proto), std::move(body));
+    auto scope_node = std::make_unique<Node>();
+    scope_node->type = Node_Types::VariableDeclarationNode;
+    scope_node->function_node = std::move(fn);
+    scope = std::move(scope_node);
+
+    auto fn_ref = std::get<std::unique_ptr<Function_Node>>(std::move(scope->function_node));
+    llvm::Function *the_function = fn_ref->proto->code_gen();
     if (the_function == 0)
         return 0;
 
@@ -255,16 +250,16 @@ llvm::Function *Function_Node::code_gen()
 
     functions[current_function] = this;
 
-    proto->create_argument_allocas(the_function);
+    fn_ref->proto->create_argument_allocas(the_function);
 
-    for (auto &node : body)
+    for (auto &node : fn_ref->body)
     {
         code_gen_node(std::move(node));
     }
 
     llvm::verifyFunction(*the_function);
 
-    function_pass_manager->run(*the_function);
+    // function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -277,11 +272,20 @@ llvm::Value *Return_Node::code_gen()
 
 llvm::Value *Variable_Node::code_gen()
 {
-    llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
-    auto v = value->code_gen();
-    auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
-    functions[current_function]->set_variables(name, alloc);
-    return alloc;
+    if (!scope)
+    {
+        auto var = new llvm::GlobalVariable(*module.get(), llvm::Type::getInt32Ty(context), false, llvm::GlobalValue::CommonLinkage, 0, name);
+        global_variables[name] = var;
+        return var;
+    }
+    else
+    {
+        llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
+        auto v = value->code_gen();
+        auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
+        functions[current_function]->set_variables(name, alloc);
+        return alloc;
+    }
 }
 
 llvm::Value *Variable_Expression_Node::code_gen()
@@ -289,10 +293,14 @@ llvm::Value *Variable_Expression_Node::code_gen()
     auto ptr = functions[current_function]->get_variable(name);
     if (ptr == 0)
     {
-        char err_msg[150];
-        sprintf(err_msg, "Reference to undefined variable: %s", name.c_str());
-        error_v(err_msg);
-        exit(-1);
+        ptr = global_variables[name];
+        if (ptr == 0)
+        {
+            char err_msg[150];
+            sprintf(err_msg, "Reference to undefined variable: %s", name.c_str());
+            error_v(err_msg);
+            exit(-1);
+        }
     }
     return builder.CreateLoad(ptr, ptr->getName().str());
 }

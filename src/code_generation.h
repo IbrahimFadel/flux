@@ -22,20 +22,17 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 
-// #include "llvm/Pass.h"
-// #include "llvm/IR/LegacyPassManager.h"
-// #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-// #include "llvm/IR/Function.h"
-
 static llvm::LLVMContext context;
 static std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>("Module", context);
 static llvm::IRBuilder<> builder(context);
 static std::unique_ptr<llvm::legacy::FunctionPassManager> function_pass_manager;
 
+static std::map<std::string, llvm::Value *> global_variables;
 static std::map<std::string, std::map<std::string, llvm::Value *>> function_variables;
 static std::string current_function;
 
 static std::map<std::string, Function_Node *> functions;
+static std::unique_ptr<Node> scope;
 
 void module_to_bin();
 void code_gen(std::vector<std::unique_ptr<Node>> nodes);
