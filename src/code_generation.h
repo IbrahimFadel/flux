@@ -22,6 +22,12 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 
+enum Scopes
+{
+    global,
+    function
+};
+
 static llvm::LLVMContext context;
 static std::unique_ptr<llvm::Module> module = std::make_unique<llvm::Module>("Module", context);
 static llvm::IRBuilder<> builder(context);
@@ -32,7 +38,7 @@ static std::map<std::string, std::map<std::string, llvm::Value *>> function_vari
 static std::string current_function;
 
 static std::map<std::string, Function_Node *> functions;
-static std::unique_ptr<Node> scope;
+static Scopes scope = Scopes::global;
 
 void module_to_bin();
 void code_gen(std::vector<std::unique_ptr<Node>> nodes);

@@ -233,15 +233,7 @@ llvm::Function *Prototype_Node::code_gen()
 
 llvm::Function *Function_Node::code_gen()
 {
-
-    auto fn = std::make_unique<Function_Node>(std::move(proto), std::move(body));
-    auto scope_node = std::make_unique<Node>();
-    scope_node->type = Node_Types::VariableDeclarationNode;
-    scope_node->function_node = std::move(fn);
-    scope = std::move(scope_node);
-
-    auto fn_ref = std::get<std::unique_ptr<Function_Node>>(std::move(scope->function_node));
-    llvm::Function *the_function = fn_ref->proto->code_gen();
+    llvm::Function *the_function = proto->code_gen();
     if (the_function == 0)
         return 0;
 
@@ -250,16 +242,18 @@ llvm::Function *Function_Node::code_gen()
 
     functions[current_function] = this;
 
-    fn_ref->proto->create_argument_allocas(the_function);
+    scope = Scopes::function;
 
-    for (auto &node : fn_ref->body)
+    proto->create_argument_allocas(the_function);
+
+    for (auto &node : body)
     {
         code_gen_node(std::move(node));
     }
 
     llvm::verifyFunction(*the_function);
 
-    // function_pass_manager->run(*the_function);
+    function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -272,13 +266,14 @@ llvm::Value *Return_Node::code_gen()
 
 llvm::Value *Variable_Node::code_gen()
 {
-    if (!scope)
+    if (scope == Scopes::global)
     {
-        auto var = new llvm::GlobalVariable(*module.get(), llvm::Type::getInt32Ty(context), false, llvm::GlobalValue::CommonLinkage, 0, name);
+        // auto var = new llvm::GlobalVariable(*module.get(), ss_type_to_llvm_type(type), false, llvm::GlobalValue::CommonLinkage, llvm::ConstantFP::get(context, value->code_gen()));
+        auto var = new llvm::GlobalVariable(*module.get(), ss_type_to_llvm_type(type), false, llvm::GlobalValue::CommonLinkage, 0, name);
         global_variables[name] = var;
         return var;
     }
-    else
+    else if (scope == Scopes::function)
     {
         llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
         auto v = value->code_gen();
