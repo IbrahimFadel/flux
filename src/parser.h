@@ -10,6 +10,7 @@
 #include <map>
 
 #include <llvm/IR/Value.h>
+#include <llvm/Support/raw_ostream.h>
 
 class Node;
 class Expression_Node;
@@ -109,6 +110,7 @@ private:
 public:
     Prototype_Node(std::string name, std::vector<Variable_Types> arg_types, std::vector<std::string> arg_names, Variable_Types return_type) : name(name), arg_types(arg_types), arg_names(arg_names), return_type(return_type) {}
     llvm::Function *code_gen();
+    void create_argument_allocas(llvm::Function *f);
 };
 
 class Function_Node
@@ -126,6 +128,7 @@ public:
     llvm::Function *code_gen();
 
     void set_variables(std::string name, llvm::Value *var);
+    llvm::Value *get_variable(std::string name);
 };
 
 class Variable_Node

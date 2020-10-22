@@ -20,7 +20,7 @@ $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
 # c++ source
 $(BUILD_DIR)/%.cpp.o: %.cpp
 	$(MKDIR_P) $(dir $@)
-	$(CC) -I/usr/include/lld -L/usr/include -L/usr/lib $(llvm-config --cxxflags --ldflags --libs) -lpthread -lncurses $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CC) -L/usr/lib $(llvm-config --cxxflags --ldflags --libs) -lpthread -lncurses $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 compile:
 	llc out.ll

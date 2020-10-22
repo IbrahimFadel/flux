@@ -1,12 +1,9 @@
-fn add() -> int {
-    return 5;
+fn add(int num) -> int {
+    int test = 30;
+    return test + num;
 }
 
-fn main(int hi, int hello) -> int {
-    int y = 10 * 3 + 43;
-    int x = y + 5;
-
-    int res = add();
-
-    return y + x * res;
+fn main() -> int {
+    int res = add(12);
+    return res;
 }

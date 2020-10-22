@@ -30,10 +30,14 @@ static llvm::IRBuilder<> builder(context);
 static std::map<std::string, std::map<std::string, llvm::Value *>> function_variables;
 static std::string current_function;
 
+static std::map<std::string, Function_Node *> functions;
+
 void module_to_bin();
 void code_gen(std::vector<std::unique_ptr<Node>> nodes);
 void code_gen_node(std::unique_ptr<Node> node);
 static llvm::Type *ss_type_to_llvm_type(Variable_Types type);
+static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
+                                                   const std::string &VarName);
 
 static llvm::Value *error_v(const char *Str);
 

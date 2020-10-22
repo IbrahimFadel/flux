@@ -139,6 +139,9 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (l == 0 || r == 0)
         return 0;
 
+    // l->print(llvm::outs());
+    // r->print(llvm::outs());
+
     // if (lhs->type != Variable_Types::type_int && rhs->type != Variable_Types::type_int)
     // {
     //     if (op == "+")
@@ -153,16 +156,14 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (op == "+")
         return builder.CreateAdd(l, r, "addtmp");
     if (op == "-")
-        return builder.CreateSub(l, r, "addtmp");
+        return builder.CreateSub(l, r, "subtmp");
     if (op == "*")
-        return builder.CreateMul(l, r, "addtmp");
+        return builder.CreateMul(l, r, "multmp");
     // }
 }
 
 llvm::Value *Call_Expression_Node::code_gen()
 {
-    // cout << callee << endl;
-    // return 0;
     llvm::Function *callee_f = module->getFunction(callee);
     if (callee_f == 0)
         return error_v("Unknown function referenced");
@@ -173,7 +174,8 @@ llvm::Value *Call_Expression_Node::code_gen()
     std::vector<llvm::Value *> args_v;
     for (unsigned int i = 0, e = args.size(); i != e; i++)
     {
-        args_v.push_back(args[i]->code_gen());
+        auto v = args[i]->code_gen();
+        args_v.push_back(v);
         if (args_v.back() == 0)
             return 0;
     }
@@ -233,6 +235,10 @@ llvm::Function *Function_Node::code_gen()
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "entry", the_function);
     builder.SetInsertPoint(bb);
 
+    functions[current_function] = this;
+
+    proto->create_argument_allocas(the_function);
+
     for (auto &node : body)
     {
         code_gen_node(std::move(node));
@@ -254,16 +260,34 @@ llvm::Value *Variable_Node::code_gen()
     llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
     auto v = value->code_gen();
     auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
-    auto load = new llvm::LoadInst(alloc, name, builder.GetInsertBlock());
-    function_variables[current_function][name] = load;
-
+    functions[current_function]->set_variables(name, alloc);
     return alloc;
 }
 
 llvm::Value *Variable_Expression_Node::code_gen()
 {
-    auto val = function_variables[current_function][name];
-    return val;
+    auto ptr = functions[current_function]->get_variable(name);
+    return builder.CreateLoad(ptr, ptr->getName().str());
+}
+
+llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
+                                            const std::string &VarName)
+{
+    llvm::IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
+                           TheFunction->getEntryBlock().begin());
+    return TmpB.CreateAlloca(llvm::Type::getInt32Ty(context), 0,
+                             VarName.c_str());
+}
+
+void Prototype_Node::create_argument_allocas(llvm::Function *f)
+{
+    llvm::Function::arg_iterator AI = f->arg_begin();
+    for (unsigned idx = 0, e = arg_names.size(); idx != e; ++idx, ++AI)
+    {
+        auto alloc = create_entry_block_alloca(f, arg_names[idx]);
+        builder.CreateStore(AI, alloc);
+        functions[f->getName().str()]->set_variables(arg_names[idx], alloc);
+    }
 }
 
 llvm::Type *ss_type_to_llvm_type(Variable_Types type)
@@ -282,31 +306,3 @@ llvm::Value *error_v(const char *str)
     cout << "LogError: " << str << endl;
     return 0;
 }
-
-namespace
-{
-    struct SkeletonPass : public llvm::FunctionPass
-    {
-        static char ID;
-        SkeletonPass() : FunctionPass(ID) {}
-
-        virtual bool runOnFunction(llvm::Function &F)
-        {
-            llvm::errs() << "I saw a function called " << F.getName() << "!\n";
-            return false;
-        }
-    };
-} // namespace
-
-char SkeletonPass::ID = 0;
-
-// Automatically enable the pass.
-// http://adriansampson.net/blog/clangpass.html
-static void registerSkeletonPass(const llvm::PassManagerBuilder &,
-                                 llvm::legacy::PassManagerBase &PM)
-{
-    PM.add(new SkeletonPass());
-}
-static llvm::RegisterStandardPasses
-    RegisterMyPass(llvm::PassManagerBuilder::EP_EarlyAsPossible,
-                   registerSkeletonPass);

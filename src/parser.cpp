@@ -398,5 +398,15 @@ int get_tok_precedence()
 
 void Function_Node::set_variables(std::string name, llvm::Value *var)
 {
+    // cout << "set " << name << " ";
+    // cout << endl;
+    // var->print(llvm::outs());
+    // llvm::outs() << '\n';
     variables[name] = var;
+}
+
+llvm::Value *Function_Node::get_variable(std::string name)
+{
+    // cout << "get " << name << endl;
+    return variables[name];
 }
