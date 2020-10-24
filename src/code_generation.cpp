@@ -85,6 +85,7 @@ void code_gen(std::vector<std::unique_ptr<Node>> nodes)
 
 void code_gen_node(std::unique_ptr<Node> node)
 {
+    // cout << node->type << endl;
     switch (node->type)
     {
     case Node_Types::FunctionDeclarationNode:
@@ -111,6 +112,12 @@ void code_gen_node(std::unique_ptr<Node> node)
         call->code_gen();
         break;
     }
+    case Node_Types::Toi8Node:
+    {
+        auto to = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        to->code_gen();
+        break;
+    }
     default:
         break;
     }
@@ -120,13 +127,22 @@ llvm::Value *Number_Expression_Node::code_gen()
 {
     switch (variable_type)
     {
-    case Variable_Types::type_int:
+    case Variable_Types::type_i64:
+        return llvm::ConstantInt::get(context, llvm::APInt(64, (int)value, true));
+    case Variable_Types::type_i32:
         return llvm::ConstantInt::get(context, llvm::APInt(32, (int)value, true));
-        break;
-
+    case Variable_Types::type_i16:
+        return llvm::ConstantInt::get(context, llvm::APInt(16, (int)value, true));
+    case Variable_Types::type_i8:
+        return llvm::ConstantInt::get(context, llvm::APInt(8, (int)value, true));
+    case Variable_Types::type_float:
+        return llvm::ConstantFP::get(context, llvm::APFloat((float)value));
+    case Variable_Types::type_double:
+        return llvm::ConstantFP::get(context, llvm::APFloat((double)value));
+    case Variable_Types::type_bool:
+        return llvm::ConstantInt::get(context, llvm::APInt(1, (int)value, true));
     default:
         return llvm::ConstantFP::get(context, llvm::APFloat(value));
-        break;
     }
     return llvm::ConstantInt::get(context, llvm::APInt(32, (int)value, true));
 }
@@ -138,27 +154,71 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (l == 0 || r == 0)
         return 0;
 
-    // l->print(llvm::outs());
-    // r->print(llvm::outs());
-
-    // if (lhs->type != Variable_Types::type_int && rhs->type != Variable_Types::type_int)
+    auto loaded_l = builder.CreateLoad(l, l->getName().str());
+    auto loaded_r = builder.CreateLoad(r, r->getName().str());
+    // llvm::Value *loaded_v;
+    // if (v->getType()->isPointerTy())
     // {
-    //     if (op == "+")
-    //         return builder.CreateFAdd(l, r, "addtmp");
-    //     if (op == "-")
-    //         return builder.CreateFSub(l, r, "addtmp");
-    //     if (op == "*")
-    //         return builder.CreateFMul(l, r, "addtmp");
+    //     loaded_v = builder.CreateLoad(v, v->getName().str());
+    //     builder.CreateStore(loaded_v, alloc);
     // }
     // else
     // {
-    if (op == "+")
-        return builder.CreateAdd(l, r, "addtmp");
-    if (op == "-")
-        return builder.CreateSub(l, r, "subtmp");
-    if (op == "*")
-        return builder.CreateMul(l, r, "multmp");
+    //     builder.CreateStore(v, alloc);
     // }
+
+    auto l_type = loaded_l->getType();
+    auto r_type = loaded_r->getType();
+
+    if (l_type->isDoubleTy() || r_type->isDoubleTy() || l_type->isFloatTy() || r_type->isFloatTy())
+    {
+        if (op == "+")
+            return builder.CreateFAdd(loaded_l, loaded_r, "addtmp");
+        if (op == "-")
+            return builder.CreateFSub(loaded_l, loaded_r, "subtmp");
+        if (op == "*")
+            return builder.CreateFMul(loaded_l, loaded_r, "multmp");
+    }
+    else
+    {
+        // // auto l_ptr = builder.CreateAlloca(llvm::Type::getInt32Ty(context), NULL, "x");
+        // auto new_l = llvm::ConstantInt::get(context, llvm::APInt(32, (int)12, true));
+        // // builder.CreateStore(new_l, l_ptr);
+        // auto new_r = llvm::ConstantInt::get(context, llvm::APInt(8, (int)5, true));
+
+        // builder.CreateAdd(new_l, new_r, "test");
+        // if (l_type->isIntegerTy())
+        // {
+        unsigned int l_bitwidth = l_type->getIntegerBitWidth();
+        unsigned int r_bitwidth = r_type->getIntegerBitWidth();
+
+        llvm::Value *new_l;
+        llvm::Value *new_r;
+
+        if (l_bitwidth < r_bitwidth)
+        {
+            auto new_type = bitwidth_to_llvm_type(r_bitwidth);
+            new_l = builder.CreateBitCast(loaded_l, new_type);
+            new_r = r;
+        }
+        else if (r_bitwidth < l_bitwidth)
+        {
+            auto new_type = bitwidth_to_llvm_type(l_bitwidth);
+            new_r = builder.CreateBitCast(loaded_r, new_type);
+            new_l = l;
+        }
+
+        // }
+        // else
+        // {
+        if (op == "+")
+            return builder.CreateAdd(loaded_l, loaded_r, "addtmp");
+        if (op == "-")
+            return builder.CreateSub(loaded_l, loaded_r, "subtmp");
+        if (op == "*")
+            return builder.CreateMul(loaded_l, loaded_r, "multmp");
+        // }
+    }
 }
 
 llvm::Value *Call_Expression_Node::code_gen()
@@ -251,7 +311,19 @@ llvm::Function *Function_Node::code_gen()
         code_gen_node(std::move(node));
     }
 
-    llvm::verifyFunction(*the_function);
+    if (llvm::verifyFunction(*the_function, &llvm::outs()))
+    {
+        llvm::raw_ostream &os = llvm::outs();
+        os << '\n'
+           << '\n';
+        llvm::StringRef o_name = "out.ll";
+        std::error_code ec;
+        llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
+        auto writer = new llvm::AssemblyAnnotationWriter();
+        module->print(os, writer);
+        module->print(*out_stream, writer);
+        exit(-1);
+    }
 
     function_pass_manager->run(*the_function);
 
@@ -260,7 +332,8 @@ llvm::Function *Function_Node::code_gen()
 
 llvm::Value *Return_Node::code_gen()
 {
-    builder.CreateRet(value->code_gen());
+    auto v = value->code_gen();
+    builder.CreateRet(builder.CreateLoad(v, v->getName().str()));
     return 0;
 }
 
@@ -268,8 +341,11 @@ llvm::Value *Variable_Node::code_gen()
 {
     if (scope == Scopes::global)
     {
-        // auto var = new llvm::GlobalVariable(*module.get(), ss_type_to_llvm_type(type), false, llvm::GlobalValue::CommonLinkage, llvm::ConstantFP::get(context, value->code_gen()));
-        auto var = new llvm::GlobalVariable(*module.get(), ss_type_to_llvm_type(type), false, llvm::GlobalValue::CommonLinkage, 0, name);
+        //! For now, just run a method 'evaluate_expression_to_constant'
+        //! Throw errors if they reference a variable
+        //! Use result as glob initializer -- i'm not smart enough for this shit
+        auto var = new llvm::GlobalVariable(*module.get(), ss_type_to_llvm_type(type), false, llvm::GlobalValue::CommonLinkage, llvm::ConstantFP::get(context, llvm::APFloat(0.0)), name);
+
         global_variables[name] = var;
         return var;
     }
@@ -277,7 +353,17 @@ llvm::Value *Variable_Node::code_gen()
     {
         llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
         auto v = value->code_gen();
-        auto store = new llvm::StoreInst(v, alloc, builder.GetInsertBlock());
+        llvm::Value *loaded_v;
+        if (v->getType()->isPointerTy())
+        {
+            loaded_v = builder.CreateLoad(v, v->getName().str());
+            builder.CreateStore(loaded_v, alloc);
+        }
+        else
+        {
+            builder.CreateStore(v, alloc);
+        }
+
         functions[current_function]->set_variables(name, alloc);
         return alloc;
     }
@@ -297,7 +383,16 @@ llvm::Value *Variable_Expression_Node::code_gen()
             exit(-1);
         }
     }
-    return builder.CreateLoad(ptr, ptr->getName().str());
+    return ptr;
+    // return builder.CreateLoad(ptr, ptr->getName().str());
+}
+
+llvm::Value *Toi8_Node::code_gen()
+{
+    auto v = value->code_gen();
+    auto newv = builder.CreateBitCast(v, llvm::Type::getInt8PtrTy(context), v->getName().str());
+    functions[current_function]->set_variables(v->getName().str(), newv);
+    return newv;
 }
 
 llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
@@ -324,10 +419,39 @@ llvm::Type *ss_type_to_llvm_type(Variable_Types type)
 {
     switch (type)
     {
-    case Variable_Types::type_int:
+    case Variable_Types::type_i64:
+        return llvm::Type::getInt64Ty(context);
+    case Variable_Types::type_i32:
         return llvm::Type::getInt32Ty(context);
+    case Variable_Types::type_i16:
+        return llvm::Type::getInt16Ty(context);
+    case Variable_Types::type_i8:
+        return llvm::Type::getInt8Ty(context);
+    case Variable_Types::type_float:
+        return llvm::Type::getFloatTy(context);
+    case Variable_Types::type_double:
+        return llvm::Type::getDoubleTy(context);
+    case Variable_Types::type_bool:
+        return llvm::Type::getInt1Ty(context);
     default:
         break;
+    }
+}
+
+llvm::Type *bitwidth_to_llvm_type(unsigned int bitwidth)
+{
+    switch (bitwidth)
+    {
+    case 64:
+        return llvm::Type::getInt64Ty(context);
+    case 32:
+        return llvm::Type::getInt32Ty(context);
+    case 16:
+        return llvm::Type::getInt16Ty(context);
+    case 8:
+        return llvm::Type::getInt8Ty(context);
+    default:
+        return llvm::Type::getInt32Ty(context);
     }
 }
 

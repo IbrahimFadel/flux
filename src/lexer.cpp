@@ -91,9 +91,49 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   {
     tok->type = Token_Types::tok_return;
   }
-  else if (token == "int")
+  else if (token == "i64")
   {
-    tok->type = Token_Types::tok_int;
+    tok->type = Token_Types::tok_i64;
+  }
+  else if (token == "i32")
+  {
+    tok->type = Token_Types::tok_i32;
+  }
+  else if (token == "i16")
+  {
+    tok->type = Token_Types::tok_i16;
+  }
+  else if (token == "i8")
+  {
+    tok->type = Token_Types::tok_i8;
+  }
+  else if (token == "toi64")
+  {
+    tok->type = Token_Types::tok_toi64;
+  }
+  else if (token == "toi32")
+  {
+    tok->type = Token_Types::tok_toi32;
+  }
+  else if (token == "toi16")
+  {
+    tok->type = Token_Types::tok_toi16;
+  }
+  else if (token == "toi8")
+  {
+    tok->type = Token_Types::tok_toi8;
+  }
+  else if (token == "float")
+  {
+    tok->type = Token_Types::tok_float;
+  }
+  else if (token == "double")
+  {
+    tok->type = Token_Types::tok_double;
+  }
+  else if (token == "bool")
+  {
+    tok->type = Token_Types::tok_bool;
   }
   else if (token == ":")
   {
@@ -199,8 +239,38 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
     case Token_Types::tok_comma:
       cout << "," << endl;
       break;
-    case Token_Types::tok_int:
-      cout << "int" << endl;
+    case Token_Types::tok_i64:
+      cout << "i64" << endl;
+      break;
+    case Token_Types::tok_i32:
+      cout << "i32" << endl;
+      break;
+    case Token_Types::tok_i16:
+      cout << "i16" << endl;
+      break;
+    case Token_Types::tok_i8:
+      cout << "i8" << endl;
+      break;
+    case Token_Types::tok_toi64:
+      cout << "toi64" << endl;
+      break;
+    case Token_Types::tok_toi32:
+      cout << "toi32" << endl;
+      break;
+    case Token_Types::tok_toi16:
+      cout << "toi16" << endl;
+      break;
+    case Token_Types::tok_toi8:
+      cout << "toi8" << endl;
+      break;
+    case Token_Types::tok_float:
+      cout << "float" << endl;
+      break;
+    case Token_Types::tok_double:
+      cout << "double" << endl;
+      break;
+    case Token_Types::tok_bool:
+      cout << "bool" << endl;
       break;
     case Token_Types::tok_eq:
       cout << "=" << endl;

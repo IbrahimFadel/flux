@@ -26,7 +26,7 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
             node->function_node = std::move(fn);
             break;
         }
-        case Token_Types::tok_int:
+        case Token_Types::tok_i32:
         {
             auto var = parse_variable_declaration();
             ate_semicolon = true;
@@ -51,7 +51,7 @@ std::unique_ptr<Variable_Node> parse_variable_declaration()
 {
     const char *type_string = cur_tok->value.c_str();
 
-    Variable_Types type = type_string_to_variable_type(type_string);
+    Variable_Types type = token_type_to_variable_type(cur_tok->type);
 
     get_next_token();
 
@@ -61,7 +61,7 @@ std::unique_ptr<Variable_Node> parse_variable_declaration()
 
     get_next_token();
 
-    auto val = parse_expression(true, Variable_Types::type_int);
+    auto val = parse_expression(true, type);
     if (!val)
     {
         error("Expected expression");
@@ -134,16 +134,7 @@ std::unique_ptr<Prototype_Node> parse_prototype()
 
     get_next_token();
 
-    // Token_Types return_type = cur_tok->type;
-    Variable_Types return_type;
-    switch (cur_tok->type)
-    {
-    case Token_Types::tok_int:
-        return_type = Variable_Types::type_int;
-        break;
-    default:
-        break;
-    }
+    Variable_Types return_type = token_type_to_variable_type(cur_tok->type);
 
     get_next_token();
 
@@ -176,7 +167,55 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             node->function_node = std::move(fn);
             break;
         }
-        case Token_Types::tok_int:
+        case Token_Types::tok_i64:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_i32:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_i16:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_i8:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_float:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_double:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_bool:
         {
             auto var = parse_variable_declaration();
             ate_semicolon = true;
@@ -190,6 +229,14 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             ate_semicolon = true;
             node->type = Node_Types::ReturnNode;
             node->return_node = std::move(ret);
+            break;
+        }
+        case Token_Types::tok_toi8:
+        {
+            auto ret = parse_toi8_expression();
+            ate_semicolon = true;
+            node->type = Node_Types::Toi8Node;
+            node->expression_node = std::move(ret);
             break;
         }
         case Token_Types::tok_identifier:
@@ -235,6 +282,8 @@ std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
         return parse_identifier_expression();
     case Token_Types::tok_number:
         return parse_number_expression(type);
+    case Token_Types::tok_toi8:
+        return parse_toi8_expression();
     default:
         break;
     }
@@ -284,7 +333,6 @@ std::unique_ptr<Expression_Node> parse_identifier_expression()
 std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type)
 {
     auto number_expression = std::make_unique<Number_Expression_Node>(std::stod(cur_tok->value), type);
-    // number_expression->variable_type = type;
     get_next_token();
     return std::move(number_expression);
 }
@@ -294,20 +342,12 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
     while (true)
     {
         int tok_prec = get_tok_precedence();
-        // cout << "tok_prec: " << tok_prec << endl;
-        // cout << "expr_prec: " << expr_prec << endl;
-        // cout << (tok_prec < expr_prec) << endl;
         if (tok_prec < expr_prec)
         {
-            // cout << "less" << endl;
-            // cout << "less before type: " << cur_tok->type << endl;
-            // get_next_token();
-            // cout << "less after type: " << cur_tok->type << endl;
             return lhs;
         }
 
         std::string bin_op = cur_tok->value;
-        // cout << "bin_op: " << bin_op << endl;
 
         get_next_token();
 
@@ -318,18 +358,13 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
             return nullptr;
         }
 
-        // cout << "RHS: " << rhs->value << endl;
-
         int next_prec = get_tok_precedence();
-        // cout << "next_prec: " << next_prec << endl;
         if (tok_prec < next_prec)
         {
             rhs = parse_bin_op_rhs(tok_prec + 1, std::move(rhs));
             if (!rhs)
                 return nullptr;
         }
-
-        // cout << "end" << endl;
 
         lhs = std::make_unique<Binary_Expression_Node>(bin_op, std::move(lhs), std::move(rhs));
     }
@@ -338,7 +373,7 @@ std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr
 std::unique_ptr<Return_Node> parse_return_statement()
 {
     get_next_token();
-    auto expr = parse_expression(true, Variable_Types::type_int);
+    auto expr = parse_expression(true, Variable_Types::type_i32);
 
     if (expr == 0)
     {
@@ -349,22 +384,38 @@ std::unique_ptr<Return_Node> parse_return_statement()
     return std::make_unique<Return_Node>(std::move(expr));
 }
 
-Variable_Types type_string_to_variable_type(const char *str)
+std::unique_ptr<Expression_Node> parse_toi8_expression()
 {
-    if (!strcmp(str, "int"))
-    {
-        return Variable_Types::type_int;
-    }
+    get_next_token();
+    get_next_token();
 
-    return Variable_Types::type_int;
+    auto expr = parse_expression(false);
+
+    get_next_token();
+
+    auto toi8_node = std::make_unique<Toi8_Node>(std::move(expr));
+
+    return toi8_node;
 }
 
 Variable_Types token_type_to_variable_type(Token_Types type)
 {
     switch (type)
     {
-    case Token_Types::tok_int:
-        return Variable_Types::type_int;
+    case Token_Types::tok_i64:
+        return Variable_Types::type_i64;
+    case Token_Types::tok_i32:
+        return Variable_Types::type_i32;
+    case Token_Types::tok_i16:
+        return Variable_Types::type_i16;
+    case Token_Types::tok_i8:
+        return Variable_Types::type_i8;
+    case Token_Types::tok_float:
+        return Variable_Types::type_float;
+    case Token_Types::tok_double:
+        return Variable_Types::type_double;
+    case Token_Types::tok_bool:
+        return Variable_Types::type_bool;
     default:
         break;
     }
@@ -398,15 +449,10 @@ int get_tok_precedence()
 
 void Function_Node::set_variables(std::string name, llvm::Value *var)
 {
-    // cout << "set " << name << " ";
-    // cout << endl;
-    // var->print(llvm::outs());
-    // llvm::outs() << '\n';
     variables[name] = var;
 }
 
 llvm::Value *Function_Node::get_variable(std::string name)
 {
-    // cout << "get " << name << endl;
     return variables[name];
 }

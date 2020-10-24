@@ -33,13 +33,20 @@ enum Node_Types
     CallExpressionNode,
     FunctionDeclarationNode,
     VariableDeclarationNode,
-    ReturnNode
+    ReturnNode,
+    Toi8Node
 };
 
 enum Variable_Types
 {
     type_null = -1,
-    type_int
+    type_i64,
+    type_i32,
+    type_i16,
+    type_i8,
+    type_float,
+    type_double,
+    type_bool,
 };
 
 class Node
@@ -153,6 +160,16 @@ public:
     llvm::Value *code_gen();
 };
 
+class Toi8_Node : public Expression_Node
+{
+private:
+    std::unique_ptr<Expression_Node> value;
+
+public:
+    Toi8_Node(std::unique_ptr<Expression_Node> value) : value(std::move(value)) {}
+    virtual llvm::Value *code_gen();
+};
+
 std::vector<std::unique_ptr<Node>>
 parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
@@ -180,11 +197,12 @@ static std::unique_ptr<Expression_Node> parse_paren_expression();
 static std::unique_ptr<Expression_Node> parse_identifier_expression();
 static std::unique_ptr<Expression_Node> parse_primary(Variable_Types type = Variable_Types::type_null);
 static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type = Variable_Types::type_null);
-static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true, Variable_Types = Variable_Types::type_int);
+static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true, Variable_Types = Variable_Types::type_i32);
 static std::vector<std::unique_ptr<Node>> parse_fn_body();
 static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();
 static std::unique_ptr<Variable_Node> parse_variable_declaration();
 static std::unique_ptr<Return_Node> parse_return_statement();
+static std::unique_ptr<Expression_Node> parse_toi8_expression();
 
 #endif

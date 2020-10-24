@@ -11,13 +11,37 @@ using std::endl;
 using std::shared_ptr;
 using std::vector;
 
+// tok_64_to_32,
+// tok_64_to_16,
+// tok_64_to_8,
+// tok_32_to_64,
+// tok_32_to_16,
+// tok_32_to_8,
+// tok_16_to_64,
+// tok_16_to_32,
+// tok_16_to_8,
+// tok_8_to_64,
+// tok_8_to_32,
+// tok_8_to_16,
+
 enum Token_Types
 {
   tok_let,
   tok_fn,
   tok_return,
+  tok_toi64,
+  tok_toi32,
+  tok_toi16,
+  tok_toi8,
 
-  tok_int,
+  tok_i64,
+  tok_i32,
+  tok_i16,
+  tok_i8,
+  tok_float,
+  tok_double,
+
+  tok_bool,
 
   tok_colon,
   tok_semicolon,
