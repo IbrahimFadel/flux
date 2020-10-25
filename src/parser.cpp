@@ -231,11 +231,35 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             node->return_node = std::move(ret);
             break;
         }
+        case Token_Types::tok_toi64:
+        {
+            auto ret = parse_typecast_expression();
+            ate_semicolon = true;
+            node->type = Node_Types::TypeCastNode;
+            node->expression_node = std::move(ret);
+            break;
+        }
+        case Token_Types::tok_toi32:
+        {
+            auto ret = parse_typecast_expression();
+            ate_semicolon = true;
+            node->type = Node_Types::TypeCastNode;
+            node->expression_node = std::move(ret);
+            break;
+        }
+        case Token_Types::tok_toi16:
+        {
+            auto ret = parse_typecast_expression();
+            ate_semicolon = true;
+            node->type = Node_Types::TypeCastNode;
+            node->expression_node = std::move(ret);
+            break;
+        }
         case Token_Types::tok_toi8:
         {
-            auto ret = parse_toi8_expression();
+            auto ret = parse_typecast_expression();
             ate_semicolon = true;
-            node->type = Node_Types::Toi8Node;
+            node->type = Node_Types::TypeCastNode;
             node->expression_node = std::move(ret);
             break;
         }
@@ -282,8 +306,14 @@ std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
         return parse_identifier_expression();
     case Token_Types::tok_number:
         return parse_number_expression(type);
+    case Token_Types::tok_toi64:
+        return parse_typecast_expression();
+    case Token_Types::tok_toi32:
+        return parse_typecast_expression();
+    case Token_Types::tok_toi16:
+        return parse_typecast_expression();
     case Token_Types::tok_toi8:
-        return parse_toi8_expression();
+        return parse_typecast_expression();
     default:
         break;
     }
@@ -384,8 +414,9 @@ std::unique_ptr<Return_Node> parse_return_statement()
     return std::make_unique<Return_Node>(std::move(expr));
 }
 
-std::unique_ptr<Expression_Node> parse_toi8_expression()
+std::unique_ptr<Expression_Node> parse_typecast_expression()
 {
+    auto type = token_type_to_variable_type(cur_tok->type);
     get_next_token();
     get_next_token();
 
@@ -393,9 +424,9 @@ std::unique_ptr<Expression_Node> parse_toi8_expression()
 
     get_next_token();
 
-    auto toi8_node = std::make_unique<Toi8_Node>(std::move(expr));
+    auto node = std::make_unique<Type_Cast_Node>(std::move(expr), type);
 
-    return toi8_node;
+    return node;
 }
 
 Variable_Types token_type_to_variable_type(Token_Types type)
@@ -416,6 +447,14 @@ Variable_Types token_type_to_variable_type(Token_Types type)
         return Variable_Types::type_double;
     case Token_Types::tok_bool:
         return Variable_Types::type_bool;
+    case Token_Types::tok_toi64:
+        return Variable_Types::type_i64;
+    case Token_Types::tok_toi32:
+        return Variable_Types::type_i32;
+    case Token_Types::tok_toi16:
+        return Variable_Types::type_i16;
+    case Token_Types::tok_toi8:
+        return Variable_Types::type_i8;
     default:
         break;
     }

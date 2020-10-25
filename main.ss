@@ -1,10 +1,6 @@
-fn sum(i32 num1, i32 num2) -> i8 {
-    i32 res = num1 + num2;
-    return toi8(res);
-}
-
 fn main() -> i8 {
-    i8 thesum = sum(5, 3);
+    i32 x = 10;
+    i16 y = 4;
 
-    return thesum;
+    return toi8(y) + toi8(x);
 }

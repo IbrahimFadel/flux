@@ -112,7 +112,7 @@ void code_gen_node(std::unique_ptr<Node> node)
         call->code_gen();
         break;
     }
-    case Node_Types::Toi8Node:
+    case Node_Types::TypeCastNode:
     {
         auto to = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
         to->code_gen();
@@ -325,7 +325,7 @@ llvm::Function *Function_Node::code_gen()
         exit(-1);
     }
 
-    function_pass_manager->run(*the_function);
+    // function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -333,8 +333,7 @@ llvm::Function *Function_Node::code_gen()
 llvm::Value *Return_Node::code_gen()
 {
     auto v = value->code_gen();
-    builder.CreateRet(builder.CreateLoad(v, v->getName().str()));
-    return 0;
+    return builder.CreateRet(v);
 }
 
 llvm::Value *Variable_Node::code_gen()
@@ -387,12 +386,30 @@ llvm::Value *Variable_Expression_Node::code_gen()
     // return builder.CreateLoad(ptr, ptr->getName().str());
 }
 
-llvm::Value *Toi8_Node::code_gen()
+llvm::Value *Type_Cast_Node::code_gen()
 {
+    auto llvm_type = variable_type_to_llvm_ptr_type(new_type);
     auto v = value->code_gen();
-    auto newv = builder.CreateBitCast(v, llvm::Type::getInt8PtrTy(context), v->getName().str());
+    auto newv = builder.CreateBitCast(v, llvm_type, v->getName().str());
     functions[current_function]->set_variables(v->getName().str(), newv);
     return newv;
+}
+
+llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type)
+{
+    switch (type)
+    {
+    case Variable_Types::type_i64:
+        return llvm::Type::getInt64PtrTy(context);
+    case Variable_Types::type_i32:
+        return llvm::Type::getInt32PtrTy(context);
+    case Variable_Types::type_i16:
+        return llvm::Type::getInt16PtrTy(context);
+    case Variable_Types::type_i8:
+        return llvm::Type::getInt8PtrTy(context);
+    default:
+        break;
+    }
 }
 
 llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,

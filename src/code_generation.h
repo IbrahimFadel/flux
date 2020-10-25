@@ -45,6 +45,7 @@ void code_gen(std::vector<std::unique_ptr<Node>> nodes);
 void code_gen_node(std::unique_ptr<Node> node);
 void initialize_fpm();
 static llvm::Type *ss_type_to_llvm_type(Variable_Types type);
+static llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type);
 static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
                                                    const std::string &VarName);
 static llvm::Type *bitwidth_to_llvm_type(unsigned int bitwidth);

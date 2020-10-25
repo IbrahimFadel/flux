@@ -34,7 +34,7 @@ enum Node_Types
     FunctionDeclarationNode,
     VariableDeclarationNode,
     ReturnNode,
-    Toi8Node
+    TypeCastNode
 };
 
 enum Variable_Types
@@ -160,13 +160,14 @@ public:
     llvm::Value *code_gen();
 };
 
-class Toi8_Node : public Expression_Node
+class Type_Cast_Node : public Expression_Node
 {
 private:
     std::unique_ptr<Expression_Node> value;
+    Variable_Types new_type;
 
 public:
-    Toi8_Node(std::unique_ptr<Expression_Node> value) : value(std::move(value)) {}
+    Type_Cast_Node(std::unique_ptr<Expression_Node> value, Variable_Types new_type) : value(std::move(value)), new_type(new_type) {}
     virtual llvm::Value *code_gen();
 };
 
@@ -203,6 +204,6 @@ static std::unique_ptr<Prototype_Node> parse_prototype();
 static std::unique_ptr<Function_Node> parse_fn_declaration();
 static std::unique_ptr<Variable_Node> parse_variable_declaration();
 static std::unique_ptr<Return_Node> parse_return_statement();
-static std::unique_ptr<Expression_Node> parse_toi8_expression();
+static std::unique_ptr<Expression_Node> parse_typecast_expression();
 
 #endif
