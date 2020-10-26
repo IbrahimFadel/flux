@@ -82,7 +82,7 @@ std::unique_ptr<Function_Node> parse_fn_declaration()
 
     auto expressions = parse_fn_body();
 
-    return std::make_unique<Function_Node>(std::move(proto), std::move(expressions));
+    return std::make_unique<Function_Node>(std::move(proto), std::move(expressions), proto->get_arg_types());
 }
 
 std::unique_ptr<Prototype_Node> parse_prototype()
@@ -494,4 +494,19 @@ void Function_Node::set_variables(std::string name, llvm::Value *var)
 llvm::Value *Function_Node::get_variable(std::string name)
 {
     return variables[name];
+}
+
+std::vector<Variable_Types> Prototype_Node::get_arg_types()
+{
+    return arg_types;
+}
+
+std::unique_ptr<Prototype_Node> Function_Node::get_proto()
+{
+    return std::move(proto);
+}
+
+std::vector<Variable_Types> Function_Node::get_arg_types()
+{
+    return arg_types;
 }

@@ -118,6 +118,7 @@ public:
     Prototype_Node(std::string name, std::vector<Variable_Types> arg_types, std::vector<std::string> arg_names, Variable_Types return_type) : name(name), arg_types(arg_types), arg_names(arg_names), return_type(return_type) {}
     llvm::Function *code_gen();
     void create_argument_allocas(llvm::Function *f);
+    std::vector<Variable_Types> get_arg_types();
 };
 
 class Function_Node
@@ -125,17 +126,20 @@ class Function_Node
     std::unique_ptr<Prototype_Node> proto;
     std::vector<std::unique_ptr<Node>> body;
     std::map<std::string, llvm::Value *> variables;
+    std::vector<Variable_Types> arg_types;
 
 public:
     Function_Node(std::unique_ptr<Prototype_Node> proto,
-                  std::vector<std::unique_ptr<Node>> body)
-        : proto(std::move(proto)), body(std::move(body))
+                  std::vector<std::unique_ptr<Node>> body, std::vector<Variable_Types> types)
+        : proto(std::move(proto)), body(std::move(body)), arg_types(types)
     {
     }
     llvm::Function *code_gen();
 
     void set_variables(std::string name, llvm::Value *var);
     llvm::Value *get_variable(std::string name);
+    std::unique_ptr<Prototype_Node> get_proto();
+    std::vector<Variable_Types> get_arg_types();
 };
 
 class Variable_Node

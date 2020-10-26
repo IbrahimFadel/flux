@@ -154,8 +154,8 @@ llvm::Value *Binary_Expression_Node::code_gen()
     if (l == 0 || r == 0)
         return 0;
 
-    auto loaded_l = builder.CreateLoad(l, l->getName().str());
-    auto loaded_r = builder.CreateLoad(r, r->getName().str());
+    auto loaded_l = builder.CreateLoad(l);
+    auto loaded_r = builder.CreateLoad(r);
     // llvm::Value *loaded_v;
     // if (v->getType()->isPointerTy())
     // {
@@ -236,11 +236,14 @@ llvm::Value *Call_Expression_Node::code_gen()
         exit(-1);
     }
 
+    auto arg_types = functions[callee]->get_arg_types();
+
     std::vector<llvm::Value *> args_v;
     for (unsigned int i = 0, e = args.size(); i != e; i++)
     {
         auto v = args[i]->code_gen();
-        args_v.push_back(v);
+        auto loaded = builder.CreateLoad(v);
+        args_v.push_back(loaded);
         if (args_v.back() == 0)
             return 0;
     }
@@ -325,15 +328,16 @@ llvm::Function *Function_Node::code_gen()
         exit(-1);
     }
 
-    // function_pass_manager->run(*the_function);
+    function_pass_manager->run(*the_function);
 
     return the_function;
 }
 
 llvm::Value *Return_Node::code_gen()
 {
-    auto v = value->code_gen();
-    return builder.CreateRet(v);
+    auto ptr = value->code_gen();
+    auto val = builder.CreateLoad(ptr);
+    return builder.CreateRet(val);
 }
 
 llvm::Value *Variable_Node::code_gen()
@@ -355,7 +359,7 @@ llvm::Value *Variable_Node::code_gen()
         llvm::Value *loaded_v;
         if (v->getType()->isPointerTy())
         {
-            loaded_v = builder.CreateLoad(v, v->getName().str());
+            loaded_v = builder.CreateLoad(v);
             builder.CreateStore(loaded_v, alloc);
         }
         else
@@ -390,9 +394,23 @@ llvm::Value *Type_Cast_Node::code_gen()
 {
     auto llvm_type = variable_type_to_llvm_ptr_type(new_type);
     auto v = value->code_gen();
-    auto newv = builder.CreateBitCast(v, llvm_type, v->getName().str());
+    auto newv = builder.CreateBitCast(v, llvm_type);
     functions[current_function]->set_variables(v->getName().str(), newv);
     return newv;
+}
+
+llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type)
+{
+    //! all sandscript types are not pointers right now, so just load them
+    //! in the future when variables can be pointers, implement logic:
+    //! If llvm val is pointer and function wants pointer return pointer, else load and return
+    // auto llvm_type = val->getType();
+    // if (llvm_type->isPointerTy())
+    // {
+    //     iff(type == Variable_Types::)
+    // }
+    // return builder.CreateLoad(val);
+    return nullptr;
 }
 
 llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type)
