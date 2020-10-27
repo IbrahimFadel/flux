@@ -46,4 +46,4 @@ entry:
 }
 ```
 
-And that gets optimized and compiled to a binary
+And that gets compiled
