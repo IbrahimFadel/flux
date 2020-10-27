@@ -7,44 +7,42 @@ Rewriting in yet again -- and hey, there's new syntax.
 The syntax in sandscript is very similar to rust:
 
 ```cpp
-fn add() -> int {
-    return 5;
+fn sum(i32 num1, i32 num2) -> i8 {
+    i32 sum = num1 + num2;
+    i8 tst = toi8(sum);
+    return tst;
 }
 
-fn main(int hi, int hello) -> int {
-    int y = 10 * 3 + 43;
-    int x = y + 5;
+fn main() -> i8 {
+    i32 x = 10;
+    i32 y = 4;
 
-    int res = add();
+    i8 res = sum(x, y);
 
-    return y + x * res;
+    return res;
 }
 ```
 
 This gets converted into LLVM IR:
 
 ```llvm
-define i32 @add() {
+; ModuleID = 'Module'
+source_filename = "Module"
+
+define i8 @sum(i32 %num1, i32 %num2) {
 entry:
-  ret i32 5
+  %sum = alloca i32, align 4
+  %addtmp = add i32 %num2, %num1
+  store i32 %addtmp, i32* %sum, align 4
+  %0 = bitcast i32* %sum to i8*
+  %1 = trunc i32 %addtmp to i8
+  ret i8 %1
 }
 
-define i32 @main(i32 %hi, i32 %hello) {
+define i8 @main() {
 entry:
-  %y = alloca i32
-  store i32 73, i32* %y
-  %y1 = load i32, i32* %y
-  %x = alloca i32
-  %addtmp = add i32 %y1, 5
-  store i32 %addtmp, i32* %x
-  %x2 = load i32, i32* %x
-  %res = alloca i32
-  %calltmp = call i32 @add()
-  store i32 %calltmp, i32* %res
-  %res3 = load i32, i32* %res
-  %addtmp4 = mul i32 %x2, %res3
-  %addtmp5 = add i32 %y1, %addtmp4
-  ret i32 %addtmp5
+  %calltmp = call i8 @sum(i32 10, i32 4)
+  ret i8 %calltmp
 }
 ```
 
