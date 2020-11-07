@@ -51,7 +51,7 @@ void initialize_fpm();
 static llvm::Type *ss_type_to_llvm_type(Variable_Types type);
 static llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type);
 static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
-                                                   const std::string &VarName);
+                                                   const std::string &VarName, llvm::Type *type);
 static llvm::Type *bitwidth_to_llvm_type(unsigned int bitwidth);
 static llvm::Constant *get_zeroed_variable(llvm::Type *type);
 static llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type);

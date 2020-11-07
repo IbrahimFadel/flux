@@ -246,11 +246,12 @@ llvm::Value *Call_Expression_Node::code_gen()
         exit(-1);
     }
 
-    auto arg_types = functions[callee]->get_arg_types();
+    auto arg_types_it = callee_f->arg_begin();
 
     std::vector<llvm::Value *> args_v;
     for (unsigned int i = 0, e = args.size(); i != e; i++)
     {
+        auto ty = arg_types_it->getType();
         auto v = args[i]->code_gen();
         llvm::Value *loaded;
         if (v->getType()->isPointerTy())
@@ -259,10 +260,29 @@ llvm::Value *Call_Expression_Node::code_gen()
         }
         else
         {
-            loaded = v;
+            if (ty->isIntegerTy())
+            {
+                auto arg_bitwidth = ty->getIntegerBitWidth();
+                auto given_bitwidth = v->getType()->getIntegerBitWidth();
+                if (arg_bitwidth != given_bitwidth)
+                {
+                    auto casted = builder.CreateIntCast(v, bitwidth_to_llvm_type(arg_bitwidth), true);
+                    loaded = casted;
+                }
+                else
+                {
+                    loaded = v;
+                }
+            }
+            else
+            {
+                loaded = v;
+            }
         }
 
         args_v.push_back(loaded);
+
+        arg_types_it++;
         if (args_v.back() == 0)
             return 0;
     }
@@ -536,11 +556,11 @@ llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type)
 }
 
 llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
-                                            const std::string &VarName)
+                                            const std::string &VarName, llvm::Type *type)
 {
     llvm::IRBuilder<> TmpB(&TheFunction->getEntryBlock(),
                            TheFunction->getEntryBlock().begin());
-    return TmpB.CreateAlloca(llvm::Type::getInt32Ty(context), 0,
+    return TmpB.CreateAlloca(type, 0,
                              VarName.c_str());
 }
 
@@ -549,7 +569,7 @@ void Prototype_Node::create_argument_allocas(llvm::Function *f)
     llvm::Function::arg_iterator AI = f->arg_begin();
     for (unsigned idx = 0, e = arg_names.size(); idx != e; ++idx, ++AI)
     {
-        auto alloc = create_entry_block_alloca(f, arg_names[idx]);
+        auto alloc = create_entry_block_alloca(f, arg_names[idx], ss_type_to_llvm_type(arg_types[idx]));
         builder.CreateStore(AI, alloc);
         functions[f->getName().str()]->set_variables(arg_names[idx], alloc);
     }
