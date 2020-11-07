@@ -1,12 +1,6 @@
-i8 globvar = 10 + 5;
-i32 othernum = 25;
+fn main() -> float {
+    float x = 0.12;
+    float y = 1.34535;
 
-fn sum(i8 num1, i32 num2) -> i8 {
-    return num1 + toi8(num2);
-}
-
-fn main() -> i8 {
-    i8 mysum = sum(20, 10);
-    i8 final = toi8(othernum) + globvar * mysum;
-    return final;
+    return x + y;
 }

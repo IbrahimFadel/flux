@@ -335,7 +335,7 @@ llvm::Function *Prototype_Node::code_gen()
 
 llvm::Function *Function_Node::code_gen()
 {
-    if (proto->get_name() == "main")
+    if (proto->get_name() == "main" && global_variables_awaiting_initialization.size() > 0)
     {
         construct_global_variable_assign_function();
     }
@@ -353,7 +353,7 @@ llvm::Function *Function_Node::code_gen()
 
     proto->create_argument_allocas(the_function);
 
-    if (proto->get_name() == "main")
+    if (proto->get_name() == "main" && global_variables_awaiting_initialization.size() > 0)
     {
         std::vector<llvm::Value *> call_args(0);
         auto callee_f = module->getFunction(global_variable_assign_function_name);

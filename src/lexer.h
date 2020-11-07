@@ -83,8 +83,20 @@ void print_tokens(vector<shared_ptr<Token>> tokens);
 
 void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok = false);
 
+static inline bool is_floating_point(const char *str)
+{
+  char *endptr = 0;
+  strtod(str, &endptr);
+
+  if (*endptr != '\0' || endptr == str)
+    return false;
+  return true;
+}
+
 static inline bool is_number(const std::string &s)
 {
+  if (is_floating_point(s.c_str()))
+    return true;
   return !s.empty() && std::find_if(s.begin(),
                                     s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
 }
