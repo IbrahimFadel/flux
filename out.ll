@@ -28,7 +28,7 @@ entry:
 define i8 @main() {
 entry:
   call void @__assign_global_variables()
-  %calltmp = call i8 @sum(i32 20, i32 30)
+  %calltmp = call i8 @sum(i32 20, i32 10)
   %0 = load i8, i8* @globvar, align 1
   %multmp = mul i8 %0, %calltmp
   %1 = load i8, i8* bitcast (i32* @othernum to i8*), align 4

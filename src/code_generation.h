@@ -57,5 +57,6 @@ static llvm::Constant *get_zeroed_variable(llvm::Type *type);
 static llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type);
 
 static llvm::Value *error_v(const char *Str);
+static void print(llvm::Value *v);
 
 #endif

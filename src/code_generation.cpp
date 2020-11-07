@@ -252,7 +252,16 @@ llvm::Value *Call_Expression_Node::code_gen()
     for (unsigned int i = 0, e = args.size(); i != e; i++)
     {
         auto v = args[i]->code_gen();
-        auto loaded = builder.CreateLoad(v);
+        llvm::Value *loaded;
+        if (v->getType()->isPointerTy())
+        {
+            loaded = builder.CreateLoad(v);
+        }
+        else
+        {
+            loaded = v;
+        }
+
         args_v.push_back(loaded);
         if (args_v.back() == 0)
             return 0;
@@ -358,8 +367,16 @@ llvm::Function *Function_Node::code_gen()
 llvm::Value *Return_Node::code_gen()
 {
     auto ptr = value->code_gen();
-    auto val = builder.CreateLoad(ptr);
-    return builder.CreateRet(val);
+    llvm::Value *loaded;
+    if (ptr->getType()->isPointerTy())
+    {
+        loaded = builder.CreateLoad(ptr);
+    }
+    else
+    {
+        loaded = ptr;
+    }
+    return builder.CreateRet(loaded);
 }
 
 llvm::Value *Variable_Node::code_gen()
@@ -603,4 +620,10 @@ llvm::Value *error_v(const char *str)
 {
     cout << "LogError: " << str << endl;
     return 0;
+}
+
+void print(llvm::Value *v)
+{
+    v->print(llvm::outs());
+    llvm::outs() << '\n';
 }
