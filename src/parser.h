@@ -119,6 +119,7 @@ public:
     llvm::Function *code_gen();
     void create_argument_allocas(llvm::Function *f);
     std::vector<Variable_Types> get_arg_types();
+    std::string get_name();
 };
 
 class Function_Node

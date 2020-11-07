@@ -1,18 +1,24 @@
 ; ModuleID = 'Module'
 source_filename = "Module"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-pc-linux-gnu"
 
-define i8 @sum(i32 %num1, i32 %num2) {
+@globvar = common global i8 0
+
+define void @__assign_global_variables() {
 entry:
-  %sum = alloca i32, align 4
-  %addtmp = add i32 %num2, %num1
-  store i32 %addtmp, i32* %sum, align 4
-  %0 = bitcast i32* %sum to i8*
-  %1 = trunc i32 %addtmp to i8
-  ret i8 %1
+  store i8 15, i8* @globvar, align 1
+  ret void
 }
 
 define i8 @main() {
 entry:
-  %calltmp = call i8 @sum(i32 10, i32 4)
-  ret i8 %calltmp
+  call void @__assign_global_variables()
+  %0 = load i8, i8* @globvar, align 1
+  ret i8 %0
 }
+
+; Function Attrs: nounwind
+declare void @llvm.stackprotector(i8*, i8**) #0
+
+attributes #0 = { nounwind }

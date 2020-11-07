@@ -40,6 +40,10 @@ static std::string current_function;
 static std::map<std::string, Function_Node *> functions;
 static Scopes scope = Scopes::global;
 
+static std::map<std::string, std::unique_ptr<Expression_Node>> global_variables_awaiting_initialization;
+static llvm::Value *construct_global_variable_assign_function();
+static std::string global_variable_assign_function_name = "__assign_global_variables";
+
 void module_to_bin();
 void code_gen(std::vector<std::unique_ptr<Node>> nodes);
 void code_gen_node(std::unique_ptr<Node> node);
@@ -49,6 +53,7 @@ static llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type);
 static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
                                                    const std::string &VarName);
 static llvm::Type *bitwidth_to_llvm_type(unsigned int bitwidth);
+static llvm::Constant *get_zeroed_variable(llvm::Type *type);
 static llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type);
 
 static llvm::Value *error_v(const char *Str);

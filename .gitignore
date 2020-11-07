@@ -1,2 +1,5 @@
 .vscode/
 build/
+out.ll
+out.o
+out

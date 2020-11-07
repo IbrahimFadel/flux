@@ -26,7 +26,31 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
             node->function_node = std::move(fn);
             break;
         }
+        case Token_Types::tok_i64:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
         case Token_Types::tok_i32:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_i16:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
+        case Token_Types::tok_i8:
         {
             auto var = parse_variable_declaration();
             ate_semicolon = true;
@@ -510,3 +534,5 @@ std::vector<Variable_Types> Function_Node::get_arg_types()
 {
     return arg_types;
 }
+
+std::string Prototype_Node::get_name() { return name; }
