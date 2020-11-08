@@ -289,10 +289,22 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
         }
         case Token_Types::tok_identifier:
         {
-            auto call = parse_identifier_expression();
-            ate_semicolon = false;
-            node->type = Node_Types::CallExpressionNode;
-            node->expression_node = std::move(call);
+            auto id = parse_identifier_expression();
+            switch (id->type)
+            {
+            case Node_Types::CallExpressionNode:
+                node->type = Node_Types::CallExpressionNode;
+                ate_semicolon = false;
+                break;
+            case Node_Types::AssignmentNode:
+                node->type = Node_Types::AssignmentNode;
+                ate_semicolon = true;
+                break;
+            default:
+                node->type = Node_Types::UnknownNode;
+                break;
+            }
+            node->expression_node = std::move(id);
             break;
         }
         default:
@@ -349,6 +361,20 @@ std::unique_ptr<Expression_Node> parse_identifier_expression()
 
     get_next_token();
 
+    if (cur_tok->type == Token_Types::tok_eq)
+    {
+        auto prev = toks[tok_pointer - 2]->type;
+
+        if (prev != Token_Types::tok_i64 || prev != Token_Types::tok_i32 || prev != Token_Types::tok_i16 || prev != Token_Types::tok_i8 || prev != Token_Types::tok_float || prev != Token_Types::tok_double)
+        {
+            get_next_token();
+            auto expr = parse_expression(true);
+            auto assignment_node = std::make_unique<Assignment_Node>(id_name, std::move(expr));
+            assignment_node->type = Node_Types::AssignmentNode;
+            return assignment_node;
+        }
+    }
+
     if (cur_tok->type != Token_Types::tok_open_paren)
         return std::make_unique<Variable_Expression_Node>(id_name);
 
@@ -379,9 +405,9 @@ std::unique_ptr<Expression_Node> parse_identifier_expression()
     }
 
     get_next_token();
-
-    return std::make_unique<Call_Expression_Node>(id_name, std::move(args));
-    // return nullptr;
+    auto call_node = std::make_unique<Call_Expression_Node>(id_name, std::move(args));
+    call_node->type = Node_Types::CallExpressionNode;
+    return call_node;
 }
 
 std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type)

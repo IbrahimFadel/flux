@@ -1,6 +1,7 @@
-fn main() -> float {
-    float x = 0.12;
-    float y = 1.34535;
+fn main() -> i32 {
+    i32 x = 0;
+    x = 23;
+    x = x + 2;
 
-    return x + y;
+    return x;
 }

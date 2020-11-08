@@ -27,6 +27,7 @@ using std::unique_ptr;
 
 enum Node_Types
 {
+    UnknownNode,
     NumberExpressionNode,
     VariableExpressionNode,
     BinaryExpressionNode,
@@ -34,7 +35,8 @@ enum Node_Types
     FunctionDeclarationNode,
     VariableDeclarationNode,
     ReturnNode,
-    TypeCastNode
+    TypeCastNode,
+    AssignmentNode
 };
 
 enum Variable_Types
@@ -174,6 +176,17 @@ private:
 public:
     Type_Cast_Node(std::unique_ptr<Expression_Node> value, Variable_Types new_type) : value(std::move(value)), new_type(new_type) {}
     virtual llvm::Value *code_gen();
+};
+
+class Assignment_Node : public Expression_Node
+{
+private:
+    std::string name;
+    std::unique_ptr<Expression_Node> value;
+
+public:
+    Assignment_Node(std::string name, std::unique_ptr<Expression_Node> value) : name(name), value(std::move(value)){};
+    llvm::Value *code_gen();
 };
 
 std::vector<std::unique_ptr<Node>>

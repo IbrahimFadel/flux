@@ -117,6 +117,12 @@ void code_gen_node(std::unique_ptr<Node> node)
         to->code_gen();
         break;
     }
+    case Node_Types::AssignmentNode:
+    {
+        auto assignment = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        assignment->code_gen();
+        break;
+    }
     default:
         break;
     }
@@ -522,6 +528,11 @@ llvm::Value *construct_global_variable_assign_function()
     function_pass_manager->run(*the_function);
 
     return the_function;
+}
+
+llvm::Value *Assignment_Node::code_gen()
+{
+    return builder.CreateStore(value->code_gen(), functions[current_function]->get_variable(name));
 }
 
 llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type)
