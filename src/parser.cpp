@@ -183,12 +183,12 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
         std::unique_ptr<Node> node = std::make_unique<Node>();
         switch (cur_tok->type)
         {
-        case Token_Types::tok_fn:
+        case Token_Types::tok_if:
         {
-            auto fn = parse_fn_declaration();
-            ate_semicolon = false;
-            node->type = Node_Types::FunctionDeclarationNode;
-            node->function_node = std::move(fn);
+            auto if_node = parse_if();
+            ate_semicolon = true;
+            node->type = Node_Types::IfNode;
+            node->expression_node = std::move(if_node);
             break;
         }
         case Token_Types::tok_i64:
@@ -479,6 +479,45 @@ std::unique_ptr<Expression_Node> parse_typecast_expression()
     return node;
 }
 
+std::unique_ptr<Expression_Node> parse_if()
+{
+    get_next_token(); //? eat 'if'
+    get_next_token(); //? eat '('
+
+    std::vector<std::unique_ptr<Condition_Expression>> conditions;
+    std::vector<Token_Types> condition_seperators;
+
+    while (cur_tok->type != Token_Types::tok_close_paren)
+    {
+        auto lhs = parse_expression(false);
+
+        auto op = cur_tok->type;
+
+        get_next_token(); //? eat operator
+
+        auto rhs = parse_expression(false);
+
+        auto condition = std::make_unique<Condition_Expression>(std::move(lhs), op, std::move(rhs));
+        conditions.push_back(std::move(condition));
+
+        if (cur_tok->type == Token_Types::tok_and || cur_tok->type == Token_Types::tok_or)
+        {
+            condition_seperators.push_back(cur_tok->type);
+            get_next_token();
+        }
+    }
+
+    get_next_token(); //? eat ')'
+    get_next_token(); //? eat '{'
+
+    auto then = parse_fn_body();
+
+    get_next_token(); //? eat '}'
+
+    auto if_node = std::make_unique<If_Node>(std::move(conditions), condition_seperators, std::move(then));
+    return if_node;
+}
+
 Variable_Types token_type_to_variable_type(Token_Types type)
 {
     switch (type)
@@ -562,3 +601,7 @@ std::vector<Variable_Types> Function_Node::get_arg_types()
 }
 
 std::string Prototype_Node::get_name() { return name; }
+
+std::unique_ptr<Expression_Node> Condition_Expression::get_lhs() { return std::move(lhs); };
+std::unique_ptr<Expression_Node> Condition_Expression::get_rhs() { return std::move(rhs); };
+Token_Types Condition_Expression::get_op() { return op; }

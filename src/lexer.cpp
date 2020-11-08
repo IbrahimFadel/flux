@@ -87,6 +87,10 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   {
     tok->type = Token_Types::tok_fn;
   }
+  else if (token == "if")
+  {
+    tok->type = Token_Types::tok_if;
+  }
   else if (token == "return")
   {
     tok->type = Token_Types::tok_return;
@@ -150,6 +154,18 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   else if (token == "=")
   {
     tok->type = Token_Types::tok_eq;
+  }
+  else if (token == "==")
+  {
+    tok->type = Token_Types::tok_compare_eq;
+  }
+  else if (token == "&&")
+  {
+    tok->type = Token_Types::tok_and;
+  }
+  else if (token == "||")
+  {
+    tok->type = Token_Types::tok_or;
   }
   else if (is_number(token))
   {
@@ -224,6 +240,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
     case Token_Types::tok_fn:
       cout << "fn" << endl;
       break;
+    case Token_Types::tok_if:
+      cout << "if" << endl;
+      break;
     case Token_Types::tok_return:
       cout << "return" << endl;
       break;
@@ -274,6 +293,15 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_eq:
       cout << "=" << endl;
+      break;
+    case Token_Types::tok_compare_eq:
+      cout << "==" << endl;
+      break;
+    case Token_Types::tok_and:
+      cout << "&&" << endl;
+      break;
+    case Token_Types::tok_or:
+      cout << "||" << endl;
       break;
     case Token_Types::tok_number:
       cout << token->value << endl;

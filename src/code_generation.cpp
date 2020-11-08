@@ -123,6 +123,11 @@ void code_gen_node(std::unique_ptr<Node> node)
         assignment->code_gen();
         break;
     }
+    case Node_Types::IfNode:
+    {
+        auto if_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        if_node->code_gen();
+    }
     default:
         break;
     }
@@ -385,7 +390,7 @@ llvm::Function *Function_Node::code_gen()
         exit(-1);
     }
 
-    function_pass_manager->run(*the_function);
+    // function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -533,6 +538,91 @@ llvm::Value *construct_global_variable_assign_function()
 llvm::Value *Assignment_Node::code_gen()
 {
     return builder.CreateStore(value->code_gen(), functions[current_function]->get_variable(name));
+}
+
+llvm::Value *Condition_Expression::code_gen()
+{
+    switch (op)
+    {
+    case Token_Types::tok_compare_eq:
+    {
+        return builder.CreateICmpEQ(lhs->code_gen(), rhs->code_gen(), "ifcond");
+    }
+    default:
+        return error_v("Could not determine the operator in if statement condition");
+    }
+}
+
+llvm::Value *If_Node::code_gen()
+{
+    std::vector<llvm::Value *> cmps;
+    for (auto &condition : conditions)
+    {
+        auto cmp = condition->code_gen();
+        cmps.push_back(cmp);
+    }
+
+    auto true_val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), (uint64_t)1, false);
+    auto false_val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), (uint64_t)0, false);
+    llvm::Value *last_comparison = cmps[0]; //? If there end up not being any condition_seperators, this will be there instead
+    int i = 0;
+    for (auto &sep : condition_seperators)
+    {
+        switch (sep)
+        {
+        case Token_Types::tok_and:
+        {
+            if (i == 0)
+                last_comparison = builder.CreateAnd(cmps[i], cmps[i + 1]);
+            else
+                last_comparison = builder.CreateAnd(last_comparison, cmps[i + 1]);
+            break;
+        }
+        case Token_Types::tok_or:
+        {
+            if (i == 0)
+                last_comparison = builder.CreateOr(cmps[i], cmps[i + 1]);
+            else
+                last_comparison = builder.CreateOr(last_comparison, cmps[i + 1]);
+        }
+        default:
+            break;
+        }
+        i++;
+    }
+
+    auto cmp = builder.CreateICmpEQ(last_comparison, true_val);
+
+    auto the_function = builder.GetInsertBlock()->getParent();
+
+    llvm::BasicBlock *then_bb = llvm::BasicBlock::Create(context, "then", the_function);
+    llvm::BasicBlock *else_bb = llvm::BasicBlock::Create(context, "else");
+    llvm::BasicBlock *merge_bb = llvm::BasicBlock::Create(context, "continue");
+
+    auto cond_br = builder.CreateCondBr(cmp, then_bb, else_bb);
+
+    builder.SetInsertPoint(then_bb);
+
+    for (auto &node : then)
+    {
+        code_gen_node(std::move(node));
+    }
+
+    builder.CreateBr(merge_bb);
+
+    then_bb = builder.GetInsertBlock();
+
+    the_function->getBasicBlockList().push_back(else_bb);
+    builder.SetInsertPoint(else_bb);
+
+    builder.CreateBr(merge_bb);
+
+    else_bb = builder.GetInsertBlock();
+
+    the_function->getBasicBlockList().push_back(merge_bb);
+    builder.SetInsertPoint(merge_bb);
+
+    return 0;
 }
 
 llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type)

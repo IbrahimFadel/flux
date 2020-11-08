@@ -36,7 +36,8 @@ enum Node_Types
     VariableDeclarationNode,
     ReturnNode,
     TypeCastNode,
-    AssignmentNode
+    AssignmentNode,
+    IfNode
 };
 
 enum Variable_Types
@@ -189,6 +190,33 @@ public:
     llvm::Value *code_gen();
 };
 
+class Condition_Expression
+{
+private:
+    std::unique_ptr<Expression_Node> lhs;
+    Token_Types op;
+    std::unique_ptr<Expression_Node> rhs;
+
+public:
+    Condition_Expression(std::unique_ptr<Expression_Node> lhs, Token_Types op, std::unique_ptr<Expression_Node> rhs) : lhs(std::move(lhs)), op(op), rhs(std::move(rhs)){};
+    std::unique_ptr<Expression_Node> get_lhs();
+    std::unique_ptr<Expression_Node> get_rhs();
+    Token_Types get_op();
+    llvm::Value *code_gen();
+};
+
+class If_Node : public Expression_Node
+{
+private:
+    std::vector<std::unique_ptr<Condition_Expression>> conditions;
+    std::vector<Token_Types> condition_seperators;
+    std::vector<std::unique_ptr<Node>> then;
+
+public:
+    If_Node(std::vector<std::unique_ptr<Condition_Expression>> conditions, std::vector<Token_Types> condition_seperators, std::vector<std::unique_ptr<Node>> then) : conditions(std::move(conditions)), condition_seperators(condition_seperators), then(std::move(then)){};
+    llvm::Value *code_gen();
+};
+
 std::vector<std::unique_ptr<Node>>
 parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
@@ -223,5 +251,6 @@ static std::unique_ptr<Function_Node> parse_fn_declaration();
 static std::unique_ptr<Variable_Node> parse_variable_declaration();
 static std::unique_ptr<Return_Node> parse_return_statement();
 static std::unique_ptr<Expression_Node> parse_typecast_expression();
+static std::unique_ptr<Expression_Node> parse_if();
 
 #endif
