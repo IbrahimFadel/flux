@@ -2,7 +2,7 @@
 
 #include <lld/Common/Driver.h>
 
-void module_to_bin()
+void module_to_obj(std::unique_ptr<llvm::Module> module, std::string path)
 {
     auto target_triple = llvm::sys::getDefaultTargetTriple();
 
@@ -30,7 +30,7 @@ void module_to_bin()
     module->setDataLayout(target_machine->createDataLayout());
     module->setTargetTriple(target_triple);
 
-    auto filename = "out.o";
+    auto filename = path;
     std::error_code ec;
     llvm::raw_fd_ostream dest(filename, ec, llvm::sys::fs::F_None);
 
@@ -55,7 +55,7 @@ void module_to_bin()
 
 void initialize_fpm()
 {
-    function_pass_manager = std::make_unique<llvm::legacy::FunctionPassManager>(module.get());
+    function_pass_manager = std::make_unique<llvm::legacy::FunctionPassManager>(modules[current_module].get());
     function_pass_manager->add(llvm::createInstructionCombiningPass());
     function_pass_manager->add(llvm::createReassociatePass());
     function_pass_manager->add(llvm::createGVNPass());
@@ -63,12 +63,12 @@ void initialize_fpm()
     function_pass_manager->doInitialization();
 }
 
-void code_gen(std::vector<std::unique_ptr<Node>> nodes)
+std::unique_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> nodes)
 {
-    llvm::raw_ostream *os = &llvm::outs();
-    llvm::StringRef o_name = "out.ll";
-    std::error_code ec;
-    llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
+    char module_name[20];
+    sprintf(module_name, "Module%d", current_module);
+    auto module = std::make_unique<llvm::Module>(module_name, context);
+    modules.push_back(std::move(module));
 
     initialize_fpm();
 
@@ -76,11 +76,24 @@ void code_gen(std::vector<std::unique_ptr<Node>> nodes)
     {
         code_gen_node(std::move(node));
     }
-    module_to_bin();
+
+    cout << "after" << endl;
 
     auto writer = new llvm::AssemblyAnnotationWriter();
-    // module->print(*os, writer);
-    module->print(*out_stream, writer);
+    modules[current_module]->print(llvm::outs(), writer);
+
+    if (current_module == 0)
+    {
+        char o_name[100];
+        sprintf(o_name, "%s/obj%d.o", build_dir.c_str(), current_module);
+        cout << current_module << endl;
+        module_to_obj(std::move(modules[current_module]), o_name);
+    }
+
+    // // module->print(*os, writer);
+    // modules[current_module]->print(*out_stream, writer);
+
+    return std::move(modules[current_module]);
 }
 
 void code_gen_node(std::unique_ptr<Node> node)
@@ -91,6 +104,12 @@ void code_gen_node(std::unique_ptr<Node> node)
     {
         auto function = std::get<std::unique_ptr<Function_Node>>(std::move(node->function_node));
         auto v = function->code_gen();
+        break;
+    }
+    case Node_Types::ImportNode:
+    {
+        auto import = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        import->code_gen();
         break;
     }
     case Node_Types::VariableDeclarationNode:
@@ -244,11 +263,11 @@ llvm::Value *Binary_Expression_Node::code_gen()
 
 llvm::Value *Call_Expression_Node::code_gen()
 {
-    llvm::Function *callee_f = module->getFunction(callee);
+    llvm::Function *callee_f = modules[current_module]->getFunction(callee);
     if (callee_f == 0)
     {
         error_v("Unknown function referenced");
-        exit(-1);
+        // exit(-1);
     }
 
     if (callee_f->arg_size() != args.size())
@@ -313,12 +332,12 @@ llvm::Function *Prototype_Node::code_gen()
     auto ret = ss_type_to_llvm_type(return_type);
 
     llvm::FunctionType *function_type = llvm::FunctionType::get(ret, param_types, false);
-    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, module.get());
+    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, modules[current_module].get());
 
     if (f->getName() != name)
     {
         f->eraseFromParent();
-        f = module->getFunction(name);
+        f = modules[current_module]->getFunction(name);
 
         if (!f->empty())
         {
@@ -358,6 +377,8 @@ llvm::Function *Function_Node::code_gen()
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "entry", the_function);
     builder.SetInsertPoint(bb);
 
+    // return_value_ptr = builder.CreateAlloca(ss_type_to_llvm_type(proto->get_return_type()), NULL, "retval");
+
     functions[current_function] = this;
 
     scope = Scopes::function;
@@ -367,14 +388,27 @@ llvm::Function *Function_Node::code_gen()
     if (proto->get_name() == "main" && global_variables_awaiting_initialization.size() > 0)
     {
         std::vector<llvm::Value *> call_args(0);
-        auto callee_f = module->getFunction(global_variable_assign_function_name);
+        auto callee_f = modules[current_module]->getFunction(global_variable_assign_function_name);
         builder.CreateCall(callee_f, call_args);
     }
+
+    // llvm::BasicBlock *end = llvm::BasicBlock::Create(context, "end", the_function);
+    // end_bb = end;
 
     for (auto &node : body)
     {
         code_gen_node(std::move(node));
     }
+
+    // builder.SetInsertPoint(end);
+
+    // auto ret_val = builder.CreateLoad(return_value_ptr, "retval_loaded");
+    // builder.CreateRet(ret_val);
+
+    // builder.SetInsertPoint(&the_function->getBasicBlockList().back());
+    // unsigned long last_index = the_function->getBasicBlockList().size() - 1;
+    // builder.SetInsertPoint(the_function->getBasicBlockList().);
+    // builder.SetInsertPoint(the_function->getBasicBlockList()[(unsigned long)the_function->getBasicBlockList().size() - 1]);
 
     if (llvm::verifyFunction(*the_function, &llvm::outs()))
     {
@@ -385,8 +419,8 @@ llvm::Function *Function_Node::code_gen()
         std::error_code ec;
         llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
         auto writer = new llvm::AssemblyAnnotationWriter();
-        module->print(os, writer);
-        module->print(*out_stream, writer);
+        modules[current_module]->print(os, writer);
+        modules[current_module]->print(*out_stream, writer);
         exit(-1);
     }
 
@@ -401,13 +435,17 @@ llvm::Value *Return_Node::code_gen()
     llvm::Value *loaded;
     if (ptr->getType()->isPointerTy())
     {
-        loaded = builder.CreateLoad(ptr);
+        loaded = builder.CreateLoad(ptr, ptr->getName().str());
     }
     else
     {
         loaded = ptr;
     }
+
     return builder.CreateRet(loaded);
+    // builder.CreateStore(loaded, functions[current_function]->get_return_value_ptr());
+    // return builder.CreateBr(functions[current_function]->get_end_bb());
+    // return builder.CreateBr(functions[current_function]->get_end_bb());
 }
 
 llvm::Value *Variable_Node::code_gen()
@@ -416,7 +454,7 @@ llvm::Value *Variable_Node::code_gen()
     {
         auto llvm_type = ss_type_to_llvm_type(type);
         auto constant_temp = get_zeroed_variable(llvm_type);
-        auto var = new llvm::GlobalVariable(*module.get(), llvm_type, false, llvm::GlobalValue::CommonLinkage, constant_temp, name);
+        auto var = new llvm::GlobalVariable(*modules[current_module].get(), llvm_type, false, llvm::GlobalValue::CommonLinkage, constant_temp, name);
 
         global_variables[name] = var;
         global_variables_awaiting_initialization[name] = std::move(value);
@@ -476,12 +514,12 @@ llvm::Value *construct_global_variable_assign_function()
     std::vector<llvm::Type *> arg_types(0);
 
     llvm::FunctionType *function_type = llvm::FunctionType::get(ret, false);
-    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, global_variable_assign_function_name, module.get());
+    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, global_variable_assign_function_name, modules[current_module].get());
 
     if (f->getName() != global_variable_assign_function_name)
     {
         f->eraseFromParent();
-        f = module->getFunction(global_variable_assign_function_name);
+        f = modules[current_module]->getFunction(global_variable_assign_function_name);
         cout << "reassigning" << endl;
 
         if (!f->empty())
@@ -496,7 +534,7 @@ llvm::Value *construct_global_variable_assign_function()
     if (f == 0)
         return 0;
 
-    auto the_function = module->getFunction(global_variable_assign_function_name);
+    auto the_function = modules[current_module]->getFunction(global_variable_assign_function_name);
 
     auto bb = llvm::BasicBlock::Create(context, "entry", the_function);
     builder.SetInsertPoint(bb);
@@ -525,8 +563,8 @@ llvm::Value *construct_global_variable_assign_function()
         std::error_code ec;
         llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
         auto writer = new llvm::AssemblyAnnotationWriter();
-        module->print(os, writer);
-        module->print(*out_stream, writer);
+        modules[current_module]->print(os, writer);
+        modules[current_module]->print(*out_stream, writer);
         exit(-1);
     }
 
@@ -542,11 +580,20 @@ llvm::Value *Assignment_Node::code_gen()
 
 llvm::Value *Condition_Expression::code_gen()
 {
+    auto l = lhs->code_gen();
+    auto r = rhs->code_gen();
+    llvm::Value *l_loaded = l;
+    llvm::Value *r_loaded = r;
+    if (l->getType()->isPointerTy())
+        l_loaded = builder.CreateLoad(l);
+    if (r->getType()->isPointerTy())
+        r_loaded = builder.CreateLoad(r);
+
     switch (op)
     {
     case Token_Types::tok_compare_eq:
     {
-        return builder.CreateICmpEQ(lhs->code_gen(), rhs->code_gen(), "ifcond");
+        return builder.CreateICmpEQ(l_loaded, r_loaded, "ifcond");
     }
     default:
         return error_v("Could not determine the operator in if statement condition");
@@ -555,6 +602,31 @@ llvm::Value *Condition_Expression::code_gen()
 
 llvm::Value *If_Node::code_gen()
 {
+    //TODO A function should have a 'return expression' to be kept track of and evaluated at the end. All return nodes will just update that expression's value
+    //TODO At the end of the function, manually generate a return instruction with the evaluated return expression.
+    /**
+     * if(x == y) {
+     *  return x;
+     * }
+     * 
+     * TRANSLATES TO
+     * 
+     * %retval = alloca i32 ; get the type from function's return type
+     * %ifcond = icmp eq i32* %x, %y
+     * br i1 %ifcond, label %then, label %else
+     * 
+     * then:
+     *  %x_loaded = load i32, i32* %x
+     *  store i32 %x_loaded, i32* %retval
+     *  br %continue
+     * else:
+     *  br %continue
+     * continue:
+     *  %retval_loaded = load i32, i32* retval
+     *  ret i32 %retval_loaded
+     * 
+     */
+
     std::vector<llvm::Value *> cmps;
     for (auto &condition : conditions)
     {
@@ -562,8 +634,6 @@ llvm::Value *If_Node::code_gen()
         cmps.push_back(cmp);
     }
 
-    auto true_val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), (uint64_t)1, false);
-    auto false_val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), (uint64_t)0, false);
     llvm::Value *last_comparison = cmps[0]; //? If there end up not being any condition_seperators, this will be there instead
     int i = 0;
     for (auto &sep : condition_seperators)
@@ -591,6 +661,7 @@ llvm::Value *If_Node::code_gen()
         i++;
     }
 
+    auto true_val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), (uint64_t)1, false);
     auto cmp = builder.CreateICmpEQ(last_comparison, true_val);
 
     auto the_function = builder.GetInsertBlock()->getParent();
@@ -615,12 +686,39 @@ llvm::Value *If_Node::code_gen()
     the_function->getBasicBlockList().push_back(else_bb);
     builder.SetInsertPoint(else_bb);
 
+    // builder.CreateAlloca(ss_type_to_llvm_type(functions[current_function]->get_proto()->get_return_type()), NULL, "hi");
+
     builder.CreateBr(merge_bb);
 
     else_bb = builder.GetInsertBlock();
 
     the_function->getBasicBlockList().push_back(merge_bb);
     builder.SetInsertPoint(merge_bb);
+
+    return 0;
+}
+
+llvm::Value *Import_Node::code_gen()
+{
+    cout << "importing: " << path << endl;
+    auto file_content = get_file_content(path.c_str());
+    auto tokens = get_tokens(file_content);
+    // print_tokens(tokens);
+    auto nodes = parse_tokens(tokens);
+
+    current_module++;
+
+    auto module = code_gen_nodes(std::move(nodes));
+    char o_name[100];
+    sprintf(o_name, "%s/obj%d.o", build_dir.c_str(), current_module);
+    module_to_obj(std::move(module), o_name);
+
+    cout << "imp1: " << current_module << endl;
+    current_module -= 1;
+    cout << "imp2: " << current_module << endl;
+
+    auto f_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), false);
+    auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, "print", modules[current_module].get());
 
     return 0;
 }

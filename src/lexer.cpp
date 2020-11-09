@@ -12,6 +12,8 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
   unsigned int row = 1;
   unsigned int col = 1;
 
+  bool is_string = false;
+
   for (auto &c : content)
   {
     if (c != ' ')
@@ -48,6 +50,19 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
     case '}':
       add_token(token, tokens, row, col, true);
       break;
+    case '"':
+    {
+      if (is_string)
+      {
+        is_string = false;
+        add_token(token, tokens, row, col);
+      }
+      else
+      {
+        is_string = true;
+      }
+      break;
+    }
     default:
       break;
     }
@@ -94,6 +109,14 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   else if (token == "return")
   {
     tok->type = Token_Types::tok_return;
+  }
+  else if (token == "import")
+  {
+    tok->type = Token_Types::tok_import;
+  }
+  else if (token[0] == '"')
+  {
+    tok->type = Token_Types::tok_string;
   }
   else if (token == "i64")
   {
@@ -245,6 +268,12 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_return:
       cout << "return" << endl;
+      break;
+    case Token_Types::tok_import:
+      cout << "import" << endl;
+      break;
+    case Token_Types::tok_string:
+      cout << token->value << endl;
       break;
     case Token_Types::tok_identifier:
       cout << token->value << endl;

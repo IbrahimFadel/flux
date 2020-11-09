@@ -2,6 +2,7 @@
 
 std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
 {
+    tok_pointer = 0;
     toks = tokens;
     cur_tok = toks[tok_pointer];
 
@@ -15,7 +16,6 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
     while (cur_tok->type != Token_Types::tok_eof)
     {
         std::unique_ptr<Node> node = std::make_unique<Node>();
-
         switch (cur_tok->type)
         {
         case Token_Types::tok_fn:
@@ -24,6 +24,14 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
             ate_semicolon = false;
             node->type = Node_Types::FunctionDeclarationNode;
             node->function_node = std::move(fn);
+            break;
+        }
+        case Token_Types::tok_import:
+        {
+            auto import = parse_import();
+            ate_semicolon = true;
+            node->type = Node_Types::ImportNode;
+            node->expression_node = std::move(import);
             break;
         }
         case Token_Types::tok_i64:
@@ -518,6 +526,16 @@ std::unique_ptr<Expression_Node> parse_if()
     return if_node;
 }
 
+std::unique_ptr<Expression_Node> parse_import()
+{
+    get_next_token(); //? eat 'import'
+    std::string path_with_quotes = cur_tok->value;
+    std::string path = path_with_quotes.substr(1, path_with_quotes.size() - 2);
+    get_next_token(); //? eat string
+    get_next_token(); //? eat ';'
+    return std::make_unique<Import_Node>(path);
+}
+
 Variable_Types token_type_to_variable_type(Token_Types type)
 {
     switch (type)
@@ -605,3 +623,6 @@ std::string Prototype_Node::get_name() { return name; }
 std::unique_ptr<Expression_Node> Condition_Expression::get_lhs() { return std::move(lhs); };
 std::unique_ptr<Expression_Node> Condition_Expression::get_rhs() { return std::move(rhs); };
 Token_Types Condition_Expression::get_op() { return op; }
+Variable_Types Prototype_Node::get_return_type() { return return_type; };
+llvm::Value *Function_Node::get_return_value_ptr() { return return_value_ptr; };
+llvm::BasicBlock *Function_Node::get_end_bb() { return end_bb; };

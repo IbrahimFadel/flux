@@ -2,6 +2,7 @@
 #include <fstream>
 #include <istream>
 
+#include "common.h"
 #include "lexer.h"
 #include "parser.h"
 #include "code_generation.h"
@@ -33,7 +34,7 @@ int main(int argc, const char **argv)
   // print_tokens(tokens);
 
   auto nodes = parse_tokens(tokens);
-  code_gen(std::move(nodes));
+  auto module = code_gen_nodes(std::move(nodes));
 
   return 0;
 }

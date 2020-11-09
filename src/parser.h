@@ -37,7 +37,8 @@ enum Node_Types
     ReturnNode,
     TypeCastNode,
     AssignmentNode,
-    IfNode
+    IfNode,
+    ImportNode
 };
 
 enum Variable_Types
@@ -50,6 +51,7 @@ enum Variable_Types
     type_float,
     type_double,
     type_bool,
+    type_void
 };
 
 class Node
@@ -123,6 +125,7 @@ public:
     void create_argument_allocas(llvm::Function *f);
     std::vector<Variable_Types> get_arg_types();
     std::string get_name();
+    Variable_Types get_return_type();
 };
 
 class Function_Node
@@ -131,6 +134,8 @@ class Function_Node
     std::vector<std::unique_ptr<Node>> body;
     std::map<std::string, llvm::Value *> variables;
     std::vector<Variable_Types> arg_types;
+    llvm::Value *return_value_ptr;
+    llvm::BasicBlock *end_bb;
 
 public:
     Function_Node(std::unique_ptr<Prototype_Node> proto,
@@ -144,6 +149,8 @@ public:
     llvm::Value *get_variable(std::string name);
     std::unique_ptr<Prototype_Node> get_proto();
     std::vector<Variable_Types> get_arg_types();
+    llvm::Value *get_return_value_ptr();
+    llvm::BasicBlock *get_end_bb();
 };
 
 class Variable_Node
@@ -217,6 +224,16 @@ public:
     llvm::Value *code_gen();
 };
 
+class Import_Node : public Expression_Node
+{
+private:
+    std::string path;
+
+public:
+    Import_Node(std::string path) : path(path){};
+    llvm::Value *code_gen();
+};
+
 std::vector<std::unique_ptr<Node>>
 parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
@@ -252,5 +269,6 @@ static std::unique_ptr<Variable_Node> parse_variable_declaration();
 static std::unique_ptr<Return_Node> parse_return_statement();
 static std::unique_ptr<Expression_Node> parse_typecast_expression();
 static std::unique_ptr<Expression_Node> parse_if();
+static std::unique_ptr<Expression_Node> parse_import();
 
 #endif
