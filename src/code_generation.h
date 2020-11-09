@@ -33,7 +33,7 @@ static llvm::LLVMContext context;
 static std::unique_ptr<llvm::Module> module;
 static llvm::IRBuilder<> builder(context);
 static std::unique_ptr<llvm::legacy::FunctionPassManager> function_pass_manager;
-static std::vector<std::unique_ptr<llvm::Module>> modules;
+static std::vector<std::shared_ptr<llvm::Module>> modules;
 static std::vector<std::string> module_names;
 static int current_module = 0;
 static std::string build_dir = "ssbuild";
@@ -49,8 +49,8 @@ static std::map<std::string, std::unique_ptr<Expression_Node>> global_variables_
 static llvm::Value *construct_global_variable_assign_function();
 static std::string global_variable_assign_function_name = "__assign_global_variables";
 
-void module_to_obj(std::unique_ptr<llvm::Module> module, std::string path);
-std::unique_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> nodes);
+void module_to_obj(std::shared_ptr<llvm::Module> module, std::string path);
+std::shared_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> nodes);
 void code_gen_node(std::unique_ptr<Node> node);
 void initialize_fpm();
 static llvm::Type *ss_type_to_llvm_type(Variable_Types type);

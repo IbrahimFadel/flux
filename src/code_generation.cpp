@@ -2,7 +2,7 @@
 
 #include <lld/Common/Driver.h>
 
-void module_to_obj(std::unique_ptr<llvm::Module> module, std::string path)
+void module_to_obj(std::shared_ptr<llvm::Module> module, std::string path)
 {
     auto target_triple = llvm::sys::getDefaultTargetTriple();
 
@@ -63,11 +63,11 @@ void initialize_fpm()
     function_pass_manager->doInitialization();
 }
 
-std::unique_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> nodes)
+std::shared_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> nodes)
 {
     char module_name[20];
     sprintf(module_name, "Module%d", current_module);
-    auto module = std::make_unique<llvm::Module>(module_name, context);
+    auto module = std::make_shared<llvm::Module>(module_name, context);
     modules.push_back(std::move(module));
 
     initialize_fpm();
@@ -77,23 +77,20 @@ std::unique_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> 
         code_gen_node(std::move(node));
     }
 
-    cout << "after" << endl;
-
-    auto writer = new llvm::AssemblyAnnotationWriter();
-    modules[current_module]->print(llvm::outs(), writer);
+    // auto writer = new llvm::AssemblyAnnotationWriter();
+    // modules[current_module]->print(llvm::outs(), writer);
 
     if (current_module == 0)
     {
         char o_name[100];
         sprintf(o_name, "%s/obj%d.o", build_dir.c_str(), current_module);
-        cout << current_module << endl;
-        module_to_obj(std::move(modules[current_module]), o_name);
+        module_to_obj(modules[current_module], o_name);
     }
 
     // // module->print(*os, writer);
     // modules[current_module]->print(*out_stream, writer);
 
-    return std::move(modules[current_module]);
+    return modules[current_module];
 }
 
 void code_gen_node(std::unique_ptr<Node> node)
@@ -520,7 +517,6 @@ llvm::Value *construct_global_variable_assign_function()
     {
         f->eraseFromParent();
         f = modules[current_module]->getFunction(global_variable_assign_function_name);
-        cout << "reassigning" << endl;
 
         if (!f->empty())
         {
@@ -700,10 +696,8 @@ llvm::Value *If_Node::code_gen()
 
 llvm::Value *Import_Node::code_gen()
 {
-    cout << "importing: " << path << endl;
     auto file_content = get_file_content(path.c_str());
     auto tokens = get_tokens(file_content);
-    // print_tokens(tokens);
     auto nodes = parse_tokens(tokens);
 
     current_module++;
@@ -711,14 +705,20 @@ llvm::Value *Import_Node::code_gen()
     auto module = code_gen_nodes(std::move(nodes));
     char o_name[100];
     sprintf(o_name, "%s/obj%d.o", build_dir.c_str(), current_module);
-    module_to_obj(std::move(module), o_name);
+    module_to_obj(module, o_name);
 
-    cout << "imp1: " << current_module << endl;
     current_module -= 1;
-    cout << "imp2: " << current_module << endl;
 
-    auto f_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), false);
-    auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, "print", modules[current_module].get());
+    //? Iterate over the imported module's functions and make a forward definition in the main module
+    auto cur = module->getFunctionList().begin();
+    auto end = module->getFunctionList().end();
+    while (cur != end)
+    {
+        auto f_name = cur->getName().str();
+        auto f_type = cur->getFunctionType();
+        auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, f_name, modules[current_module].get());
+        cur++;
+    }
 
     return 0;
 }
