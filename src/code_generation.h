@@ -37,6 +37,7 @@ static std::vector<std::shared_ptr<llvm::Module>> modules;
 static std::vector<std::string> module_names;
 static int current_module = 0;
 static std::string build_dir = "ssbuild";
+static bool defined_putchar = false;
 
 static std::map<std::string, llvm::Value *> global_variables;
 static std::map<std::string, std::map<std::string, llvm::Value *>> function_variables;
@@ -60,6 +61,7 @@ static llvm::AllocaInst *create_entry_block_alloca(llvm::Function *TheFunction,
 static llvm::Type *bitwidth_to_llvm_type(unsigned int bitwidth);
 static llvm::Constant *get_zeroed_variable(llvm::Type *type);
 static llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type);
+static void define_putchar();
 
 static llvm::Value *error_v(const char *Str);
 static void print(llvm::Value *v);

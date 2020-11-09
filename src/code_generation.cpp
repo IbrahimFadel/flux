@@ -72,6 +72,8 @@ std::shared_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> 
 
     initialize_fpm();
 
+    define_putchar();
+
     for (auto &node : nodes)
     {
         code_gen_node(std::move(node));
@@ -264,7 +266,7 @@ llvm::Value *Call_Expression_Node::code_gen()
     if (callee_f == 0)
     {
         error_v("Unknown function referenced");
-        // exit(-1);
+        exit(-1);
     }
 
     if (callee_f->arg_size() != args.size())
@@ -723,6 +725,12 @@ llvm::Value *Import_Node::code_gen()
     return 0;
 }
 
+llvm::Value *String_Expression::code_gen()
+{
+    uint8_t v = (uint8_t)value[0];
+    return llvm::ConstantInt::get(llvm::IntegerType::getInt8Ty(context), v, false);
+}
+
 llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type)
 {
     //! all sandscript types are not pointers right now, so just load them
@@ -833,6 +841,14 @@ llvm::Constant *get_zeroed_variable(llvm::Type *type)
     {
         return llvm::ConstantInt::get(context, llvm::APInt(32, (int)0, true));
     }
+}
+
+void define_putchar()
+{
+    std::vector<llvm::Type *> param_types;
+    param_types.push_back(llvm::Type::getInt8Ty(context));
+    llvm::FunctionType *f_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, false);
+    auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, "putchar", modules[current_module].get());
 }
 
 llvm::Value *error_v(const char *str)

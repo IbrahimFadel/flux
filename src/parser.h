@@ -234,6 +234,16 @@ public:
     llvm::Value *code_gen();
 };
 
+class String_Expression : public Expression_Node
+{
+private:
+    std::string value;
+
+public:
+    String_Expression(std::string value) : value(value){};
+    llvm::Value *code_gen();
+};
+
 std::vector<std::unique_ptr<Node>>
 parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
@@ -270,5 +280,6 @@ static std::unique_ptr<Return_Node> parse_return_statement();
 static std::unique_ptr<Expression_Node> parse_typecast_expression();
 static std::unique_ptr<Expression_Node> parse_if();
 static std::unique_ptr<Expression_Node> parse_import();
+static std::unique_ptr<Expression_Node> parse_string_expression();
 
 #endif

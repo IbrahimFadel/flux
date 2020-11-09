@@ -350,6 +350,8 @@ std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
         return parse_identifier_expression();
     case Token_Types::tok_number:
         return parse_number_expression(type);
+    case Token_Types::tok_string:
+        return parse_string_expression();
     case Token_Types::tok_toi64:
         return parse_typecast_expression();
     case Token_Types::tok_toi32:
@@ -361,6 +363,14 @@ std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
     default:
         break;
     }
+}
+
+std::unique_ptr<Expression_Node> parse_string_expression()
+{
+    auto with_quotes = cur_tok->value;
+    auto value = with_quotes.substr(1, with_quotes.size() - 2);
+    get_next_token();
+    return std::make_unique<String_Expression>(value);
 }
 
 std::unique_ptr<Expression_Node> parse_identifier_expression()
