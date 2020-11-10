@@ -81,8 +81,6 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
 
 std::unique_ptr<Variable_Node> parse_variable_declaration()
 {
-    const char *type_string = cur_tok->value.c_str();
-
     Variable_Types type = token_type_to_variable_type(cur_tok->type);
 
     get_next_token();
@@ -100,7 +98,6 @@ std::unique_ptr<Variable_Node> parse_variable_declaration()
         return nullptr;
     }
 
-    // return std::make_unique<Variable_Node>(name, type, std::move(val));
     std::unique_ptr<Variable_Node> var_node = std::make_unique<Variable_Node>(name, type, std::move(val));
     return var_node;
 }
@@ -315,6 +312,14 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             node->expression_node = std::move(id);
             break;
         }
+        case Token_Types::tok_string:
+        {
+            auto var = parse_variable_declaration();
+            ate_semicolon = true;
+            node->type = Node_Types::VariableDeclarationNode;
+            node->variable_node = std::move(var);
+            break;
+        }
         default:
             break;
         }
@@ -350,7 +355,7 @@ std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
         return parse_identifier_expression();
     case Token_Types::tok_number:
         return parse_number_expression(type);
-    case Token_Types::tok_string:
+    case Token_Types::tok_string_lit:
         return parse_string_expression();
     case Token_Types::tok_toi64:
         return parse_typecast_expression();
@@ -542,6 +547,8 @@ std::unique_ptr<Expression_Node> parse_import()
     std::string path_with_quotes = cur_tok->value;
     std::string path = path_with_quotes.substr(1, path_with_quotes.size() - 2);
     get_next_token(); //? eat string
+    if (cur_tok->type != Token_Types::tok_semicolon)
+        return error("Expected semicolon");
     get_next_token(); //? eat ';'
     return std::make_unique<Import_Node>(path);
 }
@@ -562,6 +569,8 @@ Variable_Types token_type_to_variable_type(Token_Types type)
         return Variable_Types::type_float;
     case Token_Types::tok_double:
         return Variable_Types::type_double;
+    case Token_Types::tok_string:
+        return Variable_Types::type_string;
     case Token_Types::tok_bool:
         return Variable_Types::type_bool;
     case Token_Types::tok_toi64:

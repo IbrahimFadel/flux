@@ -461,6 +461,12 @@ llvm::Value *Variable_Node::code_gen()
     }
     else if (scope == Scopes::function)
     {
+        if (type == Variable_Types::type_string)
+        {
+            auto str = value->code_gen();
+            functions[current_function]->set_variables(name, str);
+            return str;
+        }
         llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
         auto v = value->code_gen();
         llvm::Value *loaded_v;
@@ -727,19 +733,11 @@ llvm::Value *Import_Node::code_gen()
 
 llvm::Value *String_Expression::code_gen()
 {
-    uint8_t v;
     if (value == "\\n")
-    {
-        v = 10;
-    }
-    else if (value == "\\t")
-    {
-        v = 9;
-    }
-    else
-        v = (uint8_t)value[0];
-
-    return llvm::ConstantInt::get(llvm::IntegerType::getInt8Ty(context), v, false);
+        return builder.CreateGlobalStringPtr("\n");
+    if (value == "\\t")
+        return builder.CreateGlobalStringPtr("\t");
+    return builder.CreateGlobalStringPtr(value);
 }
 
 llvm::Value *get_ptr_or_value_with_type(llvm::Value *val, Variable_Types type)
@@ -811,6 +809,8 @@ llvm::Type *ss_type_to_llvm_type(Variable_Types type)
         return llvm::Type::getDoubleTy(context);
     case Variable_Types::type_bool:
         return llvm::Type::getInt1Ty(context);
+    case Variable_Types::type_string:
+        return llvm::Type::getInt8Ty(context);
     default:
         break;
     }
@@ -860,6 +860,13 @@ void define_putchar()
     param_types.push_back(llvm::Type::getInt8Ty(context));
     llvm::FunctionType *f_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, false);
     auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, "putchar", modules[current_module].get());
+}
+
+llvm::StringRef Variable_Node::code_gen_str()
+{
+    // return builder.CreateGlobalString("hello", name);
+    // value->
+    return "hello";
 }
 
 llvm::Value *error_v(const char *str)

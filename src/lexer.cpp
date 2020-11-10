@@ -118,7 +118,7 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   }
   else if (token[0] == '"')
   {
-    tok->type = Token_Types::tok_string;
+    tok->type = Token_Types::tok_string_lit;
   }
   else if (token == "i64")
   {
@@ -163,6 +163,10 @@ void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned i
   else if (token == "bool")
   {
     tok->type = Token_Types::tok_bool;
+  }
+  else if (token == "string")
+  {
+    tok->type = Token_Types::tok_string;
   }
   else if (token == ":")
   {
@@ -274,7 +278,7 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
     case Token_Types::tok_import:
       cout << "import" << endl;
       break;
-    case Token_Types::tok_string:
+    case Token_Types::tok_string_lit:
       cout << token->value << endl;
       break;
     case Token_Types::tok_identifier:
@@ -318,6 +322,9 @@ void print_tokens(vector<shared_ptr<Token>> tokens)
       break;
     case Token_Types::tok_double:
       cout << "double" << endl;
+      break;
+    case Token_Types::tok_string:
+      cout << "string" << endl;
       break;
     case Token_Types::tok_bool:
       cout << "bool" << endl;

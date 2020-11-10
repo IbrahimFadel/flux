@@ -1,12 +1,11 @@
 import "std/io.ss";
 
-fn main() -> i32 {
-    print();
-    print();
-    print();
-    print();
-    print();
-    print();
-    print();
-    return 0;
+fn main() -> string {
+    string mystringvar = "peepee, poopoo";
+
+    if(6 == 6) {
+        print(mystringvar);
+    }
+
+    return mystringvar;
 }

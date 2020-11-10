@@ -51,7 +51,8 @@ enum Variable_Types
     type_float,
     type_double,
     type_bool,
-    type_void
+    type_void,
+    type_string
 };
 
 class Node
@@ -163,6 +164,7 @@ private:
 public:
     Variable_Node(std::string name, Variable_Types type, std::unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
     virtual llvm::Value *code_gen();
+    llvm::StringRef code_gen_str();
 };
 
 class Return_Node
