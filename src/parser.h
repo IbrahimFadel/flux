@@ -38,7 +38,8 @@ enum Node_Types
     TypeCastNode,
     AssignmentNode,
     IfNode,
-    ImportNode
+    ImportNode,
+    ForNode
 };
 
 enum Variable_Types
@@ -246,6 +247,19 @@ public:
     llvm::Value *code_gen();
 };
 
+class For_Node : public Expression_Node
+{
+private:
+    std::unique_ptr<Variable_Node> variable;
+    std::unique_ptr<Condition_Expression> condition;
+    std::unique_ptr<Expression_Node> action;
+    std::vector<std::unique_ptr<Node>> body;
+
+public:
+    For_Node(std::unique_ptr<Variable_Node> variable, std::unique_ptr<Condition_Expression> condition, std::unique_ptr<Expression_Node> action, std::vector<std::unique_ptr<Node>> body) : variable(std::move(variable)), condition(std::move(condition)), action(std::move(action)), body(std::move(body)){};
+    llvm::Value *code_gen();
+};
+
 std::vector<std::unique_ptr<Node>>
 parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
 unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
@@ -270,8 +284,8 @@ static Variable_Types token_type_to_variable_type(Token_Types type);
 
 static std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type);
 static std::unique_ptr<Expression_Node> parse_paren_expression();
-static std::unique_ptr<Expression_Node> parse_identifier_expression();
-static std::unique_ptr<Expression_Node> parse_primary(Variable_Types type = Variable_Types::type_null);
+static std::unique_ptr<Expression_Node> parse_identifier_expression(bool needs_semicolon = true);
+static std::unique_ptr<Expression_Node> parse_primary(Variable_Types type = Variable_Types::type_null, bool needs_semicolon = true);
 static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type = Variable_Types::type_null);
 static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true, Variable_Types = Variable_Types::type_i32);
 static std::vector<std::unique_ptr<Node>> parse_fn_body();
@@ -283,5 +297,6 @@ static std::unique_ptr<Expression_Node> parse_typecast_expression();
 static std::unique_ptr<Expression_Node> parse_if();
 static std::unique_ptr<Expression_Node> parse_import();
 static std::unique_ptr<Expression_Node> parse_string_expression();
+static std::unique_ptr<Expression_Node> parse_for();
 
 #endif

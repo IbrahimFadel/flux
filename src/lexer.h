@@ -16,6 +16,7 @@ enum Token_Types
   tok_let,
   tok_fn,
   tok_if,
+  tok_for,
   tok_return,
   tok_import,
   tok_toi64,
@@ -31,6 +32,7 @@ enum Token_Types
   tok_double,
   tok_string,
   tok_compare_eq,
+  tok_compare_lt,
   tok_and,
   tok_or,
 

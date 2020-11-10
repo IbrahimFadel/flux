@@ -1,11 +1,7 @@
-import "std/io.ss";
-
-fn main() -> string {
-    string mystringvar = "peepee, poopoo";
-
-    if(6 == 6) {
-        print(mystringvar);
+fn main() -> i32 {
+    for(i32 i = 0; i < 100; i = i + 1) {
+        putchar("c");
     }
 
-    return mystringvar;
+    return 0;
 }

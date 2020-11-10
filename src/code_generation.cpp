@@ -146,6 +146,11 @@ void code_gen_node(std::unique_ptr<Node> node)
         auto if_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
         if_node->code_gen();
     }
+    case Node_Types::ForNode:
+    {
+        auto for_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        for_node->code_gen();
+    }
     default:
         break;
     }
@@ -217,6 +222,8 @@ llvm::Value *Binary_Expression_Node::code_gen()
             return builder.CreateFSub(loaded_l, loaded_r, "subtmp");
         if (op == "*")
             return builder.CreateFMul(loaded_l, loaded_r, "multmp");
+        if (op == "<")
+            return builder.CreateFCmpOLT(loaded_l, loaded_r, "lttmp");
     }
     else
     {
@@ -256,6 +263,8 @@ llvm::Value *Binary_Expression_Node::code_gen()
             return builder.CreateSub(loaded_l, loaded_r, "subtmp");
         if (op == "*")
             return builder.CreateMul(loaded_l, loaded_r, "multmp");
+        if (op == "<")
+            return builder.CreateICmpSLT(loaded_l, loaded_r, "lttmp");
         // }
     }
 }
@@ -376,8 +385,6 @@ llvm::Function *Function_Node::code_gen()
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(context, "entry", the_function);
     builder.SetInsertPoint(bb);
 
-    // return_value_ptr = builder.CreateAlloca(ss_type_to_llvm_type(proto->get_return_type()), NULL, "retval");
-
     functions[current_function] = this;
 
     scope = Scopes::function;
@@ -391,39 +398,22 @@ llvm::Function *Function_Node::code_gen()
         builder.CreateCall(callee_f, call_args);
     }
 
-    // llvm::BasicBlock *end = llvm::BasicBlock::Create(context, "end", the_function);
-    // end_bb = end;
-
     for (auto &node : body)
     {
         code_gen_node(std::move(node));
     }
-
-    // builder.SetInsertPoint(end);
-
-    // auto ret_val = builder.CreateLoad(return_value_ptr, "retval_loaded");
-    // builder.CreateRet(ret_val);
-
-    // builder.SetInsertPoint(&the_function->getBasicBlockList().back());
-    // unsigned long last_index = the_function->getBasicBlockList().size() - 1;
-    // builder.SetInsertPoint(the_function->getBasicBlockList().);
-    // builder.SetInsertPoint(the_function->getBasicBlockList()[(unsigned long)the_function->getBasicBlockList().size() - 1]);
 
     if (llvm::verifyFunction(*the_function, &llvm::outs()))
     {
         llvm::raw_ostream &os = llvm::outs();
         os << '\n'
            << '\n';
-        llvm::StringRef o_name = "out.ll";
-        std::error_code ec;
-        llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
         auto writer = new llvm::AssemblyAnnotationWriter();
         modules[current_module]->print(os, writer);
-        modules[current_module]->print(*out_stream, writer);
         exit(-1);
     }
 
-    // function_pass_manager->run(*the_function);
+    function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -563,12 +553,8 @@ llvm::Value *construct_global_variable_assign_function()
         llvm::raw_ostream &os = llvm::outs();
         os << '\n'
            << '\n';
-        llvm::StringRef o_name = "out.ll";
-        std::error_code ec;
-        llvm::raw_fd_ostream *out_stream = new llvm::raw_fd_ostream(o_name, ec);
         auto writer = new llvm::AssemblyAnnotationWriter();
         modules[current_module]->print(os, writer);
-        modules[current_module]->print(*out_stream, writer);
         exit(-1);
     }
 
@@ -867,6 +853,29 @@ llvm::StringRef Variable_Node::code_gen_str()
     // return builder.CreateGlobalString("hello", name);
     // value->
     return "hello";
+}
+
+llvm::Value *For_Node::code_gen()
+{
+    auto the_function = builder.GetInsertBlock()->getParent();
+    auto var = variable->code_gen();
+    auto cond = condition->code_gen();
+    auto loop_bb = llvm::BasicBlock::Create(context, "loop", the_function);
+    auto continue_bb = llvm::BasicBlock::Create(context, "continue", the_function);
+    auto br = builder.CreateCondBr(cond, loop_bb, continue_bb);
+    builder.SetInsertPoint(loop_bb);
+    action->code_gen();
+    for (auto &expr : body)
+    {
+        code_gen_node(std::move(expr));
+    }
+
+    auto new_cond = condition->code_gen();
+    auto repeat = builder.CreateCondBr(new_cond, loop_bb, continue_bb);
+
+    builder.SetInsertPoint(continue_bb);
+
+    return 0;
 }
 
 llvm::Value *error_v(const char *str)

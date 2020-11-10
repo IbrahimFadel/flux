@@ -196,6 +196,14 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
             node->expression_node = std::move(if_node);
             break;
         }
+        case Token_Types::tok_for:
+        {
+            auto for_node = parse_for();
+            ate_semicolon = true;
+            node->type = Node_Types::ForNode;
+            node->expression_node = std::move(for_node);
+            break;
+        }
         case Token_Types::tok_i64:
         {
             auto var = parse_variable_declaration();
@@ -335,7 +343,7 @@ std::vector<std::unique_ptr<Node>> parse_fn_body()
 
 std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon, Variable_Types type)
 {
-    auto lhs = parse_primary(type);
+    auto lhs = parse_primary(type, needs_semicolon);
     if (!lhs)
     {
         error("Error parsing primary");
@@ -347,12 +355,12 @@ std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon, Variable
     return bin_op_rhs;
 }
 
-std::unique_ptr<Expression_Node> parse_primary(Variable_Types type)
+std::unique_ptr<Expression_Node> parse_primary(Variable_Types type, bool needs_semicolon)
 {
     switch (cur_tok->type)
     {
     case Token_Types::tok_identifier:
-        return parse_identifier_expression();
+        return parse_identifier_expression(needs_semicolon);
     case Token_Types::tok_number:
         return parse_number_expression(type);
     case Token_Types::tok_string_lit:
@@ -378,7 +386,7 @@ std::unique_ptr<Expression_Node> parse_string_expression()
     return std::make_unique<String_Expression>(value);
 }
 
-std::unique_ptr<Expression_Node> parse_identifier_expression()
+std::unique_ptr<Expression_Node> parse_identifier_expression(bool needs_semicolon)
 {
     std::string id_name = cur_tok->value;
 
@@ -388,10 +396,10 @@ std::unique_ptr<Expression_Node> parse_identifier_expression()
     {
         auto prev = toks[tok_pointer - 2]->type;
 
-        if (prev != Token_Types::tok_i64 || prev != Token_Types::tok_i32 || prev != Token_Types::tok_i16 || prev != Token_Types::tok_i8 || prev != Token_Types::tok_float || prev != Token_Types::tok_double)
+        if (prev != Token_Types::tok_i64 || prev != Token_Types::tok_i32 || prev != Token_Types::tok_i16 || prev != Token_Types::tok_i8 || prev != Token_Types::tok_float || prev != Token_Types::tok_double || prev != Token_Types::tok_string)
         {
             get_next_token();
-            auto expr = parse_expression(true);
+            auto expr = parse_expression(needs_semicolon);
             auto assignment_node = std::make_unique<Assignment_Node>(id_name, std::move(expr));
             assignment_node->type = Node_Types::AssignmentNode;
             return assignment_node;
@@ -551,6 +559,33 @@ std::unique_ptr<Expression_Node> parse_import()
         return error("Expected semicolon");
     get_next_token(); //? eat ';'
     return std::make_unique<Import_Node>(path);
+}
+
+std::unique_ptr<Expression_Node> parse_for()
+{
+    get_next_token(); //? eat 'for'
+    if (cur_tok->type != Token_Types::tok_open_paren)
+        return error("Expected open parentheses");
+    get_next_token(); //? eat '('
+
+    auto var = parse_variable_declaration();
+    auto lhs = parse_expression();
+    auto op = Token_Types::tok_compare_eq;
+    auto rhs = std::make_unique<Number_Expression_Node>(1, Variable_Types::type_bool);
+    auto condition = std::make_unique<Condition_Expression>(std::move(lhs), op, std::move(rhs));
+    auto action = parse_expression(false);
+
+    if (cur_tok->type != Token_Types::tok_close_paren)
+        return error("Expected closing parentheses");
+
+    get_next_token(); //? eat ')'
+    get_next_token(); //? eat '{'
+
+    auto body = parse_fn_body();
+
+    get_next_token(); //? eat '}'
+
+    return std::make_unique<For_Node>(std::move(var), std::move(condition), std::move(action), std::move(body));
 }
 
 Variable_Types token_type_to_variable_type(Token_Types type)
