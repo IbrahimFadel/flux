@@ -12,11 +12,11 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
   unsigned int row = 1;
   unsigned int col = 1;
 
-  bool is_string = false;
-
   for (auto &c : content)
   {
-    if (c != ' ')
+    if (is_string)
+      token += c;
+    else if (c != ' ')
       token += c;
     switch (c)
     {
@@ -80,6 +80,8 @@ vector<shared_ptr<Token>> get_tokens(const std::string content)
 
 void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok)
 {
+  if (is_string)
+    return;
   trim(token);
 
   if (token.size() == 0)

@@ -727,7 +727,18 @@ llvm::Value *Import_Node::code_gen()
 
 llvm::Value *String_Expression::code_gen()
 {
-    uint8_t v = (uint8_t)value[0];
+    uint8_t v;
+    if (value == "\\n")
+    {
+        v = 10;
+    }
+    else if (value == "\\t")
+    {
+        v = 9;
+    }
+    else
+        v = (uint8_t)value[0];
+
     return llvm::ConstantInt::get(llvm::IntegerType::getInt8Ty(context), v, false);
 }
 

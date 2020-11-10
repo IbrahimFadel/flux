@@ -70,6 +70,7 @@ static vector<std::string> keywords = {
 
 static std::string file_content;
 static unsigned int file_content_pos;
+static  bool is_string = false;
 
 vector<shared_ptr<Token>> get_tokens(const std::string content);
 void print_tokens(vector<shared_ptr<Token>> tokens);
