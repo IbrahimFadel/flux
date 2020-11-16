@@ -1,48 +1,37 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "lexer.h"
-
 #include <string.h>
 #include <memory>
 #include <vector>
 #include <variant>
 #include <map>
 
-#include <llvm/IR/Value.h>
-#include <llvm/Support/raw_ostream.h>
-
-class Node;
-class Expression_Node;
-class Number_Expression_Node;
-class Variable_Expression_Node;
-class Binary_Expression_Node;
-class Call_Expression_Node;
-class Prototype_Node;
-class Function_Node;
-class Variable_Node;
-class Return_Node;
+#include "common.h"
+#include "lexer.h"
 
 using std::unique_ptr;
 
-enum Node_Types
+class Node;
+class Expression_Node;
+class Binary_Operation_Expression_Node;
+class Number_Expression_Node;
+class Function_Node;
+class Prototype_Node;
+class Then_Node;
+class Variable_Declaration_Node;
+class If_Node;
+class Condition_Node;
+class Function_Call_Node;
+class Variable_Reference_Node;
+
+enum Node_Type
 {
-    UnknownNode,
-    NumberExpressionNode,
-    VariableExpressionNode,
-    BinaryExpressionNode,
-    CallExpressionNode,
-    FunctionDeclarationNode,
-    VariableDeclarationNode,
-    ReturnNode,
-    TypeCastNode,
-    AssignmentNode,
-    IfNode,
-    ImportNode,
-    ForNode
+    ExpressionNode,
+    FunctionNode
 };
 
-enum Variable_Types
+enum Variable_Type
 {
     type_null = -1,
     type_i64,
@@ -53,250 +42,169 @@ enum Variable_Types
     type_double,
     type_bool,
     type_void,
-    type_string
+    type_string,
+    type_object
 };
 
 class Node
 {
+private:
+    Node_Type node_type;
+    unique_ptr<Node> node_value;
+
 public:
-    Node_Types type;
-    std::variant<std::unique_ptr<Expression_Node>, std::unique_ptr<Variable_Node>, std::unique_ptr<Function_Node>, std::unique_ptr<Prototype_Node>, std::unique_ptr<Return_Node>, std::unique_ptr<Call_Expression_Node>> expression_node, variable_node, function_node, prototype_node, return_node, call_node;
+    void set_node_type(Node_Type node_type);
+    virtual void print() = 0;
 };
 
-class Expression_Node
-{
-public:
-    Node_Types type;
-    virtual llvm::Value *code_gen() = 0;
-};
-
-class Number_Expression_Node : public Expression_Node
+class Expression_Node : public Node
 {
 private:
-    Variable_Types variable_type;
-    double value;
-
-public:
-    Number_Expression_Node(double value, Variable_Types type) : value(value), variable_type(type){};
-    virtual llvm::Value *code_gen();
+    Node_Type node_type;
 };
 
-class Variable_Expression_Node : public Expression_Node
-{
-private:
-    std::string name;
-
-public:
-    Variable_Expression_Node(std::string name) : name(name) {}
-    virtual llvm::Value *code_gen();
-};
-
-class Binary_Expression_Node : public Expression_Node
+class Binary_Operation_Expression_Node : public Expression_Node
 {
 private:
     std::string op;
     unique_ptr<Expression_Node> lhs, rhs;
 
 public:
-    Binary_Expression_Node(std::string op, unique_ptr<Expression_Node> lhs, unique_ptr<Expression_Node> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
-    virtual llvm::Value *code_gen();
+    Binary_Operation_Expression_Node(std::string op, unique_ptr<Expression_Node> lhs, unique_ptr<Expression_Node> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
+    void print();
 };
 
-class Call_Expression_Node : public Expression_Node
+class Number_Expression_Node : public Expression_Node
 {
 private:
-    std::string callee;
-    std::vector<unique_ptr<Expression_Node>> args;
+    double value;
+    Variable_Type variable_type;
 
 public:
-    Call_Expression_Node(const std::string &callee, std::vector<unique_ptr<Expression_Node>> args) : callee(callee), args(std::move(args)){};
-    virtual llvm::Value *code_gen();
+    Number_Expression_Node(double value) : value(value){};
+    void print();
 };
 
-class Prototype_Node
+class Function_Node : public Node
 {
 private:
-    std::string name;
-    std::vector<Variable_Types> arg_types;
-    std::vector<std::string> arg_names;
-    Variable_Types return_type;
+    unique_ptr<Prototype_Node> prototype;
+    unique_ptr<Then_Node> then;
 
 public:
-    Prototype_Node(std::string name, std::vector<Variable_Types> arg_types, std::vector<std::string> arg_names, Variable_Types return_type) : name(name), arg_types(arg_types), arg_names(arg_names), return_type(return_type) {}
-    llvm::Function *code_gen();
-    void create_argument_allocas(llvm::Function *f);
-    std::vector<Variable_Types> get_arg_types();
-    std::string get_name();
-    Variable_Types get_return_type();
+    Function_Node(unique_ptr<Prototype_Node> prototype, unique_ptr<Then_Node> then) : prototype(std::move(prototype)), then(std::move(then)){};
+    void print();
 };
 
-class Function_Node
-{
-    std::unique_ptr<Prototype_Node> proto;
-    std::vector<std::unique_ptr<Node>> body;
-    std::map<std::string, llvm::Value *> variables;
-    std::vector<Variable_Types> arg_types;
-    llvm::Value *return_value_ptr;
-    llvm::BasicBlock *end_bb;
-
-public:
-    Function_Node(std::unique_ptr<Prototype_Node> proto,
-                  std::vector<std::unique_ptr<Node>> body, std::vector<Variable_Types> types)
-        : proto(std::move(proto)), body(std::move(body)), arg_types(types)
-    {
-    }
-    llvm::Function *code_gen();
-
-    void set_variables(std::string name, llvm::Value *var);
-    llvm::Value *get_variable(std::string name);
-    std::unique_ptr<Prototype_Node> get_proto();
-    std::vector<Variable_Types> get_arg_types();
-    llvm::Value *get_return_value_ptr();
-    llvm::BasicBlock *get_end_bb();
-};
-
-class Variable_Node
+class Prototype_Node : public Node
 {
 private:
     std::string name;
-    Variable_Types type;
-    std::unique_ptr<Expression_Node> value;
+    std::vector<Variable_Type> param_types;
+    std::vector<std::string> param_names;
+    Variable_Type return_type;
 
 public:
-    Variable_Node(std::string name, Variable_Types type, std::unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
-    virtual llvm::Value *code_gen();
-    llvm::StringRef code_gen_str();
+    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type) : name(name), param_types(param_types), param_names(param_names), return_type(return_type){};
+    void print();
 };
 
-class Return_Node
+class Then_Node : public Node
 {
 private:
-    std::unique_ptr<Expression_Node> value;
+    std::vector<std::unique_ptr<Node>> nodes;
 
 public:
-    Return_Node(std::unique_ptr<Expression_Node> value) : value(std::move(value)) {}
-    llvm::Value *code_gen();
+    Then_Node(std::vector<std::unique_ptr<Node>> nodes) : nodes(std::move(nodes)){};
+    void print();
 };
 
-class Type_Cast_Node : public Expression_Node
-{
-private:
-    std::unique_ptr<Expression_Node> value;
-    Variable_Types new_type;
-
-public:
-    Type_Cast_Node(std::unique_ptr<Expression_Node> value, Variable_Types new_type) : value(std::move(value)), new_type(new_type) {}
-    virtual llvm::Value *code_gen();
-};
-
-class Assignment_Node : public Expression_Node
+class Variable_Declaration_Node : public Node
 {
 private:
     std::string name;
-    std::unique_ptr<Expression_Node> value;
+    Variable_Type type;
+    unique_ptr<Expression_Node> value;
 
 public:
-    Assignment_Node(std::string name, std::unique_ptr<Expression_Node> value) : name(name), value(std::move(value)){};
-    llvm::Value *code_gen();
+    Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
+    void print();
 };
 
-class Condition_Expression
+class If_Node : public Node
 {
 private:
-    std::unique_ptr<Expression_Node> lhs;
-    Token_Types op;
-    std::unique_ptr<Expression_Node> rhs;
+    std::vector<unique_ptr<Condition_Node>> conditions;
+    std::vector<Token_Type> condition_separators;
+    unique_ptr<Then_Node> then;
 
 public:
-    Condition_Expression(std::unique_ptr<Expression_Node> lhs, Token_Types op, std::unique_ptr<Expression_Node> rhs) : lhs(std::move(lhs)), op(op), rhs(std::move(rhs)){};
-    std::unique_ptr<Expression_Node> get_lhs();
-    std::unique_ptr<Expression_Node> get_rhs();
-    Token_Types get_op();
-    llvm::Value *code_gen();
+    If_Node(std::vector<unique_ptr<Condition_Node>> conditions, std::vector<Token_Type> condition_separators, unique_ptr<Then_Node> then) : conditions(std::move(conditions)), condition_separators(condition_separators), then(std::move(then)){};
+    void print();
 };
 
-class If_Node : public Expression_Node
+class Condition_Node : public Node
 {
 private:
-    std::vector<std::unique_ptr<Condition_Expression>> conditions;
-    std::vector<Token_Types> condition_seperators;
-    std::vector<std::unique_ptr<Node>> then;
+    unique_ptr<Expression_Node> lhs;
+    Token_Type op;
+    unique_ptr<Expression_Node> rhs;
 
 public:
-    If_Node(std::vector<std::unique_ptr<Condition_Expression>> conditions, std::vector<Token_Types> condition_seperators, std::vector<std::unique_ptr<Node>> then) : conditions(std::move(conditions)), condition_seperators(condition_seperators), then(std::move(then)){};
-    llvm::Value *code_gen();
+    Condition_Node(unique_ptr<Expression_Node> lhs, Token_Type op, unique_ptr<Expression_Node> rhs) : lhs(std::move(lhs)), op(op), rhs(std::move(rhs)){};
+    void print();
 };
 
-class Import_Node : public Expression_Node
+class Function_Call_Node : public Expression_Node
 {
 private:
-    std::string path;
+    std::string name;
+    std::vector<std::unique_ptr<Expression_Node>> parameters;
 
 public:
-    Import_Node(std::string path) : path(path){};
-    llvm::Value *code_gen();
+    Function_Call_Node(std::string name, std::vector<std::unique_ptr<Expression_Node>> parameters) : name(name), parameters(std::move(parameters)){};
+    void print();
 };
 
-class String_Expression : public Expression_Node
+class Variable_Reference_Node : public Expression_Node
 {
 private:
-    std::string value;
+    std::string name;
 
 public:
-    String_Expression(std::string value) : value(value){};
-    llvm::Value *code_gen();
+    Variable_Reference_Node(std::string name) : name(name){};
+    void print();
 };
 
-class For_Node : public Expression_Node
-{
-private:
-    std::unique_ptr<Variable_Node> variable;
-    std::unique_ptr<Condition_Expression> condition;
-    std::unique_ptr<Expression_Node> action;
-    std::vector<std::unique_ptr<Node>> body;
-
-public:
-    For_Node(std::unique_ptr<Variable_Node> variable, std::unique_ptr<Condition_Expression> condition, std::unique_ptr<Expression_Node> action, std::vector<std::unique_ptr<Node>> body) : variable(std::move(variable)), condition(std::move(condition)), action(std::move(action)), body(std::move(body)){};
-    llvm::Value *code_gen();
-};
-
-std::vector<std::unique_ptr<Node>>
-parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
-unique_ptr<Node> parse_token(std::shared_ptr<Token> tokens);
+typedef std::vector<unique_ptr<Node>> Nodes;
 
 static std::vector<std::shared_ptr<Token>> toks;
 static std::shared_ptr<Token> cur_tok;
+static std::shared_ptr<Token> last_tok;
 static int tok_pointer = 0;
-static std::map<std::string, int> bin_op_precedence;
+static std::map<std::string, int> binop_precedence;
 
-// static std::string identifier_string;
-// static double num_val;
-// static int cur_tok;
-static int get_tok_precedence();
+void print_nodes(const Nodes &nodes);
+Nodes parse_tokens(std::vector<std::shared_ptr<Token>> tokens);
+static unique_ptr<Node> parse_token(std::shared_ptr<Token> token);
+
+static unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true);
+static unique_ptr<Expression_Node> parse_primary();
+static unique_ptr<Expression_Node> parse_binop_rhs(int expression_precedence, unique_ptr<Expression_Node> lhs);
+static unique_ptr<Expression_Node> parse_number_expression();
+static unique_ptr<Expression_Node> parse_identifier_expression();
+static unique_ptr<Function_Node> parse_fn_declaration();
+static unique_ptr<Prototype_Node> parse_fn_prototype();
+static unique_ptr<Then_Node> parse_then();
+static unique_ptr<Variable_Declaration_Node> parse_variable_declaration();
+static unique_ptr<If_Node> parse_if();
+static std::tuple<std::vector<std::unique_ptr<Condition_Node>>, std::vector<Token_Type>> parse_if_condition();
+static unique_ptr<Function_Call_Node> parse_function_call_node(std::string name);
+
+static void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line, int position);
+static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);
+static Variable_Type token_type_to_variable_type(Token_Type type);
 static void get_next_token();
-// static int get_tok();
-static std::unique_ptr<Expression_Node> error(const char *str);
-static std::unique_ptr<Prototype_Node> error_p(const char *str);
-static Variable_Types type_string_to_variable_type(const char *str);
-static Variable_Types token_type_to_variable_type(Token_Types type);
-// static std::map<char, int> bin_op_precedence;
-// static int get_tok_precedence();
-
-static std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type);
-static std::unique_ptr<Expression_Node> parse_paren_expression();
-static std::unique_ptr<Expression_Node> parse_identifier_expression(bool needs_semicolon = true);
-static std::unique_ptr<Expression_Node> parse_primary(Variable_Types type = Variable_Types::type_null, bool needs_semicolon = true);
-static std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type = Variable_Types::type_null);
-static std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true, Variable_Types = Variable_Types::type_i32);
-static std::vector<std::unique_ptr<Node>> parse_fn_body();
-static std::unique_ptr<Prototype_Node> parse_prototype();
-static std::unique_ptr<Function_Node> parse_fn_declaration();
-static std::unique_ptr<Variable_Node> parse_variable_declaration();
-static std::unique_ptr<Return_Node> parse_return_statement();
-static std::unique_ptr<Expression_Node> parse_typecast_expression();
-static std::unique_ptr<Expression_Node> parse_if();
-static std::unique_ptr<Expression_Node> parse_import();
-static std::unique_ptr<Expression_Node> parse_string_expression();
-static std::unique_ptr<Expression_Node> parse_for();
+static int get_token_precedence();
 
 #endif

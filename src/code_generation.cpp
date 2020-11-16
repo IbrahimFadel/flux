@@ -36,7 +36,7 @@ void module_to_obj(std::shared_ptr<llvm::Module> module, std::string path)
 
     if (ec)
     {
-        llvm::errs() << "Could not open file: " << ec.message();
+        llvm::errs() << "Could not open file: " << ec.message() << '\n';
         return;
     }
 
@@ -79,14 +79,14 @@ std::shared_ptr<llvm::Module> code_gen_nodes(std::vector<std::unique_ptr<Node>> 
         code_gen_node(std::move(node));
     }
 
-    // auto writer = new llvm::AssemblyAnnotationWriter();
-    // modules[current_module]->print(llvm::outs(), writer);
-
     if (current_module == 0)
     {
         char o_name[100];
         sprintf(o_name, "%s/obj%d.o", build_dir.c_str(), current_module);
         module_to_obj(modules[current_module], o_name);
+
+        auto writer = new llvm::AssemblyAnnotationWriter();
+        modules[current_module]->print(llvm::outs(), writer);
     }
 
     // // module->print(*os, writer);
@@ -113,7 +113,7 @@ void code_gen_node(std::unique_ptr<Node> node)
     }
     case Node_Types::VariableDeclarationNode:
     {
-        auto expr = std::get<std::unique_ptr<Variable_Node>>(std::move(node->variable_node));
+        auto expr = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
         auto v = expr->code_gen();
         break;
     }
@@ -145,11 +145,19 @@ void code_gen_node(std::unique_ptr<Node> node)
     {
         auto if_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
         if_node->code_gen();
+        break;
     }
     case Node_Types::ForNode:
     {
         auto for_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
         for_node->code_gen();
+        break;
+    }
+    case Node_Types::ObjectNode:
+    {
+        auto object_node = std::get<std::unique_ptr<Expression_Node>>(std::move(node->expression_node));
+        object_node->code_gen();
+        break;
     }
     default:
         break;
@@ -267,6 +275,7 @@ llvm::Value *Binary_Expression_Node::code_gen()
             return builder.CreateICmpSLT(loaded_l, loaded_r, "lttmp");
         // }
     }
+    return 0;
 }
 
 llvm::Value *Call_Expression_Node::code_gen()
@@ -413,7 +422,7 @@ llvm::Function *Function_Node::code_gen()
         exit(-1);
     }
 
-    function_pass_manager->run(*the_function);
+    // function_pass_manager->run(*the_function);
 
     return the_function;
 }
@@ -457,7 +466,23 @@ llvm::Value *Variable_Node::code_gen()
             functions[current_function]->set_variables(name, str);
             return str;
         }
-        llvm::Value *alloc = new llvm::AllocaInst(ss_type_to_llvm_type(type), NULL, name, builder.GetInsertBlock());
+        llvm::Type *ty;
+        if (type == Variable_Types::type_object)
+        {
+            ty = get_object_type(object_type);
+        }
+        else
+        {
+            ty = ss_type_to_llvm_type(type);
+        }
+
+        llvm::Value *alloc = new llvm::AllocaInst(ty, 0, name, builder.GetInsertBlock());
+        if (type == Variable_Types::type_object)
+        {
+            define_object_properties(alloc, std::move(value));
+            return alloc;
+        }
+
         auto v = value->code_gen();
         llvm::Value *loaded_v;
         if (v->getType()->isPointerTy())
@@ -473,6 +498,8 @@ llvm::Value *Variable_Node::code_gen()
         functions[current_function]->set_variables(name, alloc);
         return alloc;
     }
+
+    return 0;
 }
 
 llvm::Value *Variable_Expression_Node::code_gen()
@@ -690,7 +717,10 @@ llvm::Value *If_Node::code_gen()
 
 llvm::Value *Import_Node::code_gen()
 {
-    auto file_content = get_file_content(path.c_str());
+    char file_path[500];
+    sprintf(file_path, "%s/%s", project_root.c_str(), path.c_str());
+    // auto file_content = get_file_content(file_path);
+    auto file_content = get_file_content(file_path);
     auto tokens = get_tokens(file_content);
     auto nodes = parse_tokens(tokens);
 
@@ -753,6 +783,8 @@ llvm::Type *variable_type_to_llvm_ptr_type(Variable_Types type)
     case Variable_Types::type_i8:
         return llvm::Type::getInt8PtrTy(context);
     default:
+        error_v("Could not convert variable type to llvm ptr type");
+        exit(1);
         break;
     }
 }
@@ -797,7 +829,12 @@ llvm::Type *ss_type_to_llvm_type(Variable_Types type)
         return llvm::Type::getInt1Ty(context);
     case Variable_Types::type_string:
         return llvm::Type::getInt8Ty(context);
+    case Variable_Types::type_object:
+        // return objects[typ]
+        return llvm::Type::getInt64Ty(context);
     default:
+        error_v("Could not convert variable type to llvm type");
+        exit(1);
         break;
     }
 }
@@ -878,6 +915,67 @@ llvm::Value *For_Node::code_gen()
     return 0;
 }
 
+llvm::Value *Object_Node::code_gen()
+{
+    auto it = properties.begin();
+
+    std::vector<llvm::Type *> members;
+    while (it != properties.end())
+    {
+        members.push_back(ss_type_to_llvm_type(it->second));
+        it++;
+    }
+
+    llvm::ArrayRef<llvm::Type *> struct_properties(members);
+    auto struct_type = llvm::StructType::create(context, struct_properties, name, false);
+
+    objects[name] = struct_type;
+
+    return 0;
+}
+
+llvm::Value *Object_Expression_Node::code_gen()
+{
+    // builder.CreateGEP()
+    // auto it = properties.begin();
+    // cout << "obj expr" << endl;
+    // cout << type << endl;
+
+    return 0;
+}
+
+void define_object_properties(llvm::Value *ptr, std::unique_ptr<Expression_Node> expr)
+{
+    cout << "Store values in object" << endl;
+
+    auto properties = expr->get_properties();
+    auto it = properties.begin();
+    while (it != properties.end())
+    {
+        cout << it->first << endl;
+        it++;
+    }
+
+    std::vector<llvm::Value *> values;
+    llvm::APInt zero(32, 0);
+    llvm::APInt one(32, 1);
+    // This is the array offset into RaviGCObject*
+    values.push_back(
+        llvm::Constant::getIntegerValue(llvm::Type::getInt32Ty(context), zero));
+    // This is the field offset
+    values.push_back(
+        llvm::Constant::getIntegerValue(llvm::Type::getInt32Ty(context), zero));
+
+    auto prop = builder.CreateGEP(ptr, values, "ptr_to_val");
+
+    builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), llvm::APInt(16, 10)), prop);
+}
+
+llvm::Type *get_object_type(std::string object_type_name)
+{
+    return objects[object_type_name];
+}
+
 llvm::Value *error_v(const char *str)
 {
     cout << "LogError: " << str << endl;
@@ -887,5 +985,11 @@ llvm::Value *error_v(const char *str)
 void print(llvm::Value *v)
 {
     v->print(llvm::outs());
+    llvm::outs() << '\n';
+}
+
+void print_ty(llvm::Type *ty)
+{
+    ty->print(llvm::outs());
     llvm::outs() << '\n';
 }

@@ -1,7 +1,5 @@
 fn main() -> i32 {
-    for(i32 i = 0; i < 100; i = i + 1) {
-        putchar("c");
+    if(x == 5 && 2 == 10) {
+        i32 var = 5;
     }
-
-    return 0;
 }

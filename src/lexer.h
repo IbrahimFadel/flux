@@ -11,7 +11,7 @@ using std::endl;
 using std::shared_ptr;
 using std::vector;
 
-enum Token_Types
+enum Token_Type
 {
   tok_let,
   tok_fn,
@@ -28,19 +28,22 @@ enum Token_Types
   tok_i32,
   tok_i16,
   tok_i8,
+  tok_bool,
   tok_float,
   tok_double,
   tok_string,
+  tok_object,
+
   tok_compare_eq,
   tok_compare_lt,
+  tok_compare_gt,
   tok_and,
   tok_or,
-
-  tok_bool,
 
   tok_colon,
   tok_semicolon,
   tok_comma,
+  tok_period,
   tok_open_paren,
   tok_close_paren,
   tok_open_curly_bracket,
@@ -62,23 +65,20 @@ enum Token_Types
 
 struct Token
 {
-  Token_Types type;
+  Token_Type type;
   std::string value;
   unsigned int row;
   unsigned int col;
 };
 
-static vector<std::string> keywords = {
-    "let"};
-
-static std::string file_content;
-static unsigned int file_content_pos;
-static bool is_string = false;
-
-vector<shared_ptr<Token>> get_tokens(const std::string content);
 void print_tokens(vector<shared_ptr<Token>> tokens);
+vector<shared_ptr<Token>> get_tokens(vector<std::string> content);
+static void handle_token(std::string &token, vector<shared_ptr<Token>> &tokens, int &row, int &col);
+static void handle_single_char_token(char c, vector<shared_ptr<Token>> &tokens, int &row, int &col);
+static void create_token(Token_Type type, std::string &token, std::vector<shared_ptr<Token>> &tokens, int &row, int &col);
 
-void add_token(std::string &token, vector<shared_ptr<Token>> &tokens, unsigned int row, unsigned int col, bool single_char_tok = false);
+static bool add_next_char = true;
+static bool is_string = false;
 
 static inline bool is_floating_point(const char *str)
 {
@@ -96,29 +96,6 @@ static inline bool is_number(const std::string &s)
     return true;
   return !s.empty() && std::find_if(s.begin(),
                                     s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
-}
-
-static inline void ltrim(std::string &s)
-{
-  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-            return !std::isspace(ch);
-          }));
-}
-
-// trim from end (in place)
-static inline void rtrim(std::string &s)
-{
-  s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-            return !std::isspace(ch);
-          }).base(),
-          s.end());
-}
-
-// trim from both ends (in place)
-static inline void trim(std::string &s)
-{
-  ltrim(s);
-  rtrim(s);
 }
 
 #endif

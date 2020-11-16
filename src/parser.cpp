@@ -2,148 +2,181 @@
 
 std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
 {
+    std::vector<std::unique_ptr<Node>> nodes;
+
     tok_pointer = 0;
     toks = tokens;
     cur_tok = toks[tok_pointer];
 
-    bin_op_precedence["<"] = 10;
-    bin_op_precedence["+"] = 20;
-    bin_op_precedence["-"] = 20;
-    bin_op_precedence["*"] = 40;
+    binop_precedence["<"] = 10;
+    binop_precedence["+"] = 20;
+    binop_precedence["-"] = 20;
+    binop_precedence["*"] = 40;
 
-    std::vector<std::unique_ptr<Node>> nodes;
-    bool ate_semicolon = false;
-    while (cur_tok->type != Token_Types::tok_eof)
+    while (cur_tok->type != Token_Type::tok_eof)
     {
-        std::unique_ptr<Node> node = std::make_unique<Node>();
-        switch (cur_tok->type)
-        {
-        case Token_Types::tok_fn:
-        {
-            auto fn = parse_fn_declaration();
-            ate_semicolon = false;
-            node->type = Node_Types::FunctionDeclarationNode;
-            node->function_node = std::move(fn);
-            break;
-        }
-        case Token_Types::tok_import:
-        {
-            auto import = parse_import();
-            ate_semicolon = true;
-            node->type = Node_Types::ImportNode;
-            node->expression_node = std::move(import);
-            break;
-        }
-        case Token_Types::tok_i64:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i32:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i16:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i8:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        default:
-            break;
-        }
+        auto node = parse_token(cur_tok);
         nodes.push_back(std::move(node));
-        if (!ate_semicolon)
-        {
-            get_next_token();
-        }
     }
 
     return nodes;
 }
 
-std::unique_ptr<Variable_Node> parse_variable_declaration()
+unique_ptr<Node> parse_token(std::shared_ptr<Token> token)
 {
-    Variable_Types type = token_type_to_variable_type(cur_tok->type);
-
-    get_next_token();
-
-    std::string name = cur_tok->value;
-
-    get_next_token();
-
-    get_next_token();
-
-    auto val = parse_expression(true, type);
-    if (!val)
+    switch (token->type)
     {
-        error("Expected expression");
+    case Token_Type::tok_fn:
+        return parse_fn_declaration();
+    case Token_Type::tok_if:
+        return parse_if();
+    case Token_Type::tok_i64:
+        return parse_variable_declaration();
+    case Token_Type::tok_i32:
+        return parse_variable_declaration();
+    case Token_Type::tok_i16:
+        return parse_variable_declaration();
+    case Token_Type::tok_i8:
+        return parse_variable_declaration();
+    case Token_Type::tok_float:
+        return parse_variable_declaration();
+    case Token_Type::tok_double:
+        return parse_variable_declaration();
+    case Token_Type::tok_string:
+        return parse_variable_declaration();
+    default:
         return nullptr;
     }
-
-    std::unique_ptr<Variable_Node> var_node = std::make_unique<Variable_Node>(name, type, std::move(val));
-    return var_node;
 }
 
-std::unique_ptr<Function_Node> parse_fn_declaration()
+unique_ptr<If_Node> parse_if()
 {
-    get_next_token();
-    auto proto = parse_prototype();
-    if (!proto)
-        return nullptr;
+    get_next_token(); //? eat 'if'
+    throw_if_cur_tok_not_type(Token_Type::tok_open_paren, "Expected '(' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '('
 
-    auto expressions = parse_fn_body();
+    auto if_condition = parse_if_condition();
+    auto conditions = std::get<0>(std::move(if_condition));
+    auto condition_separators = std::get<1>(std::move(if_condition));
 
-    return std::make_unique<Function_Node>(std::move(proto), std::move(expressions), proto->get_arg_types());
+    throw_if_cur_tok_not_type(Token_Type::tok_close_paren, "Expected ')' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat ')'
+    throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '{'
+
+    auto then = parse_then();
+    if (!then)
+        error("Error parsing function then block", cur_tok->row, cur_tok->col);
+
+    throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' in then block", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '}'
+
+    return std::make_unique<If_Node>(std::move(conditions), condition_separators, std::move(then));
 }
 
-std::unique_ptr<Prototype_Node> parse_prototype()
+std::tuple<std::vector<std::unique_ptr<Condition_Node>>, std::vector<Token_Type>> parse_if_condition()
 {
-    if (cur_tok->type != Token_Types::tok_identifier)
-        return error_p("Expected function name in prototype");
+    std::vector<std::unique_ptr<Condition_Node>> conditions;
+    std::vector<Token_Type> condition_separators;
+
+    while (cur_tok->type != Token_Type::tok_close_paren)
+    {
+        auto lhs = parse_expression(false);
+        auto op = cur_tok->type;
+        get_next_token(); //? eat operator
+        auto rhs = parse_expression(false);
+
+        auto condition = std::make_unique<Condition_Node>(std::move(lhs), op, std::move(rhs));
+        conditions.push_back(std::move(condition));
+
+        if (cur_tok->type == Token_Type::tok_and || cur_tok->type == Token_Type::tok_or)
+        {
+            condition_separators.push_back(cur_tok->type);
+            get_next_token();
+        }
+    }
+
+    return std::make_tuple(std::move(conditions), condition_separators);
+}
+
+unique_ptr<Variable_Declaration_Node> parse_variable_declaration()
+{
+    Variable_Type variable_type = token_type_to_variable_type(cur_tok->type);
+
+    get_next_token(); //? eat 'i64', 'i32', 'float' or whatever
+
+    std::string variable_name = cur_tok->value;
+
+    get_next_token(); //? eat variable name
+    get_next_token(); //? eat '='
+
+    auto variable_value = parse_expression();
+
+    return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, std::move(variable_value));
+}
+
+unique_ptr<Function_Node> parse_fn_declaration()
+{
+    get_next_token(); //? eat 'fn'
+
+    auto prototype = parse_fn_prototype();
+    if (!prototype)
+        error("Error parsing function prototype", cur_tok->row, cur_tok->col);
+
+    auto then = parse_then();
+    if (!then)
+        error("Error parsing function then block", cur_tok->row, cur_tok->col);
+
+    throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' in then block", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '}'
+
+    auto node = std::make_unique<Function_Node>(std::move(prototype), std::move(then));
+    node->set_node_type(Node_Type::FunctionNode);
+    return node;
+}
+
+unique_ptr<Then_Node> parse_then()
+{
+    std::vector<std::unique_ptr<Node>> nodes;
+
+    throw_if_cur_tok_is_type(Token_Type::tok_eof, "Unexpected EOF", cur_tok->row, cur_tok->col);
+
+    while (cur_tok->type != Token_Type::tok_close_curly_bracket)
+    {
+        auto node = parse_token(cur_tok);
+        nodes.push_back(std::move(node));
+    }
+
+    return std::make_unique<Then_Node>(std::move(nodes));
+}
+
+unique_ptr<Prototype_Node> parse_fn_prototype()
+{
+    throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected function name in prototype", cur_tok->row, cur_tok->col);
 
     std::string fn_name = cur_tok->value;
 
-    get_next_token();
+    get_next_token(); //? eat function name
+    throw_if_cur_tok_not_type(Token_Type::tok_open_paren, "Expected '(' in prototype", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '('
 
-    if (cur_tok->type != Token_Types::tok_open_paren)
-        return error_p("Expected '(' in prototype");
-
-    get_next_token();
-    std::vector<Variable_Types> arg_types;
-    std::vector<std::string> arg_names;
+    std::vector<Variable_Type> param_types;
+    std::vector<std::string> param_names;
 
     int param_counter = 0;
-    while (cur_tok->type != Token_Types::tok_close_paren)
+    while (cur_tok->type != Token_Type::tok_close_paren)
     {
         if (param_counter == 0)
         {
-            arg_types.push_back(token_type_to_variable_type(cur_tok->type));
+            param_types.push_back(token_type_to_variable_type(cur_tok->type));
         }
         else if (param_counter == 1)
         {
-            arg_names.push_back(cur_tok->value);
+            param_names.push_back(cur_tok->value);
         }
         else if (param_counter == 2)
         {
-            if (cur_tok->type == Token_Types::tok_comma)
+            if (cur_tok->type == Token_Type::tok_comma)
             {
                 param_counter = -1;
             }
@@ -153,266 +186,115 @@ std::unique_ptr<Prototype_Node> parse_prototype()
         param_counter++;
     }
 
-    if (cur_tok->type != Token_Types::tok_close_paren)
-        return error_p("Expected ')' in prototype");
+    if (cur_tok->type != Token_Type::tok_close_paren)
+        error("Expected ')' in prototype", cur_tok->row, cur_tok->col);
 
-    get_next_token();
+    get_next_token(); //? eat ')'
+    throw_if_cur_tok_not_type(Token_Type::tok_arrow, "Expected '->' to indicate return type in prototype", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '->'
 
-    if (cur_tok->type != Token_Types::tok_arrow)
-        return error_p("Expected '->' to indicate return type in prototype");
+    Variable_Type return_type = token_type_to_variable_type(cur_tok->type);
 
-    get_next_token();
+    get_next_token(); //? eat return type
+    throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{'", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '{'
 
-    Variable_Types return_type = token_type_to_variable_type(cur_tok->type);
-
-    get_next_token();
-
-    if (cur_tok->type != Token_Types::tok_open_curly_bracket)
-    {
-        char *err_msg;
-        sprintf(err_msg, "Expected '{' on line %d position %d", cur_tok->row, cur_tok->col);
-        return error_p(err_msg);
-    }
-
-    get_next_token();
-
-    return std::make_unique<Prototype_Node>(fn_name, arg_types, arg_names, return_type);
+    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type);
 }
 
-std::vector<std::unique_ptr<Node>> parse_fn_body()
+unique_ptr<Expression_Node> parse_expression(bool needs_semicolon)
 {
-    std::vector<std::unique_ptr<Node>> nodes;
-    bool ate_semicolon = false;
-    while (cur_tok->type != Token_Types::tok_close_curly_bracket)
-    {
-        std::unique_ptr<Node> node = std::make_unique<Node>();
-        switch (cur_tok->type)
-        {
-        case Token_Types::tok_if:
-        {
-            auto if_node = parse_if();
-            ate_semicolon = true;
-            node->type = Node_Types::IfNode;
-            node->expression_node = std::move(if_node);
-            break;
-        }
-        case Token_Types::tok_for:
-        {
-            auto for_node = parse_for();
-            ate_semicolon = true;
-            node->type = Node_Types::ForNode;
-            node->expression_node = std::move(for_node);
-            break;
-        }
-        case Token_Types::tok_i64:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i32:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i16:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_i8:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_float:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_double:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_bool:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        case Token_Types::tok_return:
-        {
-            auto ret = parse_return_statement();
-            ate_semicolon = true;
-            node->type = Node_Types::ReturnNode;
-            node->return_node = std::move(ret);
-            break;
-        }
-        case Token_Types::tok_toi64:
-        {
-            auto ret = parse_typecast_expression();
-            ate_semicolon = true;
-            node->type = Node_Types::TypeCastNode;
-            node->expression_node = std::move(ret);
-            break;
-        }
-        case Token_Types::tok_toi32:
-        {
-            auto ret = parse_typecast_expression();
-            ate_semicolon = true;
-            node->type = Node_Types::TypeCastNode;
-            node->expression_node = std::move(ret);
-            break;
-        }
-        case Token_Types::tok_toi16:
-        {
-            auto ret = parse_typecast_expression();
-            ate_semicolon = true;
-            node->type = Node_Types::TypeCastNode;
-            node->expression_node = std::move(ret);
-            break;
-        }
-        case Token_Types::tok_toi8:
-        {
-            auto ret = parse_typecast_expression();
-            ate_semicolon = true;
-            node->type = Node_Types::TypeCastNode;
-            node->expression_node = std::move(ret);
-            break;
-        }
-        case Token_Types::tok_identifier:
-        {
-            auto id = parse_identifier_expression();
-            switch (id->type)
-            {
-            case Node_Types::CallExpressionNode:
-                node->type = Node_Types::CallExpressionNode;
-                ate_semicolon = false;
-                break;
-            case Node_Types::AssignmentNode:
-                node->type = Node_Types::AssignmentNode;
-                ate_semicolon = true;
-                break;
-            default:
-                node->type = Node_Types::UnknownNode;
-                break;
-            }
-            node->expression_node = std::move(id);
-            break;
-        }
-        case Token_Types::tok_string:
-        {
-            auto var = parse_variable_declaration();
-            ate_semicolon = true;
-            node->type = Node_Types::VariableDeclarationNode;
-            node->variable_node = std::move(var);
-            break;
-        }
-        default:
-            break;
-        }
-        nodes.push_back(std::move(node));
-        if (!ate_semicolon)
-        {
-            get_next_token();
-        }
-    }
-
-    return nodes;
-}
-
-std::unique_ptr<Expression_Node> parse_expression(bool needs_semicolon, Variable_Types type)
-{
-    auto lhs = parse_primary(type, needs_semicolon);
+    auto lhs = parse_primary();
     if (!lhs)
-    {
-        error("Error parsing primary");
-        return nullptr;
-    };
-    auto bin_op_rhs = parse_bin_op_rhs(0, std::move(lhs), type);
+        error("Error parsing primary", UNKOWN_LINE, UNKNOWN_COLUMN);
+
+    auto binop_node = parse_binop_rhs(0, std::move(lhs));
+
     if (needs_semicolon)
-        get_next_token();
-    return bin_op_rhs;
+        get_next_token(); //? eat ';'
+    return binop_node;
 }
 
-std::unique_ptr<Expression_Node> parse_primary(Variable_Types type, bool needs_semicolon)
+unique_ptr<Expression_Node> parse_primary()
 {
     switch (cur_tok->type)
     {
-    case Token_Types::tok_identifier:
-        return parse_identifier_expression(needs_semicolon);
-    case Token_Types::tok_number:
-        return parse_number_expression(type);
-    case Token_Types::tok_string_lit:
-        return parse_string_expression();
-    case Token_Types::tok_toi64:
-        return parse_typecast_expression();
-    case Token_Types::tok_toi32:
-        return parse_typecast_expression();
-    case Token_Types::tok_toi16:
-        return parse_typecast_expression();
-    case Token_Types::tok_toi8:
-        return parse_typecast_expression();
+    case Token_Type::tok_identifier:
+        return parse_identifier_expression();
+    case Token_Type::tok_number:
+        return parse_number_expression();
     default:
         break;
     }
+
+    return nullptr;
 }
 
-std::unique_ptr<Expression_Node> parse_string_expression()
+unique_ptr<Expression_Node> parse_binop_rhs(int expression_precedence, unique_ptr<Expression_Node> lhs)
 {
-    auto with_quotes = cur_tok->value;
-    auto value = with_quotes.substr(1, with_quotes.size() - 2);
-    get_next_token();
-    return std::make_unique<String_Expression>(value);
-}
-
-std::unique_ptr<Expression_Node> parse_identifier_expression(bool needs_semicolon)
-{
-    std::string id_name = cur_tok->value;
-
-    get_next_token();
-
-    if (cur_tok->type == Token_Types::tok_eq)
+    while (true)
     {
-        auto prev = toks[tok_pointer - 2]->type;
-
-        if (prev != Token_Types::tok_i64 || prev != Token_Types::tok_i32 || prev != Token_Types::tok_i16 || prev != Token_Types::tok_i8 || prev != Token_Types::tok_float || prev != Token_Types::tok_double || prev != Token_Types::tok_string)
+        int tok_precedence = get_token_precedence();
+        if (tok_precedence < expression_precedence)
         {
-            get_next_token();
-            auto expr = parse_expression(needs_semicolon);
-            auto assignment_node = std::make_unique<Assignment_Node>(id_name, std::move(expr));
-            assignment_node->type = Node_Types::AssignmentNode;
-            return assignment_node;
+            return lhs;
         }
+
+        std::string binop = cur_tok->value;
+
+        get_next_token(); //? eat operator
+
+        auto rhs = parse_primary();
+        if (!rhs)
+            error("Error parsing binary operator right hand side", last_tok->row, last_tok->col);
+
+        int next_precedence = get_token_precedence();
+        if (tok_precedence < next_precedence)
+        {
+            rhs = parse_binop_rhs(tok_precedence + 1, std::move(rhs));
+            if (!rhs)
+                error("Error parsing binary operator right hand side", last_tok->row, last_tok->col);
+        }
+
+        lhs = std::make_unique<Binary_Operation_Expression_Node>(binop, std::move(lhs), std::move(rhs));
     }
 
-    if (cur_tok->type != Token_Types::tok_open_paren)
-        return std::make_unique<Variable_Expression_Node>(id_name);
+    return nullptr;
+}
 
-    get_next_token();
+unique_ptr<Expression_Node> parse_number_expression()
+{
+    auto number_expression = std::make_unique<Number_Expression_Node>(std::stod(cur_tok->value));
+    get_next_token(); //? eat number
+    return std::move(number_expression);
+}
+
+unique_ptr<Expression_Node> parse_identifier_expression()
+{
+    std::string id_name = cur_tok->value;
+    get_next_token(); //? eat identifier
+
+    if (cur_tok->type == Token_Type::tok_open_paren)
+    {
+        return parse_function_call_node(id_name);
+    }
+    else if (cur_tok->type == Token_Type::tok_eq)
+    {
+        //TODO Return assignment operator
+        return nullptr;
+    }
+    else
+    {
+        return std::make_unique<Variable_Reference_Node>(id_name);
+    }
+}
+
+unique_ptr<Function_Call_Node> parse_function_call_node(std::string name)
+{
+    get_next_token(); //? eat '('
 
     std::vector<std::unique_ptr<Expression_Node>> args;
-    if (cur_tok->type != Token_Types::tok_close_paren)
+    if (cur_tok->type != Token_Type::tok_close_paren)
     {
         while (true)
         {
@@ -422,261 +304,188 @@ std::unique_ptr<Expression_Node> parse_identifier_expression(bool needs_semicolo
             }
             else
             {
-                error("Error parsing function call parameters");
+                error("Error parsing function call parameters", cur_tok->row, cur_tok->col);
                 return nullptr;
             }
 
-            if (cur_tok->type == Token_Types::tok_close_paren)
+            if (cur_tok->type == Token_Type::tok_close_paren)
                 break;
-            if (cur_tok->type != Token_Types::tok_comma)
-                return error("Expected ')' or ',' in argument list");
+            if (cur_tok->type != Token_Type::tok_comma)
+                error("Expected ')' or ',' in argument list", cur_tok->row, cur_tok->col);
 
             get_next_token();
         }
     }
 
-    get_next_token();
-    auto call_node = std::make_unique<Call_Expression_Node>(id_name, std::move(args));
-    call_node->type = Node_Types::CallExpressionNode;
-    return call_node;
-}
-
-std::unique_ptr<Expression_Node> parse_number_expression(Variable_Types type)
-{
-    auto number_expression = std::make_unique<Number_Expression_Node>(std::stod(cur_tok->value), type);
-    get_next_token();
-    return std::move(number_expression);
-}
-
-std::unique_ptr<Expression_Node> parse_bin_op_rhs(int expr_prec, std::unique_ptr<Expression_Node> lhs, Variable_Types type)
-{
-    while (true)
-    {
-        int tok_prec = get_tok_precedence();
-        if (tok_prec < expr_prec)
-        {
-            return lhs;
-        }
-
-        std::string bin_op = cur_tok->value;
-
-        get_next_token();
-
-        auto rhs = parse_primary(type);
-        if (!rhs)
-        {
-            error("Error parsing right hand side");
-            return nullptr;
-        }
-
-        int next_prec = get_tok_precedence();
-        if (tok_prec < next_prec)
-        {
-            rhs = parse_bin_op_rhs(tok_prec + 1, std::move(rhs));
-            if (!rhs)
-                return nullptr;
-        }
-
-        lhs = std::make_unique<Binary_Expression_Node>(bin_op, std::move(lhs), std::move(rhs));
-    }
-}
-
-std::unique_ptr<Return_Node> parse_return_statement()
-{
-    get_next_token();
-    auto expr = parse_expression(true, Variable_Types::type_i32);
-
-    if (expr == 0)
-    {
-        error("Error parsing return expression");
-        return nullptr;
-    }
-
-    return std::make_unique<Return_Node>(std::move(expr));
-}
-
-std::unique_ptr<Expression_Node> parse_typecast_expression()
-{
-    auto type = token_type_to_variable_type(cur_tok->type);
-    get_next_token();
-    get_next_token();
-
-    auto expr = parse_expression(false);
-
-    get_next_token();
-
-    auto node = std::make_unique<Type_Cast_Node>(std::move(expr), type);
-
-    return node;
-}
-
-std::unique_ptr<Expression_Node> parse_if()
-{
-    get_next_token(); //? eat 'if'
-    get_next_token(); //? eat '('
-
-    std::vector<std::unique_ptr<Condition_Expression>> conditions;
-    std::vector<Token_Types> condition_seperators;
-
-    while (cur_tok->type != Token_Types::tok_close_paren)
-    {
-        auto lhs = parse_expression(false);
-
-        auto op = cur_tok->type;
-
-        get_next_token(); //? eat operator
-
-        auto rhs = parse_expression(false);
-
-        auto condition = std::make_unique<Condition_Expression>(std::move(lhs), op, std::move(rhs));
-        conditions.push_back(std::move(condition));
-
-        if (cur_tok->type == Token_Types::tok_and || cur_tok->type == Token_Types::tok_or)
-        {
-            condition_seperators.push_back(cur_tok->type);
-            get_next_token();
-        }
-    }
+    throw_if_cur_tok_not_type(Token_Type::tok_close_paren, "Expected ')' at end of function call", cur_tok->row, cur_tok->col);
 
     get_next_token(); //? eat ')'
-    get_next_token(); //? eat '{'
 
-    auto then = parse_fn_body();
-
-    get_next_token(); //? eat '}'
-
-    auto if_node = std::make_unique<If_Node>(std::move(conditions), condition_seperators, std::move(then));
-    return if_node;
+    return std::make_unique<Function_Call_Node>(name, std::move(args));
 }
 
-std::unique_ptr<Expression_Node> parse_import()
+void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line, int position)
 {
-    get_next_token(); //? eat 'import'
-    std::string path_with_quotes = cur_tok->value;
-    std::string path = path_with_quotes.substr(1, path_with_quotes.size() - 2);
-    get_next_token(); //? eat string
-    if (cur_tok->type != Token_Types::tok_semicolon)
-        return error("Expected semicolon");
-    get_next_token(); //? eat ';'
-    return std::make_unique<Import_Node>(path);
+    if (cur_tok->type == type)
+        error(msg, line, position);
 }
 
-std::unique_ptr<Expression_Node> parse_for()
+void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position)
 {
-    get_next_token(); //? eat 'for'
-    if (cur_tok->type != Token_Types::tok_open_paren)
-        return error("Expected open parentheses");
-    get_next_token(); //? eat '('
-
-    auto var = parse_variable_declaration();
-    auto lhs = parse_expression();
-    auto op = Token_Types::tok_compare_eq;
-    auto rhs = std::make_unique<Number_Expression_Node>(1, Variable_Types::type_bool);
-    auto condition = std::make_unique<Condition_Expression>(std::move(lhs), op, std::move(rhs));
-    auto action = parse_expression(false);
-
-    if (cur_tok->type != Token_Types::tok_close_paren)
-        return error("Expected closing parentheses");
-
-    get_next_token(); //? eat ')'
-    get_next_token(); //? eat '{'
-
-    auto body = parse_fn_body();
-
-    get_next_token(); //? eat '}'
-
-    return std::make_unique<For_Node>(std::move(var), std::move(condition), std::move(action), std::move(body));
+    if (cur_tok->type != type)
+        error(msg, line, position);
 }
 
-Variable_Types token_type_to_variable_type(Token_Types type)
+Variable_Type token_type_to_variable_type(Token_Type type)
 {
     switch (type)
     {
-    case Token_Types::tok_i64:
-        return Variable_Types::type_i64;
-    case Token_Types::tok_i32:
-        return Variable_Types::type_i32;
-    case Token_Types::tok_i16:
-        return Variable_Types::type_i16;
-    case Token_Types::tok_i8:
-        return Variable_Types::type_i8;
-    case Token_Types::tok_float:
-        return Variable_Types::type_float;
-    case Token_Types::tok_double:
-        return Variable_Types::type_double;
-    case Token_Types::tok_string:
-        return Variable_Types::type_string;
-    case Token_Types::tok_bool:
-        return Variable_Types::type_bool;
-    case Token_Types::tok_toi64:
-        return Variable_Types::type_i64;
-    case Token_Types::tok_toi32:
-        return Variable_Types::type_i32;
-    case Token_Types::tok_toi16:
-        return Variable_Types::type_i16;
-    case Token_Types::tok_toi8:
-        return Variable_Types::type_i8;
+    case Token_Type::tok_i64:
+        return Variable_Type::type_i64;
+    case Token_Type::tok_i32:
+        return Variable_Type::type_i32;
+    case Token_Type::tok_i16:
+        return Variable_Type::type_i16;
+    case Token_Type::tok_i8:
+        return Variable_Type::type_i8;
+    case Token_Type::tok_float:
+        return Variable_Type::type_float;
+    case Token_Type::tok_double:
+        return Variable_Type::type_double;
+    case Token_Type::tok_string:
+        return Variable_Type::type_string;
+    case Token_Type::tok_bool:
+        return Variable_Type::type_bool;
+    case Token_Type::tok_toi64:
+        return Variable_Type::type_i64;
+    case Token_Type::tok_toi32:
+        return Variable_Type::type_i32;
+    case Token_Type::tok_toi16:
+        return Variable_Type::type_i16;
+    case Token_Type::tok_toi8:
+        return Variable_Type::type_i8;
+    case Token_Type::tok_identifier:
+        return Variable_Type::type_object;
     default:
+        error("Could not convert token type to variable type", UNKOWN_LINE, UNKNOWN_COLUMN);
         break;
     }
+    return Variable_Type::type_null;
 }
 
 void get_next_token()
 {
     tok_pointer++;
     cur_tok = toks[tok_pointer];
+    last_tok = toks[tok_pointer - 1];
 }
 
-std::unique_ptr<Expression_Node> error(const char *str)
+int get_token_precedence()
 {
-    fprintf(stderr, "LogError: %s\n", str);
-    return nullptr;
-}
-
-std::unique_ptr<Prototype_Node> error_p(const char *str)
-{
-    error(str);
-    return nullptr;
-}
-
-int get_tok_precedence()
-{
-    int tok_prec = bin_op_precedence[cur_tok->value];
-    if (tok_prec <= 0)
+    int tok_precedence = binop_precedence[cur_tok->value];
+    if (tok_precedence <= 0)
         return -1;
-    return tok_prec;
+    return tok_precedence;
 }
 
-void Function_Node::set_variables(std::string name, llvm::Value *var)
+void print_nodes(const Nodes &nodes)
 {
-    variables[name] = var;
+    for (auto &node : nodes)
+    {
+        node->print();
+    }
 }
 
-llvm::Value *Function_Node::get_variable(std::string name)
+void Function_Node::print()
 {
-    return variables[name];
+    cout << "Function Node" << endl;
+    cout << endl;
+    prototype->print();
+    then->print();
 }
 
-std::vector<Variable_Types> Prototype_Node::get_arg_types()
+void Number_Expression_Node::print()
 {
-    return arg_types;
+    cout << value;
 }
 
-std::unique_ptr<Prototype_Node> Function_Node::get_proto()
+void Variable_Reference_Node::print()
 {
-    return std::move(proto);
+    cout << name;
 }
 
-std::vector<Variable_Types> Function_Node::get_arg_types()
+void Binary_Operation_Expression_Node::print()
 {
-    return arg_types;
+    lhs->print();
+    cout << op;
+    rhs->print();
+    cout << endl;
 }
 
-std::string Prototype_Node::get_name() { return name; }
+void Then_Node::print()
+{
+    cout << "Then" << endl;
+    for (auto &node : nodes)
+    {
+        node->print();
+    }
+    cout << endl;
+}
 
-std::unique_ptr<Expression_Node> Condition_Expression::get_lhs() { return std::move(lhs); };
-std::unique_ptr<Expression_Node> Condition_Expression::get_rhs() { return std::move(rhs); };
-Token_Types Condition_Expression::get_op() { return op; }
-Variable_Types Prototype_Node::get_return_type() { return return_type; };
-llvm::Value *Function_Node::get_return_value_ptr() { return return_value_ptr; };
-llvm::BasicBlock *Function_Node::get_end_bb() { return end_bb; };
+void Variable_Declaration_Node::print()
+{
+    cout << "Variable Declaration: type=" << type << " name=" << name << " value=";
+    value->print();
+    cout << endl;
+}
+
+void Prototype_Node::print()
+{
+    cout << "Prototype Node" << endl;
+    cout << "Name: " << name << endl;
+    for (int i = 0; i < param_types.size(); i++)
+    {
+        cout << "Param " << i + 1 << ": "
+             << "type=" << param_types[i] << " name=" << param_names[i] << endl;
+    }
+    cout << endl;
+}
+
+void If_Node::print()
+{
+    cout << "If Statement" << endl;
+    if (condition_separators.size() > 0)
+    {
+        for (int i = 0; i < condition_separators.size(); i++)
+        {
+            conditions[i]->print();
+            cout << condition_separators[i] << endl;
+            conditions[i + 1]->print();
+        }
+    }
+    else
+    {
+        for (auto &condition : conditions)
+        {
+            condition->print();
+        }
+    }
+
+    then->print();
+}
+
+void Condition_Node::print()
+{
+    lhs->print();
+    cout << ' ';
+    cout << op;
+    cout << ' ';
+    rhs->print();
+    cout << endl;
+}
+
+void Function_Call_Node::print()
+{
+}
+
+void Node::set_node_type(Node_Type type) { node_type = type; };
