@@ -129,9 +129,11 @@ private:
     std::vector<Variable_Type> param_types;
     std::vector<std::string> param_names;
     Variable_Type return_type;
+    std::string return_type_name;
 
 public:
     Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type) : name(name), param_types(param_types), param_names(param_names), return_type(return_type){};
+    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type, std::string return_type_name) : name(name), param_types(param_types), param_names(param_names), return_type(return_type), return_type_name(return_type_name){};
     Value *code_gen();
     Function *code_gen_proto();
     void print();

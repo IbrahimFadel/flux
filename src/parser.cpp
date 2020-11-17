@@ -273,6 +273,8 @@ unique_ptr<Function_Node> parse_fn_declaration()
 
     throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' in then block", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat '}'
+    throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' in function declaration", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat ';'
 
     auto node = std::make_unique<Function_Node>(std::move(prototype), std::move(then));
     node->set_node_type(Node_Type::FunctionNode);
@@ -339,11 +341,13 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
 
     Variable_Type return_type = token_type_to_variable_type(cur_tok->type);
 
+    std::string return_type_name = cur_tok->value;
+
     get_next_token(); //? eat return type
     throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{'", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat '{'
 
-    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type);
+    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type, return_type_name);
 }
 
 unique_ptr<Node> parse_expression(bool needs_semicolon)

@@ -96,7 +96,11 @@ Function *Prototype_Node::code_gen_proto()
         types.push_back(llvm_type);
     }
 
-    auto ret = variable_type_to_llvm_type(return_type);
+    Type *ret;
+    if (return_type == Variable_Type::type_object)
+        ret = variable_type_to_llvm_type(return_type, return_type_name);
+    else
+        ret = variable_type_to_llvm_type(return_type);
 
     llvm::FunctionType *function_type = llvm::FunctionType::get(ret, types, false);
     llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, modules[current_module_pointer].get());
@@ -220,21 +224,28 @@ Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var)
     auto llvm_ty = object_types[var->get_type_name()];
     auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
 
-    define_object_properties(ptr, var->get_value());
+    define_object_properties(var, ptr, var->get_value());
 
     auto loaded = builder.CreateLoad(ptr);
+
+    functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+    functions[current_function_name]->set_variable_value(var->get_name(), loaded);
 
     return 0;
 }
 
-void define_object_properties(Value *ptr, unique_ptr<Node> expr)
+void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Node> expr)
 {
     auto properties = expr->get_properties();
     auto it = properties.begin();
     for (unsigned i = 0; it != properties.end(); i++)
     {
+        auto variable_type = object_type_properties[var->get_type_name()][it->first];
+        currently_preferred_type = variable_type;
+
         auto index = APInt(32, i);
         auto index_value = Constant::getIntegerValue(Type::getInt32Ty(context), index);
+
         auto v = load_if_ptr(it->second->code_gen());
         auto val_ptr = builder.CreateStructGEP(ptr, i, it->first + "_ptr");
         auto store = builder.CreateStore(v, val_ptr);
@@ -308,7 +319,11 @@ Value *Object_Node::code_gen()
     std::vector<llvm::Type *> members;
     while (it != properties.end())
     {
-        members.push_back(variable_type_to_llvm_type(it->second));
+        auto ty = variable_type_to_llvm_type(it->second);
+        members.push_back(ty);
+
+        object_type_properties[name][it->first] = it->second;
+
         it++;
     }
 
@@ -336,24 +351,26 @@ Value *Return_Node::code_gen()
     return ret;
 }
 
-Type *variable_type_to_llvm_type(Variable_Type type)
+Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name)
 {
     switch (type)
     {
     case Variable_Type::type_i64:
-        return Type::getInt32Ty(context);
+        return Type::getInt64Ty(context);
     case Variable_Type::type_i32:
         return Type::getInt32Ty(context);
     case Variable_Type::type_i16:
-        return Type::getInt32Ty(context);
+        return Type::getInt16Ty(context);
     case Variable_Type::type_i8:
-        return Type::getInt32Ty(context);
+        return Type::getInt8Ty(context);
     case Variable_Type::type_bool:
-        return Type::getInt32Ty(context);
+        return Type::getInt1Ty(context);
     case Variable_Type::type_float:
-        return Type::getInt32Ty(context);
+        return Type::getFloatTy(context);
     case Variable_Type::type_double:
-        return Type::getInt32Ty(context);
+        return Type::getDoubleTy(context);
+    case Variable_Type::type_object:
+        return object_types[object_type_name];
     default:
         error("Could not convert variable type to llvm type");
         return nullptr;
