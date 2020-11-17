@@ -121,4 +121,31 @@ void Variable_Assignment_Node::print()
     value->print();
 }
 
+void Object_Node::print()
+{
+    cout << "Defining object type with name: " << name << endl;
+    cout << "Properties: " << endl;
+    for (auto &property : properties)
+    {
+        auto name = std::get<0>(property);
+        auto type = std::get<1>(property);
+        cout << "name=" << name << " type=" << type << endl;
+    }
+}
+
+void Object_Expression::print()
+{
+    cout << endl;
+    for (auto &property : properties)
+    {
+        property->print();
+        cout << endl;
+    }
+}
+
+void String_Expression::print()
+{
+    cout << value << endl;
+}
+
 void Node::set_node_type(Node_Type type) { node_type = type; };
