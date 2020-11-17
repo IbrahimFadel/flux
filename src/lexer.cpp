@@ -6,11 +6,17 @@ vector<shared_ptr<Token>> get_tokens(std::vector<std::string> content)
   std::string token;
   int row = 1, col = 1;
   is_string = false;
+  bool skip_next = false;
   for (auto &line : content)
   {
     for (auto &c : line)
     {
       add_next_char = true;
+      if (skip_next)
+      {
+        skip_next = false;
+        continue;
+      }
 
       if (is_string && c != '"')
       {
@@ -60,13 +66,19 @@ vector<shared_ptr<Token>> get_tokens(std::vector<std::string> content)
         break;
       case '=':
       {
-        // cout << line[col] << endl;
-        // if (line[col] != '=')
-        // {
-        //   cout << "doing" << endl;
-        //   handle_token(token, tokens, row, col);
-        //   handle_single_char_token(c, tokens, row, col);
-        // }
+        if (line[col] == '=')
+        {
+          token += "==";
+          handle_token(token, tokens, row, col);
+          skip_next = true;
+          continue;
+        }
+        else
+        {
+          handle_token(token, tokens, row, col);
+          handle_single_char_token(c, tokens, row, col);
+        }
+
         break;
       }
       break;

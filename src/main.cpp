@@ -15,7 +15,7 @@ int main(int argc, const char **argv)
   auto file_content = get_file_content(argv[1]);
 
   auto tokens = get_tokens(file_content);
-  // print_tokens(tokens);
+  print_tokens(tokens);
 
   auto nodes = parse_tokens(tokens);
   print_nodes(nodes);

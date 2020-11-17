@@ -13,7 +13,7 @@ add_definitions(
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-everything")
 
 # src/code_generation.cpp
-set(SOURCE_FILES src/common.cpp src/main.cpp src/lexer.cpp src/parser.cpp)
+set(SOURCE_FILES src/common.cpp src/main.cpp src/lexer.cpp src/ast.cpp src/parser.cpp)
 add_executable(Sandscript ${SOURCE_FILES})
 
 target_link_libraries(Sandscript LLVM-11)
