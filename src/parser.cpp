@@ -34,6 +34,8 @@ unique_ptr<Node> parse_token(std::shared_ptr<Token> token)
         return parse_import();
     case Token_Type::tok_for:
         return parse_for();
+    case Token_Type::tok_return:
+        return parse_return();
     case Token_Type::tok_i64:
         return parse_variable_declaration();
     case Token_Type::tok_i32:
@@ -55,6 +57,13 @@ unique_ptr<Node> parse_token(std::shared_ptr<Token> token)
     default:
         return nullptr;
     }
+}
+
+unique_ptr<Return_Node> parse_return()
+{
+    get_next_token(); //? eat 'return'
+    auto value = parse_expression();
+    return std::make_unique<Return_Node>(std::move(value));
 }
 
 unique_ptr<Object_Node> parse_object_node()
@@ -563,4 +572,14 @@ int get_token_precedence()
     if (tok_precedence <= 0)
         return -1;
     return tok_precedence;
+}
+
+void error(const char *arg, int line, int column)
+{
+    if (line == UNKOWN_LINE || column == UNKNOWN_COLUMN)
+        std::cout << arg << std::endl;
+    else
+        std::cout << arg << " at line " << line << " column " << column << std::endl;
+
+    exit(1);
 }

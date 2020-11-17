@@ -1,11 +1,9 @@
-object my_object {
-    i32 favorite_number;
-    i16 address;
-    string name;
-};
+fn sum(i32 num1, i32 num2) -> i32 {
+    return num1 + num2;
+}
 
-my_object test = {
-    favorite_number = 10;
-    address = 5;
-    name = "ibrahim";
-};
+fn main() -> i32 
+{
+    i32 x = 5 * 3;
+    return x;
+}

@@ -10,13 +10,3 @@ std::vector<std::string> get_file_content(const char *path)
     }
     return content;
 }
-
-void error(const char *arg, int line, int column)
-{
-    if (line == UNKOWN_LINE || column == UNKNOWN_COLUMN)
-        std::cout << arg << std::endl;
-    else
-        std::cout << arg << " at line " << line << " column " << column << std::endl;
-
-    exit(1);
-}

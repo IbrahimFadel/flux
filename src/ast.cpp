@@ -148,4 +148,17 @@ void String_Expression::print()
     cout << value << endl;
 }
 
+void Return_Node::print()
+{
+    cout << "Returning: ";
+    value->print();
+}
+
 void Node::set_node_type(Node_Type type) { node_type = type; };
+
+std::string Prototype_Node::get_name() { return name; };
+Variable_Type Prototype_Node::get_return_type() { return return_type; };
+
+void Function_Node::set_variable_ptr(std::string name, Value *ptr) { variable_ptrs[name] = ptr; };
+void Function_Node::set_variable_value(std::string name, Value *v) { variable_values[name] = v; };
+Value *Function_Node::get_variable_value(std::string name) { return variable_values[name]; };
