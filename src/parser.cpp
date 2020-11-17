@@ -244,6 +244,7 @@ unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration(
 unique_ptr<Variable_Declaration_Node> parse_object_variable_declaration()
 {
     Variable_Type variable_type = token_type_to_variable_type(last_tok->type);
+    std::string type_name = last_tok->value;
 
     throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in object variable declaration", cur_tok->row, cur_tok->col);
 
@@ -255,11 +256,10 @@ unique_ptr<Variable_Declaration_Node> parse_object_variable_declaration()
 
     auto value = parse_expression();
 
-    return std::make_unique<Variable_Declaration_Node>(name, variable_type, std::move(value));
+    return std::make_unique<Variable_Declaration_Node>(name, variable_type, type_name, std::move(value));
 }
 
-unique_ptr<Function_Node>
-parse_fn_declaration()
+unique_ptr<Function_Node> parse_fn_declaration()
 {
     get_next_token(); //? eat 'fn'
 
@@ -389,13 +389,32 @@ unique_ptr<Object_Expression> parse_object_expression()
 {
     get_next_token(); //? eat '{'
 
-    std::vector<unique_ptr<Variable_Assignment_Node>> properties;
+    std::map<std::string, unique_ptr<Node>> properties;
+    int i = 0;
+    std::string current_property_name;
     while (cur_tok->type != Token_Type::tok_close_curly_bracket)
     {
-        std::string name = cur_tok->value;
-        get_next_token();
-        auto assignment = parse_variable_assignment(name);
-        properties.push_back(std::move(assignment));
+        if (i == 0)
+        {
+            std::string name = cur_tok->value;
+            current_property_name = name;
+            i++;
+            get_next_token(); //? eat name
+            continue;
+        }
+        else if (i == 1)
+        {
+            throw_if_cur_tok_not_type(Token_Type::tok_eq, "Expected '=' in object expression", cur_tok->row, cur_tok->col);
+            get_next_token(); //? eat '='
+            i++;
+            continue;
+        }
+        else if (i == 2)
+        {
+            auto expr = parse_expression();
+            properties[current_property_name] = std::move(expr);
+            i = 0;
+        }
     }
 
     throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' in object expression", cur_tok->row, cur_tok->col);
@@ -506,6 +525,9 @@ unique_ptr<Function_Call_Node> parse_function_call_node(std::string name)
     throw_if_cur_tok_not_type(Token_Type::tok_close_paren, "Expected ')' at end of function call", cur_tok->row, cur_tok->col);
 
     get_next_token(); //? eat ')'
+
+    throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' at end of function call", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat ';'
 
     return std::make_unique<Function_Call_Node>(name, std::move(args));
 }

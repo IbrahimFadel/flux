@@ -66,6 +66,7 @@ public:
     void set_node_type(Node_Type node_type);
     virtual Value *code_gen() = 0;
     virtual void print() = 0;
+    virtual std::map<std::string, unique_ptr<Node>> get_properties();
 };
 
 class Expression_Node : public Node
@@ -157,11 +158,18 @@ private:
     std::string name;
     Variable_Type type;
     unique_ptr<Node> value;
+    std::string type_name;
 
 public:
     Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Node> value) : name(name), type(type), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
     Value *code_gen();
     void print();
+
+    Variable_Type get_type();
+    std::string get_name();
+    unique_ptr<Node> get_value();
+    std::string get_type_name();
 };
 
 class If_Node : public Node
@@ -265,12 +273,14 @@ public:
 class Object_Expression : public Node
 {
 private:
-    std::vector<unique_ptr<Variable_Assignment_Node>> properties;
+    std::map<std::string, unique_ptr<Node>> properties;
 
 public:
-    Object_Expression(std::vector<unique_ptr<Variable_Assignment_Node>> properties) : properties(std::move(properties)){};
+    Object_Expression(std::map<std::string, unique_ptr<Node>> properties) : properties(std::move(properties)){};
     Value *code_gen();
     void print();
+
+    std::map<std::string, unique_ptr<Node>> get_properties();
 };
 
 class String_Expression : public Node

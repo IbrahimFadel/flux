@@ -98,6 +98,16 @@ void Condition_Node::print()
 
 void Function_Call_Node::print()
 {
+    cout << "Calling: " << name << endl;
+    cout << "Args: " << endl;
+    auto it = parameters.begin();
+    for (auto &param : parameters)
+    {
+        param->print();
+        cout << ' ';
+    }
+
+    cout << endl;
 }
 
 void Import_Node::print()
@@ -136,10 +146,12 @@ void Object_Node::print()
 void Object_Expression::print()
 {
     cout << endl;
-    for (auto &property : properties)
+    auto it = properties.begin();
+    while (it == properties.end())
     {
-        property->print();
-        cout << endl;
+        cout << it->first << " ";
+        it->second->print();
+        it++;
     }
 }
 
@@ -162,3 +174,16 @@ Variable_Type Prototype_Node::get_return_type() { return return_type; };
 void Function_Node::set_variable_ptr(std::string name, Value *ptr) { variable_ptrs[name] = ptr; };
 void Function_Node::set_variable_value(std::string name, Value *v) { variable_values[name] = v; };
 Value *Function_Node::get_variable_value(std::string name) { return variable_values[name]; };
+
+std::string Variable_Declaration_Node::get_type_name() { return type_name; }
+Variable_Type Variable_Declaration_Node::get_type() { return type; };
+std::string Variable_Declaration_Node::get_name() { return name; };
+unique_ptr<Node> Variable_Declaration_Node::get_value() { return std::move(value); };
+
+std::map<std::string, unique_ptr<Node>> Object_Expression::get_properties() { return std::move(properties); };
+
+std::map<std::string, unique_ptr<Node>> Node::get_properties()
+{
+    std::map<std::string, unique_ptr<Node>> p;
+    return std::move(p);
+};

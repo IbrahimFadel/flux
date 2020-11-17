@@ -1,9 +1,14 @@
-fn sum(i32 num1, i32 num2) -> i32 {
-    return num1 + num2;
-}
-
 fn main() -> i32 
 {
-    i32 x = 5 * 3;
-    return x;
+    object my_object {
+        i32 fav_number;
+        i16 address;
+    };
+
+    my_object test = {
+        fav_number = 10;
+        address = 5;
+    };
+
+    return 0;
 }

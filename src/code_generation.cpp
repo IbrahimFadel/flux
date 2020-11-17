@@ -74,6 +74,7 @@ void Prototype_Node::create_argument_allocas(Function *function)
     for (unsigned i = 0, size = param_names.size(); i != size; ++i, ++it)
     {
         auto ptr = create_entry_block_alloca(function, param_names[i], variable_type_to_llvm_type(param_types[i]));
+        auto store = builder.CreateStore(it, ptr);
         auto loaded = builder.CreateLoad(ptr);
         functions[current_function_name]->set_variable_ptr(param_names[i], ptr);
         functions[current_function_name]->set_variable_value(param_names[i], loaded);
@@ -208,16 +209,55 @@ Value *Then_Node::code_gen()
 }
 Value *Variable_Declaration_Node::code_gen()
 {
-    auto ptr = builder.CreateAlloca(variable_type_to_llvm_type(type), 0, name);
-    auto v = value->code_gen();
+    if (type == Variable_Type::type_object)
+        return code_gen_object_variable_declaration(this);
+    else
+        return code_gen_primitive_variable_declaration(this);
+}
+
+Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var)
+{
+    auto llvm_ty = object_types[var->get_type_name()];
+    auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
+
+    define_object_properties(ptr, var->get_value());
+
+    auto loaded = builder.CreateLoad(ptr);
+
+    return 0;
+}
+
+void define_object_properties(Value *ptr, unique_ptr<Node> expr)
+{
+    auto properties = expr->get_properties();
+    auto it = properties.begin();
+    for (unsigned i = 0; it != properties.end(); i++)
+    {
+        auto index = APInt(32, i);
+        auto index_value = Constant::getIntegerValue(Type::getInt32Ty(context), index);
+        auto v = load_if_ptr(it->second->code_gen());
+        auto val_ptr = builder.CreateStructGEP(ptr, i, it->first + "_ptr");
+        auto store = builder.CreateStore(v, val_ptr);
+
+        it++;
+    }
+}
+
+Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
+{
+    auto llvm_ty = variable_type_to_llvm_type(var->get_type());
+
+    auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
+    auto v = var->get_value()->code_gen();
     auto store = builder.CreateStore(v, ptr);
     auto loaded = builder.CreateLoad(ptr);
 
-    functions[current_function_name]->set_variable_ptr(name, ptr);
-    functions[current_function_name]->set_variable_value(name, loaded);
+    functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+    functions[current_function_name]->set_variable_value(var->get_name(), loaded);
 
     return store;
 }
+
 Value *If_Node::code_gen()
 {
     return 0;
@@ -232,7 +272,22 @@ Value *Condition_Node::code_gen()
 }
 Value *Function_Call_Node::code_gen()
 {
-    return 0;
+    auto callee_function = modules[current_module_pointer]->getFunction(name);
+    if (callee_function == 0)
+        error("Unknown function referenced in function call");
+    if (callee_function->arg_size() != parameters.size())
+        error("Incorrect number of parameters passed to function call");
+
+    std::vector<llvm::Value *> args_v;
+    for (unsigned i = 0, size = parameters.size(); i != size; i++)
+    {
+        auto v = load_if_ptr(parameters[i]->code_gen());
+        args_v.push_back(v);
+    }
+
+    auto call = builder.CreateCall(callee_function, args_v, "calltmp");
+
+    return call;
 }
 Value *Variable_Reference_Node::code_gen()
 {
@@ -248,10 +303,25 @@ Value *Variable_Assignment_Node::code_gen()
 }
 Value *Object_Node::code_gen()
 {
+    auto it = properties.begin();
+
+    std::vector<llvm::Type *> members;
+    while (it != properties.end())
+    {
+        members.push_back(variable_type_to_llvm_type(it->second));
+        it++;
+    }
+
+    llvm::ArrayRef<llvm::Type *> struct_properties(members);
+    auto struct_type = llvm::StructType::create(context, struct_properties, name, false);
+
+    object_types[name] = struct_type;
+
     return 0;
 }
 Value *Object_Expression::code_gen()
 {
+
     return 0;
 }
 Value *String_Expression::code_gen()
@@ -299,11 +369,14 @@ Value *load_if_ptr(Value *v)
 
 void print_current_module()
 {
+    std::error_code ec;
+    auto f_out = raw_fd_ostream("../out.ll", ec);
     llvm::raw_ostream &os = llvm::outs();
     os << '\n'
        << '\n';
     auto writer = new AssemblyAnnotationWriter();
     modules[current_module_pointer]->print(os, writer);
+    modules[current_module_pointer]->print(f_out, writer);
 }
 
 void error(const char *arg)
