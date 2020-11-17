@@ -271,6 +271,64 @@ Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
 
 Value *If_Node::code_gen()
 {
+    std::vector<Value *> cmps;
+    for (auto &condition : conditions)
+    {
+        auto cmp = condition->code_gen();
+        cmps.push_back(cmp);
+    }
+
+    Value *last_cmp = cmps[0];
+    int i = 0;
+    for (auto &sep : condition_separators)
+    {
+        switch (sep)
+        {
+        case Token_Type::tok_and:
+            if (i == 0)
+                last_cmp = builder.CreateAnd(cmps[i], cmps[i + 1]);
+            else
+                last_cmp = builder.CreateAnd(last_cmp, cmps[i + 1]);
+            break;
+        case Token_Type::tok_or:
+        {
+            if (i == 0)
+                last_cmp = builder.CreateOr(cmps[i], cmps[i + 1]);
+            else
+                last_cmp = builder.CreateOr(last_cmp, cmps[i + 1]);
+        }
+        default:
+            break;
+        }
+        i++;
+    }
+
+    auto function = builder.GetInsertBlock()->getParent();
+
+    auto then_bb = BasicBlock::Create(context, "then", function);
+    auto else_bb = BasicBlock::Create(context, "else");
+    auto continue_bb = BasicBlock::Create(context, "continue");
+
+    auto cond_br = builder.CreateCondBr(last_cmp, then_bb, else_bb);
+
+    builder.SetInsertPoint(then_bb);
+
+    then->code_gen();
+
+    builder.CreateBr(continue_bb);
+
+    then_bb = builder.GetInsertBlock();
+
+    function->getBasicBlockList().push_back(else_bb);
+    builder.SetInsertPoint(else_bb);
+
+    builder.CreateBr(continue_bb);
+
+    else_bb = builder.GetInsertBlock();
+
+    function->getBasicBlockList().push_back(continue_bb);
+    builder.SetInsertPoint(continue_bb);
+
     return 0;
 }
 Value *For_Node::code_gen()
@@ -279,7 +337,21 @@ Value *For_Node::code_gen()
 }
 Value *Condition_Node::code_gen()
 {
-    return 0;
+    auto l = load_if_ptr(lhs->code_gen());
+    auto r = load_if_ptr(rhs->code_gen());
+
+    switch (op)
+    {
+    case Token_Type::tok_compare_eq:
+        return builder.CreateICmpEQ(l, r, "ifcond");
+    case Token_Type::tok_compare_lt:
+        return builder.CreateICmpSLT(l, r, "ltcond");
+    case Token_Type::tok_compare_gt:
+        return builder.CreateICmpSGT(l, r, "gtcond");
+    default:
+        error("Unknown operator in condition");
+        return 0;
+    }
 }
 Value *Function_Call_Node::code_gen()
 {

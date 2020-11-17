@@ -1,15 +1,35 @@
 ; ModuleID = 'TheModule'
 source_filename = "TheModule"
 
-%my_object = type { i16, i32 }
-
-define %my_object @main() {
+define i32 @main() {
 entry:
-  %test = alloca %my_object, align 8
-  %address_ptr = getelementptr inbounds %my_object, %my_object* %test, i32 0, i32 0
-  store i16 5, i16* %address_ptr, align 2
-  %fav_number_ptr = getelementptr inbounds %my_object, %my_object* %test, i32 0, i32 1
-  store i32 10, i32* %fav_number_ptr, align 4
-  %0 = load %my_object, %my_object* %test, align 4
-  ret %my_object %0
+  %x = alloca i32, align 4
+  store i32 5, i32* %x, align 4
+  %0 = load i32, i32* %x, align 4
+  %ifcond = icmp eq i32 %0, 5
+  br i1 %ifcond, label %then, label %else3
+
+then:                                             ; preds = %entry
+  %y = alloca i32, align 4
+  store i32 5, i32* %y, align 4
+  %1 = load i32, i32* %y, align 4
+  %ifcond1 = icmp eq i32 %0, %1
+  br i1 %ifcond1, label %then2, label %else
+
+then2:                                            ; preds = %then
+  ret i32 5
+  br label %continue
+
+else:                                             ; preds = %then
+  br label %continue
+
+continue:                                         ; preds = %else, %then2
+  ret i32 2
+  br label %continue4
+
+else3:                                            ; preds = %entry
+  br label %continue4
+
+continue4:                                        ; preds = %else3, %continue
+  ret i32 0
 }

@@ -1,14 +1,14 @@
-object my_object {
-    i32 fav_number;
-    i16 address;
-};
+fn main() -> i32 {
+    i32 x = 5;
+    if(x == 5) {
+        i32 y = 5;
 
+        if(x == y) {
+            return 5;
+        }
 
-fn main() -> my_object {
-    my_object test = {
-        fav_number = 10;
-        address = 5;
-    };
+        return 2;
+    }
 
-    return test;
+    return 0;
 };
