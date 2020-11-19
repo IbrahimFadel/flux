@@ -9,6 +9,7 @@
 using std::cout;
 using std::endl;
 using std::shared_ptr;
+using std::string;
 using std::vector;
 
 enum Token_Type
@@ -55,6 +56,7 @@ enum Token_Type
   tok_plus,
   tok_minus,
   tok_arrow,
+  tok_ampersand,
 
   tok_number,
   tok_string_lit,
@@ -65,37 +67,23 @@ enum Token_Type
 
 struct Token
 {
+  int row, col;
+  string value;
   Token_Type type;
-  std::string value;
-  unsigned int row;
-  unsigned int col;
 };
 
-void print_tokens(vector<shared_ptr<Token>> tokens);
-vector<shared_ptr<Token>> get_tokens(vector<std::string> content);
-static void handle_token(std::string &token, vector<shared_ptr<Token>> &tokens, int &row, int &col);
-static void handle_single_char_token(char c, vector<shared_ptr<Token>> &tokens, int &row, int &col);
-static void create_token(Token_Type type, std::string &token, std::vector<shared_ptr<Token>> &tokens, int &row, int &col);
+typedef vector<shared_ptr<Token>> Tokens;
 
-static bool add_next_char = true;
-static bool is_string = false;
+static int row = 0, col = 0;
 
-static inline bool is_floating_point(const char *str)
-{
-  char *endptr = 0;
-  strtod(str, &endptr);
+vector<shared_ptr<Token>> tokenize(vector<string> content);
+static void add_token(string &token, vector<shared_ptr<Token>> &tokens, bool is_single_char_token = false, char single_char_token = '\0');
+static shared_ptr<Token> create_token(string token);
+static Token_Type get_token_type(string token);
 
-  if (*endptr != '\0' || endptr == str)
-    return false;
-  return true;
-}
+static bool is_number(const string &token);
+static bool is_floating_point(const char *str);
 
-static inline bool is_number(const std::string &s)
-{
-  if (is_floating_point(s.c_str()))
-    return true;
-  return !s.empty() && std::find_if(s.begin(),
-                                    s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
-}
+void print_tokens(const Tokens &tokens);
 
 #endif

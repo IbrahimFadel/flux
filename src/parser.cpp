@@ -1,12 +1,13 @@
 #include "parser.h"
 
-std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Token>> tokens)
+std::vector<std::unique_ptr<Node>> parse_tokens(const Tokens &tokens)
 {
-    std::vector<std::unique_ptr<Node>> nodes;
+    std::vector<unique_ptr<Node>> nodes;
 
     tok_pointer = 0;
     toks = tokens;
-    cur_tok = toks[tok_pointer];
+    const Tokens &toks = tokens;
+    cur_tok = std::move(toks[tok_pointer]);
 
     binop_precedence["<"] = 10;
     binop_precedence["+"] = 20;
@@ -15,19 +16,22 @@ std::vector<std::unique_ptr<Node>> parse_tokens(std::vector<std::shared_ptr<Toke
 
     while (cur_tok->type != Token_Type::tok_eof)
     {
-        auto node = parse_token(cur_tok);
+        auto node = parse_token(std::move(cur_tok));
         nodes.push_back(std::move(node));
     }
 
     return nodes;
 }
 
-unique_ptr<Node> parse_token(std::shared_ptr<Token> token)
+unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
 {
     switch (token->type)
     {
     case Token_Type::tok_fn:
-        return parse_fn_declaration();
+    {
+        auto dec = parse_fn_declaration();
+        return dec;
+    }
     case Token_Type::tok_if:
         return parse_if();
     case Token_Type::tok_import:
@@ -231,9 +235,23 @@ unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration(
 
     get_next_token(); //? eat 'i64', 'i32', 'float' or whatever
 
+    if (cur_tok->type == Token_Type::tok_asterisk)
+    {
+        variable_type = variable_type_to_pointer_variable_type(variable_type);
+        get_next_token(); //? eat '*'
+    }
+
     std::string variable_name = cur_tok->value;
 
     get_next_token(); //? eat variable name
+
+    if (cur_tok->type == Token_Type::tok_semicolon)
+    {
+        get_next_token(); //? eat ';'
+        auto var = std::make_unique<Variable_Declaration_Node>(variable_name, variable_type);
+        return var;
+    }
+
     get_next_token(); //? eat '='
 
     auto variable_value = parse_expression();
@@ -289,7 +307,7 @@ unique_ptr<Then_Node> parse_then()
 
     while (cur_tok->type != Token_Type::tok_close_curly_bracket)
     {
-        auto node = parse_token(cur_tok);
+        auto node = parse_token(std::move(cur_tok));
         nodes.push_back(std::move(node));
     }
 
@@ -375,11 +393,41 @@ unique_ptr<Node> parse_primary()
         return parse_string_expression();
     case Token_Type::tok_open_curly_bracket:
         return parse_object_expression();
+    case Token_Type::tok_ampersand:
+        return parse_ampersand_expression();
+    case Token_Type::tok_asterisk:
+        return parse_asterisk_expression();
     default:
         break;
     }
 
     return nullptr;
+}
+
+unique_ptr<Node> parse_asterisk_expression()
+{
+    get_next_token(); //? eat '*'
+
+    throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier following '*'", cur_tok->row, cur_tok->col);
+
+    std::string name = cur_tok->value;
+
+    get_next_token(); //? eat identifier
+
+    return std::make_unique<Variable_Expression_Node>(name, Variable_Expression_Type::pointer);
+}
+
+unique_ptr<Node> parse_ampersand_expression()
+{
+    get_next_token(); //? eat '&'
+
+    throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier following '&'", cur_tok->row, cur_tok->col);
+
+    std::string name = cur_tok->value;
+
+    get_next_token(); //? eat identifier
+
+    return std::make_unique<Variable_Expression_Node>(name, Variable_Expression_Type::reference);
 }
 
 unique_ptr<String_Expression> parse_string_expression()
@@ -485,7 +533,7 @@ unique_ptr<Node> parse_identifier_expression()
     }
     else
     {
-        return std::make_unique<Variable_Reference_Node>(id_name);
+        return std::make_unique<Variable_Expression_Node>(id_name, Variable_Expression_Type::value);
     }
 }
 
@@ -585,11 +633,38 @@ Variable_Type token_type_to_variable_type(Token_Type type)
     return Variable_Type::type_null;
 }
 
+Variable_Type variable_type_to_pointer_variable_type(Variable_Type type)
+{
+    switch (type)
+    {
+    case Variable_Type::type_i64:
+        return Variable_Type::type_i64_ptr;
+    case Variable_Type::type_i32:
+        return Variable_Type::type_i32_ptr;
+    case Variable_Type::type_i16:
+        return Variable_Type::type_i16_ptr;
+    case Variable_Type::type_i8:
+        return Variable_Type::type_i8_ptr;
+    case Variable_Type::type_double:
+        return Variable_Type::type_double_ptr;
+    case Variable_Type::type_float:
+        return Variable_Type::type_float_ptr;
+    case Variable_Type::type_string:
+        return Variable_Type::type_string_ptr;
+    case Variable_Type::type_object:
+        return Variable_Type::type_object_ptr;
+    default:
+        error("Could not convert variable type to variable pointer type", UNKOWN_LINE, UNKNOWN_COLUMN);
+        break;
+    }
+    return Variable_Type::type_null;
+}
+
 void get_next_token()
 {
     tok_pointer++;
-    cur_tok = toks[tok_pointer];
-    last_tok = toks[tok_pointer - 1];
+    cur_tok = std::move(toks[tok_pointer]);
+    last_tok = std::move(toks[tok_pointer - 1]);
 }
 
 int get_token_precedence()

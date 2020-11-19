@@ -1,14 +1,16 @@
 fn main() -> i32 {
-    i32 x = 5;
-    if(x == 5) {
-        i32 y = 5;
+    i32 x = 6;
+    i32 *z;
 
-        if(x == y) {
-            return 5;
-        }
+    z = &x;
 
+    i32 z_val = *z;
+
+    i32 final = z_val;
+
+    if(final == 5) {
         return 2;
     }
 
-    return 0;
+    return final;
 };

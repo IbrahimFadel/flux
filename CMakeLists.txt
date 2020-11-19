@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(Sandscript)
 
-set(LLVM_PATH /build/llvm/src/llvm-11.0.0.src)
+set(LLVM_PATH /build/llvm/src/llvm-12.0.0.src)
 link_directories(${LLVM_PATH}/lib)
 include_directories(${LLVM_PATH}/include)
 

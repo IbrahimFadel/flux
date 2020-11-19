@@ -27,7 +27,7 @@ class Variable_Declaration_Node;
 class If_Node;
 class Condition_Node;
 class Function_Call_Node;
-class Variable_Reference_Node;
+class Variable_Expression_Node;
 class Import_Node;
 class Variable_Assignment_Node;
 class Object_Node;
@@ -53,7 +53,25 @@ enum Variable_Type
     type_bool,
     type_void,
     type_string,
-    type_object
+    type_object,
+
+    type_i64_ptr,
+    type_i32_ptr,
+    type_i16_ptr,
+    type_i8_ptr,
+    type_float_ptr,
+    type_double_ptr,
+    type_bool_ptr,
+    type_void_ptr,
+    type_string_ptr,
+    type_object_ptr,
+};
+
+enum Variable_Expression_Type
+{
+    value,
+    reference,
+    pointer
 };
 
 class Node
@@ -120,6 +138,7 @@ public:
     void set_variable_value(std::string name, Value *v);
 
     Value *get_variable_value(std::string name);
+    Value *get_variable_ptr(std::string name);
 };
 
 class Prototype_Node : public Node
@@ -161,8 +180,10 @@ private:
     Variable_Type type;
     unique_ptr<Node> value;
     std::string type_name;
+    bool undefined = false;
 
 public:
+    Variable_Declaration_Node(std::string name, Variable_Type type) : name(name), type(type) { undefined = true; };
     Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Node> value) : name(name), type(type), value(std::move(value)){};
     Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
     Value *code_gen();
@@ -172,6 +193,7 @@ public:
     std::string get_name();
     unique_ptr<Node> get_value();
     std::string get_type_name();
+    bool is_undefined();
 };
 
 class If_Node : public Node
@@ -212,13 +234,14 @@ public:
     void print();
 };
 
-class Variable_Reference_Node : public Expression_Node
+class Variable_Expression_Node : public Expression_Node
 {
 private:
     std::string name;
+    Variable_Expression_Type type;
 
 public:
-    Variable_Reference_Node(std::string name) : name(name){};
+    Variable_Expression_Node(std::string name, Variable_Expression_Type type) : name(name), type(type){};
     Value *code_gen();
     void print();
 };

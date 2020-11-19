@@ -257,8 +257,14 @@ void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique
 Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
 {
     auto llvm_ty = variable_type_to_llvm_type(var->get_type());
-
     auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
+
+    if (var->is_undefined())
+    {
+        functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+        return ptr;
+    }
+
     auto v = var->get_value()->code_gen();
     auto store = builder.CreateStore(v, ptr);
     auto loaded = builder.CreateLoad(ptr);
@@ -266,7 +272,7 @@ Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
     functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
     functions[current_function_name]->set_variable_value(var->get_name(), loaded);
 
-    return store;
+    return loaded;
 }
 
 Value *If_Node::code_gen()
@@ -333,6 +339,50 @@ Value *If_Node::code_gen()
 }
 Value *For_Node::code_gen()
 {
+    auto entry_bb = builder.GetInsertBlock();
+    auto function = entry_bb->getParent();
+
+    auto loop_bb = BasicBlock::Create(context, "loop", function);
+
+    builder.CreateBr(loop_bb);
+
+    builder.SetInsertPoint(loop_bb);
+
+    auto start_val = variable->get_value()->code_gen();
+    auto var = variable->code_gen();
+    auto phi = builder.CreatePHI(start_val->getType(), 2);
+    phi->addIncoming(start_val, entry_bb);
+    phi->addIncoming(var, loop_bb);
+
+    print_v(phi);
+
+    // auto v =
+    print_v(start_val);
+
+    // auto pre_bb = builder.GetInsertBlock();
+    // auto function = builder.GetInsertBlock()->getParent();
+    // auto var = variable->code_gen();
+    // auto cond = condition->code_gen();
+    // auto loop_bb = llvm::BasicBlock::Create(context, "loop", function);
+    // auto continue_bb = llvm::BasicBlock::Create(context, "continue", function);
+    // auto br = builder.CreateCondBr(cond, loop_bb, continue_bb);
+    // builder.SetInsertPoint(loop_bb);
+
+    // auto variable = builder.CreatePHI(Type::getInt32Ty(context),
+    //                                   2, var->getName().str());
+    // print_v(var);
+    // variable->addIncoming(var, pre_bb);
+    // variable->addIncoming(, loop_bb);
+
+    // assignment->code_gen();
+
+    // then->code_gen();
+
+    // auto new_cond = condition->code_gen();
+    // auto repeat = builder.CreateCondBr(new_cond, loop_bb, continue_bb);
+
+    // builder.SetInsertPoint(continue_bb);
+
     return 0;
 }
 Value *Condition_Node::code_gen()
@@ -372,9 +422,18 @@ Value *Function_Call_Node::code_gen()
 
     return call;
 }
-Value *Variable_Reference_Node::code_gen()
+Value *Variable_Expression_Node::code_gen()
 {
-    return functions[current_function_name]->get_variable_value(name);
+    if (type == Variable_Expression_Type::reference)
+        return functions[current_function_name]->get_variable_ptr(name);
+    else if (type == Variable_Expression_Type::pointer)
+    {
+        auto ptr = builder.CreateLoad(functions[current_function_name]->get_variable_ptr(name));
+        auto val = builder.CreateLoad(ptr);
+        return val;
+    }
+    else
+        return functions[current_function_name]->get_variable_value(name);
 }
 Value *Import_Node::code_gen()
 {
@@ -382,6 +441,8 @@ Value *Import_Node::code_gen()
 }
 Value *Variable_Assignment_Node::code_gen()
 {
+    auto v = value->code_gen();
+    auto store = builder.CreateStore(v, functions[current_function_name]->get_variable_ptr(name));
     return 0;
 }
 Value *Object_Node::code_gen()
@@ -443,6 +504,20 @@ Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_nam
         return Type::getDoubleTy(context);
     case Variable_Type::type_object:
         return object_types[object_type_name];
+    case Variable_Type::type_i64_ptr:
+        return Type::getInt64PtrTy(context);
+    case Variable_Type::type_i32_ptr:
+        return Type::getInt32PtrTy(context);
+    case Variable_Type::type_i16_ptr:
+        return Type::getInt16PtrTy(context);
+    case Variable_Type::type_i8_ptr:
+        return Type::getInt8PtrTy(context);
+    case Variable_Type::type_bool_ptr:
+        return Type::getInt1PtrTy(context);
+    case Variable_Type::type_float_ptr:
+        return Type::getFloatPtrTy(context);
+    case Variable_Type::type_double_ptr:
+        return Type::getDoublePtrTy(context);
     default:
         error("Could not convert variable type to llvm type");
         return nullptr;
