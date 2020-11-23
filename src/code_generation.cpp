@@ -59,6 +59,11 @@ Value *Function_Node::code_gen()
 
     then->code_gen();
 
+    if (!entry->getTerminator())
+    {
+        builder.CreateRetVoid();
+    }
+
     if (verifyFunction(*function, &outs()))
     {
         print_current_module();
@@ -90,10 +95,15 @@ Value *create_entry_block_alloca(Function *function, const std::string &name, Ty
 Function *Prototype_Node::code_gen_proto()
 {
     std::vector<Type *> types;
+    std::map<int, llvm::Type *> dereferenced_types;
+    int i = 0;
     for (auto &param_type : param_types)
     {
         auto llvm_type = variable_type_to_llvm_type(param_type);
+        if (is_reference_type(param_type))
+            dereferenced_types[i] = llvm_type;
         types.push_back(llvm_type);
+        i++;
     }
 
     Type *ret;
@@ -104,6 +114,15 @@ Function *Prototype_Node::code_gen_proto()
 
     llvm::FunctionType *function_type = llvm::FunctionType::get(ret, types, false);
     llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, modules[current_module_pointer].get());
+
+    auto dl = new llvm::DataLayout(modules[current_module_pointer].get());
+    auto it = dereferenced_types.begin();
+    while (it != dereferenced_types.end())
+    {
+        unsigned bytes = dl->getTypeAllocSize(it->second);
+        f->addDereferenceableAttr(it->first + 1, bytes);
+        it++;
+    }
 
     if (f->getName() != name)
     {
@@ -267,6 +286,13 @@ Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
 
     auto v = var->get_value()->code_gen();
     auto store = builder.CreateStore(v, ptr);
+
+    if (var->get_type() == Variable_Type::type_i32_ptr)
+    {
+        functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+        return v;
+    }
+
     auto loaded = builder.CreateLoad(ptr);
 
     functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
@@ -411,19 +437,52 @@ Value *Function_Call_Node::code_gen()
     if (callee_function->arg_size() != parameters.size())
         error("Incorrect number of parameters passed to function call");
 
+    std::vector<llvm::Type *> arg_types;
+    auto args = callee_function->args();
+    auto it = args.begin();
+    while (it != args.end())
+    {
+        arg_types.push_back(it->getType());
+        it++;
+    }
+
     std::vector<llvm::Value *> args_v;
+    std::map<int, uint64_t> dereferenced_types;
     for (unsigned i = 0, size = parameters.size(); i != size; i++)
     {
-        auto v = load_if_ptr(parameters[i]->code_gen());
-        args_v.push_back(v);
+        auto bytes = callee_function->getParamDereferenceableBytes(i);
+        llvm::Value *v;
+
+        if (bytes)
+        {
+            wants_reference = true;
+            v = parameters[i]->code_gen();
+            dereferenced_types[i] = bytes;
+            args_v.push_back(v);
+            wants_reference = false;
+        }
+        else
+        {
+            v = parameters[i]->code_gen();
+            args_v.push_back(v);
+        }
     }
 
     auto call = builder.CreateCall(callee_function, args_v, "calltmp");
+
+    auto dereferenced_it = dereferenced_types.begin();
+    while (dereferenced_it != dereferenced_types.end())
+    {
+        call->addDereferenceableAttr(dereferenced_it->first + 1, dereferenced_it->second);
+        dereferenced_it++;
+    }
 
     return call;
 }
 Value *Variable_Expression_Node::code_gen()
 {
+    if (wants_reference)
+        return functions[current_function_name]->get_variable_ptr(name);
     if (type == Variable_Expression_Type::reference)
         return functions[current_function_name]->get_variable_ptr(name);
     else if (type == Variable_Expression_Type::pointer)
@@ -433,7 +492,10 @@ Value *Variable_Expression_Node::code_gen()
         return val;
     }
     else
-        return functions[current_function_name]->get_variable_value(name);
+    {
+        auto ptr = functions[current_function_name]->get_variable_ptr(name);
+        return builder.CreateLoad(ptr);
+    }
 }
 Value *Import_Node::code_gen()
 {
@@ -442,8 +504,15 @@ Value *Import_Node::code_gen()
 Value *Variable_Assignment_Node::code_gen()
 {
     auto v = value->code_gen();
-    auto store = builder.CreateStore(v, functions[current_function_name]->get_variable_ptr(name));
-    return 0;
+    auto reference_variable_names = functions[current_function_name]->get_reference_variable_names();
+    for (auto &ref_name : reference_variable_names)
+    {
+        if (name == ref_name)
+        {
+            return builder.CreateStore(v, functions[current_function_name]->get_variable_value(name));
+        }
+    }
+    return builder.CreateStore(v, functions[current_function_name]->get_variable_ptr(name));
 }
 Value *Object_Node::code_gen()
 {
@@ -518,9 +587,77 @@ Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_nam
         return Type::getFloatPtrTy(context);
     case Variable_Type::type_double_ptr:
         return Type::getDoublePtrTy(context);
+    case Variable_Type::type_i64_ref:
+        return Type::getInt64PtrTy(context);
+    case Variable_Type::type_i32_ref:
+        return Type::getInt32PtrTy(context);
+    case Variable_Type::type_i16_ref:
+        return Type::getInt16PtrTy(context);
+    case Variable_Type::type_i8_ref:
+        return Type::getInt8PtrTy(context);
+    case Variable_Type::type_bool_ref:
+        return Type::getInt1PtrTy(context);
+    case Variable_Type::type_float_ref:
+        return Type::getFloatPtrTy(context);
+    case Variable_Type::type_double_ref:
+        return Type::getDoublePtrTy(context);
     default:
         error("Could not convert variable type to llvm type");
         return nullptr;
+    }
+}
+
+bool is_reference_type(Variable_Type type)
+{
+    switch (type)
+    {
+    case Variable_Type::type_i64:
+        return false;
+    case Variable_Type::type_i32:
+        return false;
+    case Variable_Type::type_i16:
+        return false;
+    case Variable_Type::type_i8:
+        return false;
+    case Variable_Type::type_bool:
+        return false;
+    case Variable_Type::type_float:
+        return false;
+    case Variable_Type::type_double:
+        return false;
+    case Variable_Type::type_object:
+        return false;
+    case Variable_Type::type_i64_ptr:
+        return false;
+    case Variable_Type::type_i32_ptr:
+        return false;
+    case Variable_Type::type_i16_ptr:
+        return false;
+    case Variable_Type::type_i8_ptr:
+        return false;
+    case Variable_Type::type_bool_ptr:
+        return false;
+    case Variable_Type::type_float_ptr:
+        return false;
+    case Variable_Type::type_double_ptr:
+        return false;
+    case Variable_Type::type_i64_ref:
+        return true;
+    case Variable_Type::type_i32_ref:
+        return true;
+    case Variable_Type::type_i16_ref:
+        return true;
+    case Variable_Type::type_i8_ref:
+        return true;
+    case Variable_Type::type_bool_ref:
+        return true;
+    case Variable_Type::type_float_ref:
+        return true;
+    case Variable_Type::type_double_ref:
+        return true;
+    default:
+        error("Could not determine if variable type is reference type");
+        return false;
     }
 }
 

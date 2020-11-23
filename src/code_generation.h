@@ -29,6 +29,7 @@ static std::map<std::string, Function_Node *> functions;
 static std::string current_function_name;
 
 static Scope scope;
+static bool wants_reference = false;
 
 static std::map<std::string, unique_ptr<Expression_Node>> global_variables_awaiting_initialization;
 static std::string global_variable_assign_function_name = "__assign_global_variables";
@@ -47,6 +48,7 @@ static void print_v(Value *v);
 static void print_t(Value *v);
 static void print_current_module();
 
+static bool is_reference_type(Variable_Type type);
 static Value *create_entry_block_alloca(Function *function, const std::string &name, Type *type);
 static Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name = "");
 static void error(const char *arg);

@@ -48,6 +48,9 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
       case '&':
         add_token(token, tokens, true, c);
         break;
+      case ',':
+        add_token(token, tokens, true, c);
+        break;
       default:
         break;
       }
@@ -148,6 +151,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_or;
   else if (token == "&&")
     return Token_Type::tok_and;
+  else if (token == ",")
+    return Token_Type::tok_comma;
   else if (token == "->")
     return Token_Type::tok_arrow;
   else if (token == "i64")

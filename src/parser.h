@@ -44,6 +44,7 @@ static void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line,
 static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);
 static Variable_Type token_type_to_variable_type(Token_Type type);
 static Variable_Type variable_type_to_pointer_variable_type(Variable_Type type);
+static Variable_Type variable_type_to_reference_variable_type(Variable_Type type);
 static void get_next_token();
 static int get_token_precedence();
 static void error(const char *arg, int line, int column);

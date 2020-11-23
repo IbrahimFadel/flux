@@ -326,17 +326,41 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
 
     std::vector<Variable_Type> param_types;
     std::vector<std::string> param_names;
+    std::vector<std::string> reference_variable_names;
+    Variable_Type current_type;
+    bool current_type_is_reference = false;
 
     int param_counter = 0;
     while (cur_tok->type != Token_Type::tok_close_paren)
     {
         if (param_counter == 0)
         {
-            param_types.push_back(token_type_to_variable_type(cur_tok->type));
+            Variable_Type ty = token_type_to_variable_type(cur_tok->type);
+            get_next_token();
+            if (cur_tok->type == Token_Type::tok_asterisk)
+            {
+                ty = variable_type_to_pointer_variable_type(ty);
+                get_next_token();
+            }
+            else if (cur_tok->type == Token_Type::tok_ampersand)
+            {
+                ty = variable_type_to_reference_variable_type(ty);
+                get_next_token();
+                current_type_is_reference = true;
+                current_type = ty;
+            }
+            param_types.push_back(ty);
         }
         else if (param_counter == 1)
         {
             param_names.push_back(cur_tok->value);
+
+            if (current_type_is_reference)
+            {
+                reference_variable_names.push_back(cur_tok->value);
+            }
+
+            get_next_token();
         }
         else if (param_counter == 2)
         {
@@ -344,9 +368,9 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
             {
                 param_counter = -1;
             }
+            get_next_token();
         }
 
-        get_next_token();
         param_counter++;
     }
 
@@ -365,7 +389,7 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
     throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{'", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat '{'
 
-    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type, return_type_name);
+    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type, return_type_name, reference_variable_names);
 }
 
 unique_ptr<Node> parse_expression(bool needs_semicolon)
@@ -575,11 +599,7 @@ unique_ptr<Function_Call_Node> parse_function_call_node(std::string name)
     }
 
     throw_if_cur_tok_not_type(Token_Type::tok_close_paren, "Expected ')' at end of function call", cur_tok->row, cur_tok->col);
-
     get_next_token(); //? eat ')'
-
-    throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' at end of function call", cur_tok->row, cur_tok->col);
-    get_next_token(); //? eat ';'
 
     return std::make_unique<Function_Call_Node>(name, std::move(args));
 }
@@ -655,6 +675,33 @@ Variable_Type variable_type_to_pointer_variable_type(Variable_Type type)
         return Variable_Type::type_object_ptr;
     default:
         error("Could not convert variable type to variable pointer type", UNKOWN_LINE, UNKNOWN_COLUMN);
+        break;
+    }
+    return Variable_Type::type_null;
+}
+
+Variable_Type variable_type_to_reference_variable_type(Variable_Type type)
+{
+    switch (type)
+    {
+    case Variable_Type::type_i64:
+        return Variable_Type::type_i64_ref;
+    case Variable_Type::type_i32:
+        return Variable_Type::type_i32_ref;
+    case Variable_Type::type_i16:
+        return Variable_Type::type_i16_ref;
+    case Variable_Type::type_i8:
+        return Variable_Type::type_i8_ref;
+    case Variable_Type::type_double:
+        return Variable_Type::type_double_ref;
+    case Variable_Type::type_float:
+        return Variable_Type::type_float_ref;
+    case Variable_Type::type_string:
+        return Variable_Type::type_string_ref;
+    case Variable_Type::type_object:
+        return Variable_Type::type_object_ref;
+    default:
+        error("Could not convert variable type to variable reference type", UNKOWN_LINE, UNKNOWN_COLUMN);
         break;
     }
     return Variable_Type::type_null;

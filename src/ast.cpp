@@ -199,3 +199,6 @@ std::map<std::string, unique_ptr<Node>> Node::get_properties()
     std::map<std::string, unique_ptr<Node>> p;
     return std::move(p);
 };
+
+std::vector<std::string> Function_Node::get_reference_variable_names() { return prototype->get_reference_variable_names(); };
+std::vector<std::string> Prototype_Node::get_reference_variable_names() { return reference_variable_names; };
