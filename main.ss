@@ -1,12 +1,18 @@
-fn add(i32 num1, i32 num2) -> i32 {
-    return num1 + num2;
+object Person {
+    i32 age;
+    i16 address;
 };
 
-fn main() -> i32 {
-    i32 x = 1;
-    x = 5;
+fn get_person(i32 x, i16 y) -> Person {
+    Person new_person = {
+        age = x;
+        address = y;
+    };
 
-    x = add(1, 2);
+    return new_person;
+};
 
-    return x;
+fn main() -> Person {
+    Person ibrahim = get_person(16, 123);
+    return ibrahim;
 };

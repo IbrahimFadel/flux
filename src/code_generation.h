@@ -56,8 +56,7 @@ unique_ptr<Module> code_gen_nodes(const Nodes &nodes);
 static Value *code_gen_node(const unique_ptr<Node> &node);
 static void initialize_function_pass_manager();
 static Value *load_if_ptr(Value *v);
-static Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var);
-static void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Node> expr);
+static void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Expression_Node> expr);
 static Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var);
 static Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var);
 static void print_v(Value *v);
@@ -67,6 +66,7 @@ static void print_current_module();
 static bool is_reference_type(Variable_Type type);
 static Value *create_entry_block_alloca(Function *function, const std::string &name, Type *type);
 static Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name = "");
+static Variable_Type llvm_type_to_variable_type(llvm::Type *type);
 static void error(const char *arg);
 
 #endif

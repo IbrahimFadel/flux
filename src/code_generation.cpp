@@ -276,7 +276,24 @@ Value *Then_Node::code_gen()
 Value *Variable_Declaration_Node::code_gen()
 {
     if (type == Variable_Type::type_object)
-        return code_gen_object_variable_declaration(this);
+    {
+        auto llvm_ty = object_types[type_name];
+        auto ptr = builder.CreateAlloca(llvm_ty, 0, name);
+        auto fn_call = dynamic_cast<Function_Call_Node *>(std::move(value).get());
+        if (fn_call)
+        {
+            auto v = fn_call->code_gen();
+            builder.CreateStore(v, ptr);
+        }
+        else
+        {
+            define_object_properties(this, ptr, std::move(value));
+        }
+
+        functions[current_function_name]->set_variable_ptr(name, ptr);
+
+        return 0;
+    }
     else if (type == Variable_Type::type_array)
         return code_gen_array_variable_declaration(this);
     else
@@ -290,7 +307,6 @@ Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var)
     auto members = var->get_value()->get_members();
 
     auto tst = dynamic_cast<Array_Expression *>(var->get_value().get());
-    // cout << tst->get_members().size() << endl;
 
     auto array_type = llvm::ArrayType::get(members_type, members.size());
     auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
@@ -308,23 +324,7 @@ Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var)
     return 0;
 }
 
-Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var)
-{
-    auto llvm_ty = object_types[var->get_type_name()];
-    print_t(llvm_ty);
-    auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
-
-    define_object_properties(var, ptr, var->get_value());
-
-    auto loaded = builder.CreateLoad(ptr);
-
-    functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
-    functions[current_function_name]->set_variable_value(var->get_name(), loaded);
-
-    return 0;
-}
-
-void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Node> expr)
+void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Expression_Node> expr)
 {
     auto properties = expr->get_properties();
     auto it = properties.begin();
@@ -364,12 +364,12 @@ Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
         return v;
     }
 
-    auto loaded = builder.CreateLoad(ptr);
+    // auto loaded = builder.CreateLoad(ptr);
 
     functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
-    functions[current_function_name]->set_variable_value(var->get_name(), loaded);
+    // functions[current_function_name]->set_variable_value(var->get_name(), loaded);
 
-    return loaded;
+    return 0;
 }
 
 Value *If_Node::code_gen()
@@ -534,6 +534,7 @@ Value *Function_Call_Node::code_gen()
         }
         else
         {
+            currently_preferred_type = llvm_type_to_variable_type(arg_types[i]);
             v = parameters[i]->code_gen();
             args_v.push_back(v);
         }
@@ -593,10 +594,6 @@ Value *Object_Node::code_gen()
 
     object_types[name] = struct_type;
 
-    cout << "object node: " << endl;
-
-    print_t(object_types[name]);
-
     return 0;
 }
 Value *Object_Expression::code_gen()
@@ -623,15 +620,6 @@ Value *Array_Expression::code_gen()
 
 Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name)
 {
-    // auto it = object_types.begin();
-    // // cout << object_types.size() << endl;
-    // while (it != object_types.end())
-    // {
-    //     // cout << "type: " << it->first << endl;
-    //     print_t(it->second);
-    //     it++;
-    // }
-
     switch (type)
     {
     case Variable_Type::type_i64:
@@ -699,38 +687,6 @@ bool is_reference_type(Variable_Type type)
 {
     switch (type)
     {
-    case Variable_Type::type_i64:
-        return false;
-    case Variable_Type::type_i32:
-        return false;
-    case Variable_Type::type_i16:
-        return false;
-    case Variable_Type::type_i8:
-        return false;
-    case Variable_Type::type_bool:
-        return false;
-    case Variable_Type::type_float:
-        return false;
-    case Variable_Type::type_double:
-        return false;
-    case Variable_Type::type_object:
-        return false;
-    case Variable_Type::type_i64_ptr:
-        return false;
-    case Variable_Type::type_i32_ptr:
-        return false;
-    case Variable_Type::type_i16_ptr:
-        return false;
-    case Variable_Type::type_i8_ptr:
-        return false;
-    case Variable_Type::type_bool_ptr:
-        return false;
-    case Variable_Type::type_float_ptr:
-        return false;
-    case Variable_Type::type_double_ptr:
-        return false;
-    case Variable_Type::type_object_ptr:
-        return false;
     case Variable_Type::type_i64_ref:
         return true;
     case Variable_Type::type_i32_ref:
@@ -746,9 +702,43 @@ bool is_reference_type(Variable_Type type)
     case Variable_Type::type_double_ref:
         return true;
     default:
-        error("Could not determine if variable type is reference type");
         return false;
     }
+}
+
+Variable_Type llvm_type_to_variable_type(llvm::Type *type)
+{
+    if (type->isIntegerTy(64))
+    {
+        return Variable_Type::type_i64;
+    }
+    else if (type->isIntegerTy(32))
+    {
+        return Variable_Type::type_i32;
+    }
+    else if (type->isIntegerTy(16))
+    {
+        return Variable_Type::type_i16;
+    }
+    else if (type->isIntegerTy(8))
+    {
+        return Variable_Type::type_i8;
+    }
+    else if (type->isIntegerTy(1))
+    {
+        return Variable_Type::type_bool;
+    }
+    else if (type->isFloatTy())
+    {
+        return Variable_Type::type_float;
+    }
+    else if (type->isDoubleTy())
+    {
+        return Variable_Type::type_double;
+    }
+
+    error("Could not convert llvm type to variable type");
+    return Variable_Type::type_null;
 }
 
 Value *load_if_ptr(Value *v)
