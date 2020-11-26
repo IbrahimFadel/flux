@@ -34,6 +34,7 @@ class Object_Node;
 class Object_Expression;
 class String_Expression;
 class Return_Node;
+class Array_Expression;
 
 enum Node_Type
 {
@@ -54,6 +55,7 @@ enum Variable_Type
     type_void,
     type_string,
     type_object,
+    type_array,
 
     type_i64_ptr,
     type_i32_ptr,
@@ -65,6 +67,7 @@ enum Variable_Type
     type_void_ptr,
     type_string_ptr,
     type_object_ptr,
+    type_array_ptr,
 
     type_i64_ref,
     type_i32_ref,
@@ -96,6 +99,7 @@ public:
     virtual Value *code_gen() = 0;
     virtual void print() = 0;
     virtual std::map<std::string, unique_ptr<Node>> get_properties();
+    virtual std::vector<unique_ptr<Node>> get_members();
 };
 
 class Expression_Node : public Node
@@ -196,13 +200,16 @@ class Variable_Declaration_Node : public Node
 private:
     std::string name;
     Variable_Type type;
+    Variable_Type array_type;
     unique_ptr<Node> value;
     std::string type_name;
     bool undefined = false;
 
 public:
+    Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type) : name(name), type(type), array_type(array_type) { undefined = true; };
     Variable_Declaration_Node(std::string name, Variable_Type type) : name(name), type(type) { undefined = true; };
     Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Node> value) : name(name), type(type), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type, unique_ptr<Node> value) : name(name), type(type), array_type(array_type), value(std::move(value)){};
     Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
     Value *code_gen();
     void print();
@@ -212,6 +219,7 @@ public:
     unique_ptr<Node> get_value();
     std::string get_type_name();
     bool is_undefined();
+    Variable_Type get_array_type();
 };
 
 class If_Node : public Node
@@ -346,6 +354,19 @@ public:
     Return_Node(unique_ptr<Node> value) : value(std::move(value)){};
     void print();
     Value *code_gen();
+};
+
+class Array_Expression : public Expression_Node
+{
+private:
+    vector<unique_ptr<Node>> members;
+
+public:
+    Array_Expression(vector<unique_ptr<Node>> members) : members(std::move(members)){};
+    void print();
+    Value *code_gen();
+
+    std::vector<unique_ptr<Node>> get_members();
 };
 
 typedef std::vector<unique_ptr<Node>> Nodes;

@@ -29,6 +29,12 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
       case '}':
         add_token(token, tokens, true, c);
         break;
+      case '[':
+        add_token(token, tokens, true, c);
+        break;
+      case ']':
+        add_token(token, tokens, true, c);
+        break;
       case ';':
         add_token(token, tokens, true, c);
         break;
@@ -50,6 +56,13 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
         break;
       case ',':
         add_token(token, tokens, true, c);
+        break;
+      case '<':
+        add_token(token, tokens, true, c);
+        break;
+      case '>':
+        if (line[col - 1] != '-')
+          add_token(token, tokens, true, c);
         break;
       default:
         break;
@@ -127,6 +140,10 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_open_curly_bracket;
   else if (token == "}")
     return Token_Type::tok_close_curly_bracket;
+  else if (token == "[")
+    return Token_Type::tok_open_square_bracket;
+  else if (token == "]")
+    return Token_Type::tok_close_square_bracket;
   else if (token == ";")
     return Token_Type::tok_semicolon;
   else if (token == "*")
@@ -173,6 +190,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_string;
   else if (token == "object")
     return Token_Type::tok_object;
+  else if (token == "array")
+    return Token_Type::tok_array;
   else
   {
     // if (is_string)

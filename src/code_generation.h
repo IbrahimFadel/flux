@@ -57,6 +57,7 @@ static Value *load_if_ptr(Value *v);
 static Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var);
 static void define_object_properties(Variable_Declaration_Node *var, Value *ptr, unique_ptr<Node> expr);
 static Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var);
+static Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var);
 static void print_v(Value *v);
 static void print_t(Value *v);
 static void print_current_module();

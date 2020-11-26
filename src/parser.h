@@ -39,6 +39,7 @@ static unique_ptr<String_Expression> parse_string_expression();
 static unique_ptr<Return_Node> parse_return();
 static unique_ptr<Node> parse_ampersand_expression();
 static unique_ptr<Node> parse_asterisk_expression();
+static unique_ptr<Node> parse_open_square_bracket_expression();
 
 static void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line, int position);
 static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);

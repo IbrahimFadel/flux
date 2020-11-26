@@ -115,7 +115,6 @@ Function *Prototype_Node::code_gen_proto()
     int i = 0;
     for (auto &param_type : param_types)
     {
-        cout << param_type << endl;
         llvm::Type *llvm_type;
         if (param_type == Variable_Type::type_object || param_type == Variable_Type::type_object_ptr || param_type == Variable_Type::type_object_ref)
         {
@@ -261,8 +260,31 @@ Value *Variable_Declaration_Node::code_gen()
 {
     if (type == Variable_Type::type_object)
         return code_gen_object_variable_declaration(this);
+    else if (type == Variable_Type::type_array)
+        return code_gen_array_variable_declaration(this);
     else
         return code_gen_primitive_variable_declaration(this);
+}
+
+Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var)
+{
+    currently_preferred_type = var->get_array_type();
+    auto members_type = variable_type_to_llvm_type(var->get_array_type());
+    auto members = var->get_value()->get_members();
+    auto array_type = llvm::ArrayType::get(members_type, members.size());
+    auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
+
+    int i = 0;
+    for (auto &member : members)
+    {
+        auto gep = builder.CreateStructGEP(ptr, i);
+        auto store = builder.CreateStore(member->code_gen(), gep);
+        i++;
+    }
+
+    currently_preferred_type = Variable_Type::type_i32;
+
+    return 0;
 }
 
 Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var)
@@ -583,6 +605,11 @@ Value *Return_Node::code_gen()
     auto v = value->code_gen();
     auto ret = builder.CreateRet(v);
     return ret;
+}
+
+Value *Array_Expression::code_gen()
+{
+    return 0;
 }
 
 Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name)

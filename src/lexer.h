@@ -34,6 +34,7 @@ enum Token_Type
   tok_double,
   tok_string,
   tok_object,
+  tok_array,
 
   tok_compare_eq,
   tok_compare_lt,
@@ -49,6 +50,8 @@ enum Token_Type
   tok_close_paren,
   tok_open_curly_bracket,
   tok_close_curly_bracket,
+  tok_open_square_bracket,
+  tok_close_square_bracket,
 
   tok_eq,
   tok_asterisk,

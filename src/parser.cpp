@@ -58,6 +58,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_identifier_expression();
     case Token_Type::tok_object:
         return parse_object_node();
+    case Token_Type::tok_array:
+        return parse_variable_declaration();
     default:
         return nullptr;
     }
@@ -232,8 +234,18 @@ unique_ptr<Variable_Declaration_Node> parse_variable_declaration(bool is_object_
 unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration()
 {
     Variable_Type variable_type = token_type_to_variable_type(cur_tok->type);
-
+    Variable_Type array_type = Variable_Type::type_null;
     get_next_token(); //? eat 'i64', 'i32', 'float' or whatever
+
+    if (variable_type == Variable_Type::type_array)
+    {
+        throw_if_cur_tok_not_type(Token_Type::tok_compare_lt, "Expected array type", cur_tok->row, cur_tok->col);
+        get_next_token(); //? eat '<'
+        array_type = token_type_to_variable_type(cur_tok->type);
+        get_next_token(); //? eat type
+        throw_if_cur_tok_not_type(Token_Type::tok_compare_gt, "Expected array type", cur_tok->row, cur_tok->col);
+        get_next_token(); //? eat '>'
+    }
 
     if (cur_tok->type == Token_Type::tok_asterisk)
     {
@@ -248,15 +260,20 @@ unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration(
     if (cur_tok->type == Token_Type::tok_semicolon)
     {
         get_next_token(); //? eat ';'
-        auto var = std::make_unique<Variable_Declaration_Node>(variable_name, variable_type);
-        return var;
+        if (array_type == Variable_Type::type_null)
+            return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type);
+        else
+            return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, array_type);
     }
 
     get_next_token(); //? eat '='
 
     auto variable_value = parse_expression();
 
-    return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, std::move(variable_value));
+    if (array_type == Variable_Type::type_null)
+        return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, std::move(variable_value));
+    else
+        return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, array_type, std::move(variable_value));
 }
 
 unique_ptr<Variable_Declaration_Node> parse_object_variable_declaration()
@@ -426,11 +443,34 @@ unique_ptr<Node> parse_primary()
         return parse_ampersand_expression();
     case Token_Type::tok_asterisk:
         return parse_asterisk_expression();
+    case Token_Type::tok_open_square_bracket:
+        return parse_open_square_bracket_expression();
     default:
         break;
     }
 
     return nullptr;
+}
+
+unique_ptr<Node> parse_open_square_bracket_expression()
+{
+    get_next_token(); //? eat '['
+
+    std::vector<unique_ptr<Node>> members;
+    while (cur_tok->type != Token_Type::tok_close_square_bracket)
+    {
+        auto member = parse_expression(false);
+        members.push_back(std::move(member));
+        if (cur_tok->type != Token_Type::tok_close_square_bracket)
+        {
+            throw_if_cur_tok_not_type(Token_Type::tok_comma, "Expected ',' in array member list", cur_tok->row, cur_tok->col);
+            get_next_token(); //? eat ','
+        }
+    }
+
+    get_next_token(); //? eat ']'
+
+    return std::make_unique<Array_Expression>(std::move(members));
 }
 
 unique_ptr<Node> parse_asterisk_expression()
@@ -641,6 +681,8 @@ Variable_Type token_type_to_variable_type(Token_Type type)
         return Variable_Type::type_string;
     case Token_Type::tok_bool:
         return Variable_Type::type_bool;
+    case Token_Type::tok_array:
+        return Variable_Type::type_array;
     case Token_Type::tok_toi64:
         return Variable_Type::type_i64;
     case Token_Type::tok_toi32:
@@ -678,6 +720,8 @@ Variable_Type variable_type_to_pointer_variable_type(Variable_Type type)
         return Variable_Type::type_string_ptr;
     case Variable_Type::type_object:
         return Variable_Type::type_object_ptr;
+    case Variable_Type::type_array:
+        return Variable_Type::type_array_ptr;
     default:
         error("Could not convert variable type to variable pointer type", UNKOWN_LINE, UNKNOWN_COLUMN);
         break;
