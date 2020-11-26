@@ -329,6 +329,7 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
     std::vector<std::string> reference_variable_names;
     Variable_Type current_type;
     bool current_type_is_reference = false;
+    std::vector<std::string> parameter_type_names;
 
     int param_counter = 0;
     while (cur_tok->type != Token_Type::tok_close_paren)
@@ -336,6 +337,10 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
         if (param_counter == 0)
         {
             Variable_Type ty = token_type_to_variable_type(cur_tok->type);
+            if (ty == Variable_Type::type_object || ty == Variable_Type::type_object_ptr || ty == Variable_Type::type_object_ref)
+            {
+                parameter_type_names.push_back(cur_tok->value);
+            }
             get_next_token();
             if (cur_tok->type == Token_Type::tok_asterisk)
             {
@@ -389,7 +394,7 @@ unique_ptr<Prototype_Node> parse_fn_prototype()
     throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{'", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat '{'
 
-    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type, return_type_name, reference_variable_names);
+    return std::make_unique<Prototype_Node>(fn_name, param_types, param_names, return_type, return_type_name, reference_variable_names, parameter_type_names);
 }
 
 unique_ptr<Node> parse_expression(bool needs_semicolon)
@@ -710,8 +715,8 @@ Variable_Type variable_type_to_reference_variable_type(Variable_Type type)
 void get_next_token()
 {
     tok_pointer++;
-    cur_tok = std::move(toks[tok_pointer]);
-    last_tok = std::move(toks[tok_pointer - 1]);
+    cur_tok = toks[tok_pointer];
+    last_tok = toks[tok_pointer - 1];
 }
 
 int get_token_precedence()

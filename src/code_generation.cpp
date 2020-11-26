@@ -4,6 +4,8 @@ unique_ptr<Module> code_gen_nodes(const Nodes &nodes)
 {
     modules[current_module_pointer] = std::make_unique<Module>("TheModule", context);
 
+    initialize_function_pass_manager();
+
     for (auto &node : nodes)
     {
         code_gen_node(std::move(node));
@@ -18,6 +20,17 @@ Value *code_gen_node(const unique_ptr<Node> &node)
 {
     node->code_gen();
     return 0;
+}
+
+void initialize_function_pass_manager()
+{
+    fpm = std::make_unique<llvm::legacy::FunctionPassManager>(modules[current_module_pointer].get());
+    fpm->add(llvm::createInstructionCombiningPass());
+    fpm->add(llvm::createReassociatePass());
+    fpm->add(llvm::createGVNPass());
+    fpm->add(llvm::createCFGSimplificationPass());
+
+    fpm->doInitialization();
 }
 
 void print_v(Value *v)
@@ -64,6 +77,9 @@ Value *Function_Node::code_gen()
         builder.CreateRetVoid();
     }
 
+    if (optimize)
+        fpm->run(*function);
+
     if (verifyFunction(*function, &outs()))
     {
         print_current_module();
@@ -99,7 +115,18 @@ Function *Prototype_Node::code_gen_proto()
     int i = 0;
     for (auto &param_type : param_types)
     {
-        auto llvm_type = variable_type_to_llvm_type(param_type);
+        cout << param_type << endl;
+        llvm::Type *llvm_type;
+        if (param_type == Variable_Type::type_object || param_type == Variable_Type::type_object_ptr || param_type == Variable_Type::type_object_ref)
+        {
+            auto parameter_type_names = get_parameter_type_names();
+            llvm_type = variable_type_to_llvm_type(param_type, parameter_type_names[i]);
+        }
+        else
+        {
+            llvm_type = variable_type_to_llvm_type(param_type);
+        }
+
         if (is_reference_type(param_type))
             dereferenced_types[i] = llvm_type;
         types.push_back(llvm_type);
@@ -241,6 +268,7 @@ Value *Variable_Declaration_Node::code_gen()
 Value *code_gen_object_variable_declaration(Variable_Declaration_Node *var)
 {
     auto llvm_ty = object_types[var->get_type_name()];
+    print_t(llvm_ty);
     auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
 
     define_object_properties(var, ptr, var->get_value());
@@ -534,6 +562,10 @@ Value *Object_Node::code_gen()
 
     object_types[name] = struct_type;
 
+    cout << "object node: " << endl;
+
+    print_t(object_types[name]);
+
     return 0;
 }
 Value *Object_Expression::code_gen()
@@ -555,6 +587,15 @@ Value *Return_Node::code_gen()
 
 Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_name)
 {
+    // auto it = object_types.begin();
+    // // cout << object_types.size() << endl;
+    // while (it != object_types.end())
+    // {
+    //     // cout << "type: " << it->first << endl;
+    //     print_t(it->second);
+    //     it++;
+    // }
+
     switch (type)
     {
     case Variable_Type::type_i64:
@@ -587,6 +628,17 @@ Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_nam
         return Type::getFloatPtrTy(context);
     case Variable_Type::type_double_ptr:
         return Type::getDoublePtrTy(context);
+    case Variable_Type::type_object_ptr:
+    {
+        // ! WHY THE FUCK CAN'T I JUST DO OBJECT_TYPES[OBJECT_TYPE_NAME] ????? WHAT?
+        auto it = object_types.begin();
+        while (it != object_types.end())
+        {
+            if (it->first == object_type_name)
+                return llvm::PointerType::get(it->second, 0);
+            it++;
+        }
+    }
     case Variable_Type::type_i64_ref:
         return Type::getInt64PtrTy(context);
     case Variable_Type::type_i32_ref:
@@ -640,6 +692,8 @@ bool is_reference_type(Variable_Type type)
     case Variable_Type::type_float_ptr:
         return false;
     case Variable_Type::type_double_ptr:
+        return false;
+    case Variable_Type::type_object_ptr:
         return false;
     case Variable_Type::type_i64_ref:
         return true;

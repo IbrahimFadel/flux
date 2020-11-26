@@ -152,6 +152,7 @@ public:
     Value *get_variable_ptr(std::string name);
     // unique_ptr<Prototype_Node> get_proto();
     std::vector<std::string> get_reference_variable_names();
+    std::vector<std::string> get_parameter_type_names();
 };
 
 class Prototype_Node : public Node
@@ -163,10 +164,11 @@ private:
     Variable_Type return_type;
     std::string return_type_name;
     std::vector<std::string> reference_variable_names;
+    std::vector<std::string> parameter_type_names;
 
 public:
-    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type, std::vector<std::string> reference_variable_names) : name(name), param_types(param_types), param_names(param_names), return_type(return_type), reference_variable_names(reference_variable_names){};
-    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type, std::string return_type_name, std::vector<std::string> reference_variable_names) : name(name), param_types(param_types), param_names(param_names), return_type(return_type), return_type_name(return_type_name), reference_variable_names(reference_variable_names){};
+    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type, std::vector<std::string> reference_variable_names, std::vector<std::string> parameter_type_names) : name(name), param_types(param_types), param_names(param_names), return_type(return_type), reference_variable_names(reference_variable_names), parameter_type_names(parameter_type_names){};
+    Prototype_Node(std::string name, std::vector<Variable_Type> param_types, std::vector<std::string> param_names, Variable_Type return_type, std::string return_type_name, std::vector<std::string> reference_variable_names, std::vector<std::string> parameter_type_names) : name(name), param_types(param_types), param_names(param_names), return_type(return_type), return_type_name(return_type_name), reference_variable_names(reference_variable_names), parameter_type_names(parameter_type_names){};
     Value *code_gen();
     Function *code_gen_proto();
     void print();
@@ -175,6 +177,7 @@ public:
     std::string get_name();
     Variable_Type get_return_type();
     std::vector<std::string> get_reference_variable_names();
+    std::vector<std::string> get_parameter_type_names();
 };
 
 class Then_Node : public Node
