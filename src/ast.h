@@ -29,7 +29,6 @@ class Condition_Node;
 class Function_Call_Node;
 class Variable_Expression_Node;
 class Import_Node;
-class Variable_Assignment_Node;
 class Object_Node;
 class Object_Expression;
 class String_Expression;
@@ -98,8 +97,8 @@ public:
     void set_node_type(Node_Type node_type);
     virtual Value *code_gen() = 0;
     virtual void print() = 0;
-    virtual std::map<std::string, unique_ptr<Node>> get_properties();
-    virtual std::vector<unique_ptr<Node>> get_members();
+    virtual std::map<std::string, unique_ptr<Expression_Node>> get_properties();
+    virtual std::vector<unique_ptr<Expression_Node>> get_members();
 };
 
 class Expression_Node : public Node
@@ -111,19 +110,19 @@ public:
     Value *code_gen();
 };
 
-class Binary_Operation_Expression_Node : public Node
+class Binary_Operation_Expression_Node : public Expression_Node
 {
 private:
     std::string op;
-    unique_ptr<Node> lhs, rhs;
+    unique_ptr<Expression_Node> lhs, rhs;
 
 public:
-    Binary_Operation_Expression_Node(std::string op, unique_ptr<Node> lhs, unique_ptr<Node> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
+    Binary_Operation_Expression_Node(std::string op, unique_ptr<Expression_Node> lhs, unique_ptr<Expression_Node> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
     Value *code_gen();
     void print();
 };
 
-class Number_Expression_Node : public Node
+class Number_Expression_Node : public Expression_Node
 {
 private:
     double value;
@@ -201,22 +200,22 @@ private:
     std::string name;
     Variable_Type type;
     Variable_Type array_type;
-    unique_ptr<Node> value;
+    unique_ptr<Expression_Node> value;
     std::string type_name;
     bool undefined = false;
 
 public:
     Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type) : name(name), type(type), array_type(array_type) { undefined = true; };
     Variable_Declaration_Node(std::string name, Variable_Type type) : name(name), type(type) { undefined = true; };
-    Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Node> value) : name(name), type(type), value(std::move(value)){};
-    Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type, unique_ptr<Node> value) : name(name), type(type), array_type(array_type), value(std::move(value)){};
-    Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type, unique_ptr<Expression_Node> value) : name(name), type(type), array_type(array_type), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Expression_Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
     Value *code_gen();
     void print();
 
     Variable_Type get_type();
     std::string get_name();
-    unique_ptr<Node> get_value();
+    unique_ptr<Expression_Node> get_value();
     std::string get_type_name();
     bool is_undefined();
     Variable_Type get_array_type();
@@ -238,24 +237,24 @@ public:
 class Condition_Node : public Node
 {
 private:
-    unique_ptr<Node> lhs;
+    unique_ptr<Expression_Node> lhs;
     Token_Type op;
-    unique_ptr<Node> rhs;
+    unique_ptr<Expression_Node> rhs;
 
 public:
-    Condition_Node(unique_ptr<Node> lhs, Token_Type op, unique_ptr<Node> rhs) : lhs(std::move(lhs)), op(op), rhs(std::move(rhs)){};
+    Condition_Node(unique_ptr<Expression_Node> lhs, Token_Type op, unique_ptr<Expression_Node> rhs) : lhs(std::move(lhs)), op(op), rhs(std::move(rhs)){};
     Value *code_gen();
     void print();
 };
 
-class Function_Call_Node : public Node
+class Function_Call_Node : public Expression_Node
 {
 private:
     std::string name;
-    std::vector<std::unique_ptr<Node>> parameters;
+    std::vector<std::unique_ptr<Expression_Node>> parameters;
 
 public:
-    Function_Call_Node(std::string name, std::vector<std::unique_ptr<Node>> parameters) : name(name), parameters(std::move(parameters)){};
+    Function_Call_Node(std::string name, std::vector<std::unique_ptr<Expression_Node>> parameters) : name(name), parameters(std::move(parameters)){};
     Value *code_gen();
     void print();
 };
@@ -270,6 +269,7 @@ public:
     Variable_Expression_Node(std::string name, Variable_Expression_Type type) : name(name), type(type){};
     Value *code_gen();
     void print();
+    std::string get_name();
 };
 
 class Import_Node : public Node
@@ -287,24 +287,12 @@ class For_Node : public Node
 {
 private:
     std::unique_ptr<Variable_Declaration_Node> variable;
-    std::unique_ptr<Node> condition;
-    std::unique_ptr<Variable_Assignment_Node> assignment;
+    std::unique_ptr<Expression_Node> condition;
+    std::unique_ptr<Expression_Node> assignment;
     std::unique_ptr<Then_Node> then;
 
 public:
-    For_Node(std::unique_ptr<Variable_Declaration_Node> variable, std::unique_ptr<Node> condition, std::unique_ptr<Variable_Assignment_Node> assignment, std::unique_ptr<Then_Node> then) : variable(std::move(variable)), condition(std::move(condition)), assignment(std::move(assignment)), then(std::move(then)){};
-    Value *code_gen();
-    void print();
-};
-
-class Variable_Assignment_Node : public Node
-{
-private:
-    std::string name;
-    unique_ptr<Node> value;
-
-public:
-    Variable_Assignment_Node(std::string name, unique_ptr<Node> value) : name(name), value(std::move(value)){};
+    For_Node(std::unique_ptr<Variable_Declaration_Node> variable, std::unique_ptr<Expression_Node> condition, std::unique_ptr<Expression_Node> assignment, std::unique_ptr<Then_Node> then) : variable(std::move(variable)), condition(std::move(condition)), assignment(std::move(assignment)), then(std::move(then)){};
     Value *code_gen();
     void print();
 };
@@ -321,20 +309,20 @@ public:
     void print();
 };
 
-class Object_Expression : public Node
+class Object_Expression : public Expression_Node
 {
 private:
-    std::map<std::string, unique_ptr<Node>> properties;
+    std::map<std::string, unique_ptr<Expression_Node>> properties;
 
 public:
-    Object_Expression(std::map<std::string, unique_ptr<Node>> properties) : properties(std::move(properties)){};
+    Object_Expression(std::map<std::string, unique_ptr<Expression_Node>> properties) : properties(std::move(properties)){};
     Value *code_gen();
     void print();
 
-    std::map<std::string, unique_ptr<Node>> get_properties();
+    std::map<std::string, unique_ptr<Expression_Node>> get_properties();
 };
 
-class String_Expression : public Node
+class String_Expression : public Expression_Node
 {
 private:
     std::string value;
@@ -348,10 +336,10 @@ public:
 class Return_Node : public Node
 {
 private:
-    unique_ptr<Node> value;
+    unique_ptr<Expression_Node> value;
 
 public:
-    Return_Node(unique_ptr<Node> value) : value(std::move(value)){};
+    Return_Node(unique_ptr<Expression_Node> value) : value(std::move(value)){};
     void print();
     Value *code_gen();
 };
@@ -359,14 +347,14 @@ public:
 class Array_Expression : public Expression_Node
 {
 private:
-    vector<unique_ptr<Node>> members;
+    vector<unique_ptr<Expression_Node>> members;
 
 public:
-    Array_Expression(vector<unique_ptr<Node>> members) : members(std::move(members)){};
+    Array_Expression(vector<unique_ptr<Expression_Node>> members) : members(std::move(members)){};
     void print();
     Value *code_gen();
 
-    std::vector<unique_ptr<Node>> get_members();
+    std::vector<unique_ptr<Expression_Node>> get_members();
 };
 
 typedef std::vector<unique_ptr<Node>> Nodes;

@@ -16,11 +16,13 @@ void print_nodes(const Nodes &nodes);
 Nodes parse_tokens(const Tokens &tokens);
 static unique_ptr<Node> parse_token(const shared_ptr<Token> &token);
 
-static unique_ptr<Node> parse_expression(bool needs_semicolon = true);
-static unique_ptr<Node> parse_primary();
-static unique_ptr<Node> parse_binop_rhs(int expression_precedence, unique_ptr<Node> lhs);
-static unique_ptr<Node> parse_number_expression();
-static unique_ptr<Node> parse_identifier_expression();
+static std::vector<std::string> parsed_object_types;
+
+static unique_ptr<Expression_Node> parse_expression(bool needs_semicolon = true);
+static unique_ptr<Expression_Node> parse_primary();
+static unique_ptr<Expression_Node> parse_binop_rhs(int expression_precedence, unique_ptr<Expression_Node> lhs);
+static unique_ptr<Expression_Node> parse_number_expression();
+static unique_ptr<Expression_Node> parse_identifier_expression();
 static unique_ptr<Function_Node> parse_fn_declaration();
 static unique_ptr<Prototype_Node> parse_fn_prototype();
 static unique_ptr<Then_Node> parse_then();
@@ -30,16 +32,15 @@ static std::tuple<std::vector<std::unique_ptr<Condition_Node>>, std::vector<Toke
 static unique_ptr<Function_Call_Node> parse_function_call_node(std::string name);
 static unique_ptr<Import_Node> parse_import();
 static unique_ptr<For_Node> parse_for();
-static unique_ptr<Variable_Assignment_Node> parse_variable_assignment(std::string name, bool needs_semicolon = true);
 static unique_ptr<Object_Node> parse_object_node();
 static unique_ptr<Variable_Declaration_Node> parse_object_variable_declaration();
 static unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration();
 static unique_ptr<Object_Expression> parse_object_expression();
 static unique_ptr<String_Expression> parse_string_expression();
 static unique_ptr<Return_Node> parse_return();
-static unique_ptr<Node> parse_ampersand_expression();
-static unique_ptr<Node> parse_asterisk_expression();
-static unique_ptr<Node> parse_open_square_bracket_expression();
+static unique_ptr<Expression_Node> parse_ampersand_expression();
+static unique_ptr<Expression_Node> parse_asterisk_expression();
+static unique_ptr<Expression_Node> parse_open_square_bracket_expression();
 
 static void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line, int position);
 static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);

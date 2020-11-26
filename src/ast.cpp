@@ -25,17 +25,17 @@ void Variable_Expression_Node::print()
 {
     cout << name;
     if (type == Variable_Expression_Type::reference)
-        cout << " reference";
+        cout << " (reference)";
     else if (type == Variable_Expression_Type::pointer)
-        cout << " pointer";
+        cout << " (pointer)";
     else if (type == Variable_Expression_Type::value)
-        cout << " value";
+        cout << " (value)";
 }
 
 void Binary_Operation_Expression_Node::print()
 {
     lhs->print();
-    cout << op;
+    cout << ' ' << op << ' ';
     rhs->print();
     cout << endl;
 }
@@ -134,13 +134,6 @@ void For_Node::print()
     then->print();
 }
 
-void Variable_Assignment_Node::print()
-{
-    cout << "Assign " << name << " to ";
-    value->print();
-    cout << endl;
-}
-
 void Object_Node::print()
 {
     cout << "Defining object type with name: " << name << endl;
@@ -193,15 +186,15 @@ Value *Function_Node::get_variable_ptr(std::string name) { return variable_ptrs[
 std::string Variable_Declaration_Node::get_type_name() { return type_name; }
 Variable_Type Variable_Declaration_Node::get_type() { return type; };
 std::string Variable_Declaration_Node::get_name() { return name; };
-unique_ptr<Node> Variable_Declaration_Node::get_value() { return std::move(value); };
+unique_ptr<Expression_Node> Variable_Declaration_Node::get_value() { return std::move(value); };
 bool Variable_Declaration_Node::is_undefined() { return undefined; };
 Variable_Type Variable_Declaration_Node::get_array_type() { return array_type; };
 
-std::map<std::string, unique_ptr<Node>> Object_Expression::get_properties() { return std::move(properties); };
+std::map<std::string, unique_ptr<Expression_Node>> Object_Expression::get_properties() { return std::move(properties); };
 
-std::map<std::string, unique_ptr<Node>> Node::get_properties()
+std::map<std::string, unique_ptr<Expression_Node>> Node::get_properties()
 {
-    std::map<std::string, unique_ptr<Node>> p;
+    std::map<std::string, unique_ptr<Expression_Node>> p;
     return std::move(p);
 };
 
@@ -210,5 +203,7 @@ std::vector<std::string> Prototype_Node::get_reference_variable_names() { return
 std::vector<std::string> Prototype_Node::get_parameter_type_names() { return parameter_type_names; };
 std::vector<std::string> Function_Node::get_parameter_type_names() { return prototype->get_parameter_type_names(); };
 
-std::vector<unique_ptr<Node>> Array_Expression::get_members() { return std::move(members); };
-std::vector<unique_ptr<Node>> Node::get_members() { return std::vector<unique_ptr<Node>>(0); };
+std::vector<unique_ptr<Expression_Node>> Array_Expression::get_members() { return std::move(members); };
+std::vector<unique_ptr<Expression_Node>> Node::get_members() { return std::vector<unique_ptr<Expression_Node>>(0); };
+
+std::string Variable_Expression_Node::get_name() { return name; };

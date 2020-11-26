@@ -29,6 +29,7 @@ void initialize_function_pass_manager()
     fpm->add(llvm::createReassociatePass());
     fpm->add(llvm::createGVNPass());
     fpm->add(llvm::createCFGSimplificationPass());
+    fpm->add(llvm::createPromoteMemoryToRegisterPass());
 
     fpm->doInitialization();
 }
@@ -177,6 +178,22 @@ Value *Expression_Node::code_gen()
 }
 Value *Binary_Operation_Expression_Node::code_gen()
 {
+
+    if (op == "=")
+    {
+        auto l = dynamic_cast<Variable_Expression_Node *>(lhs.get());
+        if (!l)
+            error("Left hand side of '=' must be a variable");
+
+        auto var = functions[current_function_name]->get_variable_ptr(l->get_name());
+        if (!var)
+            error("Unknown variable referenced");
+
+        auto val = rhs->code_gen();
+
+        return builder.CreateStore(val, var);
+    }
+
     auto l = lhs->code_gen();
     auto r = rhs->code_gen();
 
@@ -271,6 +288,10 @@ Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var)
     currently_preferred_type = var->get_array_type();
     auto members_type = variable_type_to_llvm_type(var->get_array_type());
     auto members = var->get_value()->get_members();
+
+    auto tst = dynamic_cast<Array_Expression *>(var->get_value().get());
+    // cout << tst->get_members().size() << endl;
+
     auto array_type = llvm::ArrayType::get(members_type, members.size());
     auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
 
@@ -551,19 +572,7 @@ Value *Import_Node::code_gen()
 {
     return 0;
 }
-Value *Variable_Assignment_Node::code_gen()
-{
-    auto v = value->code_gen();
-    auto reference_variable_names = functions[current_function_name]->get_reference_variable_names();
-    for (auto &ref_name : reference_variable_names)
-    {
-        if (name == ref_name)
-        {
-            return builder.CreateStore(v, functions[current_function_name]->get_variable_value(name));
-        }
-    }
-    return builder.CreateStore(v, functions[current_function_name]->get_variable_ptr(name));
-}
+
 Value *Object_Node::code_gen()
 {
     auto it = properties.begin();

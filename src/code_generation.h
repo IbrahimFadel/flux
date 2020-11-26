@@ -13,9 +13,11 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/IR/LegacyPassNameParser.h>
+
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Transforms/Utils.h>
 
 #include <llvm/Support/raw_ostream.h>
 
