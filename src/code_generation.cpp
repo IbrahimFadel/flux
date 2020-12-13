@@ -97,7 +97,7 @@ void Prototype_Node::create_argument_allocas(Function *function)
     {
         auto ptr = create_entry_block_alloca(function, param_names[i], variable_type_to_llvm_type(param_types[i]));
         auto store = builder.CreateStore(it, ptr);
-        auto loaded = builder.CreateLoad(ptr);
+        auto loaded = builder.CreateLoad(ptr, ptr->getName() + "_loaded");
         functions[current_function_name]->set_variable_ptr(param_names[i], ptr);
         functions[current_function_name]->set_variable_value(param_names[i], loaded);
     }
@@ -237,6 +237,7 @@ Value *Binary_Operation_Expression_Node::code_gen()
 
 Value *Number_Expression_Node::code_gen()
 {
+    // cout << "NUMBER" << endl;
     if (variable_type == Variable_Type::type_null)
         variable_type = currently_preferred_type;
     switch (variable_type)
@@ -357,19 +358,15 @@ Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var)
 
     auto v = var->get_value()->code_gen();
     auto store = builder.CreateStore(v, ptr);
-
     if (var->get_type() == Variable_Type::type_i32_ptr)
     {
         functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
         return v;
     }
 
-    // auto loaded = builder.CreateLoad(ptr);
-
     functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
-    // functions[current_function_name]->set_variable_value(var->get_name(), loaded);
 
-    return 0;
+    return ptr;
 }
 
 Value *If_Node::code_gen()
@@ -436,56 +433,29 @@ Value *If_Node::code_gen()
 }
 Value *For_Node::code_gen()
 {
-    auto entry_bb = builder.GetInsertBlock();
-    auto function = entry_bb->getParent();
-
-    auto loop_bb = BasicBlock::Create(context, "loop", function);
-
-    builder.CreateBr(loop_bb);
-
-    builder.SetInsertPoint(loop_bb);
-
-    auto start_val = variable->get_value()->code_gen();
+    auto the_function = builder.GetInsertBlock()->getParent();
     auto var = variable->code_gen();
-    auto phi = builder.CreatePHI(start_val->getType(), 2);
-    phi->addIncoming(start_val, entry_bb);
-    phi->addIncoming(var, loop_bb);
+    auto cond = condition->code_gen();
+    auto loop_bb = llvm::BasicBlock::Create(context, "loop", the_function);
+    auto continue_bb = llvm::BasicBlock::Create(context, "continue", the_function);
+    auto br = builder.CreateCondBr(cond, loop_bb, continue_bb);
+    builder.SetInsertPoint(loop_bb);
+    then->code_gen();
+    assignment->code_gen();
 
-    print_v(phi);
+    auto new_cond = condition->code_gen();
+    auto repeat = builder.CreateCondBr(new_cond, loop_bb, continue_bb);
 
-    // auto v =
-    print_v(start_val);
-
-    // auto pre_bb = builder.GetInsertBlock();
-    // auto function = builder.GetInsertBlock()->getParent();
-    // auto var = variable->code_gen();
-    // auto cond = condition->code_gen();
-    // auto loop_bb = llvm::BasicBlock::Create(context, "loop", function);
-    // auto continue_bb = llvm::BasicBlock::Create(context, "continue", function);
-    // auto br = builder.CreateCondBr(cond, loop_bb, continue_bb);
-    // builder.SetInsertPoint(loop_bb);
-
-    // auto variable = builder.CreatePHI(Type::getInt32Ty(context),
-    //                                   2, var->getName().str());
-    // print_v(var);
-    // variable->addIncoming(var, pre_bb);
-    // variable->addIncoming(, loop_bb);
-
-    // assignment->code_gen();
-
-    // then->code_gen();
-
-    // auto new_cond = condition->code_gen();
-    // auto repeat = builder.CreateCondBr(new_cond, loop_bb, continue_bb);
-
-    // builder.SetInsertPoint(continue_bb);
+    builder.SetInsertPoint(continue_bb);
 
     return 0;
 }
 Value *Condition_Node::code_gen()
 {
-    auto l = load_if_ptr(lhs->code_gen());
-    auto r = load_if_ptr(rhs->code_gen());
+    currently_preferred_type = Variable_Type::type_i32;
+    auto l = lhs->code_gen();
+    currently_preferred_type = llvm_type_to_variable_type(l->getType());
+    auto r = rhs->code_gen();
 
     switch (op)
     {
@@ -499,6 +469,7 @@ Value *Condition_Node::code_gen()
         error("Unknown operator in condition");
         return 0;
     }
+    currently_preferred_type = Variable_Type::type_bool;
 }
 Value *Function_Call_Node::code_gen()
 {
@@ -559,14 +530,14 @@ Value *Variable_Expression_Node::code_gen()
         return functions[current_function_name]->get_variable_ptr(name);
     else if (type == Variable_Expression_Type::pointer)
     {
-        auto ptr = builder.CreateLoad(functions[current_function_name]->get_variable_ptr(name));
-        auto val = builder.CreateLoad(ptr);
+        auto ptr = builder.CreateLoad(functions[current_function_name]->get_variable_ptr(name), functions[current_function_name]->get_variable_ptr(name)->getName() + "_loaded");
+        auto val = builder.CreateLoad(ptr, ptr->getName() + "_loaded");
         return val;
     }
     else
     {
         auto ptr = functions[current_function_name]->get_variable_ptr(name);
-        return builder.CreateLoad(ptr);
+        return builder.CreateLoad(ptr, ptr->getName() + "_loaded");
     }
 }
 Value *Import_Node::code_gen()
@@ -744,7 +715,7 @@ Variable_Type llvm_type_to_variable_type(llvm::Type *type)
 Value *load_if_ptr(Value *v)
 {
     if (v->getType()->isPointerTy())
-        return builder.CreateLoad(v);
+        return builder.CreateLoad(v, v->getName() + "_loaded");
     return v;
 }
 

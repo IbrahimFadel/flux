@@ -139,14 +139,11 @@ unique_ptr<For_Node> parse_for()
     throw_if_cur_tok_not_type(Token_Type::tok_open_paren, "Expected '(' in if statement", cur_tok->row, cur_tok->col);
 
     get_next_token(); //? eat '('
-
     auto variable = parse_variable_declaration();
     auto condition = parse_expression();
     std::string name = cur_tok->value;
-    get_next_token(); //? eat variable name
 
-    auto assignment = parse_expression();
-    // auto assignment = parse_variable_assignment(name, false);
+    auto assignment = parse_expression(false);
 
     throw_if_cur_tok_not_type(Token_Type::tok_close_paren, "Expected ')' in for loop", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat ')'
@@ -276,7 +273,9 @@ unique_ptr<Variable_Declaration_Node> parse_primitive_type_variable_declaration(
     auto variable_value = parse_expression();
 
     if (array_type == Variable_Type::type_null)
+    {
         return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, std::move(variable_value));
+    }
     else
         return std::make_unique<Variable_Declaration_Node>(variable_name, variable_type, array_type, std::move(variable_value));
 }

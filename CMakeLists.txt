@@ -18,3 +18,7 @@ set(TESTS_SOURCE_FILES ${TESTS_DIR}/tests.cpp)
 add_executable(ss-test ${TESTS_SOURCE_FILES})
 target_include_directories(ss-test PRIVATE ${SRC_DIR})
 target_link_libraries(ss-test sandscript gtest)
+
+set(INSTALL_PREFIX /usr/local/bin)
+
+install(TARGETS ssc DESTINATION /usr/local/bin)
