@@ -20,6 +20,13 @@ fn main() -> i32 {
     return 0;
 };
 ```
+Right now ssc emits object files, not executables
+```bash
+ssc main.ss -o test.o
+clang++ test.o -o test
+./test
+# My age in 10 years will be: 26
+```
 
 Primitive types:
 
