@@ -38,7 +38,7 @@ Primitive types:
 | Signed 8 bit integer  | i8                   |
 | Unsigned 1 bit integer| bool                 |
 | Array of bytes        | string               |
-| Array of any          | array<type>          |
+| Array of any          | array\<type>          |
 
 User defined types:
 ```
