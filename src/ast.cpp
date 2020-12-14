@@ -207,3 +207,5 @@ std::vector<unique_ptr<Expression_Node>> Array_Expression::get_members() { retur
 std::vector<unique_ptr<Expression_Node>> Node::get_members() { return std::vector<unique_ptr<Expression_Node>>(0); };
 
 std::string Variable_Expression_Node::get_name() { return name; };
+
+std::string String_Expression::get_value() { return value; };

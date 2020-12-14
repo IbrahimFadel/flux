@@ -78,6 +78,7 @@ struct Token
 typedef vector<shared_ptr<Token>> Tokens;
 
 static int row = 0, col = 0;
+static bool is_string = false;
 
 vector<shared_ptr<Token>> tokenize(vector<string> content);
 static void add_token(string &token, vector<shared_ptr<Token>> &tokens, bool is_single_char_token = false, char single_char_token = '\0');

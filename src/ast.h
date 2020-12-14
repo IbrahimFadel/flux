@@ -331,6 +331,7 @@ public:
     String_Expression(std::string value) : value(value){};
     Value *code_gen();
     void print();
+    std::string get_value();
 };
 
 class Return_Node : public Node

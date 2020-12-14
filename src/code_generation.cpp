@@ -1,10 +1,14 @@
 #include "code_generation.h"
 
-unique_ptr<Module> code_gen_nodes(const Nodes &nodes)
+unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions opts)
 {
+    compiler_options = opts;
     modules[current_module_pointer] = std::make_unique<Module>("TheModule", context);
 
-    initialize_function_pass_manager();
+    if (compiler_options.optimize)
+        initialize_function_pass_manager();
+
+    declare_printf();
 
     for (auto &node : nodes)
     {
@@ -14,6 +18,75 @@ unique_ptr<Module> code_gen_nodes(const Nodes &nodes)
     print_current_module();
 
     return std::move(modules[current_module_pointer]);
+}
+
+void declare_printf()
+{
+    std::vector<llvm::Type *> param_types;
+    param_types.push_back(llvm::Type::getInt8PtrTy(context));
+    llvm::FunctionType *f_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, true);
+    auto f = llvm::Function::Create(f_type, llvm::Function::ExternalLinkage, "printf", modules[current_module_pointer].get());
+}
+
+void module_to_obj(unique_ptr<llvm::Module> m)
+{
+    cout << "compiling module to obj: " << compiler_options.output_path << endl;
+    auto target_triple = llvm::sys::getDefaultTargetTriple();
+
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(target_triple, error);
+    if (!target)
+    {
+        llvm::errs() << error;
+        exit(1);
+    }
+
+    auto CPU = "generic";
+    auto features = "";
+
+    llvm::TargetOptions opt;
+    auto rm = llvm::Optional<llvm::Reloc::Model>();
+    auto target_machine = target->createTargetMachine(target_triple, CPU, features, opt, rm);
+
+    m->setDataLayout(target_machine->createDataLayout());
+    m->setTargetTriple(target_triple);
+
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(compiler_options.output_path, ec, llvm::sys::fs::F_None);
+    if (ec)
+    {
+        llvm::errs() << "Could not open file: " << ec.message();
+        exit(1);
+    }
+
+    llvm::legacy::PassManager pass;
+    auto file_type = llvm::CGFT_ObjectFile;
+
+    if (target_machine->addPassesToEmitFile(pass, dest, nullptr, file_type))
+    {
+        errs() << "Target Machine cannot emit a file of this type";
+        exit(1);
+    }
+
+    pass.run(*m.get());
+    dest.flush();
+
+    // const char *emu_argv[] = {
+    //     "ld.lld",
+    //     compiler_options.output_path.c_str(),
+    //     "-o",
+    //     "../testytest",
+    // };
+    // int argc = sizeof(emu_argv) / sizeof(emu_argv[0]);
+    // const char **argv = (const char **)emu_argv;
+    // std::vector<const char *> args(argv, argv + argc);
+    // lld::elf::link(args, false, outs(), outs());
 }
 
 Value *code_gen_node(const unique_ptr<Node> &node)
@@ -27,7 +100,8 @@ void initialize_function_pass_manager()
     fpm = std::make_unique<llvm::legacy::FunctionPassManager>(modules[current_module_pointer].get());
     fpm->add(llvm::createInstructionCombiningPass());
     fpm->add(llvm::createReassociatePass());
-    fpm->add(llvm::createGVNPass());
+    // fpm->add(llvm::createDeadCodeEliminationPass());
+    // fpm->add(llvm::createGVNPass());
     fpm->add(llvm::createCFGSimplificationPass());
     fpm->add(llvm::createPromoteMemoryToRegisterPass());
 
@@ -73,19 +147,48 @@ Value *Function_Node::code_gen()
 
     then->code_gen();
 
+    // const llvm::Function::BasicBlockListType &tst = function->getBasicBlockList();
+    // auto bb_it = tst.begin();
+    // auto bb_end = tst.end();
+    // while (bb_it != bb_end)
+    // {
+    //     cout << "BB" << endl;
+    //     const llvm::BasicBlock::InstListType &instrs = bb_it->getInstList();
+    //     auto instrs_it = instrs.begin();
+    //     auto instrs_end = instrs.end();
+    //     bool delete_the_rest = false;
+    //     while (instrs_it != instrs_end)
+    //     {
+    //         if (delete_the_rest)
+    //         {
+    //             // instrs_it->eraseFromParent();
+    //             llvm::Instruction *current_inst = (llvm::Instruction *)&*instrs_it;
+    //             current_inst->eraseFromParent();
+    //         }
+    //         if (instrs_it->isTerminator())
+    //         {
+    //             cout << "term" << endl;
+    //             delete_the_rest = true;
+    //         }
+    //         instrs_it++;
+    //     }
+
+    //     bb_it++;
+    // }
+
     if (!entry->getTerminator())
     {
         builder.CreateRetVoid();
     }
 
-    if (optimize)
+    if (compiler_options.optimize)
         fpm->run(*function);
 
-    if (verifyFunction(*function, &outs()))
-    {
-        print_current_module();
-        exit(1);
-    }
+    // if (verifyFunction(*function, &outs()))
+    // {
+    // print_current_module();
+    // exit(1);
+    // }
 
     return function;
 }
@@ -297,8 +400,39 @@ Value *Variable_Declaration_Node::code_gen()
     }
     else if (type == Variable_Type::type_array)
         return code_gen_array_variable_declaration(this);
+    else if (type == Variable_Type::type_string)
+        return code_gen_string_variable_declaration(this);
     else
         return code_gen_primitive_variable_declaration(this);
+}
+
+Value *code_gen_string_variable_declaration(Variable_Declaration_Node *var)
+{
+    auto string_expr = static_cast<String_Expression *>(var->get_value().get());
+    auto string_val = string_expr->get_value();
+    auto string_len = string_val.size();
+    cout << string_val << endl;
+
+    auto array_type = llvm::ArrayType::get(llvm::Type::getInt8Ty(context), string_len + 2);
+    auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
+
+    int i = 0;
+    for (auto &c : string_val)
+    {
+        auto gep = builder.CreateStructGEP(ptr, i);
+        auto store = builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, c)), gep);
+        i++;
+    }
+
+    auto nlgep = builder.CreateStructGEP(ptr, i);
+    builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 12)), nlgep);
+    i++;
+    auto nullgep = builder.CreateStructGEP(ptr, i);
+    builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 00)), nullgep);
+
+    functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+
+    return 0;
 }
 
 Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var)
@@ -474,9 +608,13 @@ Value *Condition_Node::code_gen()
 Value *Function_Call_Node::code_gen()
 {
     auto callee_function = modules[current_module_pointer]->getFunction(name);
+
+    // cout << callee_function->arg_size() << ' ' << parameters.size() << endl;
+    // cout << callee_function->isVarArg() << endl;
+
     if (callee_function == 0)
         error("Unknown function referenced in function call");
-    if (callee_function->arg_size() != parameters.size())
+    if (callee_function->arg_size() != parameters.size() && !callee_function->isVarArg())
         error("Incorrect number of parameters passed to function call");
 
     std::vector<llvm::Type *> arg_types;
@@ -505,9 +643,14 @@ Value *Function_Call_Node::code_gen()
         }
         else
         {
-            currently_preferred_type = llvm_type_to_variable_type(arg_types[i]);
+            // cout << "arg type: ";
+            // print_t(arg_types[i]);
+            if (i < arg_types.size())
+                currently_preferred_type = llvm_type_to_variable_type(arg_types[i]);
+            // cout << "preffered: " << currently_preferred_type << endl;
             v = parameters[i]->code_gen();
             args_v.push_back(v);
+            currently_preferred_type = llvm_type_to_variable_type(builder.GetInsertBlock()->getParent()->getReturnType());
         }
     }
 
@@ -537,6 +680,16 @@ Value *Variable_Expression_Node::code_gen()
     else
     {
         auto ptr = functions[current_function_name]->get_variable_ptr(name);
+        auto ty = ptr->getType();
+        if (ty->isPointerTy())
+        {
+            auto contained_type = ty->getContainedType(0);
+            if (contained_type->isArrayTy())
+            {
+                cout << "it's array" << endl;
+                return builder.CreateStructGEP(ptr, 0, ptr->getName() + "_loaded");
+            }
+        }
         return builder.CreateLoad(ptr, ptr->getName() + "_loaded");
     }
 }
@@ -574,6 +727,18 @@ Value *Object_Expression::code_gen()
 }
 Value *String_Expression::code_gen()
 {
+    // auto string_len = value.size();
+
+    // auto array_type = llvm::ArrayType::get(llvm::Type::getInt8Ty(context), string_len);
+    // auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
+
+    // int i = 0;
+    // for (auto &c : string_val)
+    // {
+    //     auto gep = builder.CreateStructGEP(ptr, i);
+    //     auto store = builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, c)), gep);
+    //     i++;
+    // }
     return 0;
 }
 
@@ -698,6 +863,10 @@ Variable_Type llvm_type_to_variable_type(llvm::Type *type)
     else if (type->isIntegerTy(1))
     {
         return Variable_Type::type_bool;
+    }
+    else if (type->isIntOrPtrTy())
+    {
+        return Variable_Type::type_i8_ptr;
     }
     else if (type->isFloatTy())
     {

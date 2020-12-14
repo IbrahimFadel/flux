@@ -9,8 +9,26 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
   {
     for (auto &c : line)
     {
-      if (c != ' ' && c != '\t' && c != '\n')
+      if (c == '"')
+      {
+        if (is_string)
+        {
+          add_token(token, tokens);
+        }
+        is_string = !is_string;
+        continue;
+      }
+
+      if (!is_string)
+      {
+        if (c != ' ' && c != '\t' && c != '\n')
+          token += c;
+      }
+      else
+      {
         token += c;
+        continue;
+      }
 
       switch (c)
       {
@@ -85,10 +103,13 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
 
 void add_token(string &token, vector<shared_ptr<Token>> &tokens, bool is_single_char_token, char single_char_token)
 {
-  string::iterator end_pos = std::remove(token.begin(), token.end(), ' ');
-  token.erase(end_pos, token.end());
-  if (token.size() < 1)
-    return;
+  if (!is_string)
+  {
+    string::iterator end_pos = std::remove(token.begin(), token.end(), ' ');
+    token.erase(end_pos, token.end());
+    if (token.size() < 1)
+      return;
+  }
 
   if (token.size() == 1)
   {
@@ -194,11 +215,11 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_array;
   else
   {
-    // if (is_string)
-    // {
-    // return Token_Type::tok_string_lit, token, tokens);
-    // }
-    if (is_number(token))
+    if (is_string)
+    {
+      return Token_Type::tok_string_lit;
+    }
+    else if (is_number(token))
     {
       return Token_Type::tok_number;
     }
