@@ -23,7 +23,6 @@ fn main() -> i32 {
 
 Primitive types:
 
-```
 | Type Description      | Sandscript Type Name |
 |-----------------------|----------------------|
 | Signed 64 bit integer | i64                  |
@@ -33,7 +32,6 @@ Primitive types:
 | Unsigned 1 bit integer| bool                 |
 | Array of bytes        | string               |
 | Array of any          | array<type>          |
-```
 
 User defined types:
 ```
