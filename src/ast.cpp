@@ -173,6 +173,11 @@ void Array_Expression::print()
 {
 }
 
+void Object_Property_Assignment_Node::print()
+{
+    cout << object_name << "." << property_name;
+}
+
 void Node::set_node_type(Node_Type type) { node_type = type; };
 
 std::string Prototype_Node::get_name() { return name; };
@@ -180,8 +185,10 @@ Variable_Type Prototype_Node::get_return_type() { return return_type; };
 
 void Function_Node::set_variable_ptr(std::string name, Value *ptr) { variable_ptrs[name] = ptr; };
 void Function_Node::set_variable_value(std::string name, Value *v) { variable_values[name] = v; };
+void Function_Node::set_variable_type_names(std::string name, std::string type) { variable_type_names[name] = type; };
 Value *Function_Node::get_variable_value(std::string name) { return variable_values[name]; };
 Value *Function_Node::get_variable_ptr(std::string name) { return variable_ptrs[name]; };
+std::string Function_Node::get_variable_type_names(std::string name) { return variable_type_names[name]; };
 
 std::string Variable_Declaration_Node::get_type_name() { return type_name; }
 Variable_Type Variable_Declaration_Node::get_type() { return type; };
@@ -209,3 +216,4 @@ std::vector<unique_ptr<Expression_Node>> Node::get_members() { return std::vecto
 std::string Variable_Expression_Node::get_name() { return name; };
 
 std::string String_Expression::get_value() { return value; };
+std::string Object_Property_Assignment_Node::get_object_name() { return object_name; };

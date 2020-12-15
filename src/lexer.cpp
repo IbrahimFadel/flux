@@ -82,6 +82,9 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
         if (line[col - 1] != '-')
           add_token(token, tokens, true, c);
         break;
+      case '.':
+        add_token(token, tokens, true, c);
+        break;
       default:
         break;
       }
@@ -183,6 +186,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_compare_eq;
   else if (token == "<")
     return Token_Type::tok_compare_lt;
+  else if (token == ".")
+    return Token_Type::tok_period;
   else if (token == ">")
     return Token_Type::tok_compare_gt;
   else if (token == "||")
@@ -207,8 +212,10 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_float;
   else if (token == "double")
     return Token_Type::tok_double;
-  else if (token == "string")
-    return Token_Type::tok_string;
+  // else if (token == "string")
+  // return Token_Type::tok_string;
+  else if (token == "void")
+    return Token_Type::tok_void;
   else if (token == "object")
     return Token_Type::tok_object;
   else if (token == "array")

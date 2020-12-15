@@ -33,6 +33,7 @@ enum Token_Type
   tok_float,
   tok_double,
   tok_string,
+  tok_void,
   tok_object,
   tok_array,
 

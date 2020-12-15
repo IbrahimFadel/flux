@@ -34,6 +34,7 @@ class Object_Expression;
 class String_Expression;
 class Return_Node;
 class Array_Expression;
+class Object_Property_Assignment_Node;
 
 enum Node_Type
 {
@@ -140,6 +141,7 @@ private:
     unique_ptr<Prototype_Node> prototype;
     unique_ptr<Then_Node> then;
 
+    std::map<std::string, std::string> variable_type_names;
     std::map<std::string, Value *> variable_ptrs;
     std::map<std::string, Value *> variable_values;
 
@@ -150,9 +152,11 @@ public:
 
     void set_variable_ptr(std::string name, Value *ptr);
     void set_variable_value(std::string name, Value *v);
+    void set_variable_type_names(std::string name, std::string type);
 
     Value *get_variable_value(std::string name);
     Value *get_variable_ptr(std::string name);
+    std::string get_variable_type_names(std::string name);
     // unique_ptr<Prototype_Node> get_proto();
     std::vector<std::string> get_reference_variable_names();
     std::vector<std::string> get_parameter_type_names();
@@ -210,6 +214,7 @@ public:
     Variable_Declaration_Node(std::string name, Variable_Type type, unique_ptr<Expression_Node> value) : name(name), type(type), value(std::move(value)){};
     Variable_Declaration_Node(std::string name, Variable_Type type, Variable_Type array_type, unique_ptr<Expression_Node> value) : name(name), type(type), array_type(array_type), value(std::move(value)){};
     Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name, unique_ptr<Expression_Node> value) : name(name), type(type), type_name(type_name), value(std::move(value)){};
+    Variable_Declaration_Node(std::string name, Variable_Type type, std::string type_name) : name(name), type(type), type_name(type_name) { undefined = true; };
     Value *code_gen();
     void print();
 
@@ -356,6 +361,20 @@ public:
     Value *code_gen();
 
     std::vector<unique_ptr<Expression_Node>> get_members();
+};
+
+class Object_Property_Assignment_Node : public Expression_Node
+{
+private:
+    std::string object_name;
+    std::string property_name;
+    bool has_asterisk;
+
+public:
+    Object_Property_Assignment_Node(std::string object_name, std::string property_name, bool has_asterisk) : object_name(object_name), property_name(property_name), has_asterisk(has_asterisk){};
+    void print();
+    Value *code_gen();
+    std::string get_object_name();
 };
 
 typedef std::vector<unique_ptr<Node>> Nodes;

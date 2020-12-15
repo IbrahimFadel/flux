@@ -62,6 +62,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_object_node();
     case Token_Type::tok_array:
         return parse_variable_declaration();
+    case Token_Type::tok_asterisk:
+        return parse_expression();
     default:
         return nullptr;
     }
@@ -101,6 +103,11 @@ unique_ptr<Object_Node> parse_object_node()
             cur_property_type = token_type_to_variable_type(cur_tok->type);
             i++;
             get_next_token();
+            if (cur_tok->type == Token_Type::tok_asterisk)
+            {
+                cur_property_type = variable_type_to_pointer_variable_type(cur_property_type);
+                get_next_token(); //? eat '*'
+            }
             continue;
         }
         //? Expect a name
@@ -292,6 +299,12 @@ unique_ptr<Variable_Declaration_Node> parse_object_variable_declaration()
     std::string name = cur_tok->value;
     get_next_token(); //? eat name
 
+    if (cur_tok->type != Token_Type::tok_eq)
+    {
+        throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' in variable declaration", cur_tok->row, cur_tok->col);
+        get_next_token(); //? eat ';'
+        return std::make_unique<Variable_Declaration_Node>(name, variable_type, type_name);
+    }
     throw_if_cur_tok_not_type(Token_Type::tok_eq, "Expected '=' in object variable declaration", cur_tok->row, cur_tok->col);
     get_next_token();
 
@@ -486,8 +499,12 @@ unique_ptr<Expression_Node> parse_asterisk_expression()
     throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier following '*'", cur_tok->row, cur_tok->col);
 
     std::string name = cur_tok->value;
-
     get_next_token(); //? eat identifier
+
+    if (cur_tok->type == Token_Type::tok_period)
+    {
+        return parse_object_property_assignment_node(name, true);
+    }
 
     return std::make_unique<Variable_Expression_Node>(name, Variable_Expression_Type::pointer);
 }
@@ -598,10 +615,27 @@ unique_ptr<Expression_Node> parse_identifier_expression()
     {
         return parse_function_call_node(id_name);
     }
+    else if (cur_tok->type == Token_Type::tok_period)
+    {
+        return parse_object_property_assignment_node(id_name);
+    }
     else
     {
         return std::make_unique<Variable_Expression_Node>(id_name, Variable_Expression_Type::value);
     }
+}
+
+unique_ptr<Object_Property_Assignment_Node> parse_object_property_assignment_node(std::string object_name, bool has_asterisk)
+{
+    // cout << cur_tok->value << endl;
+    throw_if_cur_tok_not_type(Token_Type::tok_period, "Expected '.' in object property assignment", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat object name
+
+    throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in object property assignment", cur_tok->row, cur_tok->col);
+    std::string property_name = cur_tok->value;
+    get_next_token(); //? eat property name
+
+    return std::make_unique<Object_Property_Assignment_Node>(object_name, property_name, has_asterisk);
 }
 
 unique_ptr<Function_Call_Node> parse_function_call_node(std::string name)
@@ -682,6 +716,8 @@ Variable_Type token_type_to_variable_type(Token_Type type)
         return Variable_Type::type_i8;
     case Token_Type::tok_identifier:
         return Variable_Type::type_object;
+    case Token_Type::tok_void:
+        return Variable_Type::type_void;
     default:
         error("Could not convert token type to variable type", UNKOWN_LINE, UNKNOWN_COLUMN);
         break;

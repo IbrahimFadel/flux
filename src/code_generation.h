@@ -66,6 +66,8 @@ static void define_object_properties(Variable_Declaration_Node *var, Value *ptr,
 static Value *code_gen_primitive_variable_declaration(Variable_Declaration_Node *var);
 static Value *code_gen_array_variable_declaration(Variable_Declaration_Node *var);
 static Value *code_gen_string_variable_declaration(Variable_Declaration_Node *var);
+static Value *initialize_string(String_Expression *);
+static void initialize_string_type();
 static void print_v(Value *v);
 static void print_t(Value *v);
 static void print_current_module();

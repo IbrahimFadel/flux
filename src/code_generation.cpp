@@ -9,6 +9,7 @@ unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions opts)
         initialize_function_pass_manager();
 
     declare_printf();
+    // initialize_string_type();
 
     for (auto &node : nodes)
     {
@@ -18,6 +19,34 @@ unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions opts)
     print_current_module();
 
     return std::move(modules[current_module_pointer]);
+}
+
+void initialize_string_type()
+{
+    std::map<std::string, Variable_Type> properties;
+    properties["length"] = Variable_Type::type_i32;
+    properties["value"] = Variable_Type::type_array;
+
+    auto it = properties.begin();
+
+    std::vector<llvm::Type *> members;
+    while (it != properties.end())
+    {
+        auto ty = variable_type_to_llvm_type(it->second);
+        members.push_back(ty);
+
+        object_type_properties["string"][it->first] = it->second;
+
+        it++;
+    }
+
+    llvm::ArrayRef<llvm::Type *> struct_properties(members);
+    auto struct_type = llvm::StructType::create(context, struct_properties, "string", false);
+
+    object_types["string"] = struct_type;
+
+    struct_type->print(llvm::outs());
+    llvm::outs() << '\n';
 }
 
 void declare_printf()
@@ -198,11 +227,13 @@ void Prototype_Node::create_argument_allocas(Function *function)
     Function::arg_iterator it = function->arg_begin();
     for (unsigned i = 0, size = param_names.size(); i != size; ++i, ++it)
     {
-        auto ptr = create_entry_block_alloca(function, param_names[i], variable_type_to_llvm_type(param_types[i]));
+        auto ptr = create_entry_block_alloca(function, param_names[i], variable_type_to_llvm_type(param_types[i], parameter_type_names[i]));
         auto store = builder.CreateStore(it, ptr);
         auto loaded = builder.CreateLoad(ptr, ptr->getName() + "_loaded");
         functions[current_function_name]->set_variable_ptr(param_names[i], ptr);
         functions[current_function_name]->set_variable_value(param_names[i], loaded);
+        //! this might be broken because i is not the correct index for parameter_type_names
+        functions[current_function_name]->set_variable_type_names(param_names[i], parameter_type_names[i]);
     }
 }
 
@@ -222,8 +253,12 @@ Function *Prototype_Node::code_gen_proto()
         llvm::Type *llvm_type;
         if (param_type == Variable_Type::type_object || param_type == Variable_Type::type_object_ptr || param_type == Variable_Type::type_object_ref)
         {
+            // cout << "Hi" << endl;
             auto parameter_type_names = get_parameter_type_names();
+            // cout << "Hi" << endl;
             llvm_type = variable_type_to_llvm_type(param_type, parameter_type_names[i]);
+            // cout << "Hi" << endl;
+            // print_t(llvm_type);
         }
         else
         {
@@ -235,7 +270,6 @@ Function *Prototype_Node::code_gen_proto()
         types.push_back(llvm_type);
         i++;
     }
-
     Type *ret;
     if (return_type == Variable_Type::type_object)
         ret = variable_type_to_llvm_type(return_type, return_type_name);
@@ -281,20 +315,46 @@ Value *Expression_Node::code_gen()
 }
 Value *Binary_Operation_Expression_Node::code_gen()
 {
-
     if (op == "=")
     {
         auto l = dynamic_cast<Variable_Expression_Node *>(lhs.get());
-        if (!l)
-            error("Left hand side of '=' must be a variable");
+        if (l)
+        {
+            auto var = functions[current_function_name]->get_variable_ptr(l->get_name());
+            if (!var)
+                error("Unknown variable referenced");
 
-        auto var = functions[current_function_name]->get_variable_ptr(l->get_name());
-        if (!var)
-            error("Unknown variable referenced");
+            auto val = rhs->code_gen();
 
-        auto val = rhs->code_gen();
+            return builder.CreateStore(val, var);
+        }
+        else
+        {
+            auto l = dynamic_cast<Object_Property_Assignment_Node *>(lhs.get());
+            if (l)
+            {
+                auto ptr = l->code_gen();
+                print_v(ptr);
+                auto v = rhs->code_gen();
+                print_v(v);
+                builder.CreateStore(v, ptr);
+                // auto var = functions[current_function_name]->get_variable_ptr(l->get_object_name());
+                // if (!var)
+                //     error("Unknown variable referenced");
+                // print_v(var);
+            }
+            else
+            {
+                error("Left hand side of '=' must be a variable");
+            }
+        }
 
-        return builder.CreateStore(val, var);
+        // if (!l)
+        // {
+        //     l = dynamic_cast<Object_Property_Assignment_Node *>(lhs.get());
+        //     if (!l)
+        //         error("Left hand side of '=' must be a variable");
+        // }
     }
 
     auto l = lhs->code_gen();
@@ -340,7 +400,7 @@ Value *Binary_Operation_Expression_Node::code_gen()
 
 Value *Number_Expression_Node::code_gen()
 {
-    // cout << "NUMBER" << endl;
+    // cout << "NUMBER: " << variable_type << ' ' << currently_preferred_type << endl;
     if (variable_type == Variable_Type::type_null)
         variable_type = currently_preferred_type;
     switch (variable_type)
@@ -383,6 +443,10 @@ Value *Variable_Declaration_Node::code_gen()
     {
         auto llvm_ty = object_types[type_name];
         auto ptr = builder.CreateAlloca(llvm_ty, 0, name);
+        functions[current_function_name]->set_variable_ptr(name, ptr);
+        functions[current_function_name]->set_variable_type_names(name, type_name);
+        if (undefined)
+            return ptr;
         auto fn_call = dynamic_cast<Function_Call_Node *>(std::move(value).get());
         if (fn_call)
         {
@@ -394,8 +458,6 @@ Value *Variable_Declaration_Node::code_gen()
             define_object_properties(this, ptr, std::move(value));
         }
 
-        functions[current_function_name]->set_variable_ptr(name, ptr);
-
         return 0;
     }
     else if (type == Variable_Type::type_array)
@@ -406,31 +468,52 @@ Value *Variable_Declaration_Node::code_gen()
         return code_gen_primitive_variable_declaration(this);
 }
 
+Value *initialize_string(String_Expression *)
+{
+    return 0;
+}
+
 Value *code_gen_string_variable_declaration(Variable_Declaration_Node *var)
 {
     auto string_expr = static_cast<String_Expression *>(var->get_value().get());
-    auto string_val = string_expr->get_value();
-    auto string_len = string_val.size();
-    cout << string_val << endl;
 
-    auto array_type = llvm::ArrayType::get(llvm::Type::getInt8Ty(context), string_len + 2);
-    auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
-
-    int i = 0;
-    for (auto &c : string_val)
+    auto llvm_ty = object_types["string"];
+    auto ptr = builder.CreateAlloca(llvm_ty, 0, var->get_name());
+    auto fn_call = static_cast<Function_Call_Node *>(std::move(var->get_value()).get());
+    if (fn_call)
     {
-        auto gep = builder.CreateStructGEP(ptr, i);
-        auto store = builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, c)), gep);
-        i++;
+        auto v = fn_call->code_gen();
+        builder.CreateStore(v, ptr);
+    }
+    else
+    {
+        cout << "not fn call" << endl;
+        cout << "size: " << string_expr->get_value().size() << endl;
     }
 
-    auto nlgep = builder.CreateStructGEP(ptr, i);
-    builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 12)), nlgep);
-    i++;
-    auto nullgep = builder.CreateStructGEP(ptr, i);
-    builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 00)), nullgep);
+    // functions[current_function_name]->set_variable_ptr(name, ptr);
+    // auto string_val = string_expr->get_value();
+    // auto string_len = string_val.size();
+    // cout << string_val << endl;
 
-    functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
+    // auto array_type = llvm::ArrayType::get(llvm::Type::getInt8Ty(context), string_len + 2);
+    // auto ptr = builder.CreateAlloca(array_type, 0, var->get_name());
+
+    // int i = 0;
+    // for (auto &c : string_val)
+    // {
+    //     auto gep = builder.CreateStructGEP(ptr, i);
+    //     auto store = builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, c)), gep);
+    //     i++;
+    // }
+
+    // auto nlgep = builder.CreateStructGEP(ptr, i);
+    // builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 12)), nlgep);
+    // i++;
+    // auto nullgep = builder.CreateStructGEP(ptr, i);
+    // builder.CreateStore(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), llvm::APInt(8, 00)), nullgep);
+
+    // functions[current_function_name]->set_variable_ptr(var->get_name(), ptr);
 
     return 0;
 }
@@ -667,6 +750,12 @@ Value *Function_Call_Node::code_gen()
 }
 Value *Variable_Expression_Node::code_gen()
 {
+    if (functions[current_function_name]->get_variable_type_names(name).size() > 0)
+    {
+        // ! JESUSSSSS -- ok, we need to check if it's looking for a pointer or something. The problem is this god damn Object_Property_Assign thing
+        //! It's stupid, just make '.' an operator so it can be an Expression focus on this tmrw
+        // if()
+    }
     if (wants_reference)
         return functions[current_function_name]->get_variable_ptr(name);
     if (type == Variable_Expression_Type::reference)
@@ -707,7 +796,6 @@ Value *Object_Node::code_gen()
     {
         auto ty = variable_type_to_llvm_type(it->second);
         members.push_back(ty);
-
         object_type_properties[name][it->first] = it->second;
 
         it++;
@@ -751,6 +839,30 @@ Value *Return_Node::code_gen()
 
 Value *Array_Expression::code_gen()
 {
+    return 0;
+}
+
+Value *Object_Property_Assignment_Node::code_gen()
+{
+    auto var_type = functions[current_function_name]->get_variable_type_names(object_name);
+    auto properties = object_type_properties[var_type];
+    auto begin = properties.begin();
+    auto end = properties.end();
+    int i = 0;
+    while (begin != end)
+    {
+        if (begin->first == property_name)
+        {
+            auto v = functions[current_function_name]->get_variable_ptr(object_name);
+            if (has_asterisk)
+                v = builder.CreateLoad(v);
+            auto ptr = builder.CreateGEP(v, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), llvm::APInt(32, i)), v->getName() + "_" + begin->first);
+            currently_preferred_type = begin->second;
+            return ptr;
+        }
+        begin++;
+        i++;
+    }
     return 0;
 }
 
@@ -813,6 +925,8 @@ Type *variable_type_to_llvm_type(Variable_Type type, std::string object_type_nam
         return Type::getFloatPtrTy(context);
     case Variable_Type::type_double_ref:
         return Type::getDoublePtrTy(context);
+    case Variable_Type::type_void:
+        return Type::getVoidTy(context);
     default:
         error("Could not convert variable type to llvm type");
         return nullptr;

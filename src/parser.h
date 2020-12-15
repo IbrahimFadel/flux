@@ -41,6 +41,7 @@ static unique_ptr<Return_Node> parse_return();
 static unique_ptr<Expression_Node> parse_ampersand_expression();
 static unique_ptr<Expression_Node> parse_asterisk_expression();
 static unique_ptr<Expression_Node> parse_open_square_bracket_expression();
+static unique_ptr<Object_Property_Assignment_Node> parse_object_property_assignment_node(std::string object_name, bool has_asterisk = false);
 
 static void throw_if_cur_tok_is_type(Token_Type type, const char *msg, int line, int position);
 static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);
