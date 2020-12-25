@@ -1,33 +1,30 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 2.8.12)
+
 project(Sandscript)
 
-set(CMAKE_CXX_FLAGS "-std=c++17")
+set(CMAKE_CXX_FLAGS "-std=c++17 -fno-exceptions -fno-rtti")
+set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-set(SRC_DIR src)
+set(SANDSCRIPT_SOURCE_FILES
+    ${SRC_DIR}/common.cpp
+    ${SRC_DIR}/lexer.cpp
+    ${SRC_DIR}/ast.cpp
+    ${SRC_DIR}/parser.cpp
+    ${SRC_DIR}/code_generation.cpp
+    ${SRC_DIR}/main.cpp
+)
 
-set(SANDSCRIPT_SOURCE_FILES ${SRC_DIR}/common.cpp ${SRC_DIR}/lexer.cpp ${SRC_DIR}/ast.cpp ${SRC_DIR}/parser.cpp ${SRC_DIR}/code_generation.cpp)
-# set(LLD_INCLUDE_PATH /usr/include/lld)
-add_library(sandscript ${SANDSCRIPT_SOURCE_FILES})
-target_include_directories(sandscript PRIVATE ${SRC_DIR})
-# target_include_directories(sandscript PRIVATE ${LLD_INCLUDE_PATH})
-target_link_libraries(sandscript LLVM-11)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+add_executable(ssc ${SANDSCRIPT_SOURCE_FILES})
+# target_link_libraries(ssc LLVMSupport LLVMExecutionEngine LLVMMIRParser LLVMIRReader LLVMCore LLVMAnalysis LLVMInstCombine LLVMObject LLVMScalarOpts LLVMRuntimeDyld)
+target_link_libraries(ssc LLVMXRay LLVMWindowsManifest LLVMTableGen LLVMSymbolize LLVMDebugInfoPDB LLVMOrcJIT LLVMOrcError LLVMJITLink LLVMObjectYAML LLVMMIRParser LLVMMCA LLVMLTO LLVMPasses LLVMHelloNew LLVMCoroutines LLVMObjCARCOpts LLVMipo LLVMInstrumentation LLVMVectorize LLVMLinker LLVMIRReader LLVMAsmParser LLVMFrontendOpenMP LLVMExtensions LLVMLineEditor LLVMLibDriver LLVMInterpreter LLVMInterfaceStub LLVMFuzzMutate LLVMMCJIT LLVMExecutionEngine LLVMRuntimeDyld LLVMDWARFLinker LLVMDlltoolDriver LLVMOption LLVMDebugInfoGSYM LLVMCoverage LLVMX86Disassembler LLVMX86AsmParser LLVMX86CodeGen LLVMCFGuard LLVMGlobalISel LLVMSelectionDAG LLVMAsmPrinter LLVMDebugInfoDWARF LLVMCodeGen LLVMTarget LLVMScalarOpts LLVMInstCombine LLVMAggressiveInstCombine LLVMTransformUtils LLVMBitWriter LLVMAnalysis LLVMProfileData LLVMObject LLVMTextAPI LLVMMCParser LLVMBitReader LLVMCore LLVMRemarks LLVMBitstreamReader LLVMX86Desc LLVMMCDisassembler LLVMMC LLVMDebugInfoCodeView LLVMDebugInfoMSF LLVMBinaryFormat LLVMX86Info LLVMSupport LLVMDemangle
+rt dl pthread m z tinfo xml2)
 
-# find_package(lld)
-# if (LLD_FOUND)
-#   include_directories(${LLD_INCLUDE_DIRS})
-#   target_link_libraries (sandscript ${LLD_LIBRARIES})
-# endif (LLD_FOUND)
+# include_directories(include)
 
+# add_library(ssc STATIC ${SSC_CPP_SOURCES})
+# set(SSC_CPP_SOURCES
+    # ""
+# )
 
-add_executable(ssc ${SRC_DIR}/main.cpp)
-target_link_libraries(ssc sandscript)
-
-set(TESTS_DIR tests)
-set(TESTS_SOURCE_FILES ${TESTS_DIR}/tests.cpp)
-add_executable(ss-test ${TESTS_SOURCE_FILES})
-target_include_directories(ss-test PRIVATE ${SRC_DIR})
-target_link_libraries(ss-test sandscript gtest)
-
-set(INSTALL_PREFIX /usr/local/bin)
-
-install(TARGETS ssc DESTINATION /usr/local/bin)
+# add_executable(ssc ${SSC_CPP_SOURCES})

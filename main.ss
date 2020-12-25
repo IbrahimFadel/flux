@@ -1,5 +1,15 @@
-fn main() -> i32 {
-    string str = "hi";
+fn main(i32 **param1, i32 param2) -> i32 {
+    object Person {
+        i32 **x;
+        i32 y;
+    };
 
-    return 0;
-};
+
+    i32 x = 5;
+    i32 y = &x;
+    i32 z = &y;
+
+    Person ibrahim;
+    ibrahim.x = z;
+    ibrahim.y = *(*z);
+}

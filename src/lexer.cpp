@@ -94,6 +94,8 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
     col = 0;
   }
 
+  add_token(token, tokens);
+
   auto tok = std::make_shared<Token>();
   tok->type = Token_Type::tok_eof;
   tok->row = -1;
