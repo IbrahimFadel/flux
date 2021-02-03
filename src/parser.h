@@ -9,7 +9,7 @@ static Tokens toks;
 static std::map<std::string, int> binop_precedence;
 static std::vector<std::string> object_types;
 
-std::vector<unique_ptr<Node>> parse_tokens(const Tokens &token);
+Nodes parse_tokens(const Tokens &token);
 static unique_ptr<Node> parse_token(const shared_ptr<Token> &token);
 
 //! Expression Parsing
@@ -29,7 +29,11 @@ static unique_ptr<Variable_Declaration> parse_variable_declaration();
 static unique_ptr<Function_Declaration> parse_function_declaration();
 static unique_ptr<Code_Block> parse_code_block();
 
-//! Other/Common
+//! Other
+static unique_ptr<If_Statement> parse_if_statement();
+static unique_ptr<Return_Statement> parse_return_statement();
+
+//! Common
 static void get_next_token();
 static int get_token_precedence();
 static void throw_if_cur_tok_not_type(Token_Type type, const char *msg, int line, int position);

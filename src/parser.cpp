@@ -8,6 +8,8 @@ std::vector<unique_ptr<Node>> parse_tokens(const Tokens &tokens)
 
     binop_precedence["="] = 2;
     binop_precedence["<"] = 10;
+    binop_precedence[">"] = 10;
+    binop_precedence["=="] = 10;
     binop_precedence["+"] = 20;
     binop_precedence["-"] = 20;
     binop_precedence["*"] = 40;
@@ -19,6 +21,7 @@ std::vector<unique_ptr<Node>> parse_tokens(const Tokens &tokens)
     while (cur_tok->type != Token_Type::tok_eof)
     {
         auto node = parse_token(cur_tok);
+        // node->type = Node_Type::test;
         nodes.push_back(std::move(node));
     }
 
@@ -47,6 +50,10 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_variable_declaration();
     case Token_Type::tok_object:
         return parse_object_type_declaration();
+    case Token_Type::tok_if:
+        return parse_if_statement();
+    case Token_Type::tok_return:
+        return parse_return_statement();
     case Token_Type::tok_identifier:
     {
         if (std::find(object_types.begin(), object_types.end(), cur_tok->value) != object_types.end())
@@ -57,6 +64,46 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         break;
     }
     return nullptr;
+}
+
+unique_ptr<Return_Statement> parse_return_statement()
+{
+    get_next_token(); //? eat 'return'
+    auto value = parse_expression();
+    return std::make_unique<Return_Statement>(std::move(value));
+}
+
+unique_ptr<If_Statement> parse_if_statement()
+{
+    get_next_token(); //? eat 'if'
+
+    throw_if_cur_tok_not_type(Token_Type::tok_open_paren, "Expected '(' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '(
+
+    std::vector<unique_ptr<Expression>> conditions;
+    std::vector<Token_Type> condition_separators;
+    while (cur_tok->type != Token_Type::tok_close_paren)
+    {
+        auto expr = parse_expression(false);
+
+        if (cur_tok->type != Token_Type::tok_close_paren)
+        {
+            condition_separators.push_back(cur_tok->type);
+            get_next_token(); //? eat condition separator
+        }
+    }
+
+    get_next_token(); //? eat ')'
+
+    throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '{'
+
+    auto then = parse_code_block();
+
+    throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' in if statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '}'
+
+    return std::make_unique<If_Statement>(std::move(conditions), condition_separators, std::move(then));
 }
 
 unique_ptr<Expression> parse_object_type_declaration()
@@ -170,7 +217,7 @@ unique_ptr<Function_Declaration> parse_function_declaration()
     throw_if_cur_tok_not_type(Token_Type::tok_close_curly_bracket, "Expected '}' after function code block", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat '}'
 
-    return std::make_unique<Function_Declaration>(name, params);
+    return std::make_unique<Function_Declaration>(name, params, return_type, std::move(then));
 }
 
 unique_ptr<Code_Block> parse_code_block()

@@ -27,6 +27,8 @@ int main(int argc, const char **argv)
     {
       options.output_path = std::string(arguments[i + 1]);
     }
+    else if (arg == "--print" || arg == "-p")
+      options.print_module = true;
     i++;
   }
 
@@ -35,9 +37,8 @@ int main(int argc, const char **argv)
   // print_tokens(tokens);
 
   auto nodes = parse_tokens(tokens);
-  // auto nodes = parse_tokens(tokens);
   // print_nodes(nodes);
-  // auto module = code_gen_nodes(std::move(nodes), options);
+  auto module = code_gen_nodes(std::move(nodes), options);
 
   // module_to_obj(std::move(module));
 
