@@ -111,7 +111,7 @@ llvm::Value *Number_Expression::code_gen()
 
 llvm::Value *Variable_Reference_Expression::code_gen()
 {
-    return 0;
+    return functions[current_function_name]->get_variable(name);
 }
 
 llvm::Value *Binary_Operation_Expression::code_gen()
@@ -121,6 +121,11 @@ llvm::Value *Binary_Operation_Expression::code_gen()
 
 llvm::Value *Unary_Prefix_Operation_Expression::code_gen()
 {
+    auto val = value->code_gen();
+    if (op == Token_Type::tok_ampersand)
+    {
+        return llvm::getPointerOperand(val);
+    }
     return 0;
 }
 
@@ -135,7 +140,21 @@ llvm::Value *Code_Block::code_gen()
 
 llvm::Value *Variable_Declaration::code_gen()
 {
-    return 0;
+    auto llvm_type = ss_type_to_llvm_type(type);
+    auto ptr = builder.CreateAlloca(llvm_type, 0, name);
+
+    if (value == nullptr)
+    {
+        functions[current_function_name]->set_variable(name, std::move(ptr));
+        return ptr;
+    }
+
+    currently_preferred_type = llvm_type;
+    auto val = value->code_gen();
+    auto store = builder.CreateStore(val, ptr);
+    auto loaded = builder.CreateLoad(ptr, 0, name);
+    functions[current_function_name]->set_variable(name, std::move(loaded));
+    return loaded;
 }
 
 llvm::Value *Object_Type_Expression::code_gen()
@@ -222,6 +241,12 @@ llvm::Type *ss_base_type_to_llvm_type(std::string type)
 void print_t(llvm::Type *ty)
 {
     ty->print(llvm::outs());
+    llvm::outs() << '\n';
+}
+
+void print_v(llvm::Value *v)
+{
+    v->print(llvm::outs());
     llvm::outs() << '\n';
 }
 

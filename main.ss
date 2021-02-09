@@ -1,3 +1,6 @@
-fn main(i32 **args, i32 argc) -> i32 {
-    return 0;
+fn main() -> i32* {
+    i32 x = 0;
+    i32 *y = &x;
+
+    return y;
 }

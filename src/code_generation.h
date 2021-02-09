@@ -35,6 +35,7 @@ static llvm::Value *create_entry_block_alloca(llvm::Function *function, const st
 static llvm::Type *ss_type_to_llvm_type(std::string type);
 static llvm::Type *ss_base_type_to_llvm_type(std::string type);
 static void print_t(llvm::Type *ty);
+static void print_v(llvm::Value *v);
 static void print_module();
 static void fatal_error(std::string msg);
 

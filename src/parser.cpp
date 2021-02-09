@@ -152,7 +152,7 @@ unique_ptr<Variable_Declaration> parse_variable_declaration()
     if (cur_tok->type == Token_Type::tok_semicolon)
     {
         get_next_token(); //? eat ';'
-        return std::make_unique<Variable_Declaration>(type, name, nullptr);
+        return std::make_unique<Variable_Declaration>(name, type, nullptr);
     }
 
     throw_if_cur_tok_not_type(Token_Type::tok_eq, "Expected '=' following variable name", cur_tok->row, cur_tok->col);
@@ -160,7 +160,7 @@ unique_ptr<Variable_Declaration> parse_variable_declaration()
 
     auto value = parse_expression();
 
-    return std::make_unique<Variable_Declaration>(type, name, std::move(value));
+    return std::make_unique<Variable_Declaration>(name, type, std::move(value));
 }
 
 unique_ptr<Function_Declaration> parse_function_declaration()
