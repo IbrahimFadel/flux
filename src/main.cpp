@@ -26,8 +26,6 @@ int main(int argc, const char **argv)
       options.output_path = std::string(arguments[i + 1]);
     else if (arg == "--print" || arg == "-p")
       options.print_module = true;
-    else if (arg == "--dep-tree" || arg == "-d")
-      options.print_dependency_tree = true;
     i++;
   }
 
@@ -38,12 +36,11 @@ int main(int argc, const char **argv)
   // print_tokens(tokens);
 
   auto nodes = parse_tokens(tokens);
-  auto dependency_tree = generate_dependency_tree(nodes, file_path);
-  if (options.print_dependency_tree)
-    dependency_tree->head->print();
-
-  
   // print_nodes(nodes);
+
+  auto dependency_tree = generate_dependency_tree(nodes, file_path);
+  print_deependency_tree(dependency_tree);
+
   // auto program = std::make_unique<Program>("test");
   // auto module = code_gen_nodes(std::move(nodes), options, std::move(program));
 

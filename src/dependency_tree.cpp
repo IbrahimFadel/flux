@@ -1,97 +1,62 @@
 #include "dependency_tree.h"
 
-namespace fs = std::filesystem;
-
-unique_ptr<Dependency_Tree> generate_dependency_tree(const Nodes &nodes, std::string file_path)
+Dependency_Tree *generate_dependency_tree(const Nodes &nodes, std::string file_path)
 {
-    auto tree = std::make_unique<Dependency_Tree>();
+    auto tree = new Dependency_Tree();
+
     auto resolved = fs::canonical(file_path);
-    tree->base_file_path = resolved;
+    tree->nodes.push_back(resolved);
 
-    auto head = new Dependency_Node();
-    head->file_path = resolved;
+    construct_new_dependency_node(0, resolved, tree);
 
-    for (auto &node : nodes)
+    return tree;
+}
+
+void construct_new_dependency_node(int base_index, fs::path resolved_path, Dependency_Tree *tree)
+{
+    auto file_content = get_file_content(resolved_path.c_str());
+    auto tokens = tokenize(file_content);
+    auto ast_nodes = parse_tokens(tokens);
+    for (auto &node : ast_nodes)
     {
         auto import_node = dynamic_cast<Import_Statement *>(node.get());
         if (import_node != nullptr)
         {
-            auto dep_node = construct_new_dependency_node(import_node->get_path(), head);
-            head->dependencies.push_back(dep_node);
+            auto path = resolve_path(import_node->get_path(), resolved_path.parent_path());
+            bool connection_already_made = false;
+
+            for (auto &conn : tree->connections)
+            {
+                if (tree->nodes[conn.first] == path)
+                    connection_already_made = true;
+            }
+
+            tree->nodes.push_back(path);
+            tree->connections.push_back(std::make_pair<int, int>((int)base_index, tree->nodes.size() - 1));
+
+            if (!connection_already_made)
+                construct_new_dependency_node(base_index + 1, path, tree);
         }
     }
-
-    tree->head = head;
-    return tree;
 }
 
-Dependency_Node *construct_new_dependency_node(std::string file_path, Dependency_Node *parent)
+fs::path resolve_path(std::string path, std::string base)
 {
-    auto dep_node = new Dependency_Node();
-    dep_node->depth = parent->depth + 1;
-    dep_node->parent = parent;
-
-    std::string resolved_path;
-    if (fs::path(file_path).is_relative())
+    std::error_code ec;
+    auto file = fs::canonical(std::string(base + "/" + path), ec);
+    if (ec)
     {
-        auto parent_directory = fs::path(parent->file_path).parent_path();
-        resolved_path = fs::canonical(std::string(parent_directory.string() + "/" + file_path)).string();
+        cout << "Error parsing dependency tree at file path: " << path << endl;
+        cout << ec.message() << endl;
+        exit(1);
     }
-    else
-    {
-        resolved_path = file_path;
-    }
-
-    dep_node->file_path = resolved_path;
-
-    //? Don't get trapped in infinite loop when files import eachother -- need to think about the best way to do this, but for now this can work
-    if (parent->parent)
-    {
-        if (parent->parent->file_path == resolved_path)
-        {
-            dep_node->dependencies = parent->parent->dependencies;
-            return dep_node;
-        }
-    }
-
-    //? This is just to save time, ie. don't parse a file again if it's already been parsed (copy the dependencies)
-    auto parsed_files_it = parsed_files.begin();
-    while (parsed_files_it != parsed_files.end())
-    {
-        if (parsed_files_it->first == resolved_path)
-        {
-            dep_node->dependencies = parsed_files_it->second->dependencies;
-            return dep_node;
-        }
-        parsed_files_it++;
-    }
-
-    auto file_content = get_file_content(resolved_path.c_str());
-    auto tokens = tokenize(file_content);
-    auto ast_nodes = parse_tokens(tokens);
-
-    for (auto &ast_node : ast_nodes)
-    {
-        auto import_node = dynamic_cast<Import_Statement *>(ast_node.get());
-        if (import_node != nullptr)
-        {
-            auto dependency = construct_new_dependency_node(import_node->get_path(), dep_node);
-            dep_node->dependencies.push_back(dependency);
-        }
-    }
-
-    parsed_files[resolved_path] = dep_node;
-
-    return dep_node;
+    return file;
 }
 
-void Dependency_Node::print()
+void print_deependency_tree(Dependency_Tree *tree)
 {
-    for (int i = 0; i < depth; i++)
-        cout << '\t';
-    cout << std::filesystem::relative(file_path).string() << "\n";
-    for (auto &connected_node : dependencies)
+    for (auto &conn : tree->connections)
     {
-        connected_node->print();
+        cout << tree->nodes[conn.first].string() << " connected to " << tree->nodes[conn.second].string() << endl;
     }
 }

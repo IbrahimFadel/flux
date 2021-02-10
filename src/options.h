@@ -9,7 +9,6 @@ struct CompilerOptions
     std::string path_to_root = "/home/ibrahim/dev/sandscriptold/";
     std::string output_path = path_to_root + std::string("out.ll");
     bool print_module = false;
-    bool print_dependency_tree = false;
 };
 
 #endif
