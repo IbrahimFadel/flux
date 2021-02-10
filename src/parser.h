@@ -32,6 +32,7 @@ static unique_ptr<Code_Block> parse_code_block();
 //! Other
 static unique_ptr<If_Statement> parse_if_statement();
 static unique_ptr<Return_Statement> parse_return_statement();
+static unique_ptr<Import_Statement> parse_import_statement();
 
 //! Common
 static void get_next_token();

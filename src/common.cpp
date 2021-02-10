@@ -10,3 +10,8 @@ std::vector<std::string> get_file_content(const char *path)
     }
     return content;
 }
+
+// unique_ptr<llvm::Module> Program::get_module()
+// {
+//     return std::move(module);
+// }

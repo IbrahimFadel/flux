@@ -1,7 +1,9 @@
 #include "code_generation.h"
 
+// unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program)
 unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options)
 {
+
     module = std::make_unique<llvm::Module>("TheModule", context);
     compiler_options = options;
 
@@ -14,7 +16,7 @@ unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions opti
     }
 
     if (compiler_options.print_module)
-        print_module();
+        print_module(std::move(module));
 
     return nullptr;
 }
@@ -116,6 +118,17 @@ llvm::Value *Variable_Reference_Expression::code_gen()
 
 llvm::Value *Binary_Operation_Expression::code_gen()
 {
+    auto l = lhs->code_gen();
+    auto r = rhs->code_gen();
+
+    switch (op)
+    {
+    case Token_Type::tok_plus:
+        return builder.CreateAdd(l, r);
+    default:
+        fatal_error("Tried to codegen binary operation expression of unimplemented operator");
+    }
+
     return 0;
 }
 
@@ -126,6 +139,11 @@ llvm::Value *Unary_Prefix_Operation_Expression::code_gen()
     {
         return llvm::getPointerOperand(val);
     }
+    else if (op == Token_Type::tok_asterisk)
+    {
+        return builder.CreateLoad(val);
+    }
+    fatal_error("Tried to codegen unary prefix opepration expression that is unimplemented");
     return 0;
 }
 
@@ -174,6 +192,68 @@ llvm::Value *Return_Statement::code_gen()
     return 0;
 }
 
+llvm::Value *Import_Statement::code_gen()
+{
+    auto file_content = get_file_content(path.c_str());
+    auto tokens = tokenize(file_content);
+    auto nodes = parse_tokens(tokens);
+    auto mod = code_gen_nodes(std::move(nodes), compiler_options);
+    // print_module(std::move(mod));
+
+    // auto f_list_it = mod->begin();
+    // auto f_list_end = mod->getFunctionList().end();
+    // while (f_list_it != f_list_end)
+    // {
+    // std::vector<llvm::Type *> param_types;
+    // auto arg_list_it = f_list_it->args().begin();
+    // auto arg_list_end = f_list_it->args().end();
+    // while (arg_list_it != arg_list_end)
+    // {
+    // param_types.push_back(arg_list_it->getType());
+    // arg_list_it++;
+    // }
+    // declare_function(f_list_it->getName().str(), param_types);
+    // f_list_it->
+    // f_list_it++;
+    // }
+
+    return 0;
+}
+
+llvm::Value *Function_Call_Expression::code_gen()
+{
+    if (name.substr(0, 1) == "@")
+    {
+        //? This is a Sandscript function
+        name = name.substr(1, name.size() - 1);
+        // if (name == "print")
+        // {
+        // if (!print_function_declared)
+        // declare_function("print", std::vector<llvm::Type *>(1, llvm::Type::getInt8PtrTy(context)));
+        // }
+    }
+    auto callee_function = module->getFunction(name);
+    if (callee_function == 0)
+        fatal_error("Unknown function referenced in function call");
+    if (callee_function->arg_size() != params.size())
+        fatal_error("Incorrect number of parameters passed to function call");
+
+    std::vector<llvm::Value *> param_values;
+    for (auto &param : params)
+    {
+        auto v = param->code_gen();
+        param_values.push_back(v);
+    }
+
+    return builder.CreateCall(callee_function, param_values);
+}
+
+void declare_function(std::string name, std::vector<llvm::Type *> param_types)
+{
+    llvm::FunctionType *function_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, false);
+    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, module.get());
+}
+
 void create_function_param_allocas(llvm::Function *f, std::map<std::string, std::string> params)
 {
 
@@ -184,6 +264,7 @@ void create_function_param_allocas(llvm::Function *f, std::map<std::string, std:
         auto ptr = create_entry_block_alloca(f, param_it->first, ss_type_to_llvm_type(param_it->second));
         auto store = builder.CreateStore(f_it, ptr);
         auto loaded = builder.CreateLoad(ptr);
+        functions[current_function_name]->set_variable(param_it->first, std::move(loaded));
         param_it++;
         f_it++;
     }
@@ -231,6 +312,8 @@ llvm::Type *ss_base_type_to_llvm_type(std::string type)
         return llvm::Type::getInt16Ty(context);
     else if (type == "i8")
         return llvm::Type::getInt8Ty(context);
+    else if (type == "void")
+        return llvm::Type::getVoidTy(context);
     else
     {
         fatal_error("Could not convert base type to llvm type");
@@ -250,10 +333,14 @@ void print_v(llvm::Value *v)
     llvm::outs() << '\n';
 }
 
-void print_module()
+void print_module(unique_ptr<llvm::Module> mod)
 {
+    std::error_code ec;
+    auto f_out = llvm::raw_fd_ostream(compiler_options.output_path, ec);
     auto writer = new llvm::AssemblyAnnotationWriter();
-    module->print(llvm::outs(), writer);
+
+    mod->print(llvm::outs(), writer);
+    mod->print(f_out, writer);
 }
 
 void fatal_error(std::string msg)

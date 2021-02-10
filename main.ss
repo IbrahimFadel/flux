@@ -1,6 +1,13 @@
-fn main() -> i32* {
-    i32 x = 0;
-    i32 *y = &x;
+import "std/io.ss";
+import "std/test.ss";
 
-    return y;
+fn add(i32 num1, i32 num2) -> i32 {
+    return num1 + num2;
+}
+
+fn main() -> void {
+    i8 num = 33;
+    i8 *ptr = &num;
+
+    @print(ptr);
 }

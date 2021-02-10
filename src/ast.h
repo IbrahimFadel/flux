@@ -18,15 +18,6 @@ class Expression;
 
 #include <llvm/IR/Value.h>
 
-enum Node_Type
-{
-    FunctionDeclaration,
-    VariableDeclaration,
-    ExpressionNode,
-    IfStatement,
-    ReturnStatement
-};
-
 class Node
 {
 private:
@@ -64,12 +55,12 @@ public:
 class Binary_Operation_Expression : public Expression
 {
 private:
-    std::string op;
+    Token_Type op;
     unique_ptr<Expression> lhs;
     unique_ptr<Expression> rhs;
 
 public:
-    Binary_Operation_Expression(std::string op, unique_ptr<Expression> lhs, unique_ptr<Expression> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
+    Binary_Operation_Expression(Token_Type op, unique_ptr<Expression> lhs, unique_ptr<Expression> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
     llvm::Value *code_gen();
 };
 
@@ -155,6 +146,28 @@ private:
 public:
     Return_Statement(unique_ptr<Expression> value) : value(std::move(value)){};
     llvm::Value *code_gen();
+};
+
+class Function_Call_Expression : public Expression
+{
+private:
+    std::string name;
+    std::vector<unique_ptr<Expression>> params;
+
+public:
+    Function_Call_Expression(std::string name, std::vector<unique_ptr<Expression>> params) : name(name), params(std::move(params)){};
+    llvm::Value *code_gen();
+};
+
+class Import_Statement : public Expression
+{
+private:
+    std::string path;
+
+public:
+    Import_Statement(std::string path) : path(path){};
+    llvm::Value *code_gen();
+    std::string get_path();
 };
 
 typedef std::vector<unique_ptr<Node>> Nodes;

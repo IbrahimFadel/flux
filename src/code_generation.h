@@ -2,6 +2,7 @@
 #define CODE_GENERATION_H
 
 #include "options.h"
+#include "common.h"
 #include "parser.h"
 
 #include <llvm/IR/Module.h>
@@ -27,6 +28,9 @@ static std::map<std::string, Function_Declaration *> functions;
 static std::string current_function_name;
 static llvm::Type *currently_preferred_type = llvm::Type::getInt32Ty(context);
 
+static bool print_function_declared = false;
+
+// unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program);
 unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options);
 static void code_gen_node(const unique_ptr<Node> &node);
 static void initialize_fpm();
@@ -34,9 +38,10 @@ static void create_function_param_allocas(llvm::Function *f, std::map<std::strin
 static llvm::Value *create_entry_block_alloca(llvm::Function *function, const std::string &name, llvm::Type *type);
 static llvm::Type *ss_type_to_llvm_type(std::string type);
 static llvm::Type *ss_base_type_to_llvm_type(std::string type);
+static void declare_function(std::string name, std::vector<llvm::Type *> param_types);
 static void print_t(llvm::Type *ty);
 static void print_v(llvm::Value *v);
-static void print_module();
+static void print_module(unique_ptr<llvm::Module> mod);
 static void fatal_error(std::string msg);
 
 static llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type, std::string function_name);

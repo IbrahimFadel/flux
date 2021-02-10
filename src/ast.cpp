@@ -3,6 +3,8 @@
 void Function_Declaration::set_variable(std::string name, llvm::Value *v) { variables[name] = v; }
 llvm::Value *Function_Declaration::get_variable(std::string name) { return variables[name]; }
 
+std::string Import_Statement::get_path() { return path; };
+
 // void print_nodes(const Nodes &nodes)
 // {
 //     for (auto &node : nodes)

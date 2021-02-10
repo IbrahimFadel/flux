@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(Sandscript)
 
-set(CMAKE_CXX_FLAGS "-std=c++17 -fno-exceptions -fno-rtti")
+set(CMAKE_CXX_FLAGS "-std=c++17 -fno-exceptions")
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set(SANDSCRIPT_SOURCE_FILES
@@ -10,6 +10,7 @@ set(SANDSCRIPT_SOURCE_FILES
     ${SRC_DIR}/lexer.cpp
     ${SRC_DIR}/ast.cpp
     ${SRC_DIR}/parser.cpp
+    ${SRC_DIR}/dependency_tree.cpp
     ${SRC_DIR}/code_generation.cpp
     ${SRC_DIR}/main.cpp
 )

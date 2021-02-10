@@ -21,7 +21,6 @@ std::vector<unique_ptr<Node>> parse_tokens(const Tokens &tokens)
     while (cur_tok->type != Token_Type::tok_eof)
     {
         auto node = parse_token(cur_tok);
-        // node->type = Node_Type::test;
         nodes.push_back(std::move(node));
     }
 
@@ -54,6 +53,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_if_statement();
     case Token_Type::tok_return:
         return parse_return_statement();
+    case Token_Type::tok_import:
+        return parse_import_statement();
     case Token_Type::tok_identifier:
     {
         if (std::find(object_types.begin(), object_types.end(), cur_tok->value) != object_types.end())
@@ -64,6 +65,17 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         break;
     }
     return nullptr;
+}
+
+unique_ptr<Import_Statement> parse_import_statement()
+{
+    get_next_token(); //? eat 'import'
+    throw_if_cur_tok_not_type(Token_Type::tok_string_lit, "Expected path to module in import statement", cur_tok->row, cur_tok->col);
+    std::string path = cur_tok->value;
+    get_next_token(); //? eat path
+    throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' at end of import statement", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat ';
+    return std::make_unique<Import_Statement>(path);
 }
 
 unique_ptr<Return_Statement> parse_return_statement()
@@ -292,7 +304,7 @@ unique_ptr<Expression> parse_binop_rhs(int expression_precedence, unique_ptr<Exp
         if (tok_precedence < expression_precedence)
             return lhs;
 
-        std::string binop = cur_tok->value;
+        Token_Type binop = cur_tok->type;
 
         get_next_token(); //? eat operator
 
@@ -326,6 +338,21 @@ unique_ptr<Expression> parse_identifier_expression()
     if (toks[cur_tok_index + 1]->type == Token_Type::tok_open_paren)
     {
         // TODO function call node
+        std::string fn_name = cur_tok->value;
+        std::vector<unique_ptr<Expression>> params;
+        get_next_token(); //? eat function name
+        get_next_token(); //? eat '('
+        int i = 0;
+        while (cur_tok->type != Token_Type::tok_close_paren)
+        {
+            auto param = parse_expression(false);
+            params.push_back(std::move(param));
+            if (cur_tok->type == Token_Type::tok_comma)
+                get_next_token();
+        }
+
+        get_next_token(); //? eat ')'
+        return std::make_unique<Function_Call_Expression>(fn_name, std::move(params));
     }
 
     auto expr = std::make_unique<Variable_Reference_Expression>(cur_tok->value);
