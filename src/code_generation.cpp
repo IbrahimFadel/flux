@@ -4,31 +4,70 @@
 unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options)
 {
 
-    module = std::make_unique<llvm::Module>("TheModule", context);
-    compiler_options = options;
+    // module = std::make_unique<llvm::Module>("TheModule", context);
+    // compiler_options = options;
 
-    if (compiler_options.optimize)
-        initialize_fpm();
+    // if (compiler_options.optimize)
+    //     initialize_fpm();
 
-    for (auto &node : nodes)
-    {
-        code_gen_node(std::move(node));
-    }
+    // for (auto &node : nodes)
+    // {
+    //     code_gen_node(std::move(node));
+    // }
 
-    if (compiler_options.print_module)
-        print_module(std::move(module));
+    // if (compiler_options.print_module)
+    //     print_module(std::move(module));
 
     return nullptr;
 }
 
-void code_gen_node(const unique_ptr<Node> &node)
+void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod)
 {
-    node->code_gen();
+    compiler_options = options;
+
+    declare_imported_functions(tree, fs::canonical(path), mod);
+
+    if (compiler_options.optimize)
+        initialize_fpm(mod);
+
+    for (auto &node : nodes)
+    {
+        code_gen_node(std::move(node), mod);
+    }
+
+    if (compiler_options.print_module)
+        print_module(mod);
 }
 
-void initialize_fpm()
+void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod)
 {
-    fpm = std::make_unique<llvm::legacy::FunctionPassManager>(module.get());
+    for (auto &connection : tree->connections)
+    {
+        auto left_path = tree->nodes[connection.first].first;
+        if (left_path == path)
+        {
+            auto funcs_to_declare = tree->nodes[connection.second].second;
+            for (auto &func : funcs_to_declare)
+            {
+                std::vector<llvm::Type *> param_types;
+                for (auto &param_type : func->param_types)
+                {
+                    param_types.push_back(ss_type_to_llvm_type(param_type));
+                }
+                declare_function(func->name, param_types, mod);
+            }
+        }
+    }
+}
+
+void code_gen_node(const unique_ptr<Node> &node, llvm::Module *mod)
+{
+    node->code_gen(mod);
+}
+
+void initialize_fpm(llvm::Module *mod)
+{
+    fpm = std::make_unique<llvm::legacy::FunctionPassManager>(mod);
     fpm->add(llvm::createInstructionCombiningPass());
     fpm->add(llvm::createReassociatePass());
     fpm->add(llvm::createDeadCodeEliminationPass());
@@ -39,9 +78,9 @@ void initialize_fpm()
     fpm->doInitialization();
 }
 
-llvm::Value *Function_Declaration::code_gen()
+llvm::Value *Function_Declaration::code_gen(llvm::Module *mod)
 {
-    llvm::Function *f = code_gen_function_prototype(params, return_type, name);
+    llvm::Function *f = code_gen_function_prototype(params, return_type, name, mod);
     if (f == 0)
         return 0;
 
@@ -55,7 +94,7 @@ llvm::Value *Function_Declaration::code_gen()
 
     currently_preferred_type = ss_type_to_llvm_type(return_type);
 
-    then->code_gen();
+    then->code_gen(mod);
 
     if (!entry->getTerminator())
     {
@@ -68,7 +107,7 @@ llvm::Value *Function_Declaration::code_gen()
     return 0;
 }
 
-llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type_str, std::string function_name)
+llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type_str, std::string function_name, llvm::Module *mod)
 {
     std::vector<std::string> param_names;
     std::vector<llvm::Type *> param_types;
@@ -83,15 +122,15 @@ llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> p
 
     auto return_type = ss_type_to_llvm_type(return_type_str);
     llvm::FunctionType *function_type = llvm::FunctionType::get(return_type, param_types, false);
-    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, function_name, module.get());
+    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, function_name, mod);
 
     if (f->getName() != function_name)
     {
         f->eraseFromParent();
-        f = module->getFunction(function_name);
+        f = mod->getFunction(function_name);
 
         if (!f->empty())
-            fatal_error("Redefinition of function");
+            fatal_error("Redefinition of function " + function_name);
 
         if (f->arg_size() != params.size())
             fatal_error("Redefinition of function with different number of arguments");
@@ -106,20 +145,20 @@ llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> p
     return f;
 }
 
-llvm::Value *Number_Expression::code_gen()
+llvm::Value *Number_Expression::code_gen(llvm::Module *mod)
 {
     return llvm::ConstantInt::get(currently_preferred_type, value);
 }
 
-llvm::Value *Variable_Reference_Expression::code_gen()
+llvm::Value *Variable_Reference_Expression::code_gen(llvm::Module *mod)
 {
     return functions[current_function_name]->get_variable(name);
 }
 
-llvm::Value *Binary_Operation_Expression::code_gen()
+llvm::Value *Binary_Operation_Expression::code_gen(llvm::Module *mod)
 {
-    auto l = lhs->code_gen();
-    auto r = rhs->code_gen();
+    auto l = lhs->code_gen(mod);
+    auto r = rhs->code_gen(mod);
 
     switch (op)
     {
@@ -132,9 +171,9 @@ llvm::Value *Binary_Operation_Expression::code_gen()
     return 0;
 }
 
-llvm::Value *Unary_Prefix_Operation_Expression::code_gen()
+llvm::Value *Unary_Prefix_Operation_Expression::code_gen(llvm::Module *mod)
 {
-    auto val = value->code_gen();
+    auto val = value->code_gen(mod);
     if (op == Token_Type::tok_ampersand)
     {
         return llvm::getPointerOperand(val);
@@ -147,16 +186,16 @@ llvm::Value *Unary_Prefix_Operation_Expression::code_gen()
     return 0;
 }
 
-llvm::Value *Code_Block::code_gen()
+llvm::Value *Code_Block::code_gen(llvm::Module *mod)
 {
     for (auto &node : nodes)
     {
-        node->code_gen();
+        node->code_gen(mod);
     }
     return 0;
 }
 
-llvm::Value *Variable_Declaration::code_gen()
+llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
 {
     auto llvm_type = ss_type_to_llvm_type(type);
     auto ptr = builder.CreateAlloca(llvm_type, 0, name);
@@ -168,59 +207,36 @@ llvm::Value *Variable_Declaration::code_gen()
     }
 
     currently_preferred_type = llvm_type;
-    auto val = value->code_gen();
+    auto val = value->code_gen(mod);
     auto store = builder.CreateStore(val, ptr);
     auto loaded = builder.CreateLoad(ptr, 0, name);
     functions[current_function_name]->set_variable(name, std::move(loaded));
     return loaded;
 }
 
-llvm::Value *Object_Type_Expression::code_gen()
+llvm::Value *Object_Type_Expression::code_gen(llvm::Module *mod)
 {
     return 0;
 }
 
-llvm::Value *If_Statement::code_gen()
+llvm::Value *If_Statement::code_gen(llvm::Module *mod)
 {
     return 0;
 }
 
-llvm::Value *Return_Statement::code_gen()
+llvm::Value *Return_Statement::code_gen(llvm::Module *mod)
 {
-    auto v = value->code_gen();
+    auto v = value->code_gen(mod);
     builder.CreateRet(v);
     return 0;
 }
 
-llvm::Value *Import_Statement::code_gen()
+llvm::Value *Import_Statement::code_gen(llvm::Module *mod)
 {
-    auto file_content = get_file_content(path.c_str());
-    auto tokens = tokenize(file_content);
-    auto nodes = parse_tokens(tokens);
-    auto mod = code_gen_nodes(std::move(nodes), compiler_options);
-    // print_module(std::move(mod));
-
-    // auto f_list_it = mod->begin();
-    // auto f_list_end = mod->getFunctionList().end();
-    // while (f_list_it != f_list_end)
-    // {
-    // std::vector<llvm::Type *> param_types;
-    // auto arg_list_it = f_list_it->args().begin();
-    // auto arg_list_end = f_list_it->args().end();
-    // while (arg_list_it != arg_list_end)
-    // {
-    // param_types.push_back(arg_list_it->getType());
-    // arg_list_it++;
-    // }
-    // declare_function(f_list_it->getName().str(), param_types);
-    // f_list_it->
-    // f_list_it++;
-    // }
-
     return 0;
 }
 
-llvm::Value *Function_Call_Expression::code_gen()
+llvm::Value *Function_Call_Expression::code_gen(llvm::Module *mod)
 {
     if (name.substr(0, 1) == "@")
     {
@@ -232,7 +248,7 @@ llvm::Value *Function_Call_Expression::code_gen()
         // declare_function("print", std::vector<llvm::Type *>(1, llvm::Type::getInt8PtrTy(context)));
         // }
     }
-    auto callee_function = module->getFunction(name);
+    auto callee_function = mod->getFunction(name);
     if (callee_function == 0)
         fatal_error("Unknown function referenced in function call");
     if (callee_function->arg_size() != params.size())
@@ -241,17 +257,17 @@ llvm::Value *Function_Call_Expression::code_gen()
     std::vector<llvm::Value *> param_values;
     for (auto &param : params)
     {
-        auto v = param->code_gen();
+        auto v = param->code_gen(mod);
         param_values.push_back(v);
     }
 
     return builder.CreateCall(callee_function, param_values);
 }
 
-void declare_function(std::string name, std::vector<llvm::Type *> param_types)
+void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Module *mod)
 {
     llvm::FunctionType *function_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, false);
-    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, module.get());
+    llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, mod);
 }
 
 void create_function_param_allocas(llvm::Function *f, std::map<std::string, std::string> params)
@@ -333,13 +349,17 @@ void print_v(llvm::Value *v)
     llvm::outs() << '\n';
 }
 
-void print_module(unique_ptr<llvm::Module> mod)
+void print_module(llvm::Module *mod)
 {
-    std::error_code ec;
-    auto f_out = llvm::raw_fd_ostream(compiler_options.output_path, ec);
     auto writer = new llvm::AssemblyAnnotationWriter();
-
     mod->print(llvm::outs(), writer);
+}
+
+void write_module_to_file(llvm::Module *mod, std::string path)
+{
+    auto writer = new llvm::AssemblyAnnotationWriter();
+    std::error_code ec;
+    auto f_out = llvm::raw_fd_ostream(path, ec);
     mod->print(f_out, writer);
 }
 

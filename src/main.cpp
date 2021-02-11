@@ -30,6 +30,7 @@ int main(int argc, const char **argv)
   }
 
   std::string file_path = argv[1];
+  auto file_name = fs::canonical(file_path).filename().string();
 
   auto file_content = get_file_content(file_path.c_str());
   auto tokens = tokenize(file_content);
@@ -40,6 +41,12 @@ int main(int argc, const char **argv)
 
   auto dependency_tree = generate_dependency_tree(nodes, file_path);
   print_deependency_tree(dependency_tree);
+
+  llvm::LLVMContext context;
+  auto module = new llvm::Module(file_name, context);
+  create_module(std::move(nodes), options, file_path, dependency_tree, module);
+  // print_module(module);
+  write_module_to_file(module, "../out.ll");
 
   // auto program = std::make_unique<Program>("test");
   // auto module = code_gen_nodes(std::move(nodes), options, std::move(program));
