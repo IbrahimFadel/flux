@@ -1,6 +1,6 @@
-import "std/bytes.ss";
-import "std/io.ss";
+import "./math.ss";
 
-fn main() -> void {
-    ioFunction();
+fn main() -> i32 {
+    i32 sum = sum(1, 5);
+    return sum;
 }

@@ -44,7 +44,8 @@ void make_all_connections_with_path(int base_index, fs::path resolved_path, Depe
                     auto dep_fn = new Dependency_Function();
                     dep_fn->name = fn_node->get_name();
                     std::vector<std::string> param_types;
-                    for (auto it = fn_node->get_params().begin(), end = fn_node->get_params().end(); it != end; it++)
+                    auto params = fn_node->get_params();
+                    for (auto it = params.begin(), end = params.end(); it != end; it++)
                     {
                         param_types.push_back(it->second);
                     }

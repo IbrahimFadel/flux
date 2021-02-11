@@ -1,26 +1,5 @@
 #include "code_generation.h"
 
-// unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program)
-unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options)
-{
-
-    // module = std::make_unique<llvm::Module>("TheModule", context);
-    // compiler_options = options;
-
-    // if (compiler_options.optimize)
-    //     initialize_fpm();
-
-    // for (auto &node : nodes)
-    // {
-    //     code_gen_node(std::move(node));
-    // }
-
-    // if (compiler_options.print_module)
-    //     print_module(std::move(module));
-
-    return nullptr;
-}
-
 void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod)
 {
     compiler_options = options;
@@ -39,6 +18,55 @@ void create_module(const Nodes &nodes, CompilerOptions options, std::string path
         print_module(mod);
 }
 
+void module_to_obj(llvm::Module *mod, std::string output_path)
+{
+    auto target_triple = llvm::sys::getDefaultTargetTriple();
+
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(target_triple, error);
+    if (!target)
+    {
+        llvm::errs() << error;
+        exit(1);
+    }
+
+    auto CPU = "generic";
+    auto features = "";
+
+    llvm::TargetOptions opt;
+    auto rm = llvm::Optional<llvm::Reloc::Model>();
+    auto target_machine = target->createTargetMachine(target_triple, CPU, features, opt, rm);
+
+    mod->setDataLayout(target_machine->createDataLayout());
+    mod->setTargetTriple(target_triple);
+
+    std::error_code ec;
+    llvm::raw_fd_ostream dest(output_path, ec, llvm::sys::fs::F_None);
+    if (ec)
+    {
+        llvm::errs() << "Could not open file: " << ec.message();
+        exit(1);
+    }
+
+    llvm::legacy::PassManager pass;
+    auto file_type = llvm::CGFT_ObjectFile;
+
+    if (target_machine->addPassesToEmitFile(pass, dest, nullptr, file_type))
+    {
+        llvm::errs() << "Target Machine cannot emit a file of this type";
+        exit(1);
+    }
+
+    pass.run(*mod);
+    dest.flush();
+}
+
 void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod)
 {
     for (auto &connection : tree->connections)
@@ -54,7 +82,7 @@ void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Modu
                 {
                     param_types.push_back(ss_type_to_llvm_type(param_type));
                 }
-                declare_function(func->name, param_types, mod);
+                declare_function(func->name, param_types, ss_type_to_llvm_type(func->return_type), mod);
             }
         }
     }
@@ -264,9 +292,9 @@ llvm::Value *Function_Call_Expression::code_gen(llvm::Module *mod)
     return builder.CreateCall(callee_function, param_values);
 }
 
-void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Module *mod)
+void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Type *return_type, llvm::Module *mod)
 {
-    llvm::FunctionType *function_type = llvm::FunctionType::get(llvm::Type::getInt32Ty(context), param_types, false);
+    llvm::FunctionType *function_type = llvm::FunctionType::get(return_type, param_types, false);
     llvm::Function *f = llvm::Function::Create(function_type, llvm::Function::ExternalLinkage, name, mod);
 }
 

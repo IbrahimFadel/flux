@@ -19,6 +19,17 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Utils.h>
 
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Target/TargetMachine.h>
+
+#include <lld/Common/Driver.h>
+
 static CompilerOptions compiler_options;
 static llvm::LLVMContext context;
 // static llvm::Module *module;
@@ -34,7 +45,7 @@ static std::map<fs::path, llvm::Module *> files_with_modules_already_generated;
 
 // unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program);
 void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod);
-unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options);
+void module_to_obj(llvm::Module *mod, std::string output_path);
 static void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod);
 static void code_gen_node(const unique_ptr<Node> &node, llvm::Module *mod);
 static void initialize_fpm(llvm::Module *mod);
@@ -42,7 +53,7 @@ static void create_function_param_allocas(llvm::Function *f, std::map<std::strin
 static llvm::Value *create_entry_block_alloca(llvm::Function *function, const std::string &name, llvm::Type *type);
 static llvm::Type *ss_type_to_llvm_type(std::string type);
 static llvm::Type *ss_base_type_to_llvm_type(std::string type);
-static void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Module *mod);
+static void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Type *return_type, llvm::Module *mod);
 static void print_t(llvm::Type *ty);
 static void print_v(llvm::Value *v);
 void print_module(llvm::Module *mod);
