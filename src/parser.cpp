@@ -47,8 +47,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_variable_declaration();
     case Token_Type::tok_double:
         return parse_variable_declaration();
-    case Token_Type::tok_object:
-        return parse_object_type_declaration();
+    case Token_Type::tok_struct:
+        return parse_struct_type_declaration();
     case Token_Type::tok_if:
         return parse_if_statement();
     case Token_Type::tok_return:
@@ -57,8 +57,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_import_statement();
     case Token_Type::tok_identifier:
     {
-        if (std::find(object_types.begin(), object_types.end(), cur_tok->value) != object_types.end())
-            return parse_variable_declaration();
+        if (std::find(struct_types.begin(), struct_types.end(), cur_tok->value) != struct_types.end())
+            return parse_variable_declaration(true);
         return parse_expression();
     }
     default:
@@ -118,9 +118,9 @@ unique_ptr<If_Statement> parse_if_statement()
     return std::make_unique<If_Statement>(std::move(conditions), condition_separators, std::move(then));
 }
 
-unique_ptr<Expression> parse_object_type_declaration()
+unique_ptr<Expression> parse_struct_type_declaration()
 {
-    get_next_token(); //? eat 'object'
+    get_next_token(); //? eat 'struct'
 
     throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier following object token", cur_tok->row, cur_tok->col);
     std::string name = cur_tok->value;
@@ -135,26 +135,29 @@ unique_ptr<Expression> parse_object_type_declaration()
         std::string type = get_type();
 
         throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in object property", cur_tok->row, cur_tok->col);
-        std::string name = cur_tok->value;
+        std::string prop_name = cur_tok->value;
         get_next_token(); //? eat name
 
         throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' in object property", cur_tok->row, cur_tok->col);
         get_next_token(); //? eat ';'
-
-        properties[name] = type;
+        properties[prop_name] = type;
     }
 
     get_next_token(); //? eat '}'
     throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' in object type definition", cur_tok->row, cur_tok->col);
     get_next_token(); //? eat ';'
 
-    object_types.push_back(name);
+    struct_types.push_back(name);
 
-    return std::make_unique<Object_Type_Expression>(name, properties);
+    return std::make_unique<Struct_Type_Expression>(name, properties);
 }
 
-unique_ptr<Variable_Declaration> parse_variable_declaration()
+unique_ptr<Variable_Declaration> parse_variable_declaration(bool is_struct)
 {
+    if (is_struct)
+    {
+        return parse_struct_var_declaration();
+    }
     std::string type = get_type();
 
     throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier following variable type", cur_tok->row, cur_tok->col);
@@ -173,6 +176,28 @@ unique_ptr<Variable_Declaration> parse_variable_declaration()
     auto value = parse_expression();
 
     return std::make_unique<Variable_Declaration>(name, type, std::move(value));
+}
+
+static unique_ptr<Variable_Declaration> parse_struct_var_declaration()
+{
+    std::string type_name = get_type();
+
+    throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in struct variable declaration", cur_tok->row, cur_tok->col);
+    std::string name = cur_tok->value;
+    get_next_token(); //? eat name
+
+    if (cur_tok->type == Token_Type::tok_semicolon)
+    {
+        get_next_token(); //? eat ';'
+        return std::make_unique<Variable_Declaration>(name, type_name, nullptr, true);
+    }
+
+    throw_if_cur_tok_not_type(Token_Type::tok_eq, "Expected '=' in struct variable declaration", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '='
+
+    auto value = parse_expression();
+
+    return std::make_unique<Variable_Declaration>(name, type_name, std::move(value), true);
 }
 
 unique_ptr<Function_Declaration> parse_function_declaration()
@@ -275,8 +300,34 @@ unique_ptr<Expression> parse_primary()
         return parse_unary_prefix_operation_expression();
     case Token_Type::tok_ampersand:
         return parse_unary_prefix_operation_expression();
+    case Token_Type::tok_open_curly_bracket:
+        return parse_struct_value_expression();
     }
     return nullptr;
+}
+
+unique_ptr<Expression> parse_struct_value_expression()
+{
+    throw_if_cur_tok_not_type(Token_Type::tok_open_curly_bracket, "Expected '{' in struct variable declaration", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat '{'
+
+    std::map<std::string, unique_ptr<Expression>> props;
+    while (cur_tok->type != Token_Type::tok_close_curly_bracket)
+    {
+        throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in struct variable declaration", cur_tok->row, cur_tok->col);
+        std::string property_name = cur_tok->value;
+        get_next_token(); //? eat property name
+
+        throw_if_cur_tok_not_type(Token_Type::tok_colon, "Expected ':' in struct variable declaration", cur_tok->row, cur_tok->col);
+        get_next_token(); //? eat ':'
+
+        auto val = parse_expression();
+        props[property_name] = std::move(val);
+    }
+
+    get_next_token(); //? eat '}'
+
+    return std::make_unique<Struct_Value_Expression>(std::move(props));
 }
 
 unique_ptr<Expression> parse_unary_prefix_operation_expression()

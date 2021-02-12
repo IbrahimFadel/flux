@@ -225,6 +225,15 @@ llvm::Value *Code_Block::code_gen(llvm::Module *mod)
 
 llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
 {
+    if (is_struct)
+    {
+        auto struct_val_expr = dynamic_cast<Struct_Value_Expression *>(value.get());
+        if (struct_val_expr != nullptr)
+        {
+            return code_gen_struct_variable_declaration(name, type, struct_val_expr, mod);
+        }
+    }
+
     auto llvm_type = ss_type_to_llvm_type(type);
     auto ptr = builder.CreateAlloca(llvm_type, 0, name);
 
@@ -242,7 +251,46 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
     return loaded;
 }
 
-llvm::Value *Object_Type_Expression::code_gen(llvm::Module *mod)
+llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string type, Struct_Value_Expression *value, llvm::Module *mod)
+{
+    auto ptr = builder.CreateAlloca(llvm_struct_types[type]);
+
+    int i = 0;
+    for (auto const &[key, val] : value->get_properties())
+    {
+        auto struct_property_ptr = builder.CreateStructGEP(ptr, i, key);
+        auto prop_ty = ss_type_to_llvm_type(struct_properties[type][key]);
+        currently_preferred_type = prop_ty;
+        auto v = val->code_gen(mod);
+        builder.CreateStore(v, struct_property_ptr);
+        i++;
+    }
+
+    auto loaded = builder.CreateLoad(ptr);
+
+    functions[current_function_name]->set_variable(name, std::move(loaded));
+
+    return 0;
+}
+
+llvm::Value *Struct_Type_Expression::code_gen(llvm::Module *mod)
+{
+    std::vector<llvm::Type *> llvm_types;
+    for (auto const &[key, val] : properties)
+    {
+        auto ty = ss_type_to_llvm_type(val);
+        llvm_types.push_back(ty);
+    }
+
+    auto struct_type = llvm::StructType::create(context, llvm_types, name, false);
+
+    llvm_struct_types[name] = struct_type;
+    struct_properties[name] = properties;
+
+    return 0;
+}
+
+llvm::Value *Struct_Value_Expression::code_gen(llvm::Module *mod)
 {
     return 0;
 }
@@ -360,6 +408,8 @@ llvm::Type *ss_base_type_to_llvm_type(std::string type)
         return llvm::Type::getVoidTy(context);
     else
     {
+        if (std::find(struct_types.begin(), struct_types.end(), type) != struct_types.end())
+            return llvm_struct_types[type];
         fatal_error("Could not convert base type to llvm type");
         return nullptr;
     }

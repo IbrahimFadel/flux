@@ -112,21 +112,46 @@ private:
     std::string name;
     std::string type;
     unique_ptr<Expression> value;
+    // std::map<std::string, unique_ptr<Expression>> properties;
+    // std::vector<std::string> property_names;
+    // std::vector<unique_ptr<Expression>> property_values;
+    bool is_struct = false;
 
 public:
     Variable_Declaration(std::string name, std::string type, unique_ptr<Expression> value) : name(name), type(type), value(std::move(value)){};
+    Variable_Declaration(std::string name, std::string type, unique_ptr<Expression> value, bool is_struct) : name(name), type(type), value(std::move(value)), is_struct(is_struct){};
+    // Variable_Declaration(std::string name, std::string type, std::map<std::string, unique_ptr<Expression>> properties) : name(name), type(type), properties(std::move(properties))
+    // {
+    // is_struct = true;
+    // };
+    // Variable_Declaration(std::string name, std::string type) : name(name), type(type)
+    // {
+    // is_struct = true;
+    // undefined = true;
+    // };
     llvm::Value *code_gen(llvm::Module *mod);
 };
 
-class Object_Type_Expression : public Expression
+class Struct_Type_Expression : public Expression
 {
 private:
     std::string name;
     std::map<std::string, std::string> properties;
 
 public:
-    Object_Type_Expression(std::string name, std::map<std::string, std::string> properties) : name(name), properties(properties){};
+    Struct_Type_Expression(std::string name, std::map<std::string, std::string> properties) : name(name), properties(properties){};
     llvm::Value *code_gen(llvm::Module *mod);
+};
+
+class Struct_Value_Expression : public Expression
+{
+private:
+    std::map<std::string, unique_ptr<Expression>> properties;
+
+public:
+    Struct_Value_Expression(std::map<std::string, unique_ptr<Expression>> properties) : properties(std::move(properties)){};
+    llvm::Value *code_gen(llvm::Module *mod);
+    std::map<std::string, unique_ptr<Expression>> get_properties();
 };
 
 class If_Statement : public Expression

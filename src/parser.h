@@ -7,7 +7,7 @@ static int cur_tok_index;
 static shared_ptr<Token> cur_tok;
 static Tokens toks;
 static std::map<std::string, int> binop_precedence;
-static std::vector<std::string> object_types;
+inline std::vector<std::string> struct_types;
 
 Nodes parse_tokens(const Tokens &token);
 static unique_ptr<Node> parse_token(const shared_ptr<Token> &token);
@@ -20,10 +20,12 @@ static unique_ptr<Expression> parse_paren_expression();
 static unique_ptr<Expression> parse_number_expression();
 static unique_ptr<Expression> parse_identifier_expression();
 static unique_ptr<Expression> parse_unary_prefix_operation_expression();
-static unique_ptr<Expression> parse_object_type_declaration();
+static unique_ptr<Expression> parse_struct_type_declaration();
+static unique_ptr<Expression> parse_struct_value_expression();
 
 //! Variable Declaration Parsing
-static unique_ptr<Variable_Declaration> parse_variable_declaration();
+static unique_ptr<Variable_Declaration> parse_variable_declaration(bool is_struct = false);
+static unique_ptr<Variable_Declaration> parse_struct_var_declaration();
 
 //! Function Parsing
 static unique_ptr<Function_Declaration> parse_function_declaration();

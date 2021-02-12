@@ -43,6 +43,9 @@ static llvm::Type *currently_preferred_type = llvm::Type::getInt32Ty(context);
 static bool print_function_declared = false;
 static std::map<fs::path, llvm::Module *> files_with_modules_already_generated;
 
+static std::map<std::string, llvm::StructType *> llvm_struct_types;
+static std::map<std::string, std::map<std::string, std::string>> struct_properties;
+
 // unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program);
 void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod);
 void module_to_obj(llvm::Module *mod, std::string output_path);
@@ -61,6 +64,7 @@ void write_module_to_file(llvm::Module *mod, std::string path);
 static void fatal_error(std::string msg);
 
 static llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type, std::string function_name, llvm::Module *mod);
+static llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string type, Struct_Value_Expression *value, llvm::Module *mod);
 
 // unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions compiler_options);
 

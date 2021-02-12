@@ -8,7 +8,7 @@ struct CompilerOptions
 {
     bool optimize = false;
     std::string path_to_root = std::filesystem::current_path().string();
-    std::string output_path = path_to_root + std::string("a.out");
+    std::string output_path = path_to_root + "/" + std::string("a.out");
     bool print_module = false;
 };
 

@@ -56,6 +56,9 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
       case ';':
         add_token(token, tokens, true, c);
         break;
+      case ':':
+        add_token(token, tokens, true, c);
+        break;
       case '*':
         add_token(token, tokens, true, c);
         break;
@@ -172,6 +175,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_close_square_bracket;
   else if (token == ";")
     return Token_Type::tok_semicolon;
+  else if (token == ":")
+    return Token_Type::tok_colon;
   else if (token == "*")
     return Token_Type::tok_asterisk;
   else if (token == "/")
@@ -218,8 +223,8 @@ Token_Type get_token_type(string token)
   // return Token_Type::tok_string;
   else if (token == "void")
     return Token_Type::tok_void;
-  else if (token == "object")
-    return Token_Type::tok_object;
+  else if (token == "struct")
+    return Token_Type::tok_struct;
   else if (token == "array")
     return Token_Type::tok_array;
   else

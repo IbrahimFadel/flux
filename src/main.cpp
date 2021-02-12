@@ -52,6 +52,9 @@ int main(int argc, const char **argv)
 
     create_module(nodes, compiler_options, node.first, dependency_tree, module);
 
+    print_module(module);
+    write_module_to_file(module, "../main.ll");
+
     module_to_obj(module, node.first.replace_extension("o").string());
   }
   std::string files;

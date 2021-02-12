@@ -34,7 +34,7 @@ enum Token_Type
   tok_double,
   tok_string,
   tok_void,
-  tok_object,
+  tok_struct,
   tok_array,
 
   tok_compare_eq,
