@@ -34,7 +34,7 @@ int main(int argc, const char **argv)
 
   auto main_file_content = get_file_content(file_path.c_str());
   auto main_tokens = tokenize(main_file_content);
-  // print_tokens(tokens);
+  // print_tokens(main_tokens);
 
   auto main_nodes = parse_tokens(main_tokens);
   // print_nodes(nodes);
@@ -50,29 +50,29 @@ int main(int argc, const char **argv)
     auto tokens = tokenize(file_content);
     auto nodes = parse_tokens(tokens);
 
-    create_module(nodes, compiler_options, node.first, dependency_tree, module);
+    create_module(nodes, options, node.first, dependency_tree, module);
 
     print_module(module);
     write_module_to_file(module, "../main.ll");
 
-    module_to_obj(module, node.first.replace_extension("o").string());
+    // module_to_obj(module, node.first.replace_extension("o").string());
   }
-  std::string files;
-  for (auto &node : dependency_tree->nodes)
-  {
-    files += node.first.string() + " ";
-  }
-  std::string command = "clang " + files + "-o " + options.output_path;
-  std::system(command.c_str());
+  // std::string files;
+  // for (auto &node : dependency_tree->nodes)
+  // {
+  //   files += node.first.string() + " ";
+  // }
+  // std::string command = "clang " + files + "-o " + options.output_path;
+  // std::system(command.c_str());
 
-  for (auto &node : dependency_tree->nodes)
-  {
-    if (std::remove(node.first.c_str()))
-    {
-      cout << "Error removing object files" << endl;
-      exit(1);
-    }
-  }
+  // for (auto &node : dependency_tree->nodes)
+  // {
+  //   if (std::remove(node.first.c_str()))
+  //   {
+  //     cout << "Error removing object files" << endl;
+  //     exit(1);
+  //   }
+  // }
 
   //! The entire process of linking the object files looks really gross (especially the system()) <- think about all this more
 

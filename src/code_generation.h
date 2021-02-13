@@ -56,6 +56,7 @@ static void create_function_param_allocas(llvm::Function *f, std::map<std::strin
 static llvm::Value *create_entry_block_alloca(llvm::Function *function, const std::string &name, llvm::Type *type);
 static llvm::Type *ss_type_to_llvm_type(std::string type);
 static llvm::Type *ss_base_type_to_llvm_type(std::string type);
+static void declare_c_functions(llvm::Module *mod);
 static void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Type *return_type, llvm::Module *mod);
 static void print_t(llvm::Type *ty);
 static void print_v(llvm::Value *v);

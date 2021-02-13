@@ -4,6 +4,7 @@ void create_module(const Nodes &nodes, CompilerOptions options, std::string path
 {
     compiler_options = options;
 
+    declare_c_functions(mod);
     declare_imported_functions(tree, fs::canonical(path), mod);
 
     if (compiler_options.optimize)
@@ -65,6 +66,26 @@ void module_to_obj(llvm::Module *mod, std::string output_path)
 
     pass.run(*mod);
     dest.flush();
+}
+
+void declare_c_functions(llvm::Module *mod)
+{
+    std::vector<llvm::Type *> free_param_types;
+    free_param_types.push_back(llvm::Type::getInt8PtrTy(context));
+    auto free_return_type = llvm::Type::getVoidTy(context);
+    declare_function("free", free_param_types, free_return_type, mod);
+
+    std::vector<llvm::Type *> malloc_param_types;
+    malloc_param_types.push_back(llvm::Type::getInt64Ty(context));
+    auto malloc_return_type = llvm::Type::getInt8PtrTy(context);
+    declare_function("malloc", malloc_param_types, malloc_return_type, mod);
+
+    std::vector<llvm::Type *> memcpy_param_types;
+    memcpy_param_types.push_back(llvm::Type::getInt8PtrTy(context));
+    memcpy_param_types.push_back(llvm::Type::getInt8PtrTy(context));
+    memcpy_param_types.push_back(llvm::Type::getInt64Ty(context));
+    auto memcpy_return_type = llvm::Type::getInt8PtrTy(context);
+    declare_function("memcpy", memcpy_param_types, memcpy_return_type, mod);
 }
 
 void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod)
@@ -183,20 +204,104 @@ llvm::Value *Variable_Reference_Expression::code_gen(llvm::Module *mod)
     return functions[current_function_name]->get_variable(name);
 }
 
+llvm::Value *Index_Accessed_Expression::code_gen(llvm::Module *mod)
+{
+    auto var = functions[current_function_name]->get_variable(name);
+    auto var_ptr = llvm::getPointerOperand(var);
+    currently_preferred_type = llvm::Type::getInt32Ty(context);
+    auto index_v = index->code_gen(mod);
+    auto ptr = builder.CreateGEP(var_ptr, index_v);
+    return builder.CreateLoad(ptr);
+}
+
 llvm::Value *Binary_Operation_Expression::code_gen(llvm::Module *mod)
 {
+    if (op == Token_Type::tok_arrow)
+    {
+        //? This is an object(pointer) property assignment
+        auto lhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(lhs.get());
+        if (lhs_var_reference_expr == nullptr)
+            fatal_error("Object property assignments must have a variable reference on the left hand side");
+
+        auto rhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(rhs.get());
+        if (rhs_var_reference_expr == nullptr)
+            fatal_error("Object property assignments must have a variable reference on the right hand side");
+
+        auto var = lhs_var_reference_expr->code_gen(mod);
+        auto prop_name = rhs_var_reference_expr->get_name();
+
+        auto ty = var->getType();
+        std::string struct_name;
+        if (ty->isPointerTy())
+            struct_name = ty->getPointerElementType()->getStructName().str();
+        else
+            struct_name = ty->getStructName().str();
+
+        auto properties = struct_properties[struct_name];
+        int i = 0;
+        int property_index = -1;
+        for (auto const &[key, val] : properties)
+        {
+            if (key == prop_name)
+                property_index = i;
+            i++;
+        }
+
+        if (property_index == -1)
+            fatal_error("Could not find property in struct");
+
+        auto res = builder.CreateStructGEP(var, property_index, prop_name);
+        return res;
+    }
+
     auto l = lhs->code_gen(mod);
+    auto l_ty = l->getType();
+
+    while (l_ty->isPointerTy())
+    {
+        l_ty = l_ty->getPointerElementType();
+    }
+    currently_preferred_type = l_ty;
+
+    //? This mess is caused by the fact that struct property accessed behave differently depending on the position in the binop:
+    /*
+     * mystruct->prop = 5;
+     * ^ mystruct->prop needs to return a pointer that a value can be stored into
+     * i32 x = mystruct->prop;
+     * ^ mystruct->prop needs to return the value -- not the pointer
+     */
     auto r = rhs->code_gen(mod);
+    auto rhs_binop = dynamic_cast<Binary_Operation_Expression *>(rhs.get());
+    if (rhs_binop != nullptr)
+    {
+        if (rhs_binop->op == Token_Type::tok_arrow)
+            r = builder.CreateLoad(r);
+    }
 
     switch (op)
     {
     case Token_Type::tok_plus:
         return builder.CreateAdd(l, r);
+    case Token_Type::tok_eq:
+        return builder.CreateStore(r, l);
+    case Token_Type::tok_compare_eq:
+        return builder.CreateICmpEQ(l, r);
+    case Token_Type::tok_compare_ne:
+        return builder.CreateICmpNE(l, r);
     default:
         fatal_error("Tried to codegen binary operation expression of unimplemented operator");
     }
 
     return 0;
+}
+
+llvm::Value *Nullptr_Expression::code_gen(llvm::Module *mod)
+{
+    while (currently_preferred_type->isPointerTy())
+    {
+        currently_preferred_type = currently_preferred_type->getPointerElementType();
+    }
+    return llvm::ConstantPointerNull::get(currently_preferred_type->getPointerTo());
 }
 
 llvm::Value *Unary_Prefix_Operation_Expression::code_gen(llvm::Module *mod)
@@ -245,6 +350,13 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
 
     currently_preferred_type = llvm_type;
     auto val = value->code_gen(mod);
+    auto rhs_binop = dynamic_cast<Binary_Operation_Expression *>(value.get());
+    if (rhs_binop != nullptr)
+    {
+        if (rhs_binop->get_op() == Token_Type::tok_arrow)
+            val = builder.CreateLoad(val);
+    }
+
     auto store = builder.CreateStore(val, ptr);
     auto loaded = builder.CreateLoad(ptr, 0, name);
     functions[current_function_name]->set_variable(name, std::move(loaded));
@@ -297,6 +409,42 @@ llvm::Value *Struct_Value_Expression::code_gen(llvm::Module *mod)
 
 llvm::Value *If_Statement::code_gen(llvm::Module *mod)
 {
+    std::vector<llvm::Value *> cond_vs;
+    for (auto &cond : conditions)
+    {
+        auto v = cond->code_gen(mod);
+        cond_vs.push_back(v);
+    }
+    for (auto &sep : condition_separators)
+    {
+        fatal_error("Condition seperators in if statements not implemented yet");
+        //TODO unimplemented
+    }
+
+    auto func = builder.GetInsertBlock()->getParent();
+    auto then_bb = llvm::BasicBlock::Create(context, "if.then", func);
+    auto else_bb = llvm::BasicBlock::Create(context, "if.else");
+    auto merge_bb = llvm::BasicBlock::Create(context, "if.merge");
+
+    auto br = builder.CreateCondBr(cond_vs[0], then_bb, else_bb);
+    builder.SetInsertPoint(then_bb);
+
+    then->code_gen(mod);
+
+    builder.CreateBr(merge_bb);
+
+    then_bb = builder.GetInsertBlock();
+
+    func->getBasicBlockList().push_back(else_bb);
+    builder.SetInsertPoint(else_bb);
+
+    builder.CreateBr(merge_bb);
+
+    else_bb = builder.GetInsertBlock();
+
+    func->getBasicBlockList().push_back(merge_bb);
+    builder.SetInsertPoint(merge_bb);
+
     return 0;
 }
 
@@ -314,16 +462,6 @@ llvm::Value *Import_Statement::code_gen(llvm::Module *mod)
 
 llvm::Value *Function_Call_Expression::code_gen(llvm::Module *mod)
 {
-    if (name.substr(0, 1) == "@")
-    {
-        //? This is a Sandscript function
-        name = name.substr(1, name.size() - 1);
-        // if (name == "print")
-        // {
-        // if (!print_function_declared)
-        // declare_function("print", std::vector<llvm::Type *>(1, llvm::Type::getInt8PtrTy(context)));
-        // }
-    }
     auto callee_function = mod->getFunction(name);
     if (callee_function == 0)
         fatal_error("Unknown function referenced in function call");

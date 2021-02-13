@@ -34,10 +34,12 @@ enum Token_Type
   tok_double,
   tok_string,
   tok_void,
+  tok_nullptr,
   tok_struct,
   tok_array,
 
   tok_compare_eq,
+  tok_compare_ne,
   tok_compare_lt,
   tok_compare_gt,
   tok_and,

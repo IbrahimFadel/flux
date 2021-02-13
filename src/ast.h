@@ -42,6 +42,13 @@ public:
     llvm::Value *code_gen(llvm::Module *mod);
 };
 
+class Nullptr_Expression : public Expression
+{
+private:
+public:
+    llvm::Value *code_gen(llvm::Module *mod);
+};
+
 class Variable_Reference_Expression : public Expression
 {
 private:
@@ -50,6 +57,7 @@ private:
 public:
     Variable_Reference_Expression(std::string name) : name(name){};
     llvm::Value *code_gen(llvm::Module *mod);
+    std::string get_name();
 };
 
 class Binary_Operation_Expression : public Expression
@@ -61,6 +69,18 @@ private:
 
 public:
     Binary_Operation_Expression(Token_Type op, unique_ptr<Expression> lhs, unique_ptr<Expression> rhs) : op(op), lhs(std::move(lhs)), rhs(std::move(rhs)){};
+    llvm::Value *code_gen(llvm::Module *mod);
+    Token_Type get_op();
+};
+
+class Index_Accessed_Expression : public Expression
+{
+private:
+    std::string name;
+    unique_ptr<Expression> index;
+
+public:
+    Index_Accessed_Expression(std::string name, unique_ptr<Expression> index) : name(name), index(std::move(index)){};
     llvm::Value *code_gen(llvm::Module *mod);
 };
 
@@ -112,23 +132,11 @@ private:
     std::string name;
     std::string type;
     unique_ptr<Expression> value;
-    // std::map<std::string, unique_ptr<Expression>> properties;
-    // std::vector<std::string> property_names;
-    // std::vector<unique_ptr<Expression>> property_values;
     bool is_struct = false;
 
 public:
     Variable_Declaration(std::string name, std::string type, unique_ptr<Expression> value) : name(name), type(type), value(std::move(value)){};
     Variable_Declaration(std::string name, std::string type, unique_ptr<Expression> value, bool is_struct) : name(name), type(type), value(std::move(value)), is_struct(is_struct){};
-    // Variable_Declaration(std::string name, std::string type, std::map<std::string, unique_ptr<Expression>> properties) : name(name), type(type), properties(std::move(properties))
-    // {
-    // is_struct = true;
-    // };
-    // Variable_Declaration(std::string name, std::string type) : name(name), type(type)
-    // {
-    // is_struct = true;
-    // undefined = true;
-    // };
     llvm::Value *code_gen(llvm::Module *mod);
 };
 

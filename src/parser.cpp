@@ -10,6 +10,7 @@ std::vector<unique_ptr<Node>> parse_tokens(const Tokens &tokens)
     binop_precedence["<"] = 10;
     binop_precedence[">"] = 10;
     binop_precedence["=="] = 10;
+    binop_precedence["!="] = 10;
     binop_precedence["+"] = 20;
     binop_precedence["-"] = 20;
     binop_precedence["*"] = 40;
@@ -97,6 +98,7 @@ unique_ptr<If_Statement> parse_if_statement()
     while (cur_tok->type != Token_Type::tok_close_paren)
     {
         auto expr = parse_expression(false);
+        conditions.push_back(std::move(expr));
 
         if (cur_tok->type != Token_Type::tok_close_paren)
         {
@@ -302,6 +304,9 @@ unique_ptr<Expression> parse_primary()
         return parse_unary_prefix_operation_expression();
     case Token_Type::tok_open_curly_bracket:
         return parse_struct_value_expression();
+    case Token_Type::tok_nullptr:
+        get_next_token(); //? eat 'nullptr'
+        return std::make_unique<Nullptr_Expression>();
     }
     return nullptr;
 }
@@ -388,7 +393,6 @@ unique_ptr<Expression> parse_identifier_expression()
 {
     if (toks[cur_tok_index + 1]->type == Token_Type::tok_open_paren)
     {
-        // TODO function call node
         std::string fn_name = cur_tok->value;
         std::vector<unique_ptr<Expression>> params;
         get_next_token(); //? eat function name
@@ -404,6 +408,20 @@ unique_ptr<Expression> parse_identifier_expression()
 
         get_next_token(); //? eat ')'
         return std::make_unique<Function_Call_Expression>(fn_name, std::move(params));
+    }
+    else if (toks[cur_tok_index + 1]->type == Token_Type::tok_open_square_bracket)
+    {
+        //TODO array access
+        std::string var_name = cur_tok->value;
+        get_next_token(); //? eat var name
+        get_next_token(); //? eat '['
+
+        auto index = parse_expression(false);
+
+        throw_if_cur_tok_not_type(Token_Type::tok_close_square_bracket, "Expected ']' at end of index access", cur_tok->row, cur_tok->col);
+        get_next_token(); //? eat ']'
+
+        return std::make_unique<Index_Accessed_Expression>(var_name, std::move(index));
     }
 
     auto expr = std::make_unique<Variable_Reference_Expression>(cur_tok->value);

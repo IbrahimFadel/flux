@@ -7,8 +7,9 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
 
   for (auto &line : content)
   {
-    for (auto &c : line)
+    for (int i = 0; i < line.size(); i++)
     {
+      char c = line[i];
       if (c == '"')
       {
         if (is_string)
@@ -69,9 +70,23 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
         add_token(token, tokens, true, c);
         break;
       case '-':
+      {
         if (line[col + 1] != '>')
           add_token(token, tokens, true, c);
+        else
+        {
+          if (token.size() > 1)
+          {
+            token = token.substr(0, token.size() - 1);
+            add_token(token, tokens);
+          }
+          token = "->";
+          add_token(token, tokens);
+          i++;
+          continue;
+        }
         break;
+      }
       case '&':
         add_token(token, tokens, true, c);
         break;
@@ -191,6 +206,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_eq;
   else if (token == "==")
     return Token_Type::tok_compare_eq;
+  else if (token == "!=")
+    return Token_Type::tok_compare_ne;
   else if (token == "<")
     return Token_Type::tok_compare_lt;
   else if (token == ".")
@@ -223,6 +240,8 @@ Token_Type get_token_type(string token)
   // return Token_Type::tok_string;
   else if (token == "void")
     return Token_Type::tok_void;
+  else if (token == "nullptr")
+    return Token_Type::tok_nullptr;
   else if (token == "struct")
     return Token_Type::tok_struct;
   else if (token == "array")

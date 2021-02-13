@@ -1,18 +1,6 @@
-struct Person {
-    i32 age;
-    i16 address;
-};
-
-fn test(Person p) -> Person * {
-    return &p;
-}
-
 fn main() -> void {
-    Person ibrahim = {
-        age: 36;
-        address: 5;
-    };
+    i64 size = 8;
+    i8 *buffer = malloc(size);
 
-    Person *p = &ibrahim;
-    Person *new = test(ibrahim);
+    buffer[1] = 33;
 }
