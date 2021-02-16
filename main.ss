@@ -1,6 +1,15 @@
-fn main() -> void {
-    i64 size = 8;
-    i8 *buffer = malloc(size);
+struct string {
+    i8 *buffer;
+    i64 length;
+    i64 maxLength;
+    i64 factor;
+};
 
-    buffer[1] = 33;
+fn main() -> void {
+    i64 len = 0;
+    len = len + 1;
+
+    string test;
+    
+    test->length = test->maxLength;
 }

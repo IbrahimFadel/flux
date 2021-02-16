@@ -66,7 +66,10 @@ static void fatal_error(std::string msg);
 
 static llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type, std::string function_name, llvm::Module *mod);
 static llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string type, Struct_Value_Expression *value, llvm::Module *mod);
-
+static llvm::Value *code_gen_binop_sum_diff_prod_quot(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
+static llvm::Value *code_gen_binop_eq(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
+static llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
+static llvm::Value *code_gen_binop_cmp(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, Token_Type op, llvm::Module *mod);
 // unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions compiler_options);
 
 // #include "options.h"

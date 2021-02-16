@@ -15,12 +15,16 @@ entry:
   store %string* %this, %string** %0, align 8
   %1 = load %string*, %string** %0, align 8
   %buffer = getelementptr inbounds %string, %string* %1, i32 0, i32 0
+  %2 = load i8*, i8** %buffer, align 8
   store i8* null, i8** %buffer, align 8
   %length = getelementptr inbounds %string, %string* %1, i32 0, i32 2
+  %3 = load i64, i64* %length, align 4
   store i64 0, i64* %length, align 4
   %maxLength = getelementptr inbounds %string, %string* %1, i32 0, i32 3
+  %4 = load i64, i64* %maxLength, align 4
   store i64 0, i64* %maxLength, align 4
   %factor = getelementptr inbounds %string, %string* %1, i32 0, i32 1
+  %5 = load i64, i64* %factor, align 4
   store i64 16, i64* %factor, align 4
   ret void
 }
@@ -74,6 +78,7 @@ entry:
   %7 = call i8* @memcpy(i8* %output1, i8* %buf2, i64 %len3)
   call void @free(i8* %buf2)
   %buffer4 = getelementptr inbounds %string, %string* %2, i32 0, i32 0
+  %8 = load i8*, i8** %buffer4, align 8
   store i8* %output1, i8** %buffer4, align 8
   ret void
 }
@@ -120,12 +125,7 @@ if.merge:                                         ; preds = %if.else, %if.then
   %buf5 = load i8*, i8** %buf, align 8
   %10 = getelementptr i8*, i8** %buf, i64 %len1
   %11 = load i8*, i8** %10, align 8
+  %12 = load i8, i8* %11, align 1
   store i8 %3, i8* %11, align 1
-  %newLen = alloca i64, align 8
-  %12 = add i64 %len1, 1
-  store i64 %12, i64* %newLen, align 4
-  %newLen6 = load i64, i64* %newLen, align 4
-  %length7 = getelementptr inbounds %string, %string* %2, i32 0, i32 2
-  store i64 %newLen6, i64* %length7, align 4
   ret void
 }

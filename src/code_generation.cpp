@@ -145,7 +145,9 @@ llvm::Value *Function_Declaration::code_gen(llvm::Module *mod)
 
     then->code_gen(mod);
 
-    if (!entry->getTerminator())
+    auto last_bb = builder.GetInsertBlock();
+
+    if (!last_bb->getTerminator())
     {
         builder.CreateRetVoid();
     }
@@ -211,87 +213,110 @@ llvm::Value *Index_Accessed_Expression::code_gen(llvm::Module *mod)
     currently_preferred_type = llvm::Type::getInt32Ty(context);
     auto index_v = index->code_gen(mod);
     auto ptr = builder.CreateGEP(var_ptr, index_v);
-    return builder.CreateLoad(ptr);
+    auto loaded = builder.CreateLoad(ptr);
+    return builder.CreateLoad(loaded); //? Will this break things?
 }
 
-llvm::Value *Binary_Operation_Expression::code_gen(llvm::Module *mod)
+llvm::Value *code_gen_binop_sum_diff_prod_quot(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod)
 {
-    if (op == Token_Type::tok_arrow)
-    {
-        //? This is an object(pointer) property assignment
-        auto lhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(lhs.get());
-        if (lhs_var_reference_expr == nullptr)
-            fatal_error("Object property assignments must have a variable reference on the left hand side");
-
-        auto rhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(rhs.get());
-        if (rhs_var_reference_expr == nullptr)
-            fatal_error("Object property assignments must have a variable reference on the right hand side");
-
-        auto var = lhs_var_reference_expr->code_gen(mod);
-        auto prop_name = rhs_var_reference_expr->get_name();
-
-        auto ty = var->getType();
-        std::string struct_name;
-        if (ty->isPointerTy())
-            struct_name = ty->getPointerElementType()->getStructName().str();
-        else
-            struct_name = ty->getStructName().str();
-
-        auto properties = struct_properties[struct_name];
-        int i = 0;
-        int property_index = -1;
-        for (auto const &[key, val] : properties)
-        {
-            if (key == prop_name)
-                property_index = i;
-            i++;
-        }
-
-        if (property_index == -1)
-            fatal_error("Could not find property in struct");
-
-        auto res = builder.CreateStructGEP(var, property_index, prop_name);
-        return res;
-    }
-
     auto l = lhs->code_gen(mod);
-    auto l_ty = l->getType();
-
-    while (l_ty->isPointerTy())
-    {
-        l_ty = l_ty->getPointerElementType();
-    }
-    currently_preferred_type = l_ty;
-
-    //? This mess is caused by the fact that struct property accessed behave differently depending on the position in the binop:
-    /*
-     * mystruct->prop = 5;
-     * ^ mystruct->prop needs to return a pointer that a value can be stored into
-     * i32 x = mystruct->prop;
-     * ^ mystruct->prop needs to return the value -- not the pointer
-     */
     auto r = rhs->code_gen(mod);
-    auto rhs_binop = dynamic_cast<Binary_Operation_Expression *>(rhs.get());
-    if (rhs_binop != nullptr)
+    auto sum = builder.CreateAdd(l, r);
+    return sum;
+}
+
+llvm::Value *code_gen_binop_eq(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod)
+{
+    auto l = lhs->code_gen(mod);
+    currently_preferred_type = l->getType();
+    auto r = rhs->code_gen(mod);
+    auto l_ptr = llvm::getPointerOperand(l);
+    auto store = builder.CreateStore(r, l_ptr);
+    return store;
+}
+
+llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod)
+{
+    auto lhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(lhs.get());
+    if (lhs_var_reference_expr == nullptr)
+        fatal_error("Object property assignments must have a variable reference on the left hand side");
+
+    auto rhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(rhs.get());
+    if (rhs_var_reference_expr == nullptr)
+        fatal_error("Object property assignments must have a variable reference on the right hand side");
+
+    auto prop_name = rhs_var_reference_expr->get_name();
+
+    auto l_var = lhs_var_reference_expr->code_gen(mod);
+
+    auto ty = l_var->getType();
+    std::string struct_name;
+    while (ty->isPointerTy())
+        ty = ty->getPointerElementType();
+    struct_name = ty->getStructName().str();
+
+    auto properties = struct_properties[struct_name];
+    int i = 0;
+    int prop_index = -1;
+    for (auto const &[key, val] : properties)
     {
-        if (rhs_binop->op == Token_Type::tok_arrow)
-            r = builder.CreateLoad(r);
+        if (key == prop_name)
+            prop_index = i;
+        i++;
     }
+
+    if (prop_index == -1)
+        fatal_error("Could not find property in struct");
+
+    auto gep = builder.CreateStructGEP(l_var, prop_index, prop_name);
+
+    return builder.CreateLoad(gep);
+}
+
+llvm::Value *code_gen_binop_cmp(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, Token_Type op, llvm::Module *mod)
+{
+    auto l = lhs->code_gen(mod);
+    auto r = rhs->code_gen(mod);
 
     switch (op)
     {
-    case Token_Type::tok_plus:
-        return builder.CreateAdd(l, r);
-    case Token_Type::tok_eq:
-        return builder.CreateStore(r, l);
     case Token_Type::tok_compare_eq:
         return builder.CreateICmpEQ(l, r);
     case Token_Type::tok_compare_ne:
         return builder.CreateICmpNE(l, r);
+    case Token_Type::tok_compare_lt:
+        return builder.CreateICmpULT(l, r);
+    case Token_Type::tok_compare_gt:
+        return builder.CreateICmpUGT(l, r);
+    default:
+        break;
+    }
+    return 0;
+}
+
+llvm::Value *Binary_Operation_Expression::code_gen(llvm::Module *mod)
+{
+    switch (op)
+    {
+    case Token_Type::tok_plus:
+        return code_gen_binop_sum_diff_prod_quot(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_minus:
+        return code_gen_binop_sum_diff_prod_quot(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_asterisk:
+        return code_gen_binop_sum_diff_prod_quot(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_slash:
+        return code_gen_binop_sum_diff_prod_quot(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_eq:
+        return code_gen_binop_eq(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_arrow:
+        return code_gen_binop_arrow(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_compare_eq:
+        return code_gen_binop_cmp(std::move(lhs), std::move(rhs), op, mod);
+    case Token_Type::tok_compare_ne:
+        return code_gen_binop_cmp(std::move(lhs), std::move(rhs), op, mod);
     default:
         fatal_error("Tried to codegen binary operation expression of unimplemented operator");
     }
-
     return 0;
 }
 
@@ -350,13 +375,6 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
 
     currently_preferred_type = llvm_type;
     auto val = value->code_gen(mod);
-    auto rhs_binop = dynamic_cast<Binary_Operation_Expression *>(value.get());
-    if (rhs_binop != nullptr)
-    {
-        if (rhs_binop->get_op() == Token_Type::tok_arrow)
-            val = builder.CreateLoad(val);
-    }
-
     auto store = builder.CreateStore(val, ptr);
     auto loaded = builder.CreateLoad(ptr, 0, name);
     functions[current_function_name]->set_variable(name, std::move(loaded));

@@ -42,6 +42,4 @@ fn string_add_char(string *this, i8 value) -> void {
 
     i8 *buf = this->buffer;
     buf[len] = value;
-    i64 newLen = len + 1;
-    this->length = newLen;
 }

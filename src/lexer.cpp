@@ -80,10 +80,6 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
             token = token.substr(0, token.size() - 1);
             add_token(token, tokens);
           }
-          token = "->";
-          add_token(token, tokens);
-          i++;
-          continue;
         }
         break;
       }
@@ -99,6 +95,11 @@ vector<shared_ptr<Token>> tokenize(vector<string> content)
       case '>':
         if (line[col - 1] != '-')
           add_token(token, tokens, true, c);
+        else
+        {
+          token = "->";
+          add_token(token, tokens);
+        }
         break;
       case '.':
         add_token(token, tokens, true, c);
