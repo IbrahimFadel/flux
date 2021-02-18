@@ -237,8 +237,8 @@ Token_Type get_token_type(string token)
     return Token_Type::tok_float;
   else if (token == "double")
     return Token_Type::tok_double;
-  // else if (token == "string")
-  // return Token_Type::tok_string;
+  else if (token == "string")
+    return Token_Type::tok_string;
   else if (token == "void")
     return Token_Type::tok_void;
   else if (token == "nullptr")

@@ -59,7 +59,9 @@ static llvm::Value *create_entry_block_alloca(llvm::Function *function, const st
 static llvm::Type *ss_type_to_llvm_type(std::string type);
 static llvm::Type *ss_base_type_to_llvm_type(std::string type);
 static void declare_c_functions(llvm::Module *mod);
+static void declare_string_functions(llvm::Module *mod);
 static void declare_function(std::string name, std::vector<llvm::Type *> param_types, llvm::Type *return_type, llvm::Module *mod);
+static void declare_struct_type(std::vector<llvm::Type *> llvm_types, std::map<std::string, std::string> properties, std::vector<std::string> property_insetion_order, std::string name);
 static void print_t(llvm::Type *ty);
 static void print_v(llvm::Value *v);
 void print_module(llvm::Module *mod);
@@ -67,7 +69,10 @@ void write_module_to_file(llvm::Module *mod, std::string path);
 static void fatal_error(std::string msg);
 
 static llvm::Function *code_gen_function_prototype(std::map<std::string, std::string> params, std::string return_type, std::string function_name, llvm::Module *mod);
+
 static llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string type, Struct_Value_Expression *value, llvm::Module *mod);
+static llvm::Value *code_gen_string_variable_declaration(std::string name, unique_ptr<Expression> value, llvm::Module *mod);
+
 static llvm::Value *code_gen_binop_sum_diff_prod_quot(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
 static llvm::Value *code_gen_binop_eq(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
 static llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);

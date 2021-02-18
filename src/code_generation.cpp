@@ -6,6 +6,7 @@ void create_module(const Nodes &nodes, CompilerOptions options, std::string path
     compiler_options = options;
 
     declare_c_functions(module);
+    declare_string_functions(module);
     declare_imported_functions(tree, fs::canonical(path), module);
 
     if (compiler_options.optimize)
@@ -94,6 +95,22 @@ void declare_c_functions(llvm::Module *mod)
     printf_param_types.push_back(llvm::Type::getInt8PtrTy(context));
     auto printf_return_type = llvm::Type::getInt32Ty(context);
     declare_function("printf", printf_param_types, printf_return_type, mod);
+}
+
+void declare_string_functions(llvm::Module *mod)
+{
+    std::vector<llvm::Type *> string_property_types = {llvm::Type::getInt8PtrTy(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)};
+    std::map<std::string, std::string> string_properties = {
+        {"buffer", "i8*"},
+        {"length", "i64"},
+        {"maxLength", "i64"},
+        {"factor", "i64"}};
+    std::vector<std::string> string_property_insetion_order = {"buffer, length, maxLength, factor"};
+    declare_struct_type(string_property_types, string_properties, string_property_insetion_order, "string");
+
+    std::vector<llvm::Type *> string_create_default_param_types = {llvm_struct_types["string"]->getPointerTo()};
+    auto string_create_default_return_type = llvm::Type::getVoidTy(context);
+    declare_function("string_create_default", string_create_default_param_types, string_create_default_return_type, mod);
 }
 
 void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod)
@@ -411,6 +428,10 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
             return code_gen_struct_variable_declaration(name, type, struct_val_expr, mod);
         }
     }
+    else if (type == "string")
+    {
+        return code_gen_string_variable_declaration(name, std::move(value), mod);
+    }
 
     auto llvm_type = ss_type_to_llvm_type(type);
     auto ptr = builder.CreateAlloca(llvm_type, 0, name);
@@ -423,6 +444,25 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
     }
 
     auto loaded = builder.CreateLoad(ptr, 0, name);
+    functions[current_function_name]->set_variable(name, std::move(loaded));
+    return loaded;
+}
+
+llvm::Value *code_gen_string_variable_declaration(std::string name, unique_ptr<Expression> value, llvm::Module *mod)
+{
+    auto ptr = builder.CreateAlloca(llvm_struct_types["string"]);
+    std::vector<llvm::Value *> params = {ptr};
+    auto string_init_fn = mod->getFunction("string_create_default");
+    auto init_string = builder.CreateCall(string_init_fn, params);
+
+    if (value != nullptr)
+    {
+        // String literals not implemented yet so... this is TODO
+        auto val = value->code_gen(mod);
+        builder.CreateStore(val, ptr);
+    }
+
+    auto loaded = builder.CreateLoad(ptr);
     functions[current_function_name]->set_variable(name, std::move(loaded));
     return loaded;
 }
@@ -449,6 +489,14 @@ llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string 
     return 0;
 }
 
+void declare_struct_type(std::vector<llvm::Type *> llvm_types, std::map<std::string, std::string> properties, std::vector<std::string> property_insetion_order, std::string name)
+{
+    auto struct_type = llvm::StructType::create(context, llvm_types, name, false);
+    llvm_struct_types[name] = struct_type;
+    struct_properties[name] = properties;
+    struct_property_insertion_orders[name] = property_insetion_order;
+}
+
 llvm::Value *Struct_Type_Expression::code_gen(llvm::Module *mod)
 {
     std::vector<llvm::Type *> llvm_types;
@@ -458,11 +506,7 @@ llvm::Value *Struct_Type_Expression::code_gen(llvm::Module *mod)
         llvm_types.push_back(ty);
     }
 
-    auto struct_type = llvm::StructType::create(context, llvm_types, name, false);
-
-    llvm_struct_types[name] = struct_type;
-    struct_properties[name] = properties;
-    struct_property_insertion_orders[name] = property_insetion_order;
+    declare_struct_type(llvm_types, properties, property_insetion_order, name);
 
     return 0;
 }

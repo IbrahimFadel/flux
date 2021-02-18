@@ -48,6 +48,8 @@ unique_ptr<Node> parse_token(const shared_ptr<Token> &token)
         return parse_variable_declaration();
     case Token_Type::tok_double:
         return parse_variable_declaration();
+    case Token_Type::tok_string:
+        return parse_variable_declaration();
     case Token_Type::tok_struct:
         return parse_struct_type_declaration();
     case Token_Type::tok_if:
