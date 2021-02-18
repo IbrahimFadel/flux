@@ -15,31 +15,29 @@ fn string_create_default(string *this) -> void {
 fn string_delete(string *this) -> void {
     i8 *buf = this->buffer;
     if(buf != nullptr) {
-        free(buf);
+        @free(buf);
     }
 }
 
 fn string_resize(string *this, i64 value) -> void {
-    i8 *output = malloc(value);
+    i8 *output = @malloc(value);
 
     i8 *buf = this->buffer;
     i64 len = this->length;
 
-    memcpy(output, buf, len);
+    @memcpy(output, buf, len);
 
-    free(buf);
+    @free(buf);
     this->buffer = output;
 }
 
 fn string_add_char(string *this, i8 value) -> void {
-    i64 len = this->length;
-    i64 maxLen = this->maxLength;
-
-    if(len == maxLen) {
-        i64 factor = this->factor;
-        string_resize(this, maxLen + factor);
+    if(this->length == this->maxLength) {
+        i64 newSize = this->maxLength + this->factor;
+        string_resize(this, newSize);
+        this->maxLength = newSize;
     }
 
-    i8 *buf = this->buffer;
-    buf[len] = value;
+    this->buffer[this->length] = value;
+    this->length = this->length + 1;
 }

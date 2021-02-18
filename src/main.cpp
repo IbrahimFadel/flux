@@ -42,18 +42,16 @@ int main(int argc, const char **argv)
   auto dependency_tree = generate_dependency_tree(main_nodes, file_path);
   // print_deependency_tree(dependency_tree);
 
-  llvm::LLVMContext context;
   for (auto &node : dependency_tree->nodes)
   {
-    auto module = new llvm::Module(node.first.filename().string(), context);
     auto file_content = get_file_content(node.first.c_str());
     auto tokens = tokenize(file_content);
     auto nodes = parse_tokens(tokens);
 
-    create_module(nodes, options, node.first, dependency_tree, module);
+    create_module(nodes, options, node.first, dependency_tree);
 
-    print_module(module);
-    write_module_to_file(module, "../main.ll");
+    // print_module(module);
+    // write_module_to_file(module, "../main.ll");
 
     // module_to_obj(module, node.first.replace_extension("o").string());
   }

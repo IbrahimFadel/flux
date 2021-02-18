@@ -9,6 +9,7 @@ std::string Function_Declaration::get_return_type() { return return_type; };
 std::string Import_Statement::get_path() { return path; };
 
 std::map<std::string, unique_ptr<Expression>> Struct_Value_Expression::get_properties() { return std::move(properties); }
+std::vector<std::string> Struct_Value_Expression::get_property_insertion_order() { return property_insetion_order; };
 
 std::string Variable_Reference_Expression::get_name() { return name; };
 

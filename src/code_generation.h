@@ -11,6 +11,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/Verifier.h>
 
 #include <llvm/Bitcode/BitcodeWriter.h>
 
@@ -32,7 +33,7 @@
 
 static CompilerOptions compiler_options;
 static llvm::LLVMContext context;
-// static llvm::Module *module;
+static llvm::Module *module;
 static llvm::IRBuilder<> builder(context);
 static unique_ptr<llvm::legacy::FunctionPassManager> fpm;
 
@@ -45,9 +46,10 @@ static std::map<fs::path, llvm::Module *> files_with_modules_already_generated;
 
 static std::map<std::string, llvm::StructType *> llvm_struct_types;
 static std::map<std::string, std::map<std::string, std::string>> struct_properties;
+static std::map<std::string, std::vector<std::string>> struct_property_insertion_orders;
 
 // unique_ptr<llvm::Module> code_gen_nodes(const Nodes &nodes, CompilerOptions options, unique_ptr<Program> parent_program);
-void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod);
+void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree);
 void module_to_obj(llvm::Module *mod, std::string output_path);
 static void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod);
 static void code_gen_node(const unique_ptr<Node> &node, llvm::Module *mod);
@@ -69,6 +71,7 @@ static llvm::Value *code_gen_struct_variable_declaration(std::string name, std::
 static llvm::Value *code_gen_binop_sum_diff_prod_quot(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
 static llvm::Value *code_gen_binop_eq(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
 static llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
+static llvm::Value *code_gen_binop_period(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod);
 static llvm::Value *code_gen_binop_cmp(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, Token_Type op, llvm::Module *mod);
 // unique_ptr<Module> code_gen_nodes(const Nodes &nodes, CompilerOptions compiler_options);
 

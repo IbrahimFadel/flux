@@ -132,6 +132,7 @@ unique_ptr<Expression> parse_struct_type_declaration()
     get_next_token(); //? eat '{'
 
     std::map<std::string, std::string> properties;
+    std::vector<std::string> property_insetion_order;
     while (cur_tok->type != Token_Type::tok_close_curly_bracket)
     {
         std::string type = get_type();
@@ -143,6 +144,7 @@ unique_ptr<Expression> parse_struct_type_declaration()
         throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' in object property", cur_tok->row, cur_tok->col);
         get_next_token(); //? eat ';'
         properties[prop_name] = type;
+        property_insetion_order.push_back(prop_name);
     }
 
     get_next_token(); //? eat '}'
@@ -151,7 +153,7 @@ unique_ptr<Expression> parse_struct_type_declaration()
 
     struct_types.push_back(name);
 
-    return std::make_unique<Struct_Type_Expression>(name, properties);
+    return std::make_unique<Struct_Type_Expression>(name, properties, property_insetion_order);
 }
 
 unique_ptr<Variable_Declaration> parse_variable_declaration(bool is_struct)
@@ -280,6 +282,12 @@ unique_ptr<Expression> parse_expression(bool needs_semicolon)
 
     auto binop_node = parse_binop_rhs(0, std::move(lhs));
 
+    if (cur_tok->type == Token_Type::tok_open_square_bracket)
+    {
+        auto expr = parse_square_bracket_expression(std::move(binop_node));
+        binop_node = parse_binop_rhs(0, std::move(expr));
+    }
+
     if (needs_semicolon)
     {
         throw_if_cur_tok_not_type(Token_Type::tok_semicolon, "Expected ';' at end of expression", cur_tok->row, cur_tok->col);
@@ -317,6 +325,7 @@ unique_ptr<Expression> parse_struct_value_expression()
     get_next_token(); //? eat '{'
 
     std::map<std::string, unique_ptr<Expression>> props;
+    std::vector<std::string> property_insetion_order;
     while (cur_tok->type != Token_Type::tok_close_curly_bracket)
     {
         throw_if_cur_tok_not_type(Token_Type::tok_identifier, "Expected identifier in struct variable declaration", cur_tok->row, cur_tok->col);
@@ -328,11 +337,12 @@ unique_ptr<Expression> parse_struct_value_expression()
 
         auto val = parse_expression();
         props[property_name] = std::move(val);
+        property_insetion_order.push_back(property_name);
     }
 
     get_next_token(); //? eat '}'
 
-    return std::make_unique<Struct_Value_Expression>(std::move(props));
+    return std::make_unique<Struct_Value_Expression>(std::move(props), property_insetion_order);
 }
 
 unique_ptr<Expression> parse_unary_prefix_operation_expression()
@@ -382,6 +392,18 @@ unique_ptr<Expression> parse_binop_rhs(int expression_precedence, unique_ptr<Exp
     return nullptr;
 }
 
+unique_ptr<Expression> parse_square_bracket_expression(std::unique_ptr<Expression> expr)
+{
+    get_next_token(); //? eat '['
+
+    auto index = parse_expression(false);
+
+    throw_if_cur_tok_not_type(Token_Type::tok_close_square_bracket, "Expected ']' at end of index access", cur_tok->row, cur_tok->col);
+    get_next_token(); //? eat ']'
+
+    return std::make_unique<Index_Accessed_Expression>(std::move(expr), std::move(index));
+}
+
 unique_ptr<Expression> parse_number_expression()
 {
     double val = std::stod(cur_tok->value.c_str());
@@ -409,20 +431,20 @@ unique_ptr<Expression> parse_identifier_expression()
         get_next_token(); //? eat ')'
         return std::make_unique<Function_Call_Expression>(fn_name, std::move(params));
     }
-    else if (toks[cur_tok_index + 1]->type == Token_Type::tok_open_square_bracket)
-    {
-        //TODO array access
-        std::string var_name = cur_tok->value;
-        get_next_token(); //? eat var name
-        get_next_token(); //? eat '['
+    // else if (toks[cur_tok_index + 1]->type == Token_Type::tok_open_square_bracket)
+    // {
+    //     //TODO array access
+    //     std::string var_name = cur_tok->value;
+    //     get_next_token(); //? eat var name
+    //     get_next_token(); //? eat '['
 
-        auto index = parse_expression(false);
+    //     auto index = parse_expression(false);
 
-        throw_if_cur_tok_not_type(Token_Type::tok_close_square_bracket, "Expected ']' at end of index access", cur_tok->row, cur_tok->col);
-        get_next_token(); //? eat ']'
+    //     throw_if_cur_tok_not_type(Token_Type::tok_close_square_bracket, "Expected ']' at end of index access", cur_tok->row, cur_tok->col);
+    //     get_next_token(); //? eat ']'
 
-        return std::make_unique<Index_Accessed_Expression>(var_name, std::move(index));
-    }
+    //     return std::make_unique<Index_Accessed_Expression>(var_name, std::move(index));
+    // }
 
     auto expr = std::make_unique<Variable_Reference_Expression>(cur_tok->value);
     get_next_token(); //? eat variable name

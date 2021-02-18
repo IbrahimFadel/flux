@@ -76,11 +76,11 @@ public:
 class Index_Accessed_Expression : public Expression
 {
 private:
-    std::string name;
+    unique_ptr<Expression> expr;
     unique_ptr<Expression> index;
 
 public:
-    Index_Accessed_Expression(std::string name, unique_ptr<Expression> index) : name(name), index(std::move(index)){};
+    Index_Accessed_Expression(unique_ptr<Expression> expr, unique_ptr<Expression> index) : expr(std::move(expr)), index(std::move(index)){};
     llvm::Value *code_gen(llvm::Module *mod);
 };
 
@@ -145,9 +145,10 @@ class Struct_Type_Expression : public Expression
 private:
     std::string name;
     std::map<std::string, std::string> properties;
+    std::vector<std::string> property_insetion_order;
 
 public:
-    Struct_Type_Expression(std::string name, std::map<std::string, std::string> properties) : name(name), properties(properties){};
+    Struct_Type_Expression(std::string name, std::map<std::string, std::string> properties, std::vector<std::string> property_insetion_order) : name(name), properties(properties), property_insetion_order(property_insetion_order){};
     llvm::Value *code_gen(llvm::Module *mod);
 };
 
@@ -155,11 +156,13 @@ class Struct_Value_Expression : public Expression
 {
 private:
     std::map<std::string, unique_ptr<Expression>> properties;
+    std::vector<std::string> property_insetion_order;
 
 public:
-    Struct_Value_Expression(std::map<std::string, unique_ptr<Expression>> properties) : properties(std::move(properties)){};
+    Struct_Value_Expression(std::map<std::string, unique_ptr<Expression>> properties, std::vector<std::string> property_insetion_order) : properties(std::move(properties)), property_insetion_order(property_insetion_order){};
     llvm::Value *code_gen(llvm::Module *mod);
     std::map<std::string, unique_ptr<Expression>> get_properties();
+    std::vector<std::string>  get_property_insertion_order();
 };
 
 class If_Statement : public Expression

@@ -1,22 +1,25 @@
 #include "code_generation.h"
 
-void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree, llvm::Module *mod)
+void create_module(const Nodes &nodes, CompilerOptions options, std::string path, Dependency_Tree *tree)
 {
+    module = new llvm::Module(path, context);
     compiler_options = options;
 
-    declare_c_functions(mod);
-    declare_imported_functions(tree, fs::canonical(path), mod);
+    declare_c_functions(module);
+    declare_imported_functions(tree, fs::canonical(path), module);
 
     if (compiler_options.optimize)
-        initialize_fpm(mod);
+        initialize_fpm(module);
 
     for (auto &node : nodes)
     {
-        code_gen_node(std::move(node), mod);
+        code_gen_node(std::move(node), module);
     }
 
     if (compiler_options.print_module)
-        print_module(mod);
+        print_module(module);
+
+    write_module_to_file(module, "../main.ll");
 }
 
 void module_to_obj(llvm::Module *mod, std::string output_path)
@@ -86,6 +89,11 @@ void declare_c_functions(llvm::Module *mod)
     memcpy_param_types.push_back(llvm::Type::getInt64Ty(context));
     auto memcpy_return_type = llvm::Type::getInt8PtrTy(context);
     declare_function("memcpy", memcpy_param_types, memcpy_return_type, mod);
+
+    std::vector<llvm::Type *> printf_param_types;
+    printf_param_types.push_back(llvm::Type::getInt8PtrTy(context));
+    auto printf_return_type = llvm::Type::getInt32Ty(context);
+    declare_function("printf", printf_param_types, printf_return_type, mod);
 }
 
 void declare_imported_functions(Dependency_Tree *tree, fs::path path, llvm::Module *mod)
@@ -152,6 +160,8 @@ llvm::Value *Function_Declaration::code_gen(llvm::Module *mod)
         builder.CreateRetVoid();
     }
 
+    llvm::verifyFunction(*f, &llvm::outs());
+
     if (compiler_options.optimize)
         fpm->run(*f);
 
@@ -208,13 +218,11 @@ llvm::Value *Variable_Reference_Expression::code_gen(llvm::Module *mod)
 
 llvm::Value *Index_Accessed_Expression::code_gen(llvm::Module *mod)
 {
-    auto var = functions[current_function_name]->get_variable(name);
-    auto var_ptr = llvm::getPointerOperand(var);
-    currently_preferred_type = llvm::Type::getInt32Ty(context);
+    auto var = expr->code_gen(mod);
     auto index_v = index->code_gen(mod);
-    auto ptr = builder.CreateGEP(var_ptr, index_v);
-    auto loaded = builder.CreateLoad(ptr);
-    return builder.CreateLoad(loaded); //? Will this break things?
+    auto gep = builder.CreateGEP(var, index_v);
+    auto loaded = builder.CreateLoad(gep);
+    return loaded;
 }
 
 llvm::Value *code_gen_binop_sum_diff_prod_quot(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod)
@@ -248,19 +256,56 @@ llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const uniqu
     auto prop_name = rhs_var_reference_expr->get_name();
 
     auto l_var = lhs_var_reference_expr->code_gen(mod);
-
     auto ty = l_var->getType();
     std::string struct_name;
     while (ty->isPointerTy())
         ty = ty->getPointerElementType();
     struct_name = ty->getStructName().str();
 
-    auto properties = struct_properties[struct_name];
     int i = 0;
     int prop_index = -1;
-    for (auto const &[key, val] : properties)
+    auto property_insertion_order = struct_property_insertion_orders[struct_name];
+    auto properties = struct_properties[struct_name];
+    for (auto &prop : property_insertion_order)
     {
-        if (key == prop_name)
+        if (prop == prop_name)
+            prop_index = i;
+        i++;
+    }
+
+    if (prop_index == -1)
+        fatal_error("Could not find property in struct");
+    auto gep = builder.CreateStructGEP(l_var, prop_index, prop_name);
+    auto loaded = builder.CreateLoad(gep);
+    return loaded;
+}
+
+llvm::Value *code_gen_binop_period(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, llvm::Module *mod)
+{
+    auto lhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(lhs.get());
+    if (lhs_var_reference_expr == nullptr)
+        fatal_error("Object property assignments must have a variable reference on the left hand side");
+
+    auto rhs_var_reference_expr = dynamic_cast<Variable_Reference_Expression *>(rhs.get());
+    if (rhs_var_reference_expr == nullptr)
+        fatal_error("Object property assignments must have a variable reference on the right hand side");
+
+    auto prop_name = rhs_var_reference_expr->get_name();
+
+    auto l_var = lhs_var_reference_expr->code_gen(mod);
+    auto ty = l_var->getType();
+    std::string struct_name;
+    while (ty->isPointerTy())
+        ty = ty->getPointerElementType();
+    struct_name = ty->getStructName().str();
+
+    int i = 0;
+    int prop_index = -1;
+    auto property_insertion_order = struct_property_insertion_orders[struct_name];
+    auto properties = struct_properties[struct_name];
+    for (auto &prop : property_insertion_order)
+    {
+        if (prop == prop_name)
             prop_index = i;
         i++;
     }
@@ -268,9 +313,10 @@ llvm::Value *code_gen_binop_arrow(const unique_ptr<Expression> &lhs, const uniqu
     if (prop_index == -1)
         fatal_error("Could not find property in struct");
 
-    auto gep = builder.CreateStructGEP(l_var, prop_index, prop_name);
-
-    return builder.CreateLoad(gep);
+    auto l_var_ptr = llvm::getPointerOperand(l_var);
+    auto gep = builder.CreateStructGEP(l_var_ptr, prop_index, prop_name);
+    auto loaded = builder.CreateLoad(gep);
+    return loaded;
 }
 
 llvm::Value *code_gen_binop_cmp(const unique_ptr<Expression> &lhs, const unique_ptr<Expression> &rhs, Token_Type op, llvm::Module *mod)
@@ -310,6 +356,8 @@ llvm::Value *Binary_Operation_Expression::code_gen(llvm::Module *mod)
         return code_gen_binop_eq(std::move(lhs), std::move(rhs), mod);
     case Token_Type::tok_arrow:
         return code_gen_binop_arrow(std::move(lhs), std::move(rhs), mod);
+    case Token_Type::tok_period:
+        return code_gen_binop_period(std::move(lhs), std::move(rhs), mod);
     case Token_Type::tok_compare_eq:
         return code_gen_binop_cmp(std::move(lhs), std::move(rhs), op, mod);
     case Token_Type::tok_compare_ne:
@@ -367,15 +415,13 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
     auto llvm_type = ss_type_to_llvm_type(type);
     auto ptr = builder.CreateAlloca(llvm_type, 0, name);
 
-    if (value == nullptr)
+    if (value != nullptr)
     {
-        functions[current_function_name]->set_variable(name, std::move(ptr));
-        return ptr;
+        currently_preferred_type = llvm_type;
+        auto val = value->code_gen(mod);
+        auto store = builder.CreateStore(val, ptr);
     }
 
-    currently_preferred_type = llvm_type;
-    auto val = value->code_gen(mod);
-    auto store = builder.CreateStore(val, ptr);
     auto loaded = builder.CreateLoad(ptr, 0, name);
     functions[current_function_name]->set_variable(name, std::move(loaded));
     return loaded;
@@ -384,14 +430,14 @@ llvm::Value *Variable_Declaration::code_gen(llvm::Module *mod)
 llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string type, Struct_Value_Expression *value, llvm::Module *mod)
 {
     auto ptr = builder.CreateAlloca(llvm_struct_types[type]);
-
+    auto props = value->get_properties();
     int i = 0;
-    for (auto const &[key, val] : value->get_properties())
+    for (auto &prop_name : value->get_property_insertion_order())
     {
-        auto struct_property_ptr = builder.CreateStructGEP(ptr, i, key);
-        auto prop_ty = ss_type_to_llvm_type(struct_properties[type][key]);
+        auto struct_property_ptr = builder.CreateStructGEP(ptr, i, prop_name);
+        auto prop_ty = ss_type_to_llvm_type(struct_properties[type][prop_name]);
         currently_preferred_type = prop_ty;
-        auto v = val->code_gen(mod);
+        auto v = props[prop_name]->code_gen(mod);
         builder.CreateStore(v, struct_property_ptr);
         i++;
     }
@@ -406,9 +452,9 @@ llvm::Value *code_gen_struct_variable_declaration(std::string name, std::string 
 llvm::Value *Struct_Type_Expression::code_gen(llvm::Module *mod)
 {
     std::vector<llvm::Type *> llvm_types;
-    for (auto const &[key, val] : properties)
+    for (auto &prop_name : property_insetion_order)
     {
-        auto ty = ss_type_to_llvm_type(val);
+        auto ty = ss_type_to_llvm_type(properties[prop_name]);
         llvm_types.push_back(ty);
     }
 
@@ -416,6 +462,7 @@ llvm::Value *Struct_Type_Expression::code_gen(llvm::Module *mod)
 
     llvm_struct_types[name] = struct_type;
     struct_properties[name] = properties;
+    struct_property_insertion_orders[name] = property_insetion_order;
 
     return 0;
 }
@@ -468,6 +515,7 @@ llvm::Value *If_Statement::code_gen(llvm::Module *mod)
 
 llvm::Value *Return_Statement::code_gen(llvm::Module *mod)
 {
+    currently_preferred_type = ss_type_to_llvm_type(functions[current_function_name]->get_return_type());
     auto v = value->code_gen(mod);
     builder.CreateRet(v);
     return 0;
@@ -480,6 +528,10 @@ llvm::Value *Import_Statement::code_gen(llvm::Module *mod)
 
 llvm::Value *Function_Call_Expression::code_gen(llvm::Module *mod)
 {
+    if (name.substr(0, 1) == "@")
+    {
+        name = name.substr(1, name.size() - 1);
+    }
     auto callee_function = mod->getFunction(name);
     if (callee_function == 0)
         fatal_error("Unknown function referenced in function call");
@@ -487,10 +539,19 @@ llvm::Value *Function_Call_Expression::code_gen(llvm::Module *mod)
         fatal_error("Incorrect number of parameters passed to function call");
 
     std::vector<llvm::Value *> param_values;
+    std::vector<llvm::Type *> param_types;
+    for (auto it = callee_function->args().begin(), end = callee_function->args().end(); it != end; it++)
+    {
+        param_types.push_back(it->getType());
+    }
+
+    int i = 0;
     for (auto &param : params)
     {
+        currently_preferred_type = param_types[i];
         auto v = param->code_gen(mod);
         param_values.push_back(v);
+        i++;
     }
 
     return builder.CreateCall(callee_function, param_values);

@@ -1,15 +1,10 @@
 struct string {
-    i8 *buffer;
-    i64 length;
-    i64 maxLength;
-    i64 factor;
+    i8 test;
 };
 
-fn main() -> void {
-    i64 len = 0;
-    len = len + 1;
+fn main() -> i32 {
+    string foo;
+    foo.test = 33;
 
-    string test;
-    
-    test->length = test->maxLength;
+    return 0;
 }

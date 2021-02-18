@@ -22,6 +22,7 @@ static unique_ptr<Expression> parse_identifier_expression();
 static unique_ptr<Expression> parse_unary_prefix_operation_expression();
 static unique_ptr<Expression> parse_struct_type_declaration();
 static unique_ptr<Expression> parse_struct_value_expression();
+static unique_ptr<Expression> parse_square_bracket_expression(std::unique_ptr<Expression> expr);
 
 //! Variable Declaration Parsing
 static unique_ptr<Variable_Declaration> parse_variable_declaration(bool is_struct = false);
