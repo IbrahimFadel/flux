@@ -3,17 +3,53 @@
 
 #include "driver/options.h"
 #include "ast/parser.h"
+#include "context.h"
+
+// #include "llvm/IR/Value.h"
+// #include "llvm/IR/IRBuilder.h"
+// #include "llvm/IR/AssemblyAnnotationWriter.h"
+// #include "llvm/Support/raw_ostream.h"
+
+#include <llvm/IR/Module.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/raw_ostream.h>
 
 namespace ssc
 {
-    class CodeGenerator
-    {
-    private:
-        Nodes nodes;
 
-    public:
-        void codegenNodes(Nodes nodes);
-    };
+    llvm::Module *codegenNodes(Nodes nodes, unique_ptr<CodegenContext> codegenContext);
+
+    // static llvm::LLVMContext ctx;
+    // static unique_ptr<llvm::Module> module;
+    // static unique_ptr<llvm::IRBuilder<>> builder;
+    // static std::string currentFunctionName;
+    // static std::map<std::string, FunctionDeclaration *> functions;
+
+    // static Nodes nodes;
+
+    // unique_ptr<llvm::Module> codegenNodes(Nodes nodes);
+    // void printModule(const unique_ptr<llvm::Module> &module);
+
+    // static void error(std::string msg);
+    // static llvm::Type *ssTypeToLLVMType(std::string type);
+    // static llvm::Type *ssBaseTypeToLLVMType(std::string type);
+    // static void codegenNode(unique_ptr<Node> node);
+    // static llvm::Function *codegenFunctionPrototype(bool pub, std::string name, std::vector<Parameter> parameters, std::string returnType);
+
+    // class CodeGenerator
+    // {
+    // private:
+    //     // void codegenFunctionDeclaration(unique_ptr<Node> fnDecNode);
+    //     // void createFunctionParamAllocas(llvm::Function *f, std::vector<Parameter> params);
+    //     // void codegenVariableDeclaration(unique_ptr<Node> varDecNode);
+
+    // public:
+    // };
+
 } // namespace ssc
 
 // #include "driver/options.h"

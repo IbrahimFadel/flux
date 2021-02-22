@@ -11,6 +11,7 @@
 #include "options.h"
 #include "ast/lexer.h"
 #include "ast/parser.h"
+#include "ir/context.h"
 #include "ir/codegen.h"
 
 using std::unique_ptr;

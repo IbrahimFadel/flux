@@ -1,25 +1,47 @@
 #ifndef SSC_AST_NODES_H
 #define SSC_AST_NODES_H
 
+#include <vector>
+#include <string>
+#include <memory>
+#include <map>
+#include <variant>
+
+namespace ssc
+{
+    class Expression;
+    class FunctionDeclaration;
+    class VariableDeclaration;
+    struct Parameter;
+} // namespace ssc
+
+#include "ir/context.h"
+#include "llvm/IR/Value.h"
+
+#include "lexer.h"
+
+using std::unique_ptr;
+
 namespace ssc
 {
     enum NodeType
     {
-
+        TypeFunctionDeclaration,
+        TypeVariableDeclaration
     };
 
     class Node
     {
     private:
-        NodeType type;
-
     public:
+        virtual llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext) = 0;
     };
 
     class Expression : public Node
     {
     private:
     public:
+        virtual llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext) = 0;
     };
 
     class NumberExpression : public Expression
@@ -29,6 +51,7 @@ namespace ssc
 
     public:
         NumberExpression(double value) : value(value){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
     };
 
     class BinaryOperationExpression : public Expression
@@ -38,8 +61,11 @@ namespace ssc
         unique_ptr<Expression> rhs;
         TokenType op;
 
+        llvm::Value *codegenBinopSumDiffProdQuot(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<Expression> lhs, unique_ptr<Expression> rhs, TokenType op);
+
     public:
         BinaryOperationExpression(unique_ptr<Expression> lhs, unique_ptr<Expression> rhs, TokenType op) : lhs(std::move(lhs)), rhs(std::move(rhs)), op(op){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
     };
 
     struct Parameter
@@ -58,8 +84,26 @@ namespace ssc
         std::string returnType;
         std::vector<unique_ptr<Node>> then;
 
+        std::map<std::string, llvm::Value *> mutables;
+        std::map<std::string, llvm::Value *> constants;
+
+        llvm::Function *codegenPrototype(const unique_ptr<CodegenContext> &codegenContext);
+        void createFunctionParamAllocas(const unique_ptr<CodegenContext> &codegenContext, llvm::Function *f);
+
     public:
         FunctionDeclaration(bool pub, std::string name, std::vector<Parameter> parameters, std::string returnType, std::vector<unique_ptr<Node>> then) : pub(pub), name(name), parameters(parameters), returnType(returnType), then(std::move(then)){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+
+        void setMutable(std::string name, llvm::Value *val);
+        llvm::Value *getMutable(std::string name);
+        void setConstant(std::string name, llvm::Value *val);
+        llvm::Value *getConstant(std::string name);
+
+        bool getPub();
+        std::string getName();
+        std::vector<Parameter> getParameters();
+        std::string getReturnType();
+        const std::vector<unique_ptr<Node>> &getThen();
     };
 
     class VariableDeclaration : public Node
@@ -73,6 +117,7 @@ namespace ssc
 
     public:
         VariableDeclaration(bool pub, bool mut, std::string type, std::string name, unique_ptr<Expression> value) : pub(pub), mut(mut), type(type), name(name), value(std::move(value)){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
     };
 
     typedef std::vector<unique_ptr<Node>> Nodes;

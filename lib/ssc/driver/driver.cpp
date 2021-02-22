@@ -76,12 +76,16 @@ void Driver::compile(std::string strPath)
     auto lexer = std::make_unique<Lexer>();
     auto tokens = lexer->tokenize(fileContent); //? might need to reset col/row
 
-    if (options->getDebug())
-        lexer->printTokens(tokens);
+    // lexer->printTokens(tokens);
 
     auto parser = std::make_unique<Parser>();
     auto nodes = parser->parseTokens(std::move(tokens));
 
-    auto codeGenerator = std::make_unique<CodeGenerator>();
-    codeGenerator->codegenNodes(std::move(nodes));
+    auto codegenCtx = std::make_unique<CodegenContext>();
+    codegenCtx->init(options->getInputFilePath());
+    auto module = codegenNodes(std::move(nodes), std::move(codegenCtx));
+
+    // auto module = codegenNodes(std::move(nodes));
+    // if (options->getDebug())
+    // printModule(module);
 }

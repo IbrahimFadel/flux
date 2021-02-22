@@ -17,6 +17,7 @@ set(SSC_SOURCE_FILES
     ${SSC_SRC_DIR}/ast/nodes.cpp
     ${SSC_SRC_DIR}/ast/parser.cpp
 
+    ${SSC_SRC_DIR}/ir/context.cpp
     ${SSC_SRC_DIR}/ir/codegen.cpp
 )
 

@@ -12,7 +12,8 @@ Nodes Parser::parseTokens(Tokens toks)
 
     while (curTok->type != TokenType::tokEOF)
     {
-        parseToken(curTok);
+        auto node = parseToken(curTok);
+        nodes.push_back(std::move(node));
     }
 
     return nodes;
