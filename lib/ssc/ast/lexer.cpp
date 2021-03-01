@@ -246,6 +246,10 @@ void Lexer::addValidLexeme(char c)
         tok = constructToken(TokenType::tokCompareGtEq);
     else if (token == "<=")
         tok = constructToken(TokenType::tokCompareLtEq);
+    else if (token == "||")
+        tok = constructToken(TokenType::tokOr);
+    else if (token == "&&")
+        tok = constructToken(TokenType::tokAnd);
     else if (token == "&")
         tok = constructToken(TokenType::tokAmpersand);
 

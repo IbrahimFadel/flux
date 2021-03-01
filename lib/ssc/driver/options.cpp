@@ -2,37 +2,10 @@
 
 using namespace ssc;
 
-void Options::setOptimize(bool v)
+void Options::enableAllCodegenWarnings()
 {
-    optimize = v;
+    for (auto &[key, val] : codegenWarnings)
+    {
+        val = true;
+    }
 }
-
-void Options::setOutputFilePath(std::string path)
-{
-    outputFilePath = path;
-}
-
-void Options::setInputFilePath(std::string path)
-{
-    inputFilePath = path;
-}
-
-void Options::setDebug(bool v)
-{
-    debug = v;
-}
-
-std::string Options::getInputFilePath()
-{
-    return inputFilePath;
-}
-
-bool Options::getDebug()
-{
-    return debug;
-}
-
-bool Options::getOptimize()
-{
-    return optimize;
-};

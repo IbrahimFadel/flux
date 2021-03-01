@@ -6,19 +6,47 @@ void Driver::parseCommandLineArguments(std::vector<std::string> args)
 {
     auto opts = std::make_unique<Options>();
 
-    opts->setInputFilePath(args[1]);
+    std::vector<std::string> inputFilePaths;
 
-    int i = 0;
-    for (auto &arg : args)
+    for (int i = 0; i < args.size(); i++)
     {
+        auto arg = args[i];
         if (arg == "--optimize")
+        {
             opts->setOptimize(true);
+        }
         else if (arg == "--output" || arg == "-o")
+        {
             opts->setOutputFilePath(std::string(args[i + 1]));
+            i++;
+        }
         else if (arg == "--print" || arg == "-p")
+        {
             opts->setDebug(true);
-        i++;
+        }
+        else if (arg == "--warn-all")
+        {
+            opts->enableAllCodegenWarnings();
+        }
+        else if (arg == "-Wunnecessary-typecast")
+        {
+            opts->enableWarning(CodegenWarnings::UnnecessaryTypecast);
+        }
+        else if (arg == "-Wno-unnecessary-typecast")
+        {
+            opts->disableWarning(CodegenWarnings::UnnecessaryTypecast);
+        }
+        else if (arg == "-Werror")
+        {
+            opts->setWError(true);
+        }
+        else
+        {
+            inputFilePaths.push_back(arg);
+        }
     }
+
+    opts->setInputFilePaths(inputFilePaths);
 
     options = std::move(opts);
 }
@@ -62,30 +90,44 @@ std::vector<std::string> Driver::getFileContent(const char *path)
     return content;
 }
 
-void Driver::compile(std::string strPath)
+void Driver::compile(std::vector<std::string> paths)
 {
-    std::error_code ec;
-    auto path = fs::canonical(strPath, ec);
-    if (ec)
+    std::string linkingCMD = "clang -g ";
+    std::vector<std::string> objOutPaths;
+    for (auto &path : paths)
     {
-        error("Could not find file: " + strPath);
+        std::error_code ec;
+        auto fsInputPath = fs::canonical(path, ec);
+        if (ec)
+        {
+            error("Could not find file: " + path);
+        }
+
+        std::vector<std::string> fileContent = getFileContent(fsInputPath.c_str());
+
+        auto lexer = std::make_unique<Lexer>();
+        auto tokens = lexer->tokenize(fileContent);
+
+        auto parser = std::make_unique<Parser>();
+        auto astNodes = parser->parseTokens(std::move(tokens));
+
+        auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
+        // codegenCtx->init(fsInputPath.string());
+        codegenNodes(std::move(astNodes), codegenCtx);
+
+        auto objOutPath = fsInputPath.replace_extension("o");
+        objOutPaths.push_back(objOutPath.string());
+        writeModuleToObjectFile(codegenCtx, objOutPath.string());
+        if (options->getDebug())
+            codegenCtx->printModule();
+
+        linkingCMD += objOutPath.string() + " ";
     }
 
-    std::vector<std::string> fileContent = getFileContent(path.c_str());
+    linkingCMD += "-o " + options->getOutputFilePath();
 
-    auto lexer = std::make_unique<Lexer>();
-    auto tokens = lexer->tokenize(fileContent); //? might need to reset col/row
-
-    // lexer->printTokens(tokens);
-
-    auto parser = std::make_unique<Parser>();
-    auto nodes = parser->parseTokens(std::move(tokens));
-
-    auto codegenCtx = std::make_unique<CodegenContext>();
-    codegenCtx->init(options->getInputFilePath());
-    auto module = codegenNodes(std::move(nodes), std::move(codegenCtx));
-
-    // auto module = codegenNodes(std::move(nodes));
-    // if (options->getDebug())
-    // printModule(module);
+    int exitCode;
+    info("Invoking command: " + linkingCMD);
+    executeCommand(linkingCMD, exitCode);
+    info("Linker exit code: " + std::to_string(exitCode));
 }

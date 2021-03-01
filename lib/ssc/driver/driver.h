@@ -13,6 +13,7 @@
 #include "ast/parser.h"
 #include "ir/context.h"
 #include "ir/codegen.h"
+#include "linker/lowering.h"
 
 using std::unique_ptr;
 namespace fs = std::filesystem;
@@ -32,7 +33,7 @@ namespace ssc
 
     public:
         void parseCommandLineArguments(std::vector<std::string> args);
-        void compile(std::string path);
+        void compile(std::vector<std::string> path);
 
         Options *getOptions();
     };

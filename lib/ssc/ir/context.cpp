@@ -2,19 +2,24 @@
 
 using namespace ssc;
 
-void CodegenContext::init(std::string moduleName)
-{
-    mod = std::make_unique<llvm::Module>(moduleName, ctx);
-
-    auto _builder = llvm::IRBuilder(ctx);
-}
-
 void CodegenContext::error(std::string msg)
 {
     std::cerr << "\033[1;31m"
               << "Codegen Error: "
               << "\033[0m" << msg << std::endl;
     exit(1);
+}
+
+void CodegenContext::warning(std::string msg)
+{
+    if (compilerOptions->getWError())
+    {
+        error(msg);
+    }
+
+    std::cerr << "\033[1;33m"
+              << "Codegen Warning: "
+              << "\033[0m" << msg << std::endl;
 }
 
 llvm::Type *CodegenContext::ssTypeToLLVMType(std::string type)
@@ -77,7 +82,7 @@ llvm::Type *CodegenContext::ssBaseTypeToLLVMType(std::string type)
     {
         // if (std::find(struct_types.begin(), struct_types.end(), type) != struct_types.end())
         //     return llvm_struct_types[type];
-        error("Could not convert base type to llvm type");
+        error("Could not convert base type: " + type + " to llvm type");
         return nullptr;
     }
 }

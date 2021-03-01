@@ -21,7 +21,7 @@
 namespace ssc
 {
 
-    llvm::Module *codegenNodes(Nodes nodes, unique_ptr<CodegenContext> codegenContext);
+    void codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext);
 
     // static llvm::LLVMContext ctx;
     // static unique_ptr<llvm::Module> module;
