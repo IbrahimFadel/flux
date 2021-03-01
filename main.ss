@@ -9,7 +9,5 @@ pub fn main() -> u32 {
         x = 20;
     }
 
-    x = 50;
-
     return x;
 }

@@ -385,7 +385,13 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopEq(const unique_ptr<Codeg
     }
 
     auto builder = codegenContext->getBuilder();
-    return builder->CreateStore(rVal, llvm::getPointerOperand(lVal));
+    auto lPtr = llvm::getPointerOperand(lVal);
+    auto store = builder->CreateStore(rVal, lPtr);
+
+    // ? We've already checked if it's mutable so dw about it here
+    codegenContext->getFunction(codegenContext->getCurrentFunctionName())->setMutable(lVarRefExpr->getName(), builder->CreateLoad(lPtr));
+
+    return 0;
 }
 
 llvm::Value *ASTBinaryOperationExpression::codegenBinopSumDiffProdQuot(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op)
@@ -471,6 +477,8 @@ llvm::Value *ASTVariableReferenceExpression::codegen(const unique_ptr<CodegenCon
         codegenContext->error("Unknown variable " + name + " referenced");
     }
 
+    auto builder = codegenContext->getBuilder();
+
     if (foundInConstants)
     {
         auto c = f->getConstant(name);
@@ -478,7 +486,11 @@ llvm::Value *ASTVariableReferenceExpression::codegen(const unique_ptr<CodegenCon
         auto var = codegenContext->getFunction(codegenContext->getCurrentFunctionName())->getVariable(name);
         codegenContext->setRecentlyReferencedVar(var);
 
+        // auto newlyLoaded = builder->CreateLoad(llvm::getPointerOperand(c));
         return c;
     }
     return f->getMutable(name);
+    // auto m = f->getMutable(name);
+    // auto newlyLoaded = builder->CreateLoad(llvm::getPointerOperand(m));
+    // return newlyLoaded;
 }
