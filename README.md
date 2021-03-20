@@ -28,3 +28,13 @@ pub fn main() -> u32 {
     return result;
 }
 ```
+
+## Usage
+
+Compile the project with cmake, then use the ssc compiler:
+
+```bash
+# ssc warns about everything by default
+# In this example, set warnings to errors, but don't warn about unnecessary typecasts
+ssc inputfile.ss otherinputfile.ss -Werror -Wno-unnecessary-typecast -o main
+```
