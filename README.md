@@ -29,6 +29,8 @@ pub fn main() -> u32 {
 }
 ```
 
+This project had undergone many rewrites, so some functionality is removed and re-added every now and again. For instance, imports used to be a thing, but i haven't reimplemented them yet.
+
 ## Usage
 
 Compile the project with cmake, then use the ssc compiler:
