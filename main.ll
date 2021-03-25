@@ -1,25 +1,47 @@
 ; ModuleID = '/home/ibrahim/dev/sandscript/main.ss'
 source_filename = "/home/ibrahim/dev/sandscript/main.ss"
-target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
+
+define i32 @test(i32 %x, i16 %y) {
+entry:
+  %x1 = alloca i32, align 4
+  store i32 %x, i32* %x1, align 4
+  %0 = load i32, i32* %x1, align 4
+  %y2 = alloca i16, align 2
+  store i16 %y, i16* %y2, align 2
+  %1 = load i16, i16* %y2, align 2
+  %2 = sext i16 %1 to i32
+  %3 = add i32 %0, %2
+  ret i32 %3
+}
 
 define i32 @main() {
 entry:
   %0 = alloca i32, align 4
   store i32 0, i32* %0, align 4
   %x = load i32, i32* %0, align 4
-  %1 = icmp ult i32 %x, 10
-  %2 = icmp eq i32 %x, 10
-  %3 = or i1 %1, %2
-  %4 = icmp eq i32 %x, 0
-  %5 = and i1 %3, %4
-  br i1 %5, label %if.then, label %if.merge
+  %1 = alloca i32, align 4
+  store i32 0, i32* %1, align 4
+  %i = load i32, i32* %1, align 4
+  br label %for.loop
 
-if.then:                                          ; preds = %entry
-  store i32 20, i32* %0, align 4
-  br label %if.merge
+for.loop:                                         ; preds = %for.loop, %entry
+  %2 = load i32, i32* %1, align 4
+  store i32 %2, i32* %0, align 4
+  %3 = load i32, i32* %0, align 4
+  %4 = add i32 %2, 1
+  store i32 %4, i32* %1, align 4
+  %5 = load i32, i32* %1, align 4
+  %6 = icmp slt i32 %5, 20
+  br i1 %6, label %for.loop, label %for.merge
 
-if.merge:                                         ; preds = %entry, %if.then
-  store i32 50, i32* %0, align 4
-  ret i32 %x
+for.merge:                                        ; preds = %for.loop
+  %7 = alloca i32, align 4
+  %8 = call i32 @test(i32 5, i16 10)
+  store i32 %8, i32* %7, align 4
+  %res = load i32, i32* %7, align 4
+  %9 = alloca i32, align 4
+  %10 = add i32 %res, %3
+  store i32 %10, i32* %9, align 4
+  %final = load i32, i32* %9, align 4
+  ret i32 %3
 }

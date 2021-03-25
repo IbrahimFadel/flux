@@ -30,6 +30,7 @@ namespace ssc
         void info(std::string msg);
 
         std::vector<std::string> getFileContent(const char *path);
+        void writeLLFile(const unique_ptr<CodegenContext> &codegenContext, std::string path);
 
     public:
         void parseCommandLineArguments(std::vector<std::string> args);

@@ -49,7 +49,6 @@ namespace ssc
         std::string currentFunctionName;
         std::map<std::string, ASTFunctionDeclaration *> functions;
         std::string currentlyPreferredType;
-        ASTVariableDeclaration *recentlyReferencedVar;
         unique_ptr<Options> &compilerOptions;
 
     public:
@@ -79,9 +78,8 @@ namespace ssc
         llvm::Type *ssTypeToLLVMType(std::string type);
         llvm::Type *ssBaseTypeToLLVMType(std::string type);
         bool isTypeSigned(std::string type);
+        llvm::Value *implicityTypecastExpression(llvm::Value *v, std::string currentType, llvm::Type *targetType);
 
-        void setRecentlyReferencedVar(ASTVariableDeclaration *v) { recentlyReferencedVar = v; }
-        ASTVariableDeclaration *getRecentlyReferencedVar() { return recentlyReferencedVar; }
         void setCurrentlyPreferredType(std::string ty) { currentlyPreferredType = ty; }
         std::string getCurrentlyPreferredType() { return currentlyPreferredType; }
         void setCurrentFunctionName(std::string name) { currentFunctionName = name; }

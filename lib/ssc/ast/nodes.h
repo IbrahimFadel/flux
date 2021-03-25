@@ -187,6 +187,36 @@ namespace ssc
         llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
     };
 
+    class ASTForLoop : public ASTNode
+    {
+    private:
+        unique_ptr<ASTExpression> initialClauseExpression;
+        unique_ptr<ASTVariableDeclaration> initialClauseVarDec;
+        std::unique_ptr<ssc::ASTExpression> condition;
+        std::unique_ptr<ssc::ASTExpression> action;
+        std::vector<unique_ptr<ASTNode>> then;
+
+    public:
+        ASTForLoop(unique_ptr<ASTExpression> initialClauseExpression, std::unique_ptr<ssc::ASTExpression> condition, std::unique_ptr<ssc::ASTExpression> action, std::vector<unique_ptr<ASTNode>> then) : initialClauseExpression(std::move(initialClauseExpression)), condition(std::move(condition)), action(std::move(action)), then(std::move(then)){};
+
+        ASTForLoop(unique_ptr<ASTVariableDeclaration> initialClauseVarDec, std::unique_ptr<ssc::ASTExpression> condition, std::unique_ptr<ssc::ASTExpression> action, std::vector<unique_ptr<ASTNode>> then) : initialClauseVarDec(std::move(initialClauseVarDec)), condition(std::move(condition)), action(std::move(action)), then(std::move(then)){};
+
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+    };
+
+    class ASTFunctionCallExpression : public ASTExpression
+    {
+    private:
+        std::string name;
+        std::vector<unique_ptr<ASTExpression>> params;
+        std::string type; // type of the variable it's being put into
+
+    public:
+        ASTFunctionCallExpression(std::string name, std::vector<unique_ptr<ASTExpression>> params, std::string type) : name(name), params(std::move(params)), type(type){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+        std::string getType() { return type; };
+    };
+
     typedef std::vector<unique_ptr<ASTNode>> Nodes;
 
 }; // namespace ssc

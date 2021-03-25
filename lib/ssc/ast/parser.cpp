@@ -54,6 +54,8 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
         return parseReturn();
     case TokenType::tokIf:
         return parseIfStatement();
+    case TokenType::tokFor:
+        return parseForLoop();
     case TokenType::tokI64:
         return parseVariableDeclaration();
     case TokenType::tokU64:
@@ -84,6 +86,57 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
     }
 
     return nullptr;
+}
+
+unique_ptr<ASTForLoop> Parser::parseForLoop()
+{
+    getNextToken(); //? eat 'for'
+
+    errIfCurTokNotType(TokenType::tokOpenParen, "Expected '(' after 'for'");
+    getNextToken(); //? eat '('
+
+    unique_ptr<ASTExpression> initialClauseExpression = nullptr;
+    unique_ptr<ASTVariableDeclaration> initialClauseVarDec = nullptr;
+
+    if (curTok->type == TokenType::tokIdentifier)
+    {
+        initialClauseExpression = parseExpression();
+    }
+    else
+    {
+        if (curTok->type == TokenType::tokMut)
+        {
+            getNextToken(); //? eat 'mut'
+            initialClauseVarDec = parseVariableDeclaration(false, true);
+        }
+        else
+        {
+            initialClauseVarDec = parseVariableDeclaration();
+        }
+    }
+
+    auto conditionExpression = parseExpression();
+    auto actionExpression = parseExpression(false);
+
+    errIfCurTokNotType(TokenType::tokCloseParen, "Expected ')' after 'for'");
+    getNextToken(); //? eat ')'
+    errIfCurTokNotType(TokenType::tokOpenCurlyBracket, "Expected '{' after 'for'");
+    getNextToken(); //? eat '{'
+
+    std::vector<unique_ptr<ASTNode>> then;
+    while (curTok->type != TokenType::tokCloseCurlyBracket)
+    {
+        auto node = parseToken(curTok);
+        then.push_back(std::move(node));
+    }
+
+    getNextToken(); //? eat '}'
+
+    if (initialClauseExpression)
+    {
+        return std::make_unique<ASTForLoop>(std::move(initialClauseExpression), std::move(conditionExpression), std::move(actionExpression), std::move(then));
+    }
+    return std::make_unique<ASTForLoop>(std::move(initialClauseVarDec), std::move(conditionExpression), std::move(actionExpression), std::move(then));
 }
 
 unique_ptr<ASTReturnStatement> Parser::parseReturn()
@@ -211,14 +264,47 @@ unique_ptr<ASTExpression> Parser::parseIdentifierExpression()
     std::string name = curTok->value;
     getNextToken(); //? eat id
 
-    if (tokens[curTokIndex + 1]->type == TokenType::tokOpenParen)
+    // currentlyPreferredType = functionVariableTypes[currentFunctionName][name];
+
+    if (curTok->type == TokenType::tokOpenParen)
     {
-        // TODO Function Call
+        return parseFunctionCallExpression(name);
     }
 
-    currentlyPreferredType = functionVariableTypes[currentFunctionName][name];
-
     return std::make_unique<ASTVariableReferenceExpression>(name, functionVariableTypes[currentFunctionName][name], functionVarRefsMutable[currentFunctionName][name]);
+}
+
+unique_ptr<ASTExpression> Parser::parseFunctionCallExpression(std::string fnName)
+{
+    getNextToken(); //? eat '('
+
+    if (!functionParamTypes.count(fnName))
+    {
+        error("Function call to '" + fnName + "' which has not been parsed yet");
+    }
+
+    std::vector<unique_ptr<ASTExpression>> params;
+    int i = 0;
+    while (curTok->type != TokenType::tokCloseParen)
+    {
+        currentlyPreferredType = functionParamTypes[fnName][i];
+        auto param = parseExpression(false);
+        params.push_back(std::move(param));
+
+        if (curTok->type == TokenType::tokComma)
+        {
+            getNextToken(); //? eat ','
+        }
+        else
+        {
+            errIfCurTokNotType(TokenType::tokCloseParen, "Expected ')' at end of function call expression");
+        }
+        i++;
+    }
+
+    getNextToken(); //? eat ')'
+
+    return std::make_unique<ASTFunctionCallExpression>(fnName, std::move(params), currentlyPreferredType);
 }
 
 unique_ptr<ASTExpression> Parser::parseParenExpression()
@@ -321,6 +407,8 @@ unique_ptr<ASTFunctionDeclaration> Parser::parseFn(bool isPub)
     currentFunctionName = functionName;
     getNextToken(); //? eat fn name
 
+    functionParamTypes[functionName] = {};
+
     errIfCurTokNotType(TokenType::tokOpenParen, "Expected '(' following function name");
     getNextToken(); //? eat '('
 
@@ -329,6 +417,7 @@ unique_ptr<ASTFunctionDeclaration> Parser::parseFn(bool isPub)
     {
         auto param = parseParameter();
         parameters.push_back(param);
+        functionParamTypes[functionName].push_back(param.type);
 
         functionVariableTypes[currentFunctionName][param.name] = param.type;
         functionVarRefsMutable[currentFunctionName][param.name] = param.mut;

@@ -37,6 +37,7 @@ namespace ssc
         std::string currentFunctionName;
         std::map<std::string, std::map<std::string, std::string>> functionVariableTypes;
         std::map<std::string, std::map<std::string, bool>> functionVarRefsMutable;
+        std::map<std::string, std::vector<std::string>> functionParamTypes;
 
         void error(std::string msg);
         void errIfCurTokNotType(TokenType type, std::string msg);
@@ -56,10 +57,12 @@ namespace ssc
         unique_ptr<ASTExpression> parseNumberExpression();
         unique_ptr<ASTExpression> parseParenExpression();
         unique_ptr<ASTExpression> parseIdentifierExpression();
+        unique_ptr<ASTExpression> parseFunctionCallExpression(std::string fnName);
         unique_ptr<ASTExpression> parseTypecast();
 
         unique_ptr<ASTReturnStatement> parseReturn();
         unique_ptr<ASTIfStatement> parseIfStatement();
+        unique_ptr<ASTForLoop> parseForLoop();
 
     public:
         Nodes parseTokens(Tokens tokens);

@@ -1,13 +1,18 @@
-pub fn main() -> u32 {
-    mut u32 x = 0;
+fn test(i32 x, i16 y) -> u32 {
+    return x + i32(y);
+}
 
-    /*
-     * '&&' has greater precedence than '||'
-     * so this is (x<10 or x==10) && x == 1
-    */
-    if(x < 10 || x == 10 && x == 0) {
-        x = 20;
+pub fn main() -> u32 {
+
+    mut i32 x = 0;
+
+    for(mut i32 i = 0; i < 20; i = i + 1) {
+        x = i;
     }
 
-    return x;
+    u32 res = test(5, 10);
+
+    u32 final = res + u32(x);
+
+    return u32(x);
 }

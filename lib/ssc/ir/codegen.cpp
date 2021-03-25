@@ -10,6 +10,79 @@ void ssc::codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext)
     }
 }
 
+llvm::Value *ASTFunctionCallExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
+{
+    llvm::Function *calleeF = codegenContext->getModule()->getFunction(name);
+    if (!calleeF)
+    {
+        codegenContext->error("Function call to undefined function '" + name + "'");
+    }
+
+    if (calleeF->arg_size() != params.size())
+    {
+        codegenContext->error("Incorrect number of parameters supplied in function call to '" + name + "'");
+    }
+
+    auto functionParamsIT = calleeF->args().begin();
+    std::vector<llvm::Value *> paramValues;
+    for (int i = 0; i < params.size(); i++)
+    {
+        auto v = params[i]->codegen(codegenContext);
+        auto functionParamType = functionParamsIT->getType();
+
+        if (functionParamType != v->getType())
+        {
+            v = codegenContext->implicityTypecastExpression(v, params[i]->getType(), functionParamType);
+        }
+
+        paramValues.push_back(v);
+        functionParamsIT++;
+    }
+
+    return codegenContext->getBuilder()->CreateCall(calleeF, paramValues);
+}
+
+llvm::Value *ASTForLoop::codegen(const unique_ptr<CodegenContext> &codegenContext)
+{
+    auto builder = codegenContext->getBuilder();
+
+    auto f = builder->GetInsertBlock()->getParent();
+    auto preBB = builder->GetInsertBlock();
+    auto loopBB = llvm::BasicBlock::Create(*codegenContext->getCtx(), "for.loop", f);
+    auto mergeBB = llvm::BasicBlock::Create(*codegenContext->getCtx(), "for.merge", f);
+
+    llvm::Value *var;
+    if (initialClauseExpression)
+    {
+        codegenContext->error("error unimplemented method in for loop");
+        var = initialClauseExpression->codegen(codegenContext);
+    }
+    else
+    {
+        var = initialClauseVarDec->codegen(codegenContext);
+    }
+
+    builder->CreateBr(loopBB);
+    builder->SetInsertPoint(loopBB);
+
+    var = builder->CreateLoad(llvm::getPointerOperand(var));
+    codegenContext->getFunction(codegenContext->getCurrentFunctionName())->setMutable(initialClauseVarDec->getName(), var);
+
+    for (auto &node : then)
+    {
+        node->codegen(codegenContext);
+    }
+
+    auto actionV = action->codegen(codegenContext);
+
+    auto cond = condition->codegen(codegenContext);
+
+    builder->CreateCondBr(cond, loopBB, mergeBB);
+    builder->SetInsertPoint(mergeBB);
+
+    return 0;
+}
+
 llvm::Value *ASTIfStatement::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
     auto cond = condition->codegen(codegenContext);
@@ -44,59 +117,12 @@ llvm::Value *ASTReturnStatement::codegen(const unique_ptr<CodegenContext> &codeg
     auto builder = codegenContext->getBuilder();
     auto retValue = value->codegen(codegenContext);
 
-    auto llvmFnRetType = codegenContext->ssTypeToLLVMType(fnRetType);
-    auto retValueType = retValue->getType();
-
-    if (llvmFnRetType->isIntegerTy())
+    if (fnRetType != value->getType())
     {
-        if (retValueType->isFloatTy() || retValueType->isDoubleTy())
-        {
-            if (codegenContext->isTypeSigned(fnRetType))
-            {
-                retValue = builder->CreateFPToSI(retValue, llvmFnRetType);
-            }
-            else
-            {
-                retValue = builder->CreateFPToUI(retValue, llvmFnRetType);
-            }
-        }
-        else if (retValueType->isIntegerTy())
-        {
-            retValue = builder->CreateIntCast(retValue, llvmFnRetType, codegenContext->isTypeSigned(fnRetType));
-        }
-    }
-    else if (llvmFnRetType->isFloatTy() || llvmFnRetType->isDoubleTy())
-    {
-        if (retValueType->isFloatTy() || retValueType->isDoubleTy())
-        {
-            retValue = builder->CreateFPCast(retValue, llvmFnRetType);
-        }
-        else if (retValueType->isIntegerTy())
-        {
-            auto var = codegenContext->getRecentlyReferencedVar();
-            if (codegenContext->isTypeSigned(var->getType()))
-            {
-                retValue = builder->CreateSIToFP(retValue, llvmFnRetType);
-            }
-            else
-            {
-                retValue = builder->CreateUIToFP(retValue, llvmFnRetType);
-            }
-        }
+        codegenContext->error("Return value type " + value->getType() + " does not match function return type " + fnRetType);
     }
 
-    retValueType = retValue->getType();
-
-    if (llvmFnRetType != retValueType)
-    {
-        std::string typeStr;
-        llvm::raw_string_ostream typeStrStream(typeStr);
-        retValueType->print(typeStrStream);
-        codegenContext->error("Expected return type of " + fnRetType + " but got " + typeStr);
-    }
-
-    auto ret = builder->CreateRet(retValue);
-    return ret;
+    return builder->CreateRet(retValue);
 }
 
 llvm::Value *ASTFunctionDeclaration::codegen(const unique_ptr<CodegenContext> &codegenContext)
@@ -221,7 +247,7 @@ llvm::Value *ASTVariableDeclaration::codegen(const unique_ptr<CodegenContext> &c
 
     codegenContext->getFunction(codegenContext->getCurrentFunctionName())->setVariable(name, this);
 
-    return 0;
+    return loaded;
 }
 
 llvm::Value *ASTTypecastExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
@@ -364,7 +390,6 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopComp(const unique_ptr<Cod
 
 llvm::Value *ASTBinaryOperationExpression::codegenBinopEq(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs)
 {
-
     auto lVarRefExpr = static_cast<ASTVariableReferenceExpression *>(lhs.get());
     if (!lVarRefExpr)
     {
@@ -391,7 +416,7 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopEq(const unique_ptr<Codeg
     // ? We've already checked if it's mutable so dw about it here
     codegenContext->getFunction(codegenContext->getCurrentFunctionName())->setMutable(lVarRefExpr->getName(), builder->CreateLoad(lPtr));
 
-    return 0;
+    return store;
 }
 
 llvm::Value *ASTBinaryOperationExpression::codegenBinopSumDiffProdQuot(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op)
@@ -400,6 +425,11 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopSumDiffProdQuot(const uni
     auto lVal = lhs->codegen(codegenContext);
     auto rVal = rhs->codegen(codegenContext);
     auto llvmTy = codegenContext->ssTypeToLLVMType(type);
+
+    if (lhs->getType() != rhs->getType())
+    {
+        codegenContext->error("LHS and RHS of binary operation expression have different types: " + lhs->getType() + " and " + rhs->getType());
+    }
 
     if (llvmTy->isFloatTy() || llvmTy->isDoubleTy())
     {
@@ -455,22 +485,8 @@ llvm::Value *ASTVariableReferenceExpression::codegen(const unique_ptr<CodegenCon
 {
     auto f = codegenContext->getFunction(codegenContext->getCurrentFunctionName());
 
-    auto foundInConstants = false;
-    auto foundInMutables = false;
-    for (auto &constant : f->getConstants())
-    {
-        if (constant.first == name)
-        {
-            foundInConstants = true;
-        }
-    }
-    for (auto &mut : f->getMutables())
-    {
-        if (mut.first == name)
-        {
-            foundInMutables = true;
-        }
-    }
+    auto foundInConstants = f->getConstants().count(name);
+    auto foundInMutables = f->getMutables().count(name);
 
     if (!foundInMutables && !foundInConstants)
     {
@@ -484,13 +500,7 @@ llvm::Value *ASTVariableReferenceExpression::codegen(const unique_ptr<CodegenCon
         auto c = f->getConstant(name);
 
         auto var = codegenContext->getFunction(codegenContext->getCurrentFunctionName())->getVariable(name);
-        codegenContext->setRecentlyReferencedVar(var);
-
-        // auto newlyLoaded = builder->CreateLoad(llvm::getPointerOperand(c));
         return c;
     }
     return f->getMutable(name);
-    // auto m = f->getMutable(name);
-    // auto newlyLoaded = builder->CreateLoad(llvm::getPointerOperand(m));
-    // return newlyLoaded;
 }

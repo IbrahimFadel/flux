@@ -100,3 +100,48 @@ bool CodegenContext::isTypeSigned(std::string type)
 
     return true;
 }
+
+llvm::Value *CodegenContext::implicityTypecastExpression(llvm::Value *v, std::string currentType, llvm::Type *targetType)
+{
+    auto vType = v->getType();
+    if (vType->isIntegerTy())
+    {
+        if (targetType->isIntegerTy())
+        {
+            return builder.CreateIntCast(v, targetType, isTypeSigned(currentType));
+        }
+        else if (targetType->isFloatTy() || targetType->isDoubleTy())
+        {
+            if (isTypeSigned(currentType))
+            {
+                return builder.CreateSIToFP(v, targetType);
+            }
+            else
+            {
+                return builder.CreateUIToFP(v, targetType);
+            }
+        }
+    }
+    else if (vType->isFloatTy() || vType->isDoubleTy())
+    {
+        if (targetType->isIntegerTy())
+        {
+            if (isTypeSigned(currentType))
+            {
+                return builder.CreateFPToSI(v, targetType);
+            }
+            else
+            {
+                return builder.CreateFPToUI(v, targetType);
+            }
+        }
+        else if (targetType->isFloatTy() || targetType->isDoubleTy())
+        {
+            return builder.CreateFPCast(v, targetType);
+        }
+    }
+    else
+    {
+        error("Could not implicitly typecast");
+    }
+}

@@ -90,6 +90,14 @@ std::vector<std::string> Driver::getFileContent(const char *path)
     return content;
 }
 
+void Driver::writeLLFile(const unique_ptr<CodegenContext> &codegenContext, std::string path)
+{
+    std::error_code ec;
+    llvm::raw_fd_ostream ofile(path, ec);
+    llvm::AssemblyAnnotationWriter *asmWriter = new llvm::AssemblyAnnotationWriter();
+    codegenContext->getModule()->print(ofile, asmWriter);
+}
+
 void Driver::compile(std::vector<std::string> paths)
 {
     std::string linkingCMD = "clang -g ";
@@ -114,6 +122,9 @@ void Driver::compile(std::vector<std::string> paths)
         auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
         // codegenCtx->init(fsInputPath.string());
         codegenNodes(std::move(astNodes), codegenCtx);
+
+        auto llOutPath = fsInputPath.replace_extension("ll");
+        writeLLFile(codegenCtx, llOutPath.string());
 
         auto objOutPath = fsInputPath.replace_extension("o");
         objOutPaths.push_back(objOutPath.string());
