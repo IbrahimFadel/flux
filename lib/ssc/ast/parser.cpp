@@ -56,6 +56,8 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
         return parseIfStatement();
     case TokenType::tokFor:
         return parseForLoop();
+    case TokenType::tokClass:
+        return parseClassDeclaration();
     case TokenType::tokI64:
         return parseVariableDeclaration();
     case TokenType::tokU64:
@@ -79,13 +81,156 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
     case TokenType::tokBool:
         return parseVariableDeclaration();
     case TokenType::tokIdentifier:
+    {
+        if (std::count(classTypes.begin(), classTypes.end(), tok->value))
+        {
+            return parseVariableDeclaration();
+        }
         return parseExpression();
+    }
     default:
         error("Could not parse token: " + curTok->value);
         break;
     }
 
     return nullptr;
+}
+
+unique_ptr<ASTClassDeclaration> Parser::parseClassDeclaration()
+{
+    getNextToken(); //? eat 'class'
+
+    errIfCurTokNotType(TokenType::tokIdentifier, "Expected identifier after 'class'");
+    std::string name = curTok->value;
+    getNextToken(); //? eat name
+
+    errIfCurTokNotType(TokenType::tokOpenCurlyBracket, "Expected '{' in class definition");
+    getNextToken(); //? eat '{'
+
+    Parameter structParam;
+    structParam.mut = false;
+    structParam.type = name + "*";
+    structParam.name = "this";
+
+    std::vector<unique_ptr<ASTVariableDeclaration>> properties;
+    std::vector<unique_ptr<ASTFunctionDeclaration>> methods;
+    unique_ptr<ASTFunctionDeclaration> constructor = nullptr;
+
+    while (curTok->type != TokenType::tokCloseCurlyBracket)
+    {
+        if (curTok->type == TokenType::tokConstructor)
+        {
+            constructor = parseConstructor(name + ".constructor", name);
+        }
+        else if (curTok->type == TokenType::tokFn)
+        {
+            auto method = parseFn();
+            auto methodParams = method->getParams();
+            methodParams.insert(methodParams.begin(), structParam);
+            method->setParams(methodParams);
+            method->setName(name + "." + method->getName());
+            methods.push_back(std::move(method));
+        }
+        else if (curTok->type == TokenType::tokPub)
+        {
+            auto node = parsePub();
+
+            auto var = dynamic_cast<ASTVariableDeclaration *>(node.get());
+            unique_ptr<ASTVariableDeclaration> varDec;
+            if (var != nullptr)
+            {
+                node.release();
+                varDec.reset(var);
+
+                properties.push_back(std::move(varDec));
+                continue;
+            }
+
+            auto fn = dynamic_cast<ASTFunctionDeclaration *>(node.get());
+            unique_ptr<ASTFunctionDeclaration> fnDec;
+            if (fn != nullptr)
+            {
+                node.release();
+                fnDec.reset(fn);
+
+                auto methodParams = fnDec->getParams();
+                methodParams.insert(methodParams.begin(), structParam);
+                fnDec->setParams(methodParams);
+                fnDec->setName(name + "." + fnDec->getName());
+
+                methods.push_back(std::move(fnDec));
+            }
+        }
+        else if (curTok->type == TokenType::tokMut)
+        {
+            auto node = parseMut();
+
+            auto var = dynamic_cast<ASTVariableDeclaration *>(node.get());
+            unique_ptr<ASTVariableDeclaration> varDec;
+            if (var != nullptr)
+            {
+                node.release();
+                varDec.reset(var);
+
+                properties.push_back(std::move(varDec));
+            }
+        }
+    }
+
+    getNextToken(); //? eat '}'
+
+    classTypes.push_back(name);
+
+    return std::make_unique<ASTClassDeclaration>(name, std::move(constructor), std::move(properties), std::move(methods));
+}
+
+unique_ptr<ASTFunctionDeclaration> Parser::parseConstructor(std::string name, std::string className)
+{
+    getNextToken(); //? eat 'constructor'
+
+    errIfCurTokNotType(TokenType::tokOpenParen, "Expected '(' after 'constructor'");
+    getNextToken(); //? eat '('
+
+    Parameter classParam = {
+        .mut = false,
+        .type = className + "*",
+        .name = "this"};
+
+    std::vector<Parameter> params = {classParam};
+
+    classConstructorParamTypes[className] = {};
+
+    while (curTok->type != TokenType::tokCloseParen)
+    {
+        auto param = parseParameter();
+        params.push_back(param);
+        classConstructorParamTypes[className].push_back(param.type);
+        if (curTok->type == TokenType::tokComma)
+        {
+            getNextToken(); //? eat ','
+        }
+        else if (curTok->type != TokenType::tokCloseParen)
+        {
+            error("Expected ')' at end of constructor parameter list");
+        }
+    }
+
+    getNextToken(); //? eat ')'
+
+    errIfCurTokNotType(TokenType::tokOpenCurlyBracket, "Expected '{' in constructor");
+    getNextToken(); //? eat '{'
+
+    std::vector<unique_ptr<ASTNode>> then;
+
+    while (curTok->type != TokenType::tokCloseCurlyBracket)
+    {
+        auto node = parseToken(curTok);
+        then.push_back(std::move(node));
+    }
+
+    getNextToken(); //? eat '}'
+
+    return std::make_unique<ASTFunctionDeclaration>(true, name, params, std::string("void"), std::move(then));
 }
 
 unique_ptr<ASTForLoop> Parser::parseForLoop()
@@ -161,12 +306,6 @@ unique_ptr<ASTExpression> Parser::parseExpression(bool needsSemicolon)
 
     auto binop_node = parseBinopRHS(0, std::move(lhs));
 
-    // if (cur_tok->type == Token_Type::tok_open_square_bracket)
-    // {
-    //     auto expr = parse_square_bracket_expression(std::move(binop_node));
-    //     binop_node = parse_binop_rhs(0, std::move(expr));
-    // }
-
     if (needsSemicolon)
     {
         errIfCurTokNotType(TokenType::tokSemicolon, "Expected ';' at end of expression");
@@ -185,6 +324,8 @@ unique_ptr<ASTExpression> Parser::parsePrimary()
         return parseIdentifierExpression();
     case TokenType::tokOpenParen:
         return parseParenExpression();
+    case TokenType::tokNew:
+        return parseUnaryPrefixOperationExpression();
     case TokenType::tokI64:
         return parseTypecast();
     case TokenType::tokU64:
@@ -209,6 +350,16 @@ unique_ptr<ASTExpression> Parser::parsePrimary()
         return parseTypecast();
     }
     return nullptr;
+}
+
+unique_ptr<ASTUnaryPrefixOperationExpression> Parser::parseUnaryPrefixOperationExpression()
+{
+    TokenType op = curTok->type;
+    getNextToken(); //? eat operator
+
+    auto value = parseExpression(false);
+
+    return std::make_unique<ASTUnaryPrefixOperationExpression>(op, std::move(value), currentlyPreferredType);
 }
 
 unique_ptr<ASTIfStatement> Parser::parseIfStatement()
@@ -268,17 +419,54 @@ unique_ptr<ASTExpression> Parser::parseIdentifierExpression()
 
     if (curTok->type == TokenType::tokOpenParen)
     {
-        return parseFunctionCallExpression(name);
+        if (std::count(classTypes.begin(), classTypes.end(), name))
+        {
+            //? This is a class construction
+            return parseClassConstructionExpression(name);
+        }
+        else
+        {
+            return parseFunctionCallExpression(name);
+        }
     }
 
     return std::make_unique<ASTVariableReferenceExpression>(name, functionVariableTypes[currentFunctionName][name], functionVarRefsMutable[currentFunctionName][name]);
+}
+
+unique_ptr<ASTClassConstructionExpression> Parser::parseClassConstructionExpression(std::string className)
+{
+    getNextToken(); //? eat '('
+
+    std::vector<unique_ptr<ASTExpression>> parameters;
+
+    int i = 0;
+    while (curTok->type != TokenType::tokCloseParen)
+    {
+        currentlyPreferredType = classConstructorParamTypes[className][i];
+        auto param = parseExpression(false);
+        parameters.push_back(std::move(param));
+
+        if (curTok->type == TokenType::tokComma)
+        {
+            getNextToken(); //? eat ','
+        }
+        else
+        {
+            errIfCurTokNotType(TokenType::tokCloseParen, "Expected ')' at end of class construction parameter listing");
+        }
+        i++;
+    }
+
+    getNextToken(); //? eat ')'
+
+    return std::make_unique<ASTClassConstructionExpression>(className, std::move(parameters));
 }
 
 unique_ptr<ASTExpression> Parser::parseFunctionCallExpression(std::string fnName)
 {
     getNextToken(); //? eat '('
 
-    if (!functionParamTypes.count(fnName))
+    if (!functionParamTypes.count(fnName) && !std::count(classTypes.begin(), classTypes.end(), fnName))
     {
         error("Function call to '" + fnName + "' which has not been parsed yet");
     }

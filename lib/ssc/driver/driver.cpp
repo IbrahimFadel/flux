@@ -115,6 +115,7 @@ void Driver::compile(std::vector<std::string> paths)
 
         auto lexer = std::make_unique<Lexer>();
         auto tokens = lexer->tokenize(fileContent);
+        // lexer->printTokens(tokens);
 
         auto parser = std::make_unique<Parser>();
         auto astNodes = parser->parseTokens(std::move(tokens));
@@ -137,8 +138,8 @@ void Driver::compile(std::vector<std::string> paths)
 
     linkingCMD += "-o " + options->getOutputFilePath();
 
-    int exitCode;
-    info("Invoking command: " + linkingCMD);
-    executeCommand(linkingCMD, exitCode);
-    info("Linker exit code: " + std::to_string(exitCode));
+    // int exitCode;
+    // info("Invoking command: " + linkingCMD);
+    // executeCommand(linkingCMD, exitCode);
+    // info("Linker exit code: " + std::to_string(exitCode));
 }

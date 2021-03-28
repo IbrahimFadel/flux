@@ -80,8 +80,8 @@ llvm::Type *CodegenContext::ssBaseTypeToLLVMType(std::string type)
         return llvm::Type::getVoidTy(ctx);
     else
     {
-        // if (std::find(struct_types.begin(), struct_types.end(), type) != struct_types.end())
-        //     return llvm_struct_types[type];
+        if (structTypes.find(type) != structTypes.end())
+            return structTypes[type];
         error("Could not convert base type: " + type + " to llvm type");
         return nullptr;
     }
@@ -144,4 +144,5 @@ llvm::Value *CodegenContext::implicityTypecastExpression(llvm::Value *v, std::st
     {
         error("Could not implicitly typecast");
     }
+    return 0;
 }

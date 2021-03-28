@@ -23,6 +23,9 @@ namespace ssc
         tokPub,
         tokMut,
         tokWhile,
+        tokClass,
+        tokConstructor,
+        tokNew,
 
         tokI64,
         tokU64,
@@ -39,7 +42,6 @@ namespace ssc
         tokString,
         tokVoid,
         tokNullptr,
-        tokStruct,
         tokArray,
 
         tokCompareEq,

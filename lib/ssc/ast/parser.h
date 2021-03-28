@@ -5,6 +5,7 @@
 #include "nodes.h"
 
 #include <map>
+#include <algorithm>
 
 namespace ssc
 {
@@ -38,6 +39,8 @@ namespace ssc
         std::map<std::string, std::map<std::string, std::string>> functionVariableTypes;
         std::map<std::string, std::map<std::string, bool>> functionVarRefsMutable;
         std::map<std::string, std::vector<std::string>> functionParamTypes;
+        std::vector<std::string> classTypes;
+        std::map<std::string, std::vector<std::string>> classConstructorParamTypes;
 
         void error(std::string msg);
         void errIfCurTokNotType(TokenType type, std::string msg);
@@ -63,6 +66,10 @@ namespace ssc
         unique_ptr<ASTReturnStatement> parseReturn();
         unique_ptr<ASTIfStatement> parseIfStatement();
         unique_ptr<ASTForLoop> parseForLoop();
+        unique_ptr<ASTClassDeclaration> parseClassDeclaration();
+        unique_ptr<ASTFunctionDeclaration> parseConstructor(std::string name, std::string className);
+        unique_ptr<ASTUnaryPrefixOperationExpression> parseUnaryPrefixOperationExpression();
+        unique_ptr<ASTClassConstructionExpression> parseClassConstructionExpression(std::string className);
 
     public:
         Nodes parseTokens(Tokens tokens);

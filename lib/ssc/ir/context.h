@@ -50,6 +50,10 @@ namespace ssc
         std::map<std::string, ASTFunctionDeclaration *> functions;
         std::string currentlyPreferredType;
         unique_ptr<Options> &compilerOptions;
+        std::map<std::string, llvm::StructType *> structTypes;
+        std::map<std::string, ASTClassDeclaration *> astClassTypes;
+        std::map<std::string, std::vector<std::string>> classProperties;
+        // std::map<std::string, std::vector<unique_ptr<ASTVariableDeclaration>> &> classProperties;
 
     public:
         //  mod = new llvm::Module(moduleName, ctx);
@@ -90,6 +94,12 @@ namespace ssc
         llvm::IRBuilder<> *getBuilder() { return &builder; }
         llvm::LLVMContext *getCtx() { return &ctx; }
         unique_ptr<Options> &getCompilerOptions() { return compilerOptions; }
+        void setStructType(std::string name, llvm::StructType *structType) { structTypes[name] = structType; }
+        llvm::StructType *getStructType(std::string name) { return structTypes[name]; }
+        void setClassProperties(std::string name, std::vector<std::string> props) { classProperties[name] = props; }
+        std::vector<std::string> getClassProperties(std::string name) { return classProperties[name]; }
+        void setASTClassType(std::string name, ASTClassDeclaration *c) { astClassTypes[name] = c; }
+        ASTClassDeclaration *getASTClassType(std::string name) { return astClassTypes[name]; }
     };
 } // namespace ssc
 

@@ -14,6 +14,7 @@ namespace ssc
     class ASTVariableDeclaration;
     struct Parameter;
     class ASTReturnStatement;
+    class ASTClassDeclaration;
 } // namespace ssc
 
 #include "ir/context.h"
@@ -65,6 +66,7 @@ namespace ssc
         llvm::Value *codegenBinopSumDiffProdQuot(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op);
         llvm::Value *codegenBinopEq(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs);
         llvm::Value *codegenBinopComp(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op);
+        llvm::Value *codegenBinopArrow(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs);
 
     public:
         ASTBinaryOperationExpression(unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op, std::string type) : lhs(std::move(lhs)), rhs(std::move(rhs)), op(op), type(type){};
@@ -122,15 +124,19 @@ namespace ssc
         ASTVariableDeclaration *getVariable(std::string name) { return variables[name]; }
         std::map<std::string, llvm::Value *> getConstants() { return constants; };
         std::map<std::string, llvm::Value *> getMutables() { return mutables; };
+        void setName(std::string n) { name = n; }
+        std::string getName() { return name; }
         void setMutable(std::string name, llvm::Value *val);
         llvm::Value *getMutable(std::string name);
         void setConstant(std::string name, llvm::Value *val);
         llvm::Value *getConstant(std::string name);
         bool getPub();
-        std::string getName();
         std::vector<Parameter> getParameters();
         std::string getReturnType();
         const std::vector<unique_ptr<ASTNode>> &getThen();
+        void setReturnType(std::string ty) { returnType = ty; }
+        std::vector<Parameter> getParams() { return parameters; }
+        void setParams(std::vector<Parameter> p) { parameters = p; };
     };
 
     class ASTVariableDeclaration : public ASTNode
@@ -148,7 +154,7 @@ namespace ssc
 
         std::string getType() { return type; };
         std::string getName() { return name; };
-        const unique_ptr<ASTExpression> &getValue() { return value; };
+        unique_ptr<ASTExpression> &getValue() { return value; };
     };
 
     class ASTReturnStatement : public ASTNode
@@ -215,9 +221,74 @@ namespace ssc
         ASTFunctionCallExpression(std::string name, std::vector<unique_ptr<ASTExpression>> params, std::string type) : name(name), params(std::move(params)), type(type){};
         llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
         std::string getType() { return type; };
+
+        void setName(std::string n) { name = n; };
+        std::string getName() { return name; };
+        std::vector<unique_ptr<ASTExpression>> &getParams() { return params; };
+        void setParams(std::vector<unique_ptr<ASTExpression>> p) { params = std::move(p); }
     };
 
-    typedef std::vector<unique_ptr<ASTNode>> Nodes;
+    class ASTClassDeclaration : public ASTNode
+    {
+    private:
+        std::string name;
+        unique_ptr<ASTFunctionDeclaration> constructor;
+        std::vector<unique_ptr<ASTVariableDeclaration>> properties;
+        std::vector<unique_ptr<ASTFunctionDeclaration>> methods;
+
+    public:
+        ASTClassDeclaration(std::string name, unique_ptr<ASTFunctionDeclaration> constructor, std::vector<unique_ptr<ASTVariableDeclaration>> properties, std::vector<unique_ptr<ASTFunctionDeclaration>> methods) : name(name), constructor(std::move(constructor)), properties(std::move(properties)), methods(std::move(methods)){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+
+        std::vector<unique_ptr<ASTVariableDeclaration>> const &getProperties() const { return properties; }
+        unique_ptr<ASTFunctionDeclaration> &getConstructor() { return constructor; }
+    };
+
+    class ASTUnaryPrefixOperationExpression : public ASTExpression
+    {
+    private:
+        TokenType op;
+        unique_ptr<ASTExpression> value;
+        std::string type;
+
+    public:
+        ASTUnaryPrefixOperationExpression(TokenType op, unique_ptr<ASTExpression> value, std::string type) : op(op), value(std::move(value)), type(type){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+        std::string getType() { return type; };
+
+        llvm::Value *codegenNew(const unique_ptr<CodegenContext> &codegenContext);
+    };
+
+    class ASTClassConstructionExpression : public ASTExpression
+    {
+    private:
+        std::string name;
+        std::vector<unique_ptr<ASTExpression>> parameters;
+        std::string type;
+
+    public:
+        ASTClassConstructionExpression(std::string name, std::vector<unique_ptr<ASTExpression>> parameters) : name(name), parameters(std::move(parameters)), type(name){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+        std::string getType()
+        {
+            return type;
+        };
+    };
+
+    // class ASTNewStatement : public ASTExpression
+    // {
+    // private:
+    //     unique_ptr<ASTExpression> fnCall;
+    //     std::string type;
+
+    // public:
+    //     ASTNewStatement(unique_ptr<ASTExpression> fnCall, std::string type) : fnCall(std::move(fnCall)), type(type){};
+    //     llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+    //     std::string getType() { return type; };
+    // };
+
+    typedef std::vector<unique_ptr<ASTNode>>
+        Nodes;
 
 }; // namespace ssc
 

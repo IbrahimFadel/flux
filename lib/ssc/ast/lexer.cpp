@@ -123,7 +123,15 @@ Tokens Lexer::tokenize(std::vector<std::string> content)
                 continue;
             case '-':
             {
-                if (line[i + 1] != '>')
+                if (line[i + 1] == '>')
+                {
+                    addValidLexeme();
+                    token += "->";
+                    addValidLexeme();
+                    i++;
+                    continue;
+                }
+                else
                 {
                     addValidLexeme(c);
                     continue;
@@ -190,6 +198,12 @@ void Lexer::addValidLexeme(char c)
         tok = constructToken(TokenType::tokFor);
     else if (token == "while")
         tok = constructToken(TokenType::tokWhile);
+    else if (token == "class")
+        tok = constructToken(TokenType::tokClass);
+    else if (token == "constructor")
+        tok = constructToken(TokenType::tokConstructor);
+    else if (token == "new")
+        tok = constructToken(TokenType::tokNew);
 
     else if (token == "i64")
         tok = constructToken(TokenType::tokI64);

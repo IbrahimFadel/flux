@@ -1,18 +1,27 @@
-fn test(i32 x, i16 y) -> u32 {
-    return x + i32(y);
-}
+class Person {
+    pub mut i32 age;
+    mut i16 address;
+    mut u8 test = 5;
+    mut u64 hi = 5;
 
-pub fn main() -> u32 {
-
-    mut i32 x = 0;
-
-    for(mut i32 i = 0; i < 20; i = i + 1) {
-        x = i;
+    constructor(i32 age, i16 address, u8 test, u64 hi) {
+        this->age = age;
+        this->address = address;
+        this->test = test;
+        this->hi = hi;
     }
 
-    u32 res = test(5, 10);
+    pub fn print() -> void {
 
-    u32 final = res + u32(x);
+    }
 
-    return u32(x);
+    fn testFunction(i8 param) -> u8 {
+        return 0;
+    }
+}
+
+fn main() -> i32 {
+    Person *person = new Person(16, 5, 0, 0);
+
+    return 0;
 }

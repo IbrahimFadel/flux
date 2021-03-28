@@ -3,7 +3,6 @@
 using namespace ssc;
 
 bool ASTFunctionDeclaration::getPub() { return pub; }
-std::string ASTFunctionDeclaration::getName() { return name; }
 std::vector<Parameter> ASTFunctionDeclaration::getParameters() { return parameters; }
 std::string ASTFunctionDeclaration::getReturnType() { return returnType; }
 const std::vector<unique_ptr<ASTNode>> &ASTFunctionDeclaration::getThen() { return then; }
