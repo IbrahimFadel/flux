@@ -60,7 +60,7 @@ This project had undergone many rewrites, so some functionality is removed and r
 
 ## Usage
 
-Compile the project with cmake, then use the ssc compiler:
+Compile the project with cmake, then invoke the pi compiler:
 
 ```bash
 # pi warns about everything by default
