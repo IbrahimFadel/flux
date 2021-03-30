@@ -80,11 +80,25 @@ llvm::Type *CodegenContext::ssBaseTypeToLLVMType(std::string type)
         return llvm::Type::getVoidTy(ctx);
     else
     {
-        if (structTypes.find(type) != structTypes.end())
+        if (isClassType(type))
             return structTypes[type];
         error("Could not convert base type: " + type + " to llvm type");
         return nullptr;
     }
+}
+
+bool CodegenContext::isClassType(std::string type)
+{
+    // std::string baseType = "";
+    // for (const char &c : type)
+    // {
+    //     if (c != (const char &)"*" && c != (const char &)"&")
+    //     {
+    //         baseType += c;
+    //     }
+    // }
+
+    return (structTypes.find(type) != structTypes.end());
 }
 
 bool CodegenContext::isTypeSigned(std::string type)
@@ -145,4 +159,29 @@ llvm::Value *CodegenContext::implicityTypecastExpression(llvm::Value *v, std::st
         error("Could not implicitly typecast");
     }
     return 0;
+}
+
+void CodegenContext::initializeFPM()
+{
+    fpm = std::make_unique<llvm::legacy::FunctionPassManager>(mod);
+    fpm->add(llvm::createInstructionCombiningPass());
+    // fpm->add(llvm::createReassociatePass());
+    // fpm->add(llvm::createDeadCodeEliminationPass());
+    // fpm->add(llvm::createGVNPass());
+    // fpm->add(llvm::createCFGSimplificationPass());
+    // fpm->add(llvm::createPromoteMemoryToRegisterPass());
+    fpm->doInitialization();
+}
+
+void CodegenContext::runFPM(llvm::Function *f)
+{
+    fpm->run(*f);
+}
+
+void CodegenContext::defineCFunctions()
+{
+    std::vector<llvm::Type *> paramTypes = {llvm::Type::getInt32Ty(ctx)};
+    llvm::Type *returnType = llvm::Type::getInt8PtrTy(ctx);
+    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, paramTypes, false);
+    mallocFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "malloc", mod);
 }

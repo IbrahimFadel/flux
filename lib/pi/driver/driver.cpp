@@ -122,6 +122,12 @@ void Driver::compile(std::vector<std::string> paths)
 
         auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
         // codegenCtx->init(fsInputPath.string());
+
+        if (options->getOptimize())
+        {
+            codegenCtx->initializeFPM();
+        }
+        codegenCtx->defineCFunctions();
         codegenNodes(std::move(astNodes), codegenCtx);
 
         auto llOutPath = fsInputPath.replace_extension("ll");

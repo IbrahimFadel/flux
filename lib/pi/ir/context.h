@@ -22,10 +22,10 @@ namespace ssc
 
 // #include <llvm/Bitcode/BitcodeWriter.h>
 
-// #include <llvm/Transforms/InstCombine/InstCombine.h>
-// #include <llvm/Transforms/Scalar.h>
-// #include <llvm/Transforms/Scalar/GVN.h>
-// #include <llvm/Transforms/Utils.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/GVN.h>
+#include <llvm/Transforms/Utils.h>
 
 // #include <llvm/Support/TargetSelect.h>
 // #include <llvm/Support/TargetRegistry.h>
@@ -46,6 +46,11 @@ namespace ssc
         llvm::LLVMContext ctx;
         llvm::Module *mod;
         llvm::IRBuilder<> builder;
+        unique_ptr<llvm::legacy::FunctionPassManager> fpm;
+        llvm::DataLayout *dataLayout;
+
+        llvm::Function *mallocFunction;
+
         std::string currentFunctionName;
         std::map<std::string, ASTFunctionDeclaration *> functions;
         std::string currentlyPreferredType;
@@ -53,16 +58,12 @@ namespace ssc
         std::map<std::string, llvm::StructType *> structTypes;
         std::map<std::string, ASTClassDeclaration *> astClassTypes;
         std::map<std::string, std::vector<std::string>> classProperties;
-        // std::map<std::string, std::vector<unique_ptr<ASTVariableDeclaration>> &> classProperties;
 
     public:
-        //  mod = new llvm::Module(moduleName, ctx);
-
-        // auto _builder = llvm::IRBuilder(ctx);
-
         CodegenContext(std::string moduleName, unique_ptr<Options> &compilerOptions) : builder(ctx), compilerOptions(compilerOptions)
         {
             mod = new llvm::Module(moduleName, ctx);
+            dataLayout = new llvm::DataLayout(mod);
         };
         void error(std::string msg);
         void warning(std::string msg);
@@ -79,10 +80,14 @@ namespace ssc
             llvm::outs() << '\n';
         }
 
+        void initializeFPM();
+        void runFPM(llvm::Function *f);
+
         llvm::Type *ssTypeToLLVMType(std::string type);
         llvm::Type *ssBaseTypeToLLVMType(std::string type);
         bool isTypeSigned(std::string type);
         llvm::Value *implicityTypecastExpression(llvm::Value *v, std::string currentType, llvm::Type *targetType);
+        void defineCFunctions();
 
         void setCurrentlyPreferredType(std::string ty) { currentlyPreferredType = ty; }
         std::string getCurrentlyPreferredType() { return currentlyPreferredType; }
@@ -100,6 +105,9 @@ namespace ssc
         std::vector<std::string> getClassProperties(std::string name) { return classProperties[name]; }
         void setASTClassType(std::string name, ASTClassDeclaration *c) { astClassTypes[name] = c; }
         ASTClassDeclaration *getASTClassType(std::string name) { return astClassTypes[name]; }
+        llvm::Function *getMallocFunction() { return mallocFunction; }
+        llvm::DataLayout *getDataLayout() { return dataLayout; }
+        bool isClassType(std::string name);
     };
 } // namespace ssc
 

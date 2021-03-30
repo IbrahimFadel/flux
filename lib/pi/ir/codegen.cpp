@@ -239,6 +239,11 @@ llvm::Value *ASTFunctionDeclaration::codegen(const unique_ptr<CodegenContext> &c
         builder->CreateRetVoid();
     }
 
+    if (codegenContext->getCompilerOptions()->getOptimize())
+    {
+        codegenContext->runFPM(f);
+    }
+
     llvm::verifyFunction(*f, &llvm::outs());
 
     return 0;
