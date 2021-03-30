@@ -1,4 +1,4 @@
-# Sandscript
+# PI
 
 A statically typed language made with LLVM
 
@@ -63,7 +63,7 @@ This project had undergone many rewrites, so some functionality is removed and r
 Compile the project with cmake, then use the ssc compiler:
 
 ```bash
-# ssc warns about everything by default
+# pi warns about everything by default
 # In this example, set warnings to errors, but don't warn about unnecessary typecasts
-ssc inputfile.ss otherinputfile.ss -Werror -Wno-unnecessary-typecast -o main
+pi inputfile.pi otherinputfile.pi -Werror -Wno-unnecessary-typecast -o main
 ```
