@@ -2,7 +2,7 @@
 
 A statically typed language made with LLVM
 
-Example sandscript file:
+Example program:
 
 ```
 /*
