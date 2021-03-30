@@ -5,6 +5,31 @@ A statically typed language made with LLVM
 Example sandscript file:
 
 ```
+/*
+ * Classes have just been added so not everything works yet. Ex. 'pub' is being parsed but doesn't mean anything yet (for both properties and methods)
+/*
+class Person {
+    pub mut i32 age;
+    mut i16 address;
+    mut u8 test = 5; // Default value
+    mut u64 hi = 5;
+
+    constructor(i32 age, i16 address, u8 test, u64 hi) {
+        this->age = age;
+        this->address = address;
+        this->test = test;
+        this->hi = hi;
+    }
+
+    pub fn print() -> void {
+
+    }
+
+    fn testFunction(i8 param) -> u8 {
+        return 0;
+    }
+}
+
 // only 'y' can be modified, and remember to typecast when adding!
 fn add(i32 x, mut i8 y) -> i32 {
   y = 5;
@@ -13,6 +38,8 @@ fn add(i32 x, mut i8 y) -> i32 {
 
 // entry function
 pub fn main() -> u32 {
+    Person *johnDoe = new Person(16, 153, 0, 10);
+
     mut u32 x = 0;
 
     /*
@@ -25,7 +52,7 @@ pub fn main() -> u32 {
     
     i32 result = add(x, 13);
 
-    return result;
+    return result + i32(johnDoe->age);
 }
 ```
 
