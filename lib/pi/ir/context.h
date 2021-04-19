@@ -50,14 +50,16 @@ namespace ssc
         llvm::DataLayout *dataLayout;
 
         llvm::Function *mallocFunction;
+        llvm::Function *freeFunction;
 
         std::string currentFunctionName;
-        std::map<std::string, ASTFunctionDeclaration *> functions;
+        std::map<std::string, ASTFunctionDefinition *> functions;
         std::string currentlyPreferredType;
         unique_ptr<Options> &compilerOptions;
         std::map<std::string, llvm::StructType *> structTypes;
         std::map<std::string, ASTClassDeclaration *> astClassTypes;
         std::map<std::string, std::vector<std::string>> classProperties;
+        std::map<std::string, std::vector<std::string>> classMethods;
 
     public:
         CodegenContext(std::string moduleName, unique_ptr<Options> &compilerOptions) : builder(ctx), compilerOptions(compilerOptions)
@@ -93,8 +95,8 @@ namespace ssc
         std::string getCurrentlyPreferredType() { return currentlyPreferredType; }
         void setCurrentFunctionName(std::string name) { currentFunctionName = name; }
         std::string getCurrentFunctionName() { return currentFunctionName; }
-        void setFunction(std::string name, ASTFunctionDeclaration *fn) { functions[name] = fn; }
-        ASTFunctionDeclaration *getFunction(std::string name) { return functions[name]; }
+        void setFunction(std::string name, ASTFunctionDefinition *fn) { functions[name] = fn; }
+        ASTFunctionDefinition *getFunction(std::string name) { return functions[name]; }
         llvm::Module *getModule() { return mod; }
         llvm::IRBuilder<> *getBuilder() { return &builder; }
         llvm::LLVMContext *getCtx() { return &ctx; }
@@ -103,6 +105,8 @@ namespace ssc
         llvm::StructType *getStructType(std::string name) { return structTypes[name]; }
         void setClassProperties(std::string name, std::vector<std::string> props) { classProperties[name] = props; }
         std::vector<std::string> getClassProperties(std::string name) { return classProperties[name]; }
+        void setClassMethods(std::string name, std::vector<std::string> methods) { classMethods[name] = methods; };
+        std::vector<std::string> getClassMethods(std::string name) { return classMethods[name]; };
         void setASTClassType(std::string name, ASTClassDeclaration *c) { astClassTypes[name] = c; }
         ASTClassDeclaration *getASTClassType(std::string name) { return astClassTypes[name]; }
         llvm::Function *getMallocFunction() { return mallocFunction; }

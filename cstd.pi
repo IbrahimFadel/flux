@@ -1,0 +1,1 @@
+fn free(i8* ptr) -> void;

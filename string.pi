@@ -1,0 +1,20 @@
+class string {
+    i8 *buffer;
+    i64 length;
+    i64 maxLength;
+    i64 factor;
+
+    constructor() {
+        this->buffer = nullptr;
+        this->length = 0;
+        this->maxLength = 0;
+        this->factor = 16;
+    }
+
+    fn delete() -> void {
+        i8 *buf = this->buffer;
+        if(buf != nullptr) {
+            free(buf);
+        }
+    }
+}

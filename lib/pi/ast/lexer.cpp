@@ -6,7 +6,7 @@ void Lexer::printTokens(const Tokens &tokens)
 {
     for (auto &token : tokens)
     {
-        std::cout << "[ " << token->type << " : " << token->value << " ] -- " << token->row << ", " << token->col << std::endl;
+        std::cout << "[ " << token->type << " : " << token->value << " ] -- " << token->row << ", " << token->col << '\n';
     }
 }
 
@@ -252,6 +252,8 @@ void Lexer::addValidLexeme(char c)
         tok = constructToken(TokenType::tokSlash);
     else if (token == "==")
         tok = constructToken(TokenType::tokCompareEq);
+    else if (token == "!=")
+        tok = constructToken(TokenType::tokCompareNe);
     else if (token == ">")
         tok = constructToken(TokenType::tokCompareGt);
     else if (token == "<")

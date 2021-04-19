@@ -51,7 +51,7 @@ namespace ssc
         unique_ptr<ASTNode> parsePub();
         unique_ptr<ASTNode> parseMut(bool isPub = false);
         unique_ptr<ASTVariableDeclaration> parseVariableDeclaration(bool isPub = false, bool isMut = false);
-        unique_ptr<ASTFunctionDeclaration> parseFn(bool isPub = false);
+        unique_ptr<ASTFunctionDefinition> parseFn(bool isPub = false);
         Parameter parseParameter();
         std::string parseType();
         unique_ptr<ASTExpression> parseExpression(bool needsSemicolon = true);
@@ -62,12 +62,13 @@ namespace ssc
         unique_ptr<ASTExpression> parseIdentifierExpression();
         unique_ptr<ASTExpression> parseFunctionCallExpression(std::string fnName);
         unique_ptr<ASTExpression> parseTypecast();
+        unique_ptr<ASTNullptrExpression> parseNullptr();
 
         unique_ptr<ASTReturnStatement> parseReturn();
         unique_ptr<ASTIfStatement> parseIfStatement();
         unique_ptr<ASTForLoop> parseForLoop();
         unique_ptr<ASTClassDeclaration> parseClassDeclaration();
-        unique_ptr<ASTFunctionDeclaration> parseConstructor(std::string name, std::string className);
+        unique_ptr<ASTFunctionDefinition> parseConstructor(std::string name, std::string className);
         unique_ptr<ASTUnaryPrefixOperationExpression> parseUnaryPrefixOperationExpression();
         unique_ptr<ASTClassConstructionExpression> parseClassConstructionExpression(std::string className);
 

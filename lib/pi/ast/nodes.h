@@ -10,7 +10,7 @@
 namespace ssc
 {
     class ASTExpression;
-    class ASTFunctionDeclaration;
+    class ASTFunctionDefinition;
     class ASTVariableDeclaration;
     struct Parameter;
     class ASTReturnStatement;
@@ -100,7 +100,7 @@ namespace ssc
         std::string name;
     };
 
-    class ASTFunctionDeclaration : public ASTNode
+    class ASTFunctionDefinition : public ASTNode
     {
     private:
         bool pub;
@@ -117,7 +117,7 @@ namespace ssc
         void createFunctionParamAllocas(const unique_ptr<CodegenContext> &codegenContext, llvm::Function *f);
 
     public:
-        ASTFunctionDeclaration(bool pub, std::string name, std::vector<Parameter> parameters, std::string returnType, std::vector<unique_ptr<ASTNode>> then) : pub(pub), name(name), parameters(parameters), returnType(returnType), then(std::move(then)){};
+        ASTFunctionDefinition(bool pub, std::string name, std::vector<Parameter> parameters, std::string returnType, std::vector<unique_ptr<ASTNode>> then) : pub(pub), name(name), parameters(parameters), returnType(returnType), then(std::move(then)){};
         llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
 
         void setVariable(std::string name, ASTVariableDeclaration *v) { variables[name] = v; }
@@ -226,22 +226,23 @@ namespace ssc
         std::string getName() { return name; };
         std::vector<unique_ptr<ASTExpression>> &getParams() { return params; };
         void setParams(std::vector<unique_ptr<ASTExpression>> p) { params = std::move(p); }
+        void insertParamAtFrom(std::unique_ptr<ASTExpression> p) { params.insert(params.begin(), std::move(p)); }
     };
 
     class ASTClassDeclaration : public ASTNode
     {
     private:
         std::string name;
-        unique_ptr<ASTFunctionDeclaration> constructor;
+        unique_ptr<ASTFunctionDefinition> constructor;
         std::vector<unique_ptr<ASTVariableDeclaration>> properties;
-        std::vector<unique_ptr<ASTFunctionDeclaration>> methods;
+        std::vector<unique_ptr<ASTFunctionDefinition>> methods;
 
     public:
-        ASTClassDeclaration(std::string name, unique_ptr<ASTFunctionDeclaration> constructor, std::vector<unique_ptr<ASTVariableDeclaration>> properties, std::vector<unique_ptr<ASTFunctionDeclaration>> methods) : name(name), constructor(std::move(constructor)), properties(std::move(properties)), methods(std::move(methods)){};
+        ASTClassDeclaration(std::string name, unique_ptr<ASTFunctionDefinition> constructor, std::vector<unique_ptr<ASTVariableDeclaration>> properties, std::vector<unique_ptr<ASTFunctionDefinition>> methods) : name(name), constructor(std::move(constructor)), properties(std::move(properties)), methods(std::move(methods)){};
         llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
 
         std::vector<unique_ptr<ASTVariableDeclaration>> const &getProperties() const { return properties; }
-        unique_ptr<ASTFunctionDeclaration> &getConstructor() { return constructor; }
+        unique_ptr<ASTFunctionDefinition> &getConstructor() { return constructor; }
     };
 
     class ASTUnaryPrefixOperationExpression : public ASTExpression
@@ -275,17 +276,19 @@ namespace ssc
         };
     };
 
-    // class ASTNewStatement : public ASTExpression
-    // {
-    // private:
-    //     unique_ptr<ASTExpression> fnCall;
-    //     std::string type;
+    class ASTNullptrExpression : public ASTExpression
+    {
+    private:
+        std::string type; // This is the currently prefferred type (so we know what type of pointer to make)
 
-    // public:
-    //     ASTNewStatement(unique_ptr<ASTExpression> fnCall, std::string type) : fnCall(std::move(fnCall)), type(type){};
-    //     llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
-    //     std::string getType() { return type; };
-    // };
+    public:
+        ASTNullptrExpression(std::string type) : type(type){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+        std::string getType()
+        {
+            return type;
+        };
+    };
 
     typedef std::vector<unique_ptr<ASTNode>>
         Nodes;

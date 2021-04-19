@@ -10,6 +10,12 @@ void ssc::codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext)
     }
 }
 
+llvm::Value *ASTNullptrExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
+{
+    auto ty = codegenContext->ssTypeToLLVMType(type)->getPointerElementType()->getPointerTo(); // This is gross but 'ty' needs to be a llvm::PointerType
+    return llvm::ConstantPointerNull::get(ty);
+}
+
 llvm::Value *ASTUnaryPrefixOperationExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
     switch (op)
@@ -26,7 +32,6 @@ llvm::Value *ASTUnaryPrefixOperationExpression::codegen(const unique_ptr<Codegen
 llvm::Value *ASTUnaryPrefixOperationExpression::codegenNew(const unique_ptr<CodegenContext> &codegenContext)
 {
     auto v = value->codegen(codegenContext);
-    codegenContext->print(v);
 
     return llvm::getPointerOperand(v);
 }
@@ -73,8 +78,15 @@ llvm::Value *ASTClassDeclaration::codegen(const unique_ptr<CodegenContext> &code
     }
     auto llvmClassType = llvm::StructType::create(classPropertyTypes, name);
 
+    std::vector<std::string> methodNames;
+    for (auto const &method : methods)
+    {
+        methodNames.push_back(method->getName());
+    }
+
     codegenContext->setStructType(name, llvmClassType);
     codegenContext->setClassProperties(name, propertyNames);
+    codegenContext->setClassMethods(name, methodNames);
 
     if (constructor != nullptr)
     {
@@ -211,11 +223,16 @@ llvm::Value *ASTReturnStatement::codegen(const unique_ptr<CodegenContext> &codeg
     return builder->CreateRet(retValue);
 }
 
-llvm::Value *ASTFunctionDeclaration::codegen(const unique_ptr<CodegenContext> &codegenContext)
+llvm::Value *ASTFunctionDefinition::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
     auto f = codegenPrototype(codegenContext);
     if (f == 0)
         codegenContext->error("Could not codegen" + name + "'s function prototype");
+
+    if (then.size() == 0)
+    {
+        return f;
+    }
 
     auto entry = llvm::BasicBlock::Create(*codegenContext->getCtx(), "entry", f);
     codegenContext->getBuilder()->SetInsertPoint(entry);
@@ -246,10 +263,10 @@ llvm::Value *ASTFunctionDeclaration::codegen(const unique_ptr<CodegenContext> &c
 
     llvm::verifyFunction(*f, &llvm::outs());
 
-    return 0;
+    return f;
 }
 
-void ASTFunctionDeclaration::createFunctionParamAllocas(const unique_ptr<CodegenContext> &codegenContext, llvm::Function *f)
+void ASTFunctionDefinition::createFunctionParamAllocas(const unique_ptr<CodegenContext> &codegenContext, llvm::Function *f)
 {
     auto builder = codegenContext->getBuilder();
     auto functionParamIt = f->arg_begin();
@@ -272,7 +289,7 @@ void ASTFunctionDeclaration::createFunctionParamAllocas(const unique_ptr<Codegen
     }
 }
 
-llvm::Function *ASTFunctionDeclaration::codegenPrototype(const unique_ptr<CodegenContext> &codegenContext)
+llvm::Function *ASTFunctionDefinition::codegenPrototype(const unique_ptr<CodegenContext> &codegenContext)
 {
     std::vector<llvm::Type *> paramTypes;
     for (auto &param : parameters)
@@ -314,8 +331,6 @@ llvm::Value *ASTVariableDeclaration::codegen(const unique_ptr<CodegenContext> &c
 
     auto ty = codegenContext->ssTypeToLLVMType(type);
     auto ptr = builder->CreateAlloca(ty);
-
-    codegenContext->print(ptr);
 
     auto isSigned = codegenContext->isTypeSigned(type);
 
@@ -421,6 +436,8 @@ llvm::Value *ASTBinaryOperationExpression::codegen(const unique_ptr<CodegenConte
         return codegenBinopComp(codegenContext, std::move(lhs), std::move(rhs), op);
     case TokenType::tokCompareEq:
         return codegenBinopComp(codegenContext, std::move(lhs), std::move(rhs), op);
+    case TokenType::tokCompareNe:
+        return codegenBinopComp(codegenContext, std::move(lhs), std::move(rhs), op);
     case TokenType::tokOr:
         return codegenBinopComp(codegenContext, std::move(lhs), std::move(rhs), op);
     case TokenType::tokAnd:
@@ -436,11 +453,20 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopArrow(const unique_ptr<Co
     auto lhsVarRef = dynamic_cast<ASTVariableReferenceExpression *>(lhs.get());
     if (lhsVarRef == nullptr)
         codegenContext->error("Object property access must have a variable refernce expression on the left hand side");
-    auto rhsVarRef = dynamic_cast<ASTVariableReferenceExpression *>(rhs.get());
-    if (rhsVarRef == nullptr)
-        codegenContext->error("Object property access must have a variable refernce expression on the right hand side");
 
-    auto propName = rhsVarRef->getName();
+    ASTFunctionCallExpression *rhsFnCall;
+    ASTVariableReferenceExpression *rhsVarRef;
+    bool isVarRef = false;
+    bool isFnCall = false;
+    rhsVarRef = dynamic_cast<ASTVariableReferenceExpression *>(rhs.get());
+    if (rhsVarRef != nullptr)
+        isVarRef = true;
+    else
+    {
+        rhsFnCall = dynamic_cast<ASTFunctionCallExpression *>(rhs.get());
+        if (rhsFnCall != nullptr)
+            isFnCall = true;
+    }
 
     auto lVar = lhsVarRef->codegen(codegenContext);
     auto ty = lVar->getType();
@@ -448,22 +474,40 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopArrow(const unique_ptr<Co
         ty = ty->getPointerElementType();
     std::string className = ty->getStructName().str();
 
-    auto props = codegenContext->getClassProperties(className);
-    int propIndex = 0;
-    for (auto const &prop : props)
+    if (isFnCall)
     {
-        if (prop == propName)
-            break;
-        propIndex++;
+        auto methodName = rhsFnCall->getName();
+        auto builder = codegenContext->getBuilder();
+        std::string globalFnName = className + "." + methodName;
+        rhsFnCall->setName(globalFnName);
+        auto t = std::make_unique<ASTVariableReferenceExpression>(lhsVarRef->getName(), className, lhsVarRef->getIsMut());
+        rhsFnCall->insertParamAtFrom(std::move(t));
+        rhsFnCall->codegen(codegenContext);
+        return 0;
+    }
+    else
+    {
+        auto propName = rhsVarRef->getName();
+
+        auto props = codegenContext->getClassProperties(className);
+        int propIndex = 0;
+        for (auto const &prop : props)
+        {
+            if (prop == propName)
+                break;
+            propIndex++;
+        }
+
+        if (propIndex == props.size())
+            codegenContext->error("Could not find property '" + propName + "' in class");
+
+        auto builder = codegenContext->getBuilder();
+        auto gep = builder->CreateStructGEP(lVar, propIndex);
+        auto loaded = builder->CreateLoad(gep);
+        return loaded;
     }
 
-    if (propIndex == props.size())
-        codegenContext->error("Could not find property '" + propName + "' in class");
-
-    auto builder = codegenContext->getBuilder();
-    auto gep = builder->CreateStructGEP(lVar, propIndex);
-    auto loaded = builder->CreateLoad(gep);
-    return loaded;
+    return 0;
 }
 
 llvm::Value *ASTBinaryOperationExpression::codegenBinopComp(const unique_ptr<CodegenContext> &codegenContext, unique_ptr<ASTExpression> lhs, unique_ptr<ASTExpression> rhs, TokenType op)
@@ -497,6 +541,14 @@ llvm::Value *ASTBinaryOperationExpression::codegenBinopComp(const unique_ptr<Cod
             return builder->CreateFCmpUEQ(lVal, rVal);
         }
         return builder->CreateICmpEQ(lVal, rVal);
+    }
+    case TokenType::tokCompareNe:
+    {
+        if (isFloatingPoint)
+        {
+            return builder->CreateFCmpUNE(lVal, rVal);
+        }
+        return builder->CreateICmpNE(lVal, rVal);
     }
     case TokenType::tokCompareLt:
     {

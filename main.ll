@@ -18,7 +18,7 @@ entry:
   ret void
 }
 
-define void @Person.print(%Person* %this) {
+define void @Person.print(%Person* %this, i32 %x) {
 entry:
   ret void
 }
@@ -32,5 +32,6 @@ define i32 @main() {
 entry:
   %0 = alloca %Person, align 8
   call void @Person.constructor(%Person* nonnull %0, i32 16, i16 5, i8 0, i64 0)
+  call void @Person.print(%Person* nonnull %0, i32 1)
   ret i32 0
 }

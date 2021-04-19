@@ -165,11 +165,11 @@ void CodegenContext::initializeFPM()
 {
     fpm = std::make_unique<llvm::legacy::FunctionPassManager>(mod);
     fpm->add(llvm::createInstructionCombiningPass());
-    // fpm->add(llvm::createReassociatePass());
-    // fpm->add(llvm::createDeadCodeEliminationPass());
-    // fpm->add(llvm::createGVNPass());
-    // fpm->add(llvm::createCFGSimplificationPass());
-    // fpm->add(llvm::createPromoteMemoryToRegisterPass());
+    fpm->add(llvm::createReassociatePass());
+    fpm->add(llvm::createDeadCodeEliminationPass());
+    fpm->add(llvm::createGVNPass());
+    fpm->add(llvm::createCFGSimplificationPass());
+    fpm->add(llvm::createPromoteMemoryToRegisterPass());
     fpm->doInitialization();
 }
 
@@ -184,4 +184,9 @@ void CodegenContext::defineCFunctions()
     llvm::Type *returnType = llvm::Type::getInt8PtrTy(ctx);
     llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, paramTypes, false);
     mallocFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "malloc", mod);
+
+    paramTypes = {llvm::Type::getInt8PtrTy(ctx)};
+    returnType = llvm::Type::getVoidTy(ctx);
+    functionType = llvm::FunctionType::get(returnType, paramTypes, false);
+    freeFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "free", mod);
 }

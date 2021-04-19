@@ -127,7 +127,7 @@ void Driver::compile(std::vector<std::string> paths)
         {
             codegenCtx->initializeFPM();
         }
-        codegenCtx->defineCFunctions();
+        // codegenCtx->defineCFunctions();
         codegenNodes(std::move(astNodes), codegenCtx);
 
         auto llOutPath = fsInputPath.replace_extension("ll");

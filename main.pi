@@ -11,8 +11,8 @@ class Person {
         this->hi = hi;
     }
 
-    pub fn print() -> void {
-
+    pub fn print(i32 x) -> void {
+        
     }
 
     fn testFunction(i8 param) -> u8 {
@@ -22,6 +22,8 @@ class Person {
 
 fn main() -> i32 {
     Person *person = new Person(16, 5, 0, 0);
+
+    person->print(1);
 
     return 0;
 }
