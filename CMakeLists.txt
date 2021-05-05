@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.7...3.18)
 
 project(Sandscript)
 
-set(CMAKE_CXX_FLAGS "-std=c++17")
+set(CMAKE_CXX_FLAGS "-std=c++20")
 
 set(PI_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/pi)
 set(PI_SOURCE_FILES

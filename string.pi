@@ -1,3 +1,5 @@
+import "./cstd.pi";
+
 class string {
     i8 *buffer;
     i64 length;
@@ -14,7 +16,6 @@ class string {
     fn delete() -> void {
         i8 *buf = this->buffer;
         if(buf != nullptr) {
-            free(buf);
         }
     }
 }

@@ -290,8 +290,19 @@ namespace ssc
         };
     };
 
-    typedef std::vector<unique_ptr<ASTNode>>
-        Nodes;
+    class ASTImportStatement : public ASTNode
+    {
+    private:
+        std::string path;
+
+    public:
+        ASTImportStatement(std::string path) : path(path){};
+        llvm::Value *codegen(const unique_ptr<CodegenContext> &codegenContext);
+
+        std::string getPath() { return path; }
+    };
+
+    typedef std::vector<unique_ptr<ASTNode>> Nodes;
 
 }; // namespace ssc
 

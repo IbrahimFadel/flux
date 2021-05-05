@@ -204,6 +204,8 @@ void Lexer::addValidLexeme(char c)
         tok = constructToken(TokenType::tokConstructor);
     else if (token == "new")
         tok = constructToken(TokenType::tokNew);
+    else if (token == "import")
+        tok = constructToken(TokenType::tokImport);
 
     else if (token == "i64")
         tok = constructToken(TokenType::tokI64);

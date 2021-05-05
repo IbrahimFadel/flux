@@ -10,6 +10,12 @@ void ssc::codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext)
     }
 }
 
+llvm::Value *ASTImportStatement::codegen(const unique_ptr<CodegenContext> &codegenContext)
+{
+    std::cout << "import\n";
+    return 0;
+}
+
 llvm::Value *ASTNullptrExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
     auto ty = codegenContext->ssTypeToLLVMType(type)->getPointerElementType()->getPointerTo(); // This is gross but 'ty' needs to be a llvm::PointerType

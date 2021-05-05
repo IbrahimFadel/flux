@@ -58,6 +58,8 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
         return parseForLoop();
     case TokenType::tokClass:
         return parseClassDeclaration();
+    case TokenType::tokImport:
+        return parseImportStatement();
     case TokenType::tokI64:
         return parseVariableDeclaration();
     case TokenType::tokU64:
@@ -94,6 +96,20 @@ unique_ptr<ASTNode> Parser::parseToken(const unique_ptr<Token> &tok)
     }
 
     return nullptr;
+}
+
+unique_ptr<ASTImportStatement> Parser::parseImportStatement()
+{
+    getNextToken(); //? eat 'import'
+
+    errIfCurTokNotType(TokenType::tokStringLit, "Expected string literal after 'import'");
+    std::string path = curTok->value;
+    getNextToken(); //? eat path
+
+    errIfCurTokNotType(TokenType::tokSemicolon, "Expected ';' after import path");
+    getNextToken(); //? eat ';'
+
+    return std::make_unique<ASTImportStatement>(path);
 }
 
 unique_ptr<ASTClassDeclaration> Parser::parseClassDeclaration()

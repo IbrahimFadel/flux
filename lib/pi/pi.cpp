@@ -1,8 +1,6 @@
 #include "pi.h"
 #include "driver/driver.h"
 
-#include "mlir/IR/Module.h"
-
 using std::cout;
 using std::endl;
 

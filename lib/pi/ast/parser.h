@@ -71,6 +71,7 @@ namespace ssc
         unique_ptr<ASTFunctionDefinition> parseConstructor(std::string name, std::string className);
         unique_ptr<ASTUnaryPrefixOperationExpression> parseUnaryPrefixOperationExpression();
         unique_ptr<ASTClassConstructionExpression> parseClassConstructionExpression(std::string className);
+        unique_ptr<ASTImportStatement> parseImportStatement();
 
     public:
         Nodes parseTokens(Tokens tokens);

@@ -7,10 +7,12 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <map>
 
 #include "options.h"
 #include "ast/lexer.h"
 #include "ast/parser.h"
+#include "dependencies.h"
 #include "ir/context.h"
 #include "ir/codegen.h"
 #include "linker/lowering.h"
@@ -24,6 +26,7 @@ namespace ssc
     {
     private:
         unique_ptr<Options> options;
+        std::map<fs::path, Nodes> fileASTs;
 
         void error(std::string msg);
         void warning(std::string msg);
@@ -31,6 +34,8 @@ namespace ssc
 
         std::vector<std::string> getFileContent(const char *path);
         void writeLLFile(const unique_ptr<CodegenContext> &codegenContext, std::string path);
+        unique_ptr<DependencyGraph> createDependencyGraph(fs::path basePath, const Nodes &nodes);
+        void addDependencyConnections(const unique_ptr<DependencyGraph> &graph, fs::path parentPath, const Nodes &nodes);
 
     public:
         void parseCommandLineArguments(std::vector<std::string> args);

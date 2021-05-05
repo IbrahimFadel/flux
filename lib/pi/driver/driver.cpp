@@ -111,35 +111,37 @@ void Driver::compile(std::vector<std::string> paths)
             error("Could not find file: " + path);
         }
 
-        std::vector<std::string> fileContent = getFileContent(fsInputPath.c_str());
+        if (!fileASTs.contains(fsInputPath))
+        {
+            std::vector<std::string> fileContent = getFileContent(fsInputPath.c_str());
+            auto lexer = std::make_unique<Lexer>();
+            auto tokens = lexer->tokenize(fileContent);
+            auto parser = std::make_unique<Parser>();
+            fileASTs[fsInputPath] = parser->parseTokens(std::move(tokens));
+        }
 
-        auto lexer = std::make_unique<Lexer>();
-        auto tokens = lexer->tokenize(fileContent);
-        // lexer->printTokens(tokens);
+        auto dependencyGraph = createDependencyGraph(fsInputPath, fileASTs[fsInputPath]);
 
-        auto parser = std::make_unique<Parser>();
-        auto astNodes = parser->parseTokens(std::move(tokens));
-
-        auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
+        // auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
         // codegenCtx->init(fsInputPath.string());
 
-        if (options->getOptimize())
-        {
-            codegenCtx->initializeFPM();
-        }
+        // if (options->getOptimize())
+        // {
+        //     codegenCtx->initializeFPM();
+        // }
         // codegenCtx->defineCFunctions();
-        codegenNodes(std::move(astNodes), codegenCtx);
+        // codegenNodes(std::move(astNodes), codegenCtx);
 
-        auto llOutPath = fsInputPath.replace_extension("ll");
-        writeLLFile(codegenCtx, llOutPath.string());
+        // auto llOutPath = fsInputPath.replace_extension("ll");
+        // writeLLFile(codegenCtx, llOutPath.string());
 
-        auto objOutPath = fsInputPath.replace_extension("o");
-        objOutPaths.push_back(objOutPath.string());
-        writeModuleToObjectFile(codegenCtx, objOutPath.string());
-        if (options->getDebug())
-            codegenCtx->printModule();
+        // auto objOutPath = fsInputPath.replace_extension("o");
+        // objOutPaths.push_back(objOutPath.string());
+        // writeModuleToObjectFile(codegenCtx, objOutPath.string());
+        // if (options->getDebug())
+        //     codegenCtx->printModule();
 
-        linkingCMD += objOutPath.string() + " ";
+        // linkingCMD += objOutPath.string() + " ";
     }
 
     linkingCMD += "-o " + options->getOutputFilePath();
@@ -148,4 +150,56 @@ void Driver::compile(std::vector<std::string> paths)
     // info("Invoking command: " + linkingCMD);
     // executeCommand(linkingCMD, exitCode);
     // info("Linker exit code: " + std::to_string(exitCode));
+}
+
+unique_ptr<DependencyGraph> Driver::createDependencyGraph(fs::path basePath, const Nodes &nodes)
+{
+    auto graph = std::make_unique<DependencyGraph>();
+
+    addDependencyConnections(graph, basePath, nodes);
+
+    for (auto const &c : graph->getConnections())
+    {
+        std::cout << graph->getPath(c.first).c_str() << " -> " << graph->getPath(c.second).c_str() << '\n';
+    }
+
+    return graph;
+}
+
+void Driver::addDependencyConnections(const unique_ptr<DependencyGraph> &graph, fs::path parentPath, const Nodes &nodes)
+{
+    graph->insertPath(parentPath);
+    for (const auto &node : nodes)
+    {
+        auto importStatement = dynamic_cast<ASTImportStatement *>(node.get());
+        if (importStatement == nullptr)
+            continue;
+
+        std::string path = importStatement->getPath();
+        auto realPath = parentPath.parent_path().append(path);
+        std::error_code ec;
+        fs::path fsPath = fs::canonical(realPath, ec);
+        if (ec)
+        {
+            error("Could not find file: " + path);
+        }
+
+        if (fileASTs.contains(fsPath))
+        {
+            int idx = graph->getPathIndex(fsPath);
+            graph->insertConnection(std::make_pair(graph->getPathIndex(parentPath), idx));
+        }
+        else
+        {
+            auto fileContent = getFileContent(fsPath.c_str());
+            auto lexer = std::make_unique<Lexer>();
+            auto tokens = lexer->tokenize(fileContent);
+            auto parser = std::make_unique<Parser>();
+            fileASTs[fsPath] = parser->parseTokens(std::move(tokens));
+
+            int idx = graph->insertPath(fsPath);
+            graph->insertConnection(std::make_pair(graph->getPathIndex(parentPath), idx));
+            addDependencyConnections(graph, fsPath, fileASTs[fsPath]);
+        }
+    }
 }
