@@ -16,6 +16,28 @@ class string {
     fn delete() -> void {
         i8 *buf = this->buffer;
         if(buf != nullptr) {
+            @free(buf);
         }
+    }
+
+    fn resize(i64 value) -> void {
+        i8 *output = @malloc(value);
+        @memcpy(output, this->buffer, this->length);
+        @free(this->buffer);
+        this->buffer = output;
+    }
+
+    fn addChar(i8 value) -> void {
+        i64 len = this->length;
+        i64 maxLen = this->maxLength;
+        if(len == maxLen) {
+            i64 factor = this->factor;
+            i64 newLength = maxLen + factor;
+            this->resize(newLength);
+            this->maxLength = newLength;
+        }
+
+        // this->buffer[len] = value; TODO: indexed accesses to memory
+        this->length = len + 1;
     }
 }

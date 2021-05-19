@@ -16,7 +16,7 @@
 namespace ssc
 {
 
-    void codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext);
+    void codegenNodes(const Nodes &nodes, unique_ptr<CodegenContext> &codegenContext);
 } // namespace ssc
 
 #endif

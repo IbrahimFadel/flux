@@ -117,20 +117,22 @@ void Driver::compile(std::vector<std::string> paths)
             auto lexer = std::make_unique<Lexer>();
             auto tokens = lexer->tokenize(fileContent);
             auto parser = std::make_unique<Parser>();
+            std::cout << "codegen\n";
             fileASTs[fsInputPath] = parser->parseTokens(std::move(tokens));
+            std::cout << "codegen\n";
         }
 
+        std::cout << "codegen\n";
         auto dependencyGraph = createDependencyGraph(fsInputPath, fileASTs[fsInputPath]);
 
-        // auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath.string(), options);
-        // codegenCtx->init(fsInputPath.string());
-
-        // if (options->getOptimize())
-        // {
-        //     codegenCtx->initializeFPM();
-        // }
+        auto codegenCtx = std::make_unique<CodegenContext>(fsInputPath, options, dependencyGraph);
+        if (options->getOptimize())
+        {
+            codegenCtx->initializeFPM();
+        }
         // codegenCtx->defineCFunctions();
-        // codegenNodes(std::move(astNodes), codegenCtx);
+        std::cout << "codegen\n";
+        codegenNodes(fileASTs[fsInputPath], codegenCtx);
 
         // auto llOutPath = fsInputPath.replace_extension("ll");
         // writeLLFile(codegenCtx, llOutPath.string());
@@ -138,8 +140,8 @@ void Driver::compile(std::vector<std::string> paths)
         // auto objOutPath = fsInputPath.replace_extension("o");
         // objOutPaths.push_back(objOutPath.string());
         // writeModuleToObjectFile(codegenCtx, objOutPath.string());
-        // if (options->getDebug())
-        //     codegenCtx->printModule();
+        if (options->getDebug())
+            codegenCtx->printModule();
 
         // linkingCMD += objOutPath.string() + " ";
     }
@@ -160,7 +162,19 @@ unique_ptr<DependencyGraph> Driver::createDependencyGraph(fs::path basePath, con
 
     for (auto const &c : graph->getConnections())
     {
-        std::cout << graph->getPath(c.first).c_str() << " -> " << graph->getPath(c.second).c_str() << '\n';
+        fs::path importPath = graph->getPath(c.second);
+        std::vector<ASTFunctionDefinition *> functionsToDeclare;
+        for (auto const &node : fileASTs[importPath])
+        {
+            ASTFunctionDefinition *fn = dynamic_cast<ASTFunctionDefinition *>(node.get());
+            if (fn == nullptr)
+                continue;
+
+            if (fn->getPub())
+                functionsToDeclare.push_back(fn);
+        }
+        graph->addFunctionsToDeclare(importPath, functionsToDeclare);
+        // std::cout << graph->getPath(c.first).c_str() << " -> " << graph->getPath(c.second).c_str() << '\n';
     }
 
     return graph;

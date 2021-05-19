@@ -12,6 +12,7 @@ namespace ssc
 
 #include "ast/nodes.h"
 #include "driver/options.h"
+#include "driver/dependencies.h"
 
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
@@ -20,21 +21,10 @@ namespace ssc
 #include "llvm/IR/AssemblyAnnotationWriter.h"
 #include "llvm/IR/Verifier.h"
 
-// #include <llvm/Bitcode/BitcodeWriter.h>
-
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Utils.h>
-
-// #include <llvm/Support/TargetSelect.h>
-// #include <llvm/Support/TargetRegistry.h>
-// #include <llvm/Support/FileSystem.h>
-// #include <llvm/Support/Host.h>
-// #include <llvm/Support/raw_ostream.h>
-
-// #include <llvm/Target/TargetOptions.h>
-// #include <llvm/Target/TargetMachine.h>
 
 using std::unique_ptr;
 
@@ -46,6 +36,8 @@ namespace ssc
         llvm::LLVMContext ctx;
         llvm::Module *mod;
         llvm::IRBuilder<> builder;
+        fs::path basePath;
+        unique_ptr<DependencyGraph> &dependencyGraph;
         unique_ptr<llvm::legacy::FunctionPassManager> fpm;
         llvm::DataLayout *dataLayout;
 
@@ -62,9 +54,10 @@ namespace ssc
         std::map<std::string, std::vector<std::string>> classMethods;
 
     public:
-        CodegenContext(std::string moduleName, unique_ptr<Options> &compilerOptions) : builder(ctx), compilerOptions(compilerOptions)
+        CodegenContext(fs::path moduleName, unique_ptr<Options> &compilerOptions, unique_ptr<DependencyGraph> &depGraph) : builder(ctx), compilerOptions(compilerOptions), dependencyGraph(depGraph)
         {
-            mod = new llvm::Module(moduleName, ctx);
+            mod = new llvm::Module(moduleName.string(), ctx);
+            basePath = moduleName.parent_path();
             dataLayout = new llvm::DataLayout(mod);
         };
         void error(std::string msg);
@@ -84,6 +77,7 @@ namespace ssc
 
         void initializeFPM();
         void runFPM(llvm::Function *f);
+        void declareFunction(ASTFunctionDefinition *fn);
 
         llvm::Type *ssTypeToLLVMType(std::string type);
         llvm::Type *ssBaseTypeToLLVMType(std::string type);
@@ -112,6 +106,8 @@ namespace ssc
         llvm::Function *getMallocFunction() { return mallocFunction; }
         llvm::DataLayout *getDataLayout() { return dataLayout; }
         bool isClassType(std::string name);
+        fs::path getBasePath() { return basePath; }
+        unique_ptr<DependencyGraph> &getDependencyGraph() { return dependencyGraph; }
     };
 } // namespace ssc
 

@@ -2,7 +2,7 @@
 
 using namespace ssc;
 
-void ssc::codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext)
+void ssc::codegenNodes(const Nodes &nodes, unique_ptr<CodegenContext> &codegenContext)
 {
     for (auto &node : nodes)
     {
@@ -12,7 +12,11 @@ void ssc::codegenNodes(Nodes nodes, unique_ptr<CodegenContext> &codegenContext)
 
 llvm::Value *ASTImportStatement::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
-    std::cout << "import\n";
+    auto functions = codegenContext->getDependencyGraph()->getFunctionsToDeclare(fs::canonical(codegenContext->getBasePath().append(path)));
+    for (const auto &fn : functions)
+    {
+        codegenContext->declareFunction(fn);
+    }
     return 0;
 }
 
@@ -116,7 +120,9 @@ llvm::Value *ASTClassDeclaration::codegen(const unique_ptr<CodegenContext> &code
 
 llvm::Value *ASTFunctionCallExpression::codegen(const unique_ptr<CodegenContext> &codegenContext)
 {
+    std::cout << "HI\n";
     llvm::Function *calleeF = codegenContext->getModule()->getFunction(name);
+    codegenContext->print(calleeF);
     if (!calleeF)
     {
         codegenContext->error("Function call to undefined function '" + name + "'");

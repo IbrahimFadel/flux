@@ -1,0 +1,3 @@
+pub fn free(i8 *ptr) -> void;
+pub fn malloc(i32 size) -> i8*;
+pub fn memcpy(i8 *dest, i8 *src, i32 size) -> i8*;

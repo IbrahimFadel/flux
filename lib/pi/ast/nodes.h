@@ -7,22 +7,24 @@
 #include <map>
 #include <variant>
 
+using std::unique_ptr;
+
 namespace ssc
 {
+    class ASTNode;
     class ASTExpression;
     class ASTFunctionDefinition;
     class ASTVariableDeclaration;
     struct Parameter;
     class ASTReturnStatement;
     class ASTClassDeclaration;
+    typedef std::vector<unique_ptr<ASTNode>> Nodes;
 } // namespace ssc
 
 #include "ir/context.h"
 #include "llvm/IR/Value.h"
 
 #include "lexer.h"
-
-using std::unique_ptr;
 
 namespace ssc
 {
@@ -301,8 +303,6 @@ namespace ssc
 
         std::string getPath() { return path; }
     };
-
-    typedef std::vector<unique_ptr<ASTNode>> Nodes;
 
 }; // namespace ssc
 

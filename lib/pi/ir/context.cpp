@@ -190,3 +190,16 @@ void CodegenContext::defineCFunctions()
     functionType = llvm::FunctionType::get(returnType, paramTypes, false);
     freeFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "free", mod);
 }
+
+void CodegenContext::declareFunction(ASTFunctionDefinition *fn)
+{
+    auto params = fn->getParameters();
+    std::vector<llvm::Type *> paramTypes;
+    for (const auto &param : params)
+    {
+        paramTypes.push_back(ssTypeToLLVMType(param.type));
+    }
+    llvm::Type *returnType = ssTypeToLLVMType(fn->getReturnType());
+    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, paramTypes, false);
+    llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, fn->getName(), mod);
+}

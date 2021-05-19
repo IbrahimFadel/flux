@@ -444,6 +444,8 @@ unique_ptr<ASTExpression> Parser::parseIdentifierExpression()
     std::string name = curTok->value;
     getNextToken(); //? eat id
 
+    std::cout << "Parse id: " << name << '\n';
+
     // currentlyPreferredType = functionVariableTypes[currentFunctionName][name];
 
     if (curTok->type == TokenType::tokOpenParen)
@@ -500,11 +502,18 @@ unique_ptr<ASTExpression> Parser::parseFunctionCallExpression(std::string fnName
     //     error("Function call to '" + fnName + "' which has not been parsed yet");
     // }
 
+    std::cout << "fn call: " << fnName << '\n';
+
     std::vector<unique_ptr<ASTExpression>> params;
     int i = 0;
     while (curTok->type != TokenType::tokCloseParen)
     {
-        currentlyPreferredType = functionParamTypes[fnName][i];
+        std::map<std::string, std::vector<std::string>>::iterator it = functionParamTypes.find(fnName);
+        if (it != functionParamTypes.end())
+        {
+            currentlyPreferredType = it->second[i];
+        }
+        // std::cout << "fn call: " << fnName << '\n';
         auto param = parseExpression(false);
         params.push_back(std::move(param));
 
