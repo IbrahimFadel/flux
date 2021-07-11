@@ -10,21 +10,21 @@ var lexer ast.Lexer
 
 var (
 	InputArithmeticNoSpaces  = []string{"x+y*5.0/-1 - 9\n"}
-	OutputArithmeticNoSpaces = [...]ast.TokenType{ast.TokenTypeIdentifier, ast.TokenTypePlus, ast.TokenTypeIdentifier, ast.TokenTypeAsterisk, ast.TokenTypeNumberLiteral, ast.TokenTypeSlash, ast.TokenTypeNumberLiteral, ast.TokenTypeMinus, ast.TokenTypeNumberLiteral}
+	OutputArithmeticNoSpaces = [...]ast.TokenType{ast.TokenTypeIdentifier, ast.TokenTypePlus, ast.TokenTypeIdentifier, ast.TokenTypeAsterisk, ast.TokenTypeNumberLiteral, ast.TokenTypeSlash, ast.TokenTypeNumberLiteral, ast.TokenTypeMinus, ast.TokenTypeNumberLiteral, ast.TokenTypeEOF}
 
 	InputFunctionNoSpaces  = []string{"fn main()->{\n", "\treturn\n", "}\n"}
-	OutputFunctionNoSpaces = [...]ast.TokenType{ast.TokenTypeFn, ast.TokenTypeIdentifier, ast.TokenTypeOpenParen, ast.TokenTypeCloseParen, ast.TokenTypeArrow, ast.TokenTypeOpenCurlyBracket, ast.TokenTypeReturn, ast.TokenTypeCloseCurlyBracket}
+	OutputFunctionNoSpaces = [...]ast.TokenType{ast.TokenTypeFn, ast.TokenTypeIdentifier, ast.TokenTypeOpenParen, ast.TokenTypeCloseParen, ast.TokenTypeArrow, ast.TokenTypeOpenCurlyBracket, ast.TokenTypeReturn, ast.TokenTypeCloseCurlyBracket, ast.TokenTypeEOF}
 )
 
 func TestArithmeticNoSpaces(t *testing.T) {
 	lexer.Tokenize(InputArithmeticNoSpaces)
-	CheckExpectedNumberOfTokens(t, 9, len(lexer.Tokens))
+	CheckExpectedNumberOfTokens(t, 10, len(lexer.Tokens))
 	CheckTokenTypes(t, OutputArithmeticNoSpaces[:], lexer.Tokens)
 }
 
 func TestFunctionNoSpaces(t *testing.T) {
 	lexer.Tokenize(InputFunctionNoSpaces)
-	CheckExpectedNumberOfTokens(t, 8, len(lexer.Tokens))
+	CheckExpectedNumberOfTokens(t, 9, len(lexer.Tokens))
 	CheckTokenTypes(t, OutputFunctionNoSpaces[:], lexer.Tokens)
 }
 

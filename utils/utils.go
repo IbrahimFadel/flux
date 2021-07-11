@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"io/ioutil"
 	"os"
 	"strconv"
 )
@@ -26,6 +27,13 @@ func ReadFileContent(filePath string) []string {
 	}
 
 	return content
+}
+
+func WriteFile(content string, path string) {
+	err := ioutil.WriteFile(path, []byte(content), 0644)
+	if err != nil {
+		FatalError(err.Error())
+	}
 }
 
 func ContainsByte(arr []byte, el byte) bool {

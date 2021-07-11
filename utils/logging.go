@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 )
@@ -17,4 +18,9 @@ func Error(msg string) {
 func FatalError(msg string) {
 	Error(msg)
 	os.Exit(1)
+}
+
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "  ")
+	return string(s)
 }

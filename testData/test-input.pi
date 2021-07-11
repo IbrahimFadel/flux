@@ -1,14 +1,3 @@
-// test file, here's a comment
-
-/*
- * Entry function
- *
- * @return ExitStatus i32
-*/
 fn main() -> i32 {
-
-	mut i32 x, y, z = 10, 5, 2
-	const i32 x, y, z = 10, 5, 2
-
 	return 0
 }

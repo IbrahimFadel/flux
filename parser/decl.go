@@ -6,90 +6,107 @@ import (
 	"github.com/IbrahimFadel/pi-lang/ast"
 )
 
-// TODO: Assign actually *can* be done on ConstDecl, initial declaration... figure this out
+/*
+ * Parse the 'x, y, z' in 'mut i32 x, y, z = 10, 2, 5'
+ *
+ * @return idents []string ["x", "y", "z"]
+ */
+func (p *Parser) ParseIdentList() []string {
+	var idents []string
 
-func (parser *Parser) ParseMut() (ast.AssignStmt, error) {
-	var assign ast.AssignStmt
+	for p.CurTok.TokenType != ast.TokenTypeComma && p.CurTok.TokenType != ast.TokenTypeEq {
+		p.Expect(ast.TokenTypeIdentifier, "expected identifier following mutable declaration type")
+		idents = append(idents, p.CurTok.Value)
+		p.EatToken()
 
-	parser.EatToken()
-	mutTypes := parser.ParseType()
-
-	for parser.CurTok.TokenType != ast.TokenTypeComma && parser.CurTok.TokenType != ast.TokenTypeEq {
-		parser.Expect(ast.TokenTypeIdentifier, "expected identifier following mutable declaration type")
-		mut := ast.MutDecl{
-			Type: mutTypes,
-			Name: parser.CurTok.Value,
-		}
-		assign.Left = append(assign.Left, mut)
-		parser.EatToken()
-		if parser.CurTok.TokenType == ast.TokenTypeComma {
-			parser.EatToken()
-		} else if parser.CurTok.TokenType != ast.TokenTypeEq {
-			// If there's no '=', assign them all to null
-			nullExpr := ast.NullExpr{Pos: parser.CurTok.Pos}
-			assign.Right = make([]ast.Expr, len(assign.Left))
-			for i := range assign.Right {
-				assign.Right[i] = nullExpr
-			}
-			return assign, nil
-		}
-	}
-	parser.Expect(ast.TokenTypeEq, "expected '=' following mutable declaration list") // bad msg, + idek if this check is necessary, come back to this
-	parser.EatToken()
-
-	for i := 0; i < len(assign.Left); i++ {
-		expr, err := parser.ParseExpr()
-		if err != nil {
-			return assign, fmt.Errorf("could not parse expression following mutable declaration list")
-		}
-		assign.Right = append(assign.Right, expr)
-		if parser.CurTok.TokenType == ast.TokenTypeComma {
-			parser.EatToken()
+		if p.CurTok.TokenType == ast.TokenTypeComma {
+			p.EatToken()
+		} else {
+			return idents
 		}
 	}
 
-	return assign, nil
+	return idents // i don't think this will ever be reached
 }
 
-// func (parser *Parser) ParseConst() (ast.AssignStmt, error) {
-// 	var assign ast.AssignStmt
+// TODO: Look over ParseMut and ParseConst as they're basically the exact same thing
+func (p *Parser) ParseMut() (ast.MutDecl, error) {
+	var mut ast.MutDecl
 
-// 	parser.EatToken()
-// 	mutTypes := parser.ParseType()
+	p.EatToken()
+	mut.MutType = p.ParseType()
+	mut.Names = p.ParseIdentList()
 
-// 	for parser.CurTok.TokenType != ast.TokenTypeComma && parser.CurTok.TokenType != ast.TokenTypeEq {
-// 		parser.Expect(ast.TokenTypeIdentifier, "expected identifier following mutable declaration type")
-// 		mut := ast.MutDecl{
-// 			Type: mutTypes,
-// 			Name: parser.CurTok.Value,
-// 		}
-// 		assign.Left = append(assign.Left, mut)
-// 		parser.EatToken()
-// 		if parser.CurTok.TokenType == ast.TokenTypeComma {
-// 			parser.EatToken()
-// 		} else if parser.CurTok.TokenType != ast.TokenTypeEq {
-// 			// If there's no '=', assign them all to null
-// 			nullExpr := ast.NullExpr{Pos: parser.CurTok.Pos}
-// 			assign.Right = make([]ast.Expr, len(assign.Left))
-// 			for i := range assign.Right {
-// 				assign.Right[i] = nullExpr
-// 			}
-// 			return assign, nil
-// 		}
-// 	}
-// 	parser.Expect(ast.TokenTypeEq, "expected '=' following mutable declaration list") // bad msg, + idek if this check is necessary, come back to this
-// 	parser.EatToken()
+	if p.CurTok.TokenType != ast.TokenTypeEq {
+		// if there's no '=' assign each of them to null
+		mut.Values = make([]ast.Expr, len(mut.Names))
+		for i := range mut.Values {
+			mut.Values[i] = ast.NullExpr{Pos: p.CurTok.Pos}
+		}
+		return mut, nil
+	}
 
-// 	for i := 0; i < len(assign.Left); i++ {
-// 		expr, err := parser.ParseExpr()
-// 		if err != nil {
-// 			return assign, fmt.Errorf("could not parse expression following mutable declaration list")
-// 		}
-// 		assign.Right = append(assign.Right, expr)
-// 		if parser.CurTok.TokenType == ast.TokenTypeComma {
-// 			parser.EatToken()
-// 		}
-// 	}
+	p.Expect(ast.TokenTypeEq, "expected '=' following mutable declaration list") // bad msg, + idek if this check is necessary, come back to this
+	p.EatToken()
 
-// 	return assign, nil
-// }
+	for i := 0; i < len(mut.Names); i++ {
+		expr, err := p.ParseExpr()
+		if err != nil {
+			return mut, fmt.Errorf("could not parse expression following mutable declaration list")
+		}
+		mut.Values = append(mut.Values, expr)
+		if p.CurTok.TokenType == ast.TokenTypeComma {
+			p.EatToken()
+		}
+	}
+
+	return mut, nil
+}
+
+func (p *Parser) ParseConst() (ast.ConstDecl, error) {
+	var constDecl ast.ConstDecl
+
+	p.EatToken()
+	constDecl.ConstType = p.ParseType()
+	constDecl.Names = p.ParseIdentList()
+
+	if p.CurTok.TokenType != ast.TokenTypeEq {
+		// if there's no '=' assign each of them to null
+		constDecl.Values = make([]ast.Expr, len(constDecl.Names))
+		for i := range constDecl.Values {
+			constDecl.Values[i] = ast.NullExpr{Pos: p.CurTok.Pos}
+		}
+		return constDecl, nil
+	}
+
+	p.Expect(ast.TokenTypeEq, "expected '=' following constant declaration list") // bad msg, + idek if this check is necessary, come back to this
+	p.EatToken()
+
+	for i := 0; i < len(constDecl.Names); i++ {
+		expr, err := p.ParseExpr()
+		if err != nil {
+			return constDecl, fmt.Errorf("could not parse expression following mutable declaration list")
+		}
+		constDecl.Values = append(constDecl.Values, expr)
+		if p.CurTok.TokenType == ast.TokenTypeComma {
+			p.EatToken()
+		}
+	}
+
+	return constDecl, nil
+}
+
+// TODO: implement... i wanna go work on codegen :)
+func (p *Parser) ParseTypeDecl() (ast.TypeDecl, error) {
+	var typeDecl ast.TypeDecl
+
+	p.EatToken()
+
+	p.Expect(ast.TokenTypeIdentifier, "expected identifier following type declaration")
+	// name := p.CurTok.Value
+	p.EatToken()
+
+	// typeValue := p.ParseType()
+
+	return typeDecl, nil
+}

@@ -1,0 +1,33 @@
+package animals
+
+import "std/io"
+
+import (
+	"myproj/pkg1"
+	"myproj/pkg2"
+)
+
+type Lbs u32
+type Meters u16
+
+type Animal interface {
+	Name() string
+}
+
+type Dog struct {
+	Weight Lbs
+	Height Meters
+}
+
+/*
+ * Implements 'Animal.Name()'
+*/
+fn Dog.Name() -> string {
+	return "Rex"
+}
+
+// Specific to Dog
+fn Dog.Bark() {
+	io.Println("Bark!")
+}
+

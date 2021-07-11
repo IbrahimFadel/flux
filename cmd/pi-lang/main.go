@@ -1,9 +1,8 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/IbrahimFadel/pi-lang/ast"
+	"github.com/IbrahimFadel/pi-lang/codegen"
 	"github.com/IbrahimFadel/pi-lang/parser"
 	"github.com/IbrahimFadel/pi-lang/utils"
 )
@@ -14,20 +13,30 @@ func main() {
 	var lexer ast.Lexer
 	lexer.Tokenize(fileContent)
 
-	fmt.Println("---- Tokens ----")
-	for _, value := range lexer.Tokens {
-		fmt.Printf("- %v\n", value)
-	}
-	fmt.Println("----------------")
+	// fmt.Println("---- Tokens ----")
+	// for _, value := range lexer.Tokens {
+	// 	str := utils.PrettyPrint(value)
+	// 	fmt.Println(str)
+	// }
+	// fmt.Println("----------------")
 
 	var parser parser.Parser
 	parser.GenerateAST(lexer.Tokens)
 
-	fmt.Print("\n\n")
+	var ast string
 
-	fmt.Println("----- AST -----")
+	// fmt.Print("\n\n")
+
+	// fmt.Println("----- AST -----")
 	for _, value := range parser.Nodes {
-		fmt.Printf("- %v\n", value)
+		str := utils.PrettyPrint(value)
+		ast += str + ",\n"
+		// 	fmt.Println(str)
 	}
-	fmt.Println("---------------")
+	// fmt.Println("---------------")
+
+	utils.WriteFile(ast, "ast.txt")
+
+	var gen codegen.IRGenerator
+	gen.GenerateIR(parser.Nodes)
 }

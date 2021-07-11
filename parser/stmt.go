@@ -6,50 +6,58 @@ import (
 	"github.com/IbrahimFadel/pi-lang/ast"
 )
 
-func (parser *Parser) ParseBlockStmt() (ast.BlockStmt, error) {
+func (p *Parser) ParseBlockStmt() (ast.BlockStmt, error) {
 	var block ast.BlockStmt
 
-	parser.Expect(ast.TokenTypeOpenCurlyBracket, "expected '{' at beggining of block statement")
-	parser.EatToken()
+	p.Expect(ast.TokenTypeOpenCurlyBracket, "expected '{' at beggining of block statement")
+	startPos := p.CurTok.Pos
+	p.EatToken()
 
-	for parser.CurTok.TokenType != ast.TokenTypeCloseCurlyBracket {
-		stmt, err := parser.ParseStatement()
+	for p.CurTok.TokenType != ast.TokenTypeCloseCurlyBracket {
+		stmt, err := p.ParseStatement()
 		if err != nil {
 			return block, fmt.Errorf("could not parse statement: %s", err.Error())
 		}
 		block.List = append(block.List, stmt)
 	}
 
-	parser.EatToken()
+	endPos := p.CurTok.Pos
+	p.EatToken()
+
+	block.Start = startPos
+	block.End = endPos
 
 	return block, nil
 }
 
-func (parser *Parser) ParseStatement() (ast.Stmt, error) {
+func (p *Parser) ParseStatement() (ast.Stmt, error) {
 	var stmt ast.Stmt
 
-	switch parser.CurTok.TokenType {
+	switch p.CurTok.TokenType {
 	default:
-		return stmt, fmt.Errorf("no method for parsing statement: %s", parser.CurTok.Value)
+		return stmt, fmt.Errorf("no method for parsing statement: %s", p.CurTok.Value)
 	case ast.TokenTypeReturn:
-		return parser.ParseReturn()
+		return p.ParseReturn()
 	case ast.TokenTypeMut:
-		return parser.ParseMut()
+		return p.ParseMut()
 	case ast.TokenTypeConst:
-		return parser.ParseConst()
+		return p.ParseConst()
 	}
 }
 
-func (parser *Parser) ParseReturn() (ast.ReturnStmt, error) {
+func (p *Parser) ParseReturn() (ast.ReturnStmt, error) {
 	var ret ast.ReturnStmt
 
-	parser.EatToken()
+	retPos := p.CurTok.Pos
 
-	retVal, err := parser.ParseExpr()
+	p.EatToken()
+
+	retVal, err := p.ParseExpr()
 	if err != nil {
 		return ret, fmt.Errorf("could not parse expression: %s", err.Error())
 	}
 	ret.Value = retVal
+	ret.ReturnPos = retPos
 
 	return ret, nil
 }

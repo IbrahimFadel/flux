@@ -24,6 +24,7 @@ const (
 	TokenTypeVoid
 	TokenTypeNullptr
 
+	TokenTypePackage
 	TokenTypeFn
 	TokenTypeIf
 	TokenTypeFor
@@ -32,6 +33,7 @@ const (
 	TokenTypePub
 	TokenTypeMut
 	TokenTypeConst
+	TokenTypeType
 	TokenTypeWhile
 	TokenTypeClass
 	TokenTypeConstructor
@@ -83,7 +85,7 @@ const (
 	LexerStateBlockComment
 )
 
-var singleCharTokens = [...]byte{'(', ')', ';', ',', '+', '*', '/', '-'}
+var singleCharTokens = [...]byte{'(', ')', ';', ',', '.', '+', '*', '/', '-'}
 
 type TokenPos struct {
 	Row, Col int
@@ -144,6 +146,10 @@ func (lexer *Lexer) Tokenize(content []string) {
 						lexer.AddTokenIfValid(c)
 						continue
 					}
+				} else if c == '.' && utils.IsNumber(string(lexer.Line[i+1])) {
+					// This handles decimal numbers
+					lexer.Token += string(c)
+					continue
 				} else {
 					// If it's not a special single char token, just add it normally
 					lexer.AddTokenIfValid(c)
@@ -245,6 +251,8 @@ func (lexer *Lexer) AddTokenIfValid(c byte) {
 	case "nullptr":
 		tok = lexer.ConstructToken(TokenTypeNullptr)
 
+	case "package":
+		tok = lexer.ConstructToken(TokenTypePackage)
 	case "fn":
 		tok = lexer.ConstructToken(TokenTypeFn)
 	case "if":
@@ -261,6 +269,8 @@ func (lexer *Lexer) AddTokenIfValid(c byte) {
 		tok = lexer.ConstructToken(TokenTypeMut)
 	case "const":
 		tok = lexer.ConstructToken(TokenTypeConst)
+	case "type":
+		tok = lexer.ConstructToken(TokenTypeType)
 	case "while":
 		tok = lexer.ConstructToken(TokenTypeWhile)
 	case "class":
@@ -356,7 +366,10 @@ func (lexer *Lexer) ConstructToken(tokenType TokenType) Token {
 	tok.Value = lexer.Token
 	tok.Pos.Col = lexer.Pos.Col
 	tokLen := len(lexer.Token)
-	if tokLen > 1 {
+	// This is just some weird stuff with the position of single char tokens
+	// You just can't subtract the length if it's a single char token since we did some
+	// Magic/messy stuff with them
+	if tokLen > 0 && !utils.ContainsByte(singleCharTokens[:], byte(lexer.Token[0])) {
 		tok.Pos.Col -= tokLen
 	}
 	tok.Pos.Row = lexer.Pos.Row

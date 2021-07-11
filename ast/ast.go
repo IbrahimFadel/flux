@@ -2,13 +2,29 @@ package ast
 
 type NodeType int
 
-// Maybe in the future populate with data...
-type Node interface{}
-
-// Maybe the inheritance is confusing since they're all literally the same...
+const (
+	NodeTypeNullExpr NodeType = iota
+	NodeTypeBinaryExpr
+	NodeTypeUnaryExpr
+	NodeTypeCallExpr
+	NodeTypeExprStmt
+	NodeTypeNumberLitExpr
+	NodeTypeStringLitExpr
+	NodeTypeVarRefExpr
+	NodeTypeFuncDecl
+	NodeTypePackageClause
+	NodeTypeTypeDecl
+	NodeTypeReturnStmt
+	NodeTypeMutDecl
+	NodeTypeConstDecl
+)
 
 // Stmt := Decl | ReturnStmt | IfStmt | ...
-// Decl := MutDecl | ConstDecl | TypeDecl(maybe)
+// Decl := MutDecl | ConstDecl | TypeDecl
+
+type Node interface {
+	Type() NodeType
+}
 
 type Expr interface {
 	Node
@@ -20,6 +36,11 @@ type Stmt interface {
 
 type Decl interface {
 	Node
+}
+
+// This doesn't really fit into Expr Stmt or Decl...
+type PackageClause struct {
+	Name string
 }
 
 type (
@@ -52,14 +73,14 @@ type (
 		Value    string
 	}
 
-	BinOpExpr struct {
+	BinaryExpr struct {
 		X     Expr
 		OpPos TokenPos
 		Op    TokenType
 		Y     Expr
 	}
 
-	UnaryOpExpr struct {
+	UnaryExpr struct {
 		OpPos TokenPos
 		Op    TokenType
 		X     Expr
@@ -69,12 +90,16 @@ type (
 		Fn            Expr
 		OpenParenPos  TokenPos
 		Args          []Expr
-		EllipsisPos   TokenPos //Potentially implement
 		CloseParenPos TokenPos
 	}
 
 	NullExpr struct {
 		Pos TokenPos
+	}
+
+	VarRefExpr struct {
+		Pos  TokenPos
+		Name string
 	}
 )
 
@@ -115,22 +140,82 @@ type (
 		Return  string
 	}
 
-	FuncDec struct {
-		Name string
-		Type FuncType
-		Body BlockStmt
+	FuncDecl struct {
+		Name     string
+		FuncType FuncType
+		Body     BlockStmt
 	}
 )
 
 type (
 	MutDecl struct {
-		Type string
-		Name string
+		MutType string
+		Names   []string
+		Values  []Expr
 	}
 
 	ConstDecl struct {
+		ConstType string
+		Names     []string
+		Values    []Expr
 	}
 
 	TypeDecl struct {
 	}
 )
+
+func (nullExpr PackageClause) Type() NodeType {
+	return NodeTypePackageClause
+}
+
+func (nullExpr TypeDecl) Type() NodeType {
+	return NodeTypeTypeDecl
+}
+
+func (nullExpr ReturnStmt) Type() NodeType {
+	return NodeTypeReturnStmt
+}
+
+func (nullExpr MutDecl) Type() NodeType {
+	return NodeTypeMutDecl
+}
+
+func (nullExpr ConstDecl) Type() NodeType {
+	return NodeTypeConstDecl
+}
+
+func (nullExpr NullExpr) Type() NodeType {
+	return NodeTypeNullExpr
+}
+
+func (nullExpr BinaryExpr) Type() NodeType {
+	return NodeTypeBinaryExpr
+}
+
+func (nullExpr UnaryExpr) Type() NodeType {
+	return NodeTypeUnaryExpr
+}
+
+func (nullExpr CallExpr) Type() NodeType {
+	return NodeTypeCallExpr
+}
+
+func (nullExpr ExprStmt) Type() NodeType {
+	return NodeTypeExprStmt
+}
+
+func (nullExpr NumberLitExpr) Type() NodeType {
+	return NodeTypeNumberLitExpr
+}
+
+func (nullExpr StringLitExpr) Type() NodeType {
+	return NodeTypeStringLitExpr
+}
+
+func (nullExpr VarRefExpr) Type() NodeType {
+	return NodeTypeVarRefExpr
+}
+
+func (nullExpr FuncDecl) Type() NodeType {
+	return NodeTypeFuncDecl
+}

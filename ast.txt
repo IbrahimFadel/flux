@@ -1,0 +1,46 @@
+{
+  "Name": "main",
+  "FuncType": {
+    "FuncPos": {
+      "Row": 1,
+      "Col": 8
+    },
+    "Params": {
+      "Start": {
+        "Row": 0,
+        "Col": 0
+      },
+      "Params": null,
+      "End": {
+        "Row": 0,
+        "Col": 0
+      }
+    },
+    "Return": "i32"
+  },
+  "Body": {
+    "Start": {
+      "Row": 1,
+      "Col": 16
+    },
+    "List": [
+      {
+        "ReturnPos": {
+          "Row": 2,
+          "Col": 2
+        },
+        "Value": {
+          "ValuePos": {
+            "Row": 2,
+            "Col": 9
+          },
+          "Value": "0"
+        }
+      }
+    ],
+    "End": {
+      "Row": 3,
+      "Col": 1
+    }
+  }
+},
