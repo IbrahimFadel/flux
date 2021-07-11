@@ -21,6 +21,7 @@ const (
 	TokenTypeF64
 	TokenTypeF32
 	TokenTypeBool
+	TokenTypeString
 	TokenTypeVoid
 	TokenTypeNullptr
 
@@ -38,6 +39,8 @@ const (
 	TokenTypeClass
 	TokenTypeConstructor
 	TokenTypeNew
+	TokenTypeInterface
+	TokenTypeStruct
 
 	TokenTypeCompareEq
 	TokenTypeCompareNe
@@ -246,6 +249,8 @@ func (lexer *Lexer) AddTokenIfValid(c byte) {
 		tok = lexer.ConstructToken(TokenTypeF32)
 	case "bool":
 		tok = lexer.ConstructToken(TokenTypeBool)
+	case "string":
+		tok = lexer.ConstructToken(TokenTypeString)
 	case "void":
 		tok = lexer.ConstructToken(TokenTypeVoid)
 	case "nullptr":
@@ -279,6 +284,10 @@ func (lexer *Lexer) AddTokenIfValid(c byte) {
 		tok = lexer.ConstructToken(TokenTypeConstructor)
 	case "new":
 		tok = lexer.ConstructToken(TokenTypeNew)
+	case "interface":
+		tok = lexer.ConstructToken(TokenTypeInterface)
+	case "struct":
+		tok = lexer.ConstructToken(TokenTypeStruct)
 
 	case "==":
 		tok = lexer.ConstructToken(TokenTypeCompareEq)

@@ -1,30 +1,25 @@
 package ast
 
-type NodeType int
+type NumberType int
 
-const (
-	NodeTypeNullExpr NodeType = iota
-	NodeTypeBinaryExpr
-	NodeTypeUnaryExpr
-	NodeTypeCallExpr
-	NodeTypeExprStmt
-	NodeTypeNumberLitExpr
-	NodeTypeStringLitExpr
-	NodeTypeVarRefExpr
-	NodeTypeFuncDecl
-	NodeTypePackageClause
-	NodeTypeTypeDecl
-	NodeTypeReturnStmt
-	NodeTypeMutDecl
-	NodeTypeConstDecl
-)
+// const (
+// 	I64 NumberType = iota
+// 	U64
+// 	I32
+// 	U32
+// 	I16
+// 	U16
+// 	I8
+// 	U8
+// 	F64
+// 	F32
+// 	Bool
+// )
 
 // Stmt := Decl | ReturnStmt | IfStmt | ...
 // Decl := MutDecl | ConstDecl | TypeDecl
 
-type Node interface {
-	Type() NodeType
-}
+type Node interface{}
 
 type Expr interface {
 	Node
@@ -46,7 +41,7 @@ type PackageClause struct {
 type (
 	Param struct {
 		Mut  bool
-		Type string
+		Type Expr
 		Name string
 	}
 
@@ -55,9 +50,37 @@ type (
 		Params []Param
 		End    TokenPos
 	}
+
+	Method struct {
+		Name   string
+		Params ParamList
+		Return Expr
+	}
+
+	MethodList struct {
+		Start   TokenPos
+		Methods []Method
+		End     TokenPos
+	}
+
+	Property struct {
+		Pub   bool
+		Mut   bool
+		Type  Expr
+		Names []string // Several properties with the same pub/mut/type -- pub mut i32 x, y, z or mut i32 x, y, z, etc.
+	}
+
+	PropertyList struct {
+		Start      TokenPos
+		Properties []Property
+		End        TokenPos
+	}
 )
 
 type (
+	EmptyExpr struct {
+	}
+
 	IdentifierExpr struct {
 		NamePos TokenPos
 		Name    string
@@ -65,6 +88,7 @@ type (
 
 	NumberLitExpr struct {
 		ValuePos TokenPos
+		Type     Expr
 		Value    string
 	}
 
@@ -101,6 +125,26 @@ type (
 		Pos  TokenPos
 		Name string
 	}
+
+	PrimitiveTypeExpr struct {
+		PrimitiveType TokenType
+		Pos           TokenPos
+	}
+
+	PointerTypeExpr struct {
+		PointerToType Expr // What is it a pointer of?
+		Pos           TokenPos
+	}
+
+	InterfaceTypeExpr struct {
+		InterfacePos TokenPos
+		Methods      MethodList
+	}
+
+	StructTypeExpr struct {
+		StructPos  TokenPos
+		Properties PropertyList
+	}
 )
 
 type (
@@ -116,31 +160,35 @@ type (
 		X Expr
 	}
 
-	AssignStmt struct {
-		Left  []MutDecl // If it's being assigned, it must be a Mutable
-		Right []Expr
-	}
-
 	BlockStmt struct {
 		Start TokenPos
+		Name  string
 		List  []Stmt
 		End   TokenPos
 	}
 
 	ReturnStmt struct {
 		ReturnPos TokenPos
+		Type      Expr
 		Value     Expr
 	}
 )
 
 type (
+	FuncReceiver struct {
+		Pos  TokenPos
+		Name string
+		Type Expr
+	}
+
 	FuncType struct {
 		FuncPos TokenPos
 		Params  ParamList
-		Return  string
+		Return  Expr
 	}
 
 	FuncDecl struct {
+		Receiver FuncReceiver
 		Name     string
 		FuncType FuncType
 		Body     BlockStmt
@@ -148,74 +196,15 @@ type (
 )
 
 type (
-	MutDecl struct {
-		MutType string
-		Names   []string
-		Values  []Expr
-	}
-
-	ConstDecl struct {
-		ConstType string
-		Names     []string
-		Values    []Expr
+	VarDecl struct {
+		Mut    bool
+		Type   Expr
+		Names  []string
+		Values []Expr
 	}
 
 	TypeDecl struct {
+		Name string
+		Type Expr
 	}
 )
-
-func (nullExpr PackageClause) Type() NodeType {
-	return NodeTypePackageClause
-}
-
-func (nullExpr TypeDecl) Type() NodeType {
-	return NodeTypeTypeDecl
-}
-
-func (nullExpr ReturnStmt) Type() NodeType {
-	return NodeTypeReturnStmt
-}
-
-func (nullExpr MutDecl) Type() NodeType {
-	return NodeTypeMutDecl
-}
-
-func (nullExpr ConstDecl) Type() NodeType {
-	return NodeTypeConstDecl
-}
-
-func (nullExpr NullExpr) Type() NodeType {
-	return NodeTypeNullExpr
-}
-
-func (nullExpr BinaryExpr) Type() NodeType {
-	return NodeTypeBinaryExpr
-}
-
-func (nullExpr UnaryExpr) Type() NodeType {
-	return NodeTypeUnaryExpr
-}
-
-func (nullExpr CallExpr) Type() NodeType {
-	return NodeTypeCallExpr
-}
-
-func (nullExpr ExprStmt) Type() NodeType {
-	return NodeTypeExprStmt
-}
-
-func (nullExpr NumberLitExpr) Type() NodeType {
-	return NodeTypeNumberLitExpr
-}
-
-func (nullExpr StringLitExpr) Type() NodeType {
-	return NodeTypeStringLitExpr
-}
-
-func (nullExpr VarRefExpr) Type() NodeType {
-	return NodeTypeVarRefExpr
-}
-
-func (nullExpr FuncDecl) Type() NodeType {
-	return NodeTypeFuncDecl
-}

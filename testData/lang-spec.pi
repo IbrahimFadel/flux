@@ -1,33 +1,35 @@
-package animals
+package main
 
-import "std/io"
-
-import (
-	"myproj/pkg1"
-	"myproj/pkg2"
-)
-
-type Lbs u32
-type Meters u16
+type Pound i32
 
 type Animal interface {
-	Name() string
+	Hello() -> string
 }
 
 type Dog struct {
-	Weight Lbs
-	Height Meters
+	pub mut i32 Age
+	pub const i32* X, Y, Z
+	mut Pound Weight
+	const string Name
 }
 
-/*
- * Implements 'Animal.Name()'
-*/
-fn Dog.Name() -> string {
-	return "Rex"
+fn (d Dog*) Hello() -> string {
+	return "Hi! I am " + d->Name
 }
 
-// Specific to Dog
-fn Dog.Bark() {
-	io.Println("Bark!")
+fn Sum(i32 x, i32 y) -> i32 {
+	return x + y
 }
 
+fn BadCode(mut i32* x) {
+	x = x + 1 // ew, changing a pointer!!!
+}
+
+fn main() -> i32 {
+	mut Dog roofus, rex
+
+	roofus.Name = "Roofus"
+	roofus.Age = 10
+
+	const string helloStr = roofus.Hello()
+}

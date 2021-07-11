@@ -1,4 +1,12 @@
 {
+  "Receiver": {
+    "Pos": {
+      "Row": 0,
+      "Col": 0
+    },
+    "Name": "",
+    "Type": null
+  },
   "Name": "main",
   "FuncType": {
     "FuncPos": {
@@ -16,30 +24,110 @@
         "Col": 0
       }
     },
-    "Return": "i32"
+    "Return": {
+      "PrimitiveType": 9,
+      "Pos": {
+        "Row": 1,
+        "Col": 12
+      }
+    }
   },
   "Body": {
     "Start": {
       "Row": 1,
       "Col": 16
     },
+    "Name": "entry",
     "List": [
       {
+        "Mut": false,
+        "Type": {
+          "PrimitiveType": 2,
+          "Pos": {
+            "Row": 2,
+            "Col": 8
+          }
+        },
+        "Names": [
+          "x",
+          "y",
+          "z"
+        ],
+        "Values": [
+          {
+            "ValuePos": {
+              "Row": 2,
+              "Col": 22
+            },
+            "Type": {
+              "PrimitiveType": 2,
+              "Pos": {
+                "Row": 2,
+                "Col": 8
+              }
+            },
+            "Value": "1"
+          },
+          {
+            "ValuePos": {
+              "Row": 2,
+              "Col": 25
+            },
+            "Type": {
+              "PrimitiveType": 2,
+              "Pos": {
+                "Row": 2,
+                "Col": 8
+              }
+            },
+            "Value": "2"
+          },
+          {
+            "ValuePos": {
+              "Row": 2,
+              "Col": 28
+            },
+            "Type": {
+              "PrimitiveType": 2,
+              "Pos": {
+                "Row": 2,
+                "Col": 8
+              }
+            },
+            "Value": "3"
+          }
+        ]
+      },
+      {
         "ReturnPos": {
-          "Row": 2,
+          "Row": 3,
           "Col": 2
+        },
+        "Type": {
+          "PrimitiveType": 9,
+          "Pos": {
+            "Row": 1,
+            "Col": 12
+          }
         },
         "Value": {
           "ValuePos": {
-            "Row": 2,
-            "Col": 9
+            "Row": 3,
+            "Col": 8
           },
-          "Value": "0"
+          "Type": {
+            "PrimitiveType": 9,
+            "Pos": {
+              "Row": 1,
+              "Col": 12
+            }
+          },
+          "Value": "10.5"
         }
       }
     ],
     "End": {
-      "Row": 3,
+      "Row": 4,
       "Col": 1
     }
   }

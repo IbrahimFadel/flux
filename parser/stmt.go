@@ -38,10 +38,10 @@ func (p *Parser) ParseStatement() (ast.Stmt, error) {
 		return stmt, fmt.Errorf("no method for parsing statement: %s", p.CurTok.Value)
 	case ast.TokenTypeReturn:
 		return p.ParseReturn()
-	case ast.TokenTypeMut:
-		return p.ParseMut()
-	case ast.TokenTypeConst:
-		return p.ParseConst()
+	case ast.TokenTypeMut, ast.TokenTypeConst:
+		return p.ParseVarDecl()
+	case ast.TokenTypeIdentifier:
+		return p.ParseExpr()
 	}
 }
 
@@ -52,6 +52,8 @@ func (p *Parser) ParseReturn() (ast.ReturnStmt, error) {
 
 	p.EatToken()
 
+	ret.Type = p.CurFunc.FuncType.Return
+	p.CurType = ret.Type
 	retVal, err := p.ParseExpr()
 	if err != nil {
 		return ret, fmt.Errorf("could not parse expression: %s", err.Error())

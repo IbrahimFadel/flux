@@ -115,7 +115,7 @@ func (p *Parser) ParsePrimaryExpr() (ast.Expr, error) {
 }
 
 func (p *Parser) ParseNumberLit() (ast.NumberLitExpr, error) {
-	num := ast.NumberLitExpr{ValuePos: p.CurTok.Pos, Value: p.CurTok.Value}
+	num := ast.NumberLitExpr{ValuePos: p.CurTok.Pos, Value: p.CurTok.Value, Type: p.CurType}
 	p.EatToken()
 	return num, nil
 }

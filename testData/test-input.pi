@@ -1,3 +1,4 @@
-fn main() -> i32 {
-	return 0
+fn main() -> f32 {
+	const i32 x, y, z = 1, 2, 3
+	return 10.5
 }
