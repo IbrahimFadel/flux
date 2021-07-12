@@ -126,6 +126,9 @@ func (p *Parser) ParseType() (ast.Expr, error) {
 		ty := p.ParsePrimitiveType()
 		p.CurType = ty
 		return ty, nil
+	case ast.TokenTypeVoid:
+		p.EatToken()
+		return ast.VoidExpr{}, nil
 	case ast.TokenTypeInterface:
 		interfaceTy, err := p.ParseInterfaceType()
 		if err != nil {

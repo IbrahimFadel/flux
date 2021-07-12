@@ -16,20 +16,22 @@ import (
 type VTable map[string]value.Value // function value
 
 type IRGenerator struct {
-	Nodes                []ast.Node
-	Module               *ir.Module
-	CurBB                *ir.Block
-	CurBlockStmt         *ast.BlockStmt
-	KnownStructTypes     map[string]*types.StructType
-	KnownInterfaceTypes  map[string]*ast.InterfaceTypeExpr
+	Nodes        []ast.Node
+	Module       *ir.Module
+	CurBB        *ir.Block
+	CurBlockStmt *ast.BlockStmt
+
+	TypedefLLVMTypes map[string]*types.Type
+
+	InterfaceTypeExprs   map[string]*ast.InterfaceTypeExpr
 	InterfaceVTableTypes map[string]*types.StructType
 	InterfaceVTables     map[string]*constant.Struct
 	CurTypeDeclName      string
 }
 
 func (gen *IRGenerator) Init() {
-	gen.KnownStructTypes = make(map[string]*types.StructType)
-	gen.KnownInterfaceTypes = make(map[string]*ast.InterfaceTypeExpr)
+	gen.TypedefLLVMTypes = make(map[string]*types.Type)
+	gen.InterfaceTypeExprs = make(map[string]*ast.InterfaceTypeExpr)
 	gen.InterfaceVTableTypes = make(map[string]*types.StructType)
 	gen.InterfaceVTables = make(map[string]*constant.Struct)
 }
@@ -60,13 +62,13 @@ func (gen *IRGenerator) Node(node ast.Node) {
 
 func (gen *IRGenerator) TypeDecl(typeDecl ast.TypeDecl) {
 	gen.CurTypeDeclName = typeDecl.Name // TODO: ew refactor... need a better way to do this
-	_, err := gen.Type(typeDecl.Type)
+	ty, err := gen.Type(typeDecl.Type)
 	if err != nil {
 		utils.FatalError(fmt.Sprintf("could not codegen type value in type declaration: %s", err.Error()))
 	}
 
-	// why tf does this replace *anything* that matches the type with the custom typename... stupid
-	// gen.Module.NewTypeDef(typeDecl.Name, ty)
+	gen.TypedefLLVMTypes[gen.CurTypeDeclName] = &ty
+	gen.Module.NewTypeDef(typeDecl.Name, ty)
 }
 
 func (gen *IRGenerator) VarDecl(varDecl ast.VarDecl) {
@@ -200,26 +202,24 @@ func (gen *IRGenerator) FuncDecl(fnDecl ast.FuncDecl) {
 	}
 
 	fnName := fnDecl.Name
+	implementsInterface := false
 	var interfaceImplementedName string
 
 	if hasReceiver {
-		for interfaceName, knownInterface := range gen.KnownInterfaceTypes {
+		for interfaceName, knownInterface := range gen.InterfaceTypeExprs {
 			if gen.FnImplementsInterface(fnDecl, interfaceName, knownInterface) {
 				structName := gen.FindTypeExprName(fnDecl.Receiver.Type)
 				fnName = structName + "_" + fnName
+				implementsInterface = true
 				interfaceImplementedName = interfaceName
 				break
 			}
 		}
 	}
 
-	// if fnDecl.Receiver != empty {
-	// fnName = "Dog_" + fnName
-	// }
-
 	fn := gen.Module.NewFunc(fnName, retType, params...)
 
-	if hasReceiver {
+	if implementsInterface {
 		vTableType := gen.InterfaceVTableTypes[interfaceImplementedName]
 		vTableType.Fields = append(vTableType.Fields, fn.Type())
 
@@ -227,17 +227,16 @@ func (gen *IRGenerator) FuncDecl(fnDecl ast.FuncDecl) {
 		vTableData.Fields = append(vTableData.Fields, fn)
 	}
 
-	// if fnDecl.Receiver != empty {
-	// 	vTableData := gen.InterfaceVTables["Animal"]
-	// 	_ = vTableData
-	// 	fmt.Println(vTableData.String())
-	// 	// fmt.Println(fn.String())
-	// 	vTableData.Fields = append(vTableData.Fields, fn)
-	// }
-
 	gen.CurBB = fn.NewBlock(fnDecl.Body.Name)
 	gen.CurBlockStmt = &fnDecl.Body
 	gen.BlockStmt(fnDecl.Body)
+
+	if gen.CurBB.Term == nil {
+		if retType != types.Void {
+			utils.FatalError(fmt.Sprintf("missing return statement in function '%s'", fnDecl.Name))
+		}
+		gen.CurBB.NewRet(nil)
+	}
 }
 
 func (gen *IRGenerator) FindTypeExprName(ty ast.Expr) string {
@@ -319,8 +318,12 @@ func (gen *IRGenerator) Type(ty ast.Expr) (types.Type, error) {
 	case ast.InterfaceTypeExpr:
 		return gen.InterfaceTypeExpr(t)
 	case ast.IdentifierExpr:
-		if idType, ok := gen.KnownStructTypes[t.Name]; ok {
-			return idType, nil
+		if idType, ok := gen.TypedefLLVMTypes[t.Name]; ok {
+			return *idType, nil
+		} else if idType, ok := gen.TypedefLLVMTypes[t.Name]; ok {
+			return *idType, nil
+		} else if idType, ok := gen.TypedefLLVMTypes[t.Name]; ok {
+			return *idType, nil
 		} else {
 			return types.Void, fmt.Errorf("could not convert pi type to llvm type")
 		}
@@ -332,44 +335,9 @@ func (gen *IRGenerator) VoidExpr(_ ast.VoidExpr) (types.Type, error) {
 }
 
 func (gen *IRGenerator) InterfaceTypeExpr(ty ast.InterfaceTypeExpr) (types.Type, error) {
-	// An interface is just a struct that contains *only* a vtable
-
-	/*
-
-		type Animal interface {
-			Hello()
-		}
-
-		type Dog struct {
-			...
-		}
-
-		fn (dog *Dog) Hello() {
-			...
-		}
-
-		--------
-
-		%Animal_VTable_Type = type { void(%Animal*)* }
-		%Animal = type { %Animal_VTable* }
-
-		@Animal_Vtable_Data = global %Animal_VTable_Type {
-		void(%Dog*)* @Dog_Hello()
-		}
-
-		define void @Dog_Hello(%Dog* %dog) {
-
-		}
-
-	*/
-
 	structTy := types.StructType{}
 	gen.Module.NewTypeDef(gen.CurTypeDeclName, &structTy)
 
-	// vTableTy, err := gen.InterfaceVTableType(ty, structTy)
-	// if err != nil {
-	// return types.Void, fmt.Errorf("could not codegen interface %s's vtable type: %s", gen.CurTypeDeclName, err.Error())
-	// }
 	vtableType := types.StructType{}
 
 	gen.Module.NewTypeDef(gen.CurTypeDeclName+"_VTable_Type", &vtableType)
@@ -380,41 +348,10 @@ func (gen *IRGenerator) InterfaceTypeExpr(ty ast.InterfaceTypeExpr) (types.Type,
 	vTableData := constant.NewStruct(&vtableType)
 	gen.Module.NewGlobalDef(gen.CurTypeDeclName+"_VTable_Data", vTableData)
 	gen.InterfaceVTables[gen.CurTypeDeclName] = vTableData
-	gen.KnownInterfaceTypes[gen.CurTypeDeclName] = &ty
+	gen.InterfaceTypeExprs[gen.CurTypeDeclName] = &ty
 
 	return &structTy, nil
 }
-
-// func (gen *IRGenerator) InterfaceVTableType(interfaceExpr ast.InterfaceTypeExpr, structType types.StructType) (types.StructType, error) {
-// 	vtableType := types.StructType{}
-
-// 	structPtr := types.NewPointer(&structType)
-// 	for _, method := range interfaceExpr.Methods.Methods {
-// 		retTy, err := gen.Type(method.Return)
-// 		if err != nil {
-// 			return vtableType, fmt.Errorf("could not codegen method return type: %s", err.Error())
-// 		}
-
-// 		var params []types.Type
-
-// 		params = append(params, structPtr)
-
-// 		for _, param := range method.Params.Params {
-// 			paramTy, err := gen.Type(param.Type)
-// 			if err != nil {
-// 				return vtableType, fmt.Errorf("could not codegen method param type while constructing vtable: %s", err.Error())
-// 			}
-
-// 			params = append(params, paramTy)
-// 		}
-
-// 		funcType := types.NewFunc(retTy, params...)
-// 		ptrTo := types.NewPointer(funcType)
-// 		vtableType.Fields = append(vtableType.Fields, ptrTo)
-// 	}
-
-// 	return vtableType, nil
-// }
 
 func (gen *IRGenerator) StructTypeExpr(ty ast.StructTypeExpr) (types.Type, error) {
 	var structPropertyTypes []types.Type
@@ -431,7 +368,6 @@ func (gen *IRGenerator) StructTypeExpr(ty ast.StructTypeExpr) (types.Type, error
 
 	structTy := types.StructType{Fields: structPropertyTypes}
 	gen.Module.NewTypeDef(gen.CurTypeDeclName, &structTy)
-	gen.KnownStructTypes[gen.CurTypeDeclName] = &structTy
 
 	return &structTy, nil
 }
@@ -450,19 +386,19 @@ func (gen *IRGenerator) PrimitiveTypeExpr(ty ast.PrimitiveTypeExpr) (types.Type,
 	default:
 		return types.Void, fmt.Errorf("could not convert type %d to LLVM type", ty.PrimitiveType)
 	case ast.TokenTypeI64, ast.TokenTypeU64:
-		return types.I64, nil
+		return types.NewInt(64), nil
 	case ast.TokenTypeI32, ast.TokenTypeU32:
-		return types.I32, nil
+		return types.NewInt(32), nil
 	case ast.TokenTypeI16, ast.TokenTypeU16:
-		return types.I16, nil
+		return types.NewInt(16), nil
 	case ast.TokenTypeI8, ast.TokenTypeU8:
-		return types.I8, nil
+		return types.NewInt(8), nil
 	case ast.TokenTypeF64:
-		return types.Double, nil
+		return &types.FloatType{Kind: types.Double.Kind}, nil
 	case ast.TokenTypeF32:
-		return types.Float, nil
+		return &types.FloatType{Kind: types.Float.Kind}, nil
 	case ast.TokenTypeBool:
-		return types.I1, nil
+		return types.NewInt(1), nil
 	case ast.TokenTypeVoid:
 		return types.Void, nil
 	}

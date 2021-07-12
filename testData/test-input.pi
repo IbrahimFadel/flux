@@ -1,5 +1,9 @@
-// TODO: codegen interfaces/types
-// Also, start parsing 'pub' at top level for things like interface/struct/fn/var
+// TODO: start parsing 'pub' at top level for things like interface/struct/fn/var
+
+// What i need is an array 'InterfacesImplemented' in a AST function declaration that gets added to
+// then i can know stuff
+
+type Foo i32
 
 type Animal interface {
 	Hello() -> i32
@@ -16,6 +20,14 @@ fn (dog Dog*) Hello() -> i32 {
 	return 0
 }
 
+fn (dog Dog*) Other() {
+}
+
 fn main() -> i32 {
+
+	const Animal animal
+
+	const Foo x = 0
+
 	return 0
 }
