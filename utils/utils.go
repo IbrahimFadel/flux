@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -39,12 +40,7 @@ func WriteFile(content string, path string) {
 }
 
 func ContainsByte(arr []byte, el byte) bool {
-	for _, a := range arr {
-		if a == el {
-			return true
-		}
-	}
-	return false
+	return bytes.IndexByte(arr, el) != -1
 }
 
 func IsNumber(str string) bool {
@@ -57,7 +53,7 @@ func TypeArraysEqual(a, b []types.Type) bool {
 		return false
 	}
 	for i, v := range a {
-		if v != b[i] {
+		if !v.Equal(b[i]) {
 			return false
 		}
 	}
@@ -66,7 +62,7 @@ func TypeArraysEqual(a, b []types.Type) bool {
 
 func TypeArrayContains(s []types.Type, e types.Type) bool {
 	for _, a := range s {
-		if a == e {
+		if a.Equal(e) {
 			return true
 		}
 	}
