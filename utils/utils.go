@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+
+	"github.com/llir/llvm/ir/types"
 )
 
 func ReadFileContent(filePath string) []string {
@@ -48,4 +50,25 @@ func ContainsByte(arr []byte, el byte) bool {
 func IsNumber(str string) bool {
 	_, err := strconv.ParseFloat(str, 64)
 	return err == nil
+}
+
+func TypeArraysEqual(a, b []types.Type) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TypeArrayContains(s []types.Type, e types.Type) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

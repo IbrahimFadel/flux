@@ -1,6 +1,10 @@
 // TODO: codegen interfaces/types
 // Also, start parsing 'pub' at top level for things like interface/struct/fn/var
 
+type Animal interface {
+	Hello() -> i32
+}
+
 type Dog struct {
 	pub mut i32 Age
 	pub const i32* X, Y, Z
@@ -8,13 +12,10 @@ type Dog struct {
 	const i32 Name
 }
 
-fn GetDog() -> Dog {
-	const Dog dog
-	return dog
+fn (dog Dog*) Hello() -> i32 {
+	return 0
 }
 
 fn main() -> i32 {
-	const Dog rex
-
 	return 0
 }

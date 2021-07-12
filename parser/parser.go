@@ -258,6 +258,7 @@ func (p *Parser) ParseMethod() (ast.Method, error) {
 	}
 	method.Params = params
 
+	method.Return = ast.VoidExpr{Pos: p.CurTok.Pos}
 	if p.CurTok.TokenType == ast.TokenTypeArrow {
 		p.EatToken()
 		retType, err := p.ParseType()

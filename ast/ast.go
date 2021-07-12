@@ -124,6 +124,10 @@ type (
 		Type Expr
 	}
 
+	VoidExpr struct {
+		Pos TokenPos
+	}
+
 	VarRefExpr struct {
 		Pos  TokenPos
 		Name string

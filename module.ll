@@ -1,19 +1,15 @@
+%Animal = type { %Animal_VTable_Type* }
+%Animal_VTable_Type = type { i32 (%Dog*)* }
 %Dog = type { i32, i32*, i32*, i32*, i32, i32 }
 
-define %Dog @GetDog() {
+@Animal_VTable_Data = global %Animal_VTable_Type { i32 (%Dog*)* @Dog_Hello }
+
+define i32 @Dog_Hello(%Dog* %dog) {
 entry:
-	%0 = alloca %Dog
-	%1 = load %Dog, %Dog* null
-	store %Dog %1, %Dog* %0
-	%2 = load %Dog, %Dog* %0
-	ret %Dog %2
+	ret i32 0
 }
 
 define i32 @main() {
 entry:
-	%0 = alloca %Dog
-	%1 = load %Dog, %Dog* null
-	store %Dog %1, %Dog* %0
-	%2 = load %Dog, %Dog* %0
 	ret i32 0
 }
