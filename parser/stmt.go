@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/IbrahimFadel/pi-lang/ast"
+	"github.com/llir/llvm/ir/value"
 )
 
 func (p *Parser) ParseBlockStmt() (ast.BlockStmt, error) {
@@ -26,6 +27,9 @@ func (p *Parser) ParseBlockStmt() (ast.BlockStmt, error) {
 
 	block.Start = startPos
 	block.End = endPos
+
+	block.Constants = make(map[string]value.Value)
+	block.Mutables = make(map[string]value.Value)
 
 	return block, nil
 }

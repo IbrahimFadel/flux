@@ -44,7 +44,7 @@ func (p *Parser) ParseVarDecl() (ast.Decl, error) {
 
 	ty, err := p.ParseType()
 	if err != nil {
-		return varDecl, fmt.Errorf("could not parse mutable type: %s", err.Error())
+		return varDecl, fmt.Errorf("could not parse variable type: %s", err.Error())
 	}
 	varDecl.Type = ty
 	varDecl.Names = p.ParseIdentList()
@@ -53,12 +53,12 @@ func (p *Parser) ParseVarDecl() (ast.Decl, error) {
 		// if there's no '=' assign each of them to null
 		varDecl.Values = make([]ast.Expr, len(varDecl.Names))
 		for i := range varDecl.Values {
-			varDecl.Values[i] = ast.NullExpr{Pos: p.CurTok.Pos}
+			varDecl.Values[i] = ast.NullExpr{Pos: p.CurTok.Pos, Type: p.CurType}
 		}
 		return varDecl, nil
 	}
 
-	p.Expect(ast.TokenTypeEq, "expected '=' following mutable declaration list") // bad msg, + idek if this check is necessary, come back to this
+	p.Expect(ast.TokenTypeEq, "expected '=' following variable declaration identifier list") // bad msg, + idek if this check is necessary, come back to this
 	p.EatToken()
 
 	for i := 0; i < len(varDecl.Names); i++ {

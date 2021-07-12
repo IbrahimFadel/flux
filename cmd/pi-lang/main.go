@@ -16,7 +16,7 @@ func main() {
 	emitIR := flag.Bool("emit-ir", false, "print IR and write it to file")
 	flag.Parse()
 
-	fileContent := utils.ReadFileContent("./testData/test-input.pi")
+	fileContent := utils.ReadFileContent(flag.Arg(0))
 
 	var lexer ast.Lexer
 	lexer.Tokenize(fileContent)

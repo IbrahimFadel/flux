@@ -1,13 +1,19 @@
-define float @main() {
+%Dog = type { i32, i32*, i32*, i32*, i32, i32 }
+
+define %Dog @GetDog() {
 entry:
-	%0 = alloca i32
-	store i32 1, i32* %0
-	%1 = load i32, i32* %0
-	%2 = alloca i32
-	store i32 2, i32* %2
-	%3 = load i32, i32* %2
-	%4 = alloca i32
-	store i32 3, i32* %4
-	%5 = load i32, i32* %4
-	ret float 10.5
+	%0 = alloca %Dog
+	%1 = load %Dog, %Dog* null
+	store %Dog %1, %Dog* %0
+	%2 = load %Dog, %Dog* %0
+	ret %Dog %2
+}
+
+define i32 @main() {
+entry:
+	%0 = alloca %Dog
+	%1 = load %Dog, %Dog* null
+	store %Dog %1, %Dog* %0
+	%2 = load %Dog, %Dog* %0
+	ret i32 0
 }

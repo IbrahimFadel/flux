@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/llir/llvm/ir/value"
+
 type NumberType int
 
 // const (
@@ -118,7 +120,8 @@ type (
 	}
 
 	NullExpr struct {
-		Pos TokenPos
+		Pos  TokenPos
+		Type Expr
 	}
 
 	VarRefExpr struct {
@@ -144,6 +147,7 @@ type (
 	StructTypeExpr struct {
 		StructPos  TokenPos
 		Properties PropertyList
+		Name       string
 	}
 )
 
@@ -161,10 +165,12 @@ type (
 	}
 
 	BlockStmt struct {
-		Start TokenPos
-		Name  string
-		List  []Stmt
-		End   TokenPos
+		Start     TokenPos
+		Name      string
+		List      []Stmt
+		End       TokenPos
+		Constants map[string]value.Value
+		Mutables  map[string]value.Value
 	}
 
 	ReturnStmt struct {

@@ -1,4 +1,20 @@
-fn main() -> f32 {
-	const i32 x, y, z = 1, 2, 3
-	return 10.5
+// TODO: codegen interfaces/types
+// Also, start parsing 'pub' at top level for things like interface/struct/fn/var
+
+type Dog struct {
+	pub mut i32 Age
+	pub const i32* X, Y, Z
+	mut i32 Weight
+	const i32 Name
+}
+
+fn GetDog() -> Dog {
+	const Dog dog
+	return dog
+}
+
+fn main() -> i32 {
+	const Dog rex
+
+	return 0
 }

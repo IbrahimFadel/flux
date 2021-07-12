@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/IbrahimFadel/pi-lang/ast"
 	"github.com/IbrahimFadel/pi-lang/utils"
@@ -13,12 +14,20 @@ import (
 )
 
 type IRGenerator struct {
-	Nodes  []ast.Node
-	Module *ir.Module
-	CurBB  *ir.Block
+	Nodes            []ast.Node
+	Module           *ir.Module
+	CurBB            *ir.Block
+	CurBlockStmt     *ast.BlockStmt
+	KnownStructTypes map[string]*types.StructType
+	CurTypeDeclName  string
+}
+
+func (gen *IRGenerator) Init() {
+	gen.KnownStructTypes = make(map[string]*types.StructType)
 }
 
 func (gen *IRGenerator) GenerateIR(ast []ast.Node) {
+	gen.Init()
 	gen.Module = ir.NewModule()
 
 	for _, node := range ast {
@@ -36,7 +45,20 @@ func (gen *IRGenerator) Node(node ast.Node) {
 		gen.ReturnStmt(n)
 	case ast.VarDecl:
 		gen.VarDecl(n)
+	case ast.TypeDecl:
+		gen.TypeDecl(n)
 	}
+}
+
+func (gen *IRGenerator) TypeDecl(typeDecl ast.TypeDecl) {
+	gen.CurTypeDeclName = typeDecl.Name // TODO: ew refactor... need a better way to do this
+	ty, err := gen.Type(typeDecl.Type)
+	if err != nil {
+		utils.FatalError(fmt.Sprintf("could not codegen type value in type declaration: %s", err.Error()))
+	}
+
+	// why tf does this replace *anything* that matches the type with the custom typename... stupid
+	gen.Module.NewTypeDef(typeDecl.Name, ty)
 }
 
 func (gen *IRGenerator) VarDecl(varDecl ast.VarDecl) {
@@ -45,14 +67,19 @@ func (gen *IRGenerator) VarDecl(varDecl ast.VarDecl) {
 		utils.FatalError(fmt.Sprintf("could not codegen type: %s", err.Error()))
 	}
 
-	for _, v := range varDecl.Values {
+	for i, v := range varDecl.Values {
 		ptr := gen.CurBB.NewAlloca(ty)
 		val, err := gen.Expr(v)
 		if err != nil {
 			utils.FatalError(fmt.Sprintf("could not codegen const declaration expression: %s", err.Error()))
 		}
 		gen.CurBB.NewStore(val, ptr)
-		gen.CurBB.NewLoad(ty, ptr)
+		loaded := gen.CurBB.NewLoad(ty, ptr)
+		if varDecl.Mut {
+			gen.CurBlockStmt.Mutables[varDecl.Names[i]] = loaded
+		} else {
+			gen.CurBlockStmt.Constants[varDecl.Names[i]] = loaded
+		}
 	}
 }
 
@@ -63,14 +90,35 @@ func (gen *IRGenerator) Expr(expr ast.Expr) (value.Value, error) {
 		return constant.NewInt(types.I32, 0), fmt.Errorf("unimplemented expression type")
 	case ast.NumberLitExpr:
 		return gen.NumberLitExpr(e)
+	case ast.NullExpr:
+		return gen.NullExpr(e)
+	case ast.VarRefExpr:
+		return gen.VarRefExpr(e)
 	}
+}
+
+func (gen *IRGenerator) VarRefExpr(ref ast.VarRefExpr) (value.Value, error) {
+	if v, found := gen.CurBlockStmt.Constants[ref.Name]; found {
+		return v, nil
+	} else if v, found := gen.CurBlockStmt.Mutables[ref.Name]; found {
+		return v, nil
+	}
+	return constant.False, fmt.Errorf("could not find variable '%s'", ref.Name)
+}
+
+func (gen *IRGenerator) NullExpr(nullExpr ast.NullExpr) (value.Value, error) {
+	ty, err := gen.Type(nullExpr.Type)
+	if err != nil {
+		return constant.NewNull(types.I32Ptr), fmt.Errorf("could not generate null expression type: %s", err.Error())
+	}
+	return gen.CurBB.NewLoad(ty, constant.NewNull(&types.PointerType{ElemType: ty})), nil
 }
 
 func (gen *IRGenerator) NumberLitExpr(num ast.NumberLitExpr) (value.Value, error) {
 	errVal := constant.NewInt(types.I32, 0)
 	ty, err := gen.Type(num.Type)
 	if err != nil {
-		return constant.NewInt(types.I32, 0), fmt.Errorf("could not codegen type: %s", err.Error())
+		return errVal, fmt.Errorf("could not codegen type: %s", err.Error())
 	}
 
 	if ty.Equal(types.Double) {
@@ -124,6 +172,7 @@ func (gen *IRGenerator) FuncDecl(fnDecl ast.FuncDecl) {
 
 	fn := gen.Module.NewFunc(fnDecl.Name, retType)
 	gen.CurBB = fn.NewBlock(fnDecl.Body.Name)
+	gen.CurBlockStmt = &fnDecl.Body
 	gen.BlockStmt(fnDecl.Body)
 }
 
@@ -142,7 +191,33 @@ func (gen *IRGenerator) Type(ty ast.Expr) (types.Type, error) {
 		return gen.PrimitiveTypeExpr(t)
 	case ast.PointerTypeExpr:
 		return gen.PointerTypeExpr(t)
+	case ast.StructTypeExpr:
+		return gen.StructTypeExpr(t)
+	case ast.IdentifierExpr:
+		if idType, ok := gen.KnownStructTypes[t.Name]; ok {
+			return idType, nil
+		} else {
+			return types.Void, fmt.Errorf("could not convert pi type to llvm type")
+		}
 	}
+}
+
+func (gen *IRGenerator) StructTypeExpr(ty ast.StructTypeExpr) (types.Type, error) {
+	structTy := types.StructType{TypeName: gen.CurTypeDeclName}
+
+	for _, props := range ty.Properties.Properties {
+		propTy, err := gen.Type(props.Type)
+		if err != nil {
+			return &structTy, fmt.Errorf("could not codegen '%s''s type: %s", strings.Join(props.Names, ","), err.Error())
+		}
+		for range props.Names {
+			structTy.Fields = append(structTy.Fields, propTy)
+		}
+	}
+
+	gen.KnownStructTypes[gen.CurTypeDeclName] = &structTy
+
+	return &structTy, nil
 }
 
 func (gen *IRGenerator) PointerTypeExpr(ty ast.PointerTypeExpr) (types.Type, error) {

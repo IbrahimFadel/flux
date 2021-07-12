@@ -98,14 +98,16 @@ func (p *Parser) ParseType() (ast.Expr, error) {
 
 	// TODO: should i refactor this to a seperate function?
 	if p.CurTok.TokenType == ast.TokenTypeIdentifier {
-		if tyDecl, ok := p.KnownIdentifierTypes[p.CurTok.Value]; ok {
+		if _, ok := p.KnownIdentifierTypes[p.CurTok.Value]; ok {
+			ty := ast.IdentifierExpr{Name: p.CurTok.Value, NamePos: p.CurTok.Pos}
 			p.EatToken()
 			if p.CurTok.TokenType != ast.TokenTypeAsterisk {
-				p.CurType = tyDecl
-				return tyDecl, nil
+				p.CurType = ty
+				// return tyDecl.Type, nil
+				return ty, nil
 			}
 
-			pointerType := ast.PointerTypeExpr{PointerToType: tyDecl, Pos: p.CurTok.Pos}
+			pointerType := ast.PointerTypeExpr{PointerToType: ty, Pos: p.CurTok.Pos}
 			p.EatToken()
 			for p.CurTok.TokenType == ast.TokenTypeAsterisk {
 				pointerType.PointerToType = pointerType
