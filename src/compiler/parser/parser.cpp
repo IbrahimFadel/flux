@@ -38,8 +38,9 @@ std::string Parser::Parser::fmt(const std::string &format, Args... args) {
 }
 
 void Parser::Parser::parseTokens() {
-  for (const auto &tok : tokens) {
-    parseToken(tok);
+  while (curTok->type != Token::_EOF) {
+    auto node = parseToken(curTok);
+    nodes.push_back(std::move(node));
   }
 }
 
@@ -49,9 +50,10 @@ void Parser::Parser::error(Token::Position pos, std::string msg) {
 }
 
 //TODO: check if it's at end of tokens
-void Parser::Parser::eat() {
+Token::Token *Parser::Parser::eat() {
   curTokPtr++;
   curTok = &tokens[curTokPtr];
+  return curTok;
 }
 
 //TODO: check if it's at end of tokens
@@ -78,36 +80,69 @@ int Parser::Parser::getTokenPrecedence(Token::Token *tok) {
   return opPrecedence[tok->value];
 }
 
-unique_ptr<Node> Parser::Parser::parseToken(Token::Token tok) {
-  switch (tok.type) {
-    case Token::FN:
-      return parseFn();
-    case Token::COMMENT:
-      eat();
-      return nullptr;
-    default:
-      error(curTok->pos, fmt("could not parse token: %s", curTok->value.c_str()));
-      break;
+unique_ptr<Node> Parser::Parser::parseToken(Token::Token *tok) {
+  if (tok->type < Token::types_end && tok->type > Token::types_begin)
+    return parseVarDecl();
+  else if (tok->type == Token::FN)
+    return parseFn();
+  else if (tok->type == Token::RETURN)
+    return parseReturn();
+  else if (tok->type == Token::COMMENT) {
+    eat();
+    return nullptr;
+  } else {
+    error(curTok->pos, fmt("could not parse token: %s", curTok->value.c_str()));
   }
   return nullptr;
 }
 
-unique_ptr<FnDecl> Parser::Parser::parseFn() {
-  expect(Token::FN, "expected 'fn'");
-  expect(Token::IDENT, "expected identifier following 'fn'");
-  expect(Token::LPAREN, "expected '(' following function name");
-
-  auto paramList = parseParamList();
-
-  expect(Token::RPAREN, "expected ')' following param list");  // should already be handled in parseParamList, but for clarity, we have it here
-
-  unique_ptr<Expr> retTy;
-  if (curTok->type != Token::ARROW) {
-    retTy = std::make_unique<PrimitiveTypeExpr>(Token::VOID);
+unique_ptr<VarDecl> Parser::Parser::parseVarDecl(bool mut) {
+  auto type = parseTypeExpr();
+  auto names = parseIdentList();
+  std::vector<unique_ptr<Expr>> values;
+  if (curTok->type != Token::EQ) {
+    for (int i = 0; i < names.size(); i++) {
+      values.push_back(std::make_unique<NullExpr>());
+    }
   } else {
     eat();
-    retTy = parseTypeExpr();
+    for (int i = 0; i < names.size(); i++) {
+      auto val = parseExpr();
+      values.push_back(std::move(val));
+      if (curTok->type == Token::COMMA)
+        eat();
+    }
   }
+  return std::make_unique<VarDecl>(mut, std::move(type), names, std::move(values));
+}
+
+std::vector<std::string> Parser::Parser::parseIdentList() {
+  std::vector<std::string> idents;
+  while (curTok->type != Token::COMMA && curTok->type != Token::EQ) {
+    std::string ident = expect(Token::IDENT, "expected identifier in identifier list")->value;
+    idents.push_back(ident);
+
+    if (curTok->type == Token::COMMA) {
+      eat();
+    } else {
+      return idents;
+    }
+  }
+
+  return idents;
+}
+
+unique_ptr<ReturnStmt> Parser::Parser::parseReturn() {
+  expect(Token::RETURN, "expected 'return' statement");
+  auto expr = parseExpr();
+  return std::make_unique<ReturnStmt>(std::move(expr));
+}
+
+unique_ptr<FnDecl> Parser::Parser::parseFn() {
+  expect(Token::FN, "expected 'fn'");
+  std::string name = expect(Token::IDENT, "expected identifier following 'fn'")->value;
+
+  auto fnType = parseFnType();
 
   expect(Token::LBRACE, "expected '{' at beginning of function body");
 
@@ -115,14 +150,35 @@ unique_ptr<FnDecl> Parser::Parser::parseFn() {
 
   expect(Token::RBRACE, "expected '}' at end of function body");
 
-  return nullptr;
+  return std::make_unique<FnDecl>(nullptr, name, std::move(fnType), std::move(body));
+}
+
+unique_ptr<FnType> Parser::Parser::parseFnType() {
+  expect(Token::LPAREN, "expected '(' following function name");
+
+  auto paramList = parseParamList();
+
+  expect(Token::RPAREN, "expected ')' following param list");  // should already be handled in parseParamList, but for clarity, we have it here
+
+  unique_ptr<Expr> retType;
+  if (curTok->type != Token::ARROW) {
+    retType = std::make_unique<PrimitiveTypeExpr>(Token::VOID);
+  } else {
+    eat();
+    retType = parseTypeExpr();
+  }
+
+  return std::make_unique<FnType>(std::move(paramList), std::move(retType));
 }
 
 unique_ptr<BlockStmt> Parser::Parser::parseBlockStmt() {
   std::vector<unique_ptr<Node>> nodes;
   while (curTok->type != Token::RBRACE) {
-    auto node = parseToken(*curTok);
+    auto node = parseToken(curTok);
     nodes.push_back(std::move(node));
+    if (curTok->type == Token::_EOF) {
+      error(curTok->pos, "expected '}' at end of block statement");
+    }
   }
 
   return std::make_unique<BlockStmt>(std::move(nodes));
@@ -132,6 +188,7 @@ unique_ptr<ParamList> Parser::Parser::parseParamList() {
   std::vector<Param> params;
   while (curTok->type != Token::RPAREN) {
     auto param = parseParam();
+    params.push_back(std::move(param));
     if (curTok->type != Token::COMMA) {
       if (curTok->type != Token::RPAREN) error(curTok->pos, "expected ')' at end of param list");
     } else {
@@ -166,7 +223,7 @@ unique_ptr<Expr> Parser::Parser::parsePrimitiveTypeExpr() {
   Token::TokenType ty = expectRange(Token::types_begin, Token::types_end, "expected a type in primitive type expression")->type;
   if (curTok->type != Token::ASTERISK) return std::make_unique<PrimitiveTypeExpr>(ty);
 
-  auto ptrTy = std::make_unique<PointerType>(std::make_unique<PrimitiveTypeExpr>(ty));
+  auto ptrTy = std::make_unique<PointerTypeExpr>(std::make_unique<PrimitiveTypeExpr>(ty));
   eat();
   while (curTok->type == Token::ASTERISK) {
     //TODO: does this cause issues cus c++ sucks?
@@ -221,7 +278,19 @@ unique_ptr<Expr> Parser::Parser::parsePostfixExpr(unique_ptr<Expr> expr) {
 }
 
 unique_ptr<Expr> Parser::Parser::parsePrimaryExpr() {
+  switch (curTok->type) {
+    case Token::INT:
+    case Token::FLOAT:
+      return parseBasicLit();
+    default:
+      break;
+  }
   return nullptr;
+}
+
+unique_ptr<BasicLitExpr> Parser::Parser::parseBasicLit() {
+  auto tok = expectRange(Token::basic_lit_begin, Token::basic_lit_end, "expected literal");
+  return std::make_unique<BasicLitExpr>(tok->type, tok->value);
 }
 
 unique_ptr<Expr> Parser::Parser::parseCallExpr(const unique_ptr<Expr> &expr) {

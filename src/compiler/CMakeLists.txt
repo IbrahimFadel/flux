@@ -1,6 +1,7 @@
 set(PI_COMPILER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(PI_COMPILER_SRC_FILES
+	${PI_COMPILER_SRC_DIR}/parser/dump.cpp
 	${PI_COMPILER_SRC_DIR}/parser/parser.cpp
 
 	${PI_COMPILER_SRC_DIR}/scanner/scanner.cpp

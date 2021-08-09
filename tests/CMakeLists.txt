@@ -1,6 +1,8 @@
 set(PI_TESTS_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(PI_TESTS_SRC_FILES
+	${PI_TESTS_SRC_DIR}/compiler/parser/parser_test.cpp
+
 	${PI_TESTS_SRC_DIR}/compiler/scanner/scanner_test.cpp
 
 	${PI_TESTS_SRC_DIR}/compiler/token/position_test.cpp

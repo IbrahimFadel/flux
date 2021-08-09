@@ -13,11 +13,15 @@ enum TokenType {
   _EOF,
   COMMENT,
 
+  basic_lit_begin,
+
   IDENT,
   INT,
   FLOAT,
   CHAR,
   STRING,
+
+  basic_lit_end,
 
   PLUS,
   MINUS,
@@ -25,6 +29,8 @@ enum TokenType {
   SLASH,
   PERCENT,
   AMPERSAND,
+
+  EQ,
 
   SEMICOLON,
   COMMA,
@@ -69,10 +75,10 @@ static std::map<int, std::string> tokens = {
     {TokenType::COMMENT, "COMMENT"},
 
     {TokenType::IDENT, "IDENT"},
-    {TokenType::INT, "ILLEGAL"},
-    {TokenType::FLOAT, "ILLEGAL"},
-    {TokenType::CHAR, "ILLEGAL"},
-    {TokenType::STRING, "ILLEGAL"},
+    {TokenType::INT, "INT"},
+    {TokenType::FLOAT, "FLOAT"},
+    {TokenType::CHAR, "CHAR"},
+    {TokenType::STRING, "STRING"},
 
     {TokenType::PLUS, "+"},
     {TokenType::MINUS, "-"},
@@ -80,6 +86,8 @@ static std::map<int, std::string> tokens = {
     {TokenType::SLASH, "/"},
     {TokenType::PERCENT, "%"},
     {TokenType::AMPERSAND, "&"},
+
+    {TokenType::EQ, "="},
 
     {TokenType::SEMICOLON, ";"},
     {TokenType::COMMA, ","},

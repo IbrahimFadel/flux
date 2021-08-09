@@ -3,8 +3,10 @@
 
 #include <stdio.h>
 
+#include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -48,6 +50,8 @@ class Scanner {
 
   std::vector<Token::Token> getTokens() { return tokens; }
 };
+
+std::string readFile(std::string path);
 
 }  // namespace Scanner
 

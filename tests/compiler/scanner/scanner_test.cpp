@@ -55,7 +55,7 @@ TEST(Scanner, ScansAllTokens) {
   scanner.tokenize();
 
   auto toks = scanner.getTokens();
-  for (int i = 0; i < toks.size(); i++) {
+  for (int i = 0; i < toks.size() - 1; i++) {  // toks.size() - 1 to ignore EOF token
     auto tok = toks[i];
     EXPECT_EQ(tok.type, tokens[i].type);
     EXPECT_EQ(tok.value, tokens[i].value);

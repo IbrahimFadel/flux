@@ -1,5 +1,12 @@
 #include "scanner.h"
 
+std::string Scanner::readFile(std::string path) {
+  std::ifstream t(path);
+  std::stringstream buffer;
+  buffer << t.rdbuf();
+  return buffer.str();
+}
+
 Scanner::Scanner::Scanner(std::string _src) {
   src = _src;
 
@@ -320,6 +327,10 @@ Token::Token Scanner::Scanner::scan() {
         break;
       case '*':
         tokType = Token::ASTERISK;
+        value = "*";
+        break;
+      case '=':
+        tokType = Token::EQ;
         value = "*";
         break;
       case '-':
