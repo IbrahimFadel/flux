@@ -11,7 +11,6 @@ Scanner::Scanner::Scanner(std::string _src) {
   src = _src;
 
   offset = 0;
-  lineOffset = 0;
   ch = src[offset];
   pos.line = 1;
   pos.col = 1;
@@ -294,7 +293,7 @@ Token::Token Scanner::Scanner::scan() {
         value = ";";
         break;
       case '"':
-        tokType = Token::STRING;
+        tokType = Token::STRING_LIT;
         value = scanString();
         break;
       case '\'':
@@ -329,9 +328,13 @@ Token::Token Scanner::Scanner::scan() {
         tokType = Token::ASTERISK;
         value = "*";
         break;
+      case '+':
+        tokType = Token::PLUS;
+        value = "+";
+        break;
       case '=':
         tokType = Token::EQ;
-        value = "*";
+        value = "=";
         break;
       case '-':
         tokType = Token::MINUS;
@@ -356,7 +359,13 @@ Token::Token Scanner::Scanner::scan() {
   }
 
   skipWhiteSpace();
-  return {pos, tokType, value};
+
+  Token::Token tok;
+  tok.pos = {"test.pi", 1, 1};
+  tok.type = tokType;
+  tok.value = value;
+  return tok;
+  // return {{"", -1, -1}, tokType, value};
 }
 
 void Scanner::Scanner::tokenize() {
@@ -365,5 +374,9 @@ void Scanner::Scanner::tokenize() {
     tokens.push_back(token);
   }
 
-  tokens.push_back({{"", -1, -1}, Token::_EOF, "EOF"});
+  Token::Token tok;
+  tok.pos = {"test.pi", 1, 1};
+  tok.type = Token::_EOF;
+  tok.value = "EOF";
+  tokens.push_back(tok);
 }

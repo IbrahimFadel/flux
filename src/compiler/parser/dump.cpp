@@ -10,7 +10,7 @@ std::string Parser::ASTDump::toString() {
 
 std::string Parser::FnDecl::toString() {
   std::string repr;
-  repr += "FnDecl: {\n";
+  repr += "Fn Decl: {\n";
   if (receiver) {
     repr += receiver->toString();
   }
@@ -24,7 +24,12 @@ std::string Parser::FnDecl::toString() {
 }
 
 std::string Parser::FnReceiver::toString() {
-  return "";
+  std::string repr;
+  repr += "Fn Receiver: {\n";
+  repr += "Type: " + type->toString();
+  repr += "Name: " + name->toString();
+  repr += "}\n";
+  return repr;
 }
 
 std::string Parser::FnType::toString() {
@@ -48,10 +53,6 @@ std::string Parser::ParamList::toString() {
   }
   repr += "}\n";
   return repr;
-}
-
-std::string Parser::BinaryExpr::toString() {
-  return "";
 }
 
 std::string Parser::PrimitiveTypeExpr::toString() {
@@ -96,7 +97,7 @@ std::string Parser::VarDecl::toString() {
   repr += "Type: " + type->toString() + "\n";
   repr += "Names: ";
   for (int i = 0; i < names.size(); i++) {
-    repr += names[i];
+    repr += names[i]->toString();
     if (i < names.size() - 1) {
       repr += ", ";
     } else {
@@ -113,6 +114,97 @@ std::string Parser::VarDecl::toString() {
 }
 
 std::string Parser::NullExpr::toString() {
+  return "Null\n";
+}
+
+std::string Parser::IdentExpr::toString() {
+  return "Ident Expr: " + value + "\n";
+}
+
+std::string Parser::BinaryExpr::toString() {
   std::string repr;
+  repr += "Binary Expr: {\n";
+  repr += "Left: {\n";
+  repr += x->toString();
+  repr += "}\n";
+  repr += "Operator: " + Token::tokens[op] + "\n";
+  repr += "Right: {\n";
+  repr += y->toString();
+  repr += "}\n";
+  repr += "}\n";
+  return repr;
+}
+
+std::string Parser::TypeDecl::toString() {
+  std::string repr;
+  repr += "Type Declaration: {\n";
+  repr += "Name: " + name + "\n";
+  repr += "Type: {\n";
+  repr += type->toString();
+  repr += "}\n";
+  repr += "}\n";
+  return repr;
+}
+
+std::string Parser::InterfaceTypeExpr::toString() {
+  std::string repr;
+  repr += "Interface Type: {\n";
+  repr += "Methods: {\n";
+  repr += methods->toString();
+  repr += "}\n";
+  repr += "}\n";
+  return repr;
+}
+
+std::string Parser::FieldList::toString() {
+  std::string repr;
+  repr += "Field List: {\n";
+  for (int i = 0; i < fields.size(); i++) {
+    repr += "Field " + std::to_string(i + 1) + " {\n";
+    repr += "Name: " + fields[i].name + "\n";
+    repr += "Params: {\n";
+    repr += fields[i].params->toString();
+    repr += "}\n";
+    repr += "Return Type: {\n";
+    repr += fields[i].returnType->toString() + "\n";
+    repr += "}\n";
+  }
+  repr += "}\n";
+  return repr;
+}
+
+std::string Parser::StructTypeExpr::toString() {
+  std::string repr;
+  repr += "Struct Type: {\n";
+  repr += "Properties: {\n";
+  repr += properties->toString();
+  repr += "}\n";
+  repr += "}\n";
+  return repr;
+}
+
+std::string Parser::PropertyList::toString() {
+  std::string repr;
+  repr += "Property List: {\n";
+
+  for (int i = 0; i < properties.size(); i++) {
+    repr += "Property " + std::to_string(i + 1) + " {\n";
+    repr += "Pub: " + std::to_string(properties[i].pub) + "\n";
+    repr += "Mut: " + std::to_string(properties[i].mut) + "\n";
+    repr += "Type: {\n";
+    repr += properties[i].type->toString() + "\n";
+    repr += "}\n";
+    repr += "Names: {\n";
+    for (int j = 0; j < properties[i].names.size(); j++) {
+      repr += properties[i].names[j]->toString();
+      if (i < properties[i].names.size() - 1) {
+        repr += ", ";
+      }
+    }
+    repr += "}\n";
+    repr += "}\n";
+  }
+
+  repr += "}\n";
   return repr;
 }

@@ -5,6 +5,7 @@ using namespace Parser;
 Parser::Parser::Parser(std::vector<Token::Token> tokens) : tokens(tokens) {
   curTokPtr = 0;
   curTok = &tokens[0];
+
   opPrecedence = {
       {"=", 2},
       {"&&", 3},
@@ -38,10 +39,26 @@ std::string Parser::Parser::fmt(const std::string &format, Args... args) {
 }
 
 void Parser::Parser::parseTokens() {
-  while (curTok->type != Token::_EOF) {
-    auto node = parseToken(curTok);
-    nodes.push_back(std::move(node));
-  }
+  auto cur = &tokens[0];
+  auto x = cur->pos;
+  auto y = cur->type;
+  auto z = cur->value;
+
+  auto a = curTok->pos;
+  // auto b = curTok->type;
+  // auto c = curTok->value;
+  // for (auto const &tok : tokens) {
+  //   auto x = tok.pos;
+  //   auto y = tok.type;
+  //   auto z = tok.value;
+  // }
+  // auto type = curTok->type;
+  // auto t = curTok->value;
+  // auto x = curTok->pos;
+  // while (curTok->type != Token::_EOF) {
+  //   auto node = parseToken(curTok);
+  //   nodes.push_back(std::move(node));
+  // }
 }
 
 void Parser::Parser::error(Token::Position pos, std::string msg) {
@@ -83,10 +100,15 @@ int Parser::Parser::getTokenPrecedence(Token::Token *tok) {
 unique_ptr<Node> Parser::Parser::parseToken(Token::Token *tok) {
   if (tok->type < Token::types_end && tok->type > Token::types_begin)
     return parseVarDecl();
-  else if (tok->type == Token::FN)
+  else if (tok->type == Token::MUT) {
+    eat();
+    return parseVarDecl(true);
+  } else if (tok->type == Token::FN)
     return parseFn();
   else if (tok->type == Token::RETURN)
     return parseReturn();
+  else if (tok->type == Token::TYPE)
+    return parseTypeDecl();
   else if (tok->type == Token::COMMENT) {
     eat();
     return nullptr;
@@ -94,6 +116,13 @@ unique_ptr<Node> Parser::Parser::parseToken(Token::Token *tok) {
     error(curTok->pos, fmt("could not parse token: %s", curTok->value.c_str()));
   }
   return nullptr;
+}
+
+unique_ptr<TypeDecl> Parser::Parser::parseTypeDecl() {
+  expect(Token::TYPE, "expected 'type' in type declaration");
+  std::string name = expect(Token::IDENT, "expected identifier in type declaration")->value;
+  auto type = parseTypeExpr();
+  return std::make_unique<TypeDecl>(name, std::move(type));
 }
 
 unique_ptr<VarDecl> Parser::Parser::parseVarDecl(bool mut) {
@@ -113,23 +142,24 @@ unique_ptr<VarDecl> Parser::Parser::parseVarDecl(bool mut) {
         eat();
     }
   }
-  return std::make_unique<VarDecl>(mut, std::move(type), names, std::move(values));
+  return std::make_unique<VarDecl>(mut, std::move(type), std::move(names), std::move(values));
 }
 
-std::vector<std::string> Parser::Parser::parseIdentList() {
-  std::vector<std::string> idents;
-  while (curTok->type != Token::COMMA && curTok->type != Token::EQ) {
-    std::string ident = expect(Token::IDENT, "expected identifier in identifier list")->value;
-    idents.push_back(ident);
+std::vector<unique_ptr<IdentExpr>> Parser::Parser::parseIdentList() {
+  std::vector<unique_ptr<IdentExpr>> idents;
 
-    if (curTok->type == Token::COMMA) {
-      eat();
-    } else {
-      return idents;
-    }
+  idents.push_back(parseIdentExpr());
+  while (curTok->type == Token::COMMA) {
+    eat();
+    idents.push_back(parseIdentExpr());
   }
 
   return idents;
+}
+
+unique_ptr<IdentExpr> Parser::Parser::parseIdentExpr() {
+  std::string value = expect(Token::IDENT, "expected identifier")->value;
+  return std::make_unique<IdentExpr>(value);
 }
 
 unique_ptr<ReturnStmt> Parser::Parser::parseReturn() {
@@ -140,6 +170,12 @@ unique_ptr<ReturnStmt> Parser::Parser::parseReturn() {
 
 unique_ptr<FnDecl> Parser::Parser::parseFn() {
   expect(Token::FN, "expected 'fn'");
+
+  unique_ptr<FnReceiver> receiver = nullptr;
+  if (curTok->type == Token::LPAREN) {
+    receiver = parseFnReceiver();
+  }
+
   std::string name = expect(Token::IDENT, "expected identifier following 'fn'")->value;
 
   auto fnType = parseFnType();
@@ -150,7 +186,18 @@ unique_ptr<FnDecl> Parser::Parser::parseFn() {
 
   expect(Token::RBRACE, "expected '}' at end of function body");
 
-  return std::make_unique<FnDecl>(nullptr, name, std::move(fnType), std::move(body));
+  return std::make_unique<FnDecl>(std::move(receiver), name, std::move(fnType), std::move(body));
+}
+
+unique_ptr<FnReceiver> Parser::Parser::parseFnReceiver() {
+  expect(Token::LPAREN, "expected '(' in function receiver");
+
+  auto type = parseTypeExpr();
+  auto name = parseIdentExpr();
+
+  expect(Token::RPAREN, "expected ')' at end of function receiver");
+
+  return std::make_unique<FnReceiver>(std::move(type), std::move(name));
 }
 
 unique_ptr<FnType> Parser::Parser::parseFnType() {
@@ -211,12 +258,87 @@ Param Parser::Parser::parseParam() {
 }
 
 unique_ptr<Expr> Parser::Parser::parseTypeExpr() {
-  if (curTok->type > Token::types_begin && curTok->type < Token::types_end) {
+  if (curTok->type > Token::types_begin && curTok->type < Token::types_end)
     return parsePrimitiveTypeExpr();
-  } else {
-    error(curTok->pos, "unimplemented type");
+  else if (curTok->type == Token::IDENT)
+    return parseIdentExpr();
+  else if (curTok->type == Token::INTERFACE)
+    return parseInterfaceTypeExpr();
+  else if (curTok->type == Token::STRUCT)
+    return parseStructTypeExpr();
+  else {
+    error(curTok->pos, fmt("unimplemented type: %s", curTok->value.c_str()));
     return nullptr;
   }
+}
+
+unique_ptr<StructTypeExpr> Parser::Parser::parseStructTypeExpr() {
+  expect(Token::STRUCT, "expected 'struct' in struct type expression");
+  expect(Token::LBRACE, "expected '{' in struct type expression");
+  auto propertyList = parsePropertyList();
+  expect(Token::RBRACE, "expected '}' in struct type expression");
+  return std::make_unique<StructTypeExpr>(std::move(propertyList));
+}
+
+unique_ptr<PropertyList> Parser::Parser::parsePropertyList() {
+  std::vector<Property> properties;
+  while (curTok->type != Token::RBRACE) {
+    properties.push_back(parseProperty());
+  }
+  return std::make_unique<PropertyList>(std::move(properties));
+}
+
+Property Parser::Parser::parseProperty() {
+  Property prop;
+  prop.pub = false;
+  prop.mut = false;
+  if (curTok->type == Token::PUB) {
+    eat();
+    prop.pub = true;
+  }
+  if (curTok->type == Token::MUT) {
+    eat();
+    prop.mut = true;
+  }
+  prop.type = parseTypeExpr();
+  prop.names = parseIdentList();
+  return prop;
+}
+
+unique_ptr<InterfaceTypeExpr> Parser::Parser::parseInterfaceTypeExpr() {
+  expect(Token::INTERFACE, "expected 'interface' in interface type expression");
+  expect(Token::LBRACE, "expected '{' in interface type expression");
+
+  auto methods = parseFieldList();
+
+  expect(Token::RBRACE, "expected '}' in interface type expression");
+
+  return std::make_unique<InterfaceTypeExpr>(std::move(methods));
+}
+
+unique_ptr<FieldList> Parser::Parser::parseFieldList() {
+  std::vector<Field> fields;
+  while (curTok->type != Token::RBRACE) {
+    fields.push_back(parseField());
+  }
+  return std::make_unique<FieldList>(std::move(fields));
+}
+
+Field Parser::Parser::parseField() {
+  Field field;
+
+  field.name = expect(Token::IDENT, "expected identifier in field")->value;
+  expect(Token::LPAREN, "expected '(' before field param list");
+  field.params = parseParamList();
+  expect(Token::RPAREN, "expected ')' at end of field param list");
+
+  field.returnType = std::make_unique<PrimitiveTypeExpr>(Token::VOID);
+  if (curTok->type == Token::ARROW) {
+    eat();
+    field.returnType = parseTypeExpr();
+  }
+
+  return field;
 }
 
 unique_ptr<Expr> Parser::Parser::parsePrimitiveTypeExpr() {
@@ -279,8 +401,11 @@ unique_ptr<Expr> Parser::Parser::parsePostfixExpr(unique_ptr<Expr> expr) {
 
 unique_ptr<Expr> Parser::Parser::parsePrimaryExpr() {
   switch (curTok->type) {
+    case Token::IDENT:
+      return parseIdentExpr();
     case Token::INT:
     case Token::FLOAT:
+    case Token::STRING_LIT:
       return parseBasicLit();
     default:
       break;

@@ -31,6 +31,7 @@ class Parser {
 
   unique_ptr<Node> parseToken(Token::Token *tok);
   unique_ptr<FnDecl> parseFn();
+  unique_ptr<FnReceiver> parseFnReceiver();
   unique_ptr<FnType> parseFnType();
   unique_ptr<ParamList> parseParamList();
   Param parseParam();
@@ -46,7 +47,15 @@ class Parser {
   unique_ptr<ReturnStmt> parseReturn();
   unique_ptr<BasicLitExpr> parseBasicLit();
   unique_ptr<VarDecl> parseVarDecl(bool mut = false);
-  std::vector<std::string> parseIdentList();
+  std::vector<unique_ptr<IdentExpr>> parseIdentList();
+  unique_ptr<IdentExpr> parseIdentExpr();
+  unique_ptr<TypeDecl> parseTypeDecl();
+  unique_ptr<InterfaceTypeExpr> parseInterfaceTypeExpr();
+  unique_ptr<FieldList> parseFieldList();
+  Field parseField();
+  unique_ptr<StructTypeExpr> parseStructTypeExpr();
+  unique_ptr<PropertyList> parsePropertyList();
+  Property parseProperty();
 
  public:
   Parser(std::vector<Token::Token> tokens);

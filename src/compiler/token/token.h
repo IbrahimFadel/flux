@@ -19,7 +19,7 @@ enum TokenType {
   INT,
   FLOAT,
   CHAR,
-  STRING,
+  STRING_LIT,
 
   basic_lit_end,
 
@@ -47,8 +47,8 @@ enum TokenType {
   FOR,
   TYPE,
   STRUCT,
+  INTERFACE,
   RETURN,
-  CONST,
   MUT,
   PUB,
 
@@ -65,6 +65,7 @@ enum TokenType {
   U16,
   U8,
   VOID,
+  STRING,
 
   types_end,
 };
@@ -78,7 +79,7 @@ static std::map<int, std::string> tokens = {
     {TokenType::INT, "INT"},
     {TokenType::FLOAT, "FLOAT"},
     {TokenType::CHAR, "CHAR"},
-    {TokenType::STRING, "STRING"},
+    {TokenType::STRING_LIT, "STRING"},
 
     {TokenType::PLUS, "+"},
     {TokenType::MINUS, "-"},
@@ -102,9 +103,10 @@ static std::map<int, std::string> tokens = {
     {TokenType::FOR, "for"},
     {TokenType::TYPE, "type"},
     {TokenType::STRUCT, "struct"},
+    {TokenType::INTERFACE, "interface"},
     {TokenType::RETURN, "return"},
-    {TokenType::CONST, "const"},
     {TokenType::MUT, "mut"},
+    {TokenType::PUB, "pub"},
     {TokenType::I64, "i64"},
     {TokenType::I32, "i32"},
     {TokenType::I16, "i16"},
@@ -113,6 +115,7 @@ static std::map<int, std::string> tokens = {
     {TokenType::U32, "u32"},
     {TokenType::U16, "u16"},
     {TokenType::U8, "u8"},
+    {TokenType::STRING, "string"},
     {TokenType::VOID, "void"},
 };
 

@@ -21,7 +21,6 @@ class Scanner {
 
   char ch;
   int offset;
-  int lineOffset;
   Token::Position pos;
 
   template <typename... Args>

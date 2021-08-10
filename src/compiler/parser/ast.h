@@ -11,6 +11,7 @@ using std::unique_ptr;
 
 namespace Parser {
 
+class IdentExpr;
 class BlockStmt;
 
 class Node {
@@ -47,8 +48,11 @@ class Comment : public Node {
 
 class FnReceiver : public Expr {
  private:
+  std::unique_ptr<Expr> type;
+  std::unique_ptr<IdentExpr> name;
+
  public:
-  FnReceiver(){};
+  FnReceiver(std::unique_ptr<Expr> type, std::unique_ptr<IdentExpr> name) : type(std::move(type)), name(std::move(name)){};
 
   std::string toString();
 };
@@ -87,6 +91,28 @@ class FnDecl : public Decl {
 
  public:
   FnDecl(unique_ptr<FnReceiver> receiver, std::string name, unique_ptr<FnType> type, unique_ptr<BlockStmt> body) : receiver(std::move(receiver)), name(name), type(std::move(type)), body(std::move(body)){};
+  std::string toString();
+};
+
+class VarDecl : public Decl {
+ private:
+  bool mut;
+  unique_ptr<Expr> type;
+  std::vector<unique_ptr<IdentExpr>> names;
+  std::vector<unique_ptr<Expr>> values;
+
+ public:
+  VarDecl(bool mut, unique_ptr<Expr> type, std::vector<unique_ptr<IdentExpr>> names, std::vector<unique_ptr<Expr>> values) : mut(mut), type(std::move(type)), names(std::move(names)), values(std::move(values)){};
+  std::string toString();
+};
+
+class TypeDecl : public Decl {
+ private:
+  std::string name;
+  unique_ptr<Expr> type;
+
+ public:
+  TypeDecl(std::string name, unique_ptr<Expr> type) : name(name), type(std::move(type)){};
   std::string toString();
 };
 
@@ -140,6 +166,64 @@ class NullExpr : public Expr {
   std::string toString();
 };
 
+class IdentExpr : public Expr {
+ private:
+  std::string value;
+
+ public:
+  IdentExpr(std::string value) : value(value){};
+  std::string toString();
+};
+
+struct Field {
+  std::string name;
+  unique_ptr<ParamList> params;
+  unique_ptr<Expr> returnType;
+};
+
+class FieldList : public Expr {
+ private:
+  std::vector<Field> fields;
+
+ public:
+  FieldList(std::vector<Field> fields) : fields(std::move(fields)){};
+  std::string toString();
+};
+
+class InterfaceTypeExpr : public Expr {
+ private:
+  unique_ptr<FieldList> methods;
+
+ public:
+  InterfaceTypeExpr(unique_ptr<FieldList> methods) : methods(std::move(methods)){};
+  std::string toString();
+};
+
+struct Property {
+  bool pub;
+  bool mut;
+  unique_ptr<Expr> type;
+  std::vector<unique_ptr<IdentExpr>> names;
+};
+
+class PropertyList : public Expr {
+ private:
+  std::vector<Property> properties;
+
+ public:
+  PropertyList(std::vector<Property> fields) : properties(std::move(fields)){};
+  std::string toString();
+};
+
+class StructTypeExpr : public Expr {
+ private:
+  unique_ptr<PropertyList> properties;
+
+ public:
+  StructTypeExpr(unique_ptr<PropertyList> properties) : properties(std::move(properties)){};
+  std::string toString();
+};
+
 ////////////////////////////////////
 
 class BlockStmt : public Stmt {
@@ -160,18 +244,6 @@ class ReturnStmt : public Stmt {
 };
 
 //////////////////////////////////
-
-class VarDecl : public Decl {
- private:
-  bool mut;
-  unique_ptr<Expr> type;
-  std::vector<std::string> names;
-  std::vector<unique_ptr<Expr>> values;
-
- public:
-  VarDecl(bool mut, unique_ptr<Expr> type, std::vector<std::string> names, std::vector<unique_ptr<Expr>> values) : mut(mut), type(std::move(type)), names(names), values(std::move(values)){};
-  std::string toString();
-};
 
 }  // namespace Parser
 
