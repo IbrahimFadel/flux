@@ -14,7 +14,7 @@ using std::unique_ptr;
 namespace Parser {
 class Parser {
  private:
-  std::vector<unique_ptr<Node>> nodes;
+  unique_ptr<AST> ast;
   std::vector<Token::Token> tokens;
   int curTokPtr;
   Token::Token *curTok;
@@ -61,7 +61,7 @@ class Parser {
   Parser(std::vector<Token::Token> tokens);
   void parseTokens();
 
-  std::vector<unique_ptr<Node>> &getNodes() { return nodes; }
+  const unique_ptr<AST> &getAST() { return ast; }
 };
 
 }  // namespace Parser

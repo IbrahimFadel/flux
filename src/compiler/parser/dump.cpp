@@ -1,11 +1,22 @@
 #include "dump.h"
 
-std::string Parser::ASTDump::toString() {
-  std::string astStrRepr = "";
-  for (const auto &node : ast) {
-    astStrRepr += node->toString();
+std::string Parser::astToString(const unique_ptr<AST> &ast) {
+  std::string repr;
+
+  repr += "------- Types -------\n";
+  for (auto const &ty : ast->types) {
+    repr += ty->toString().c_str();
   }
-  return astStrRepr;
+  repr += "----- Variables -----\n";
+  for (auto const &v : ast->variables) {
+    repr += v->toString().c_str();
+  }
+  repr += "----- Functions -----\n";
+  for (auto const &fn : ast->functions) {
+    repr += fn->toString().c_str();
+  }
+  repr += "---------------------\n";
+  return repr;
 }
 
 std::string Parser::FnDecl::toString() {
@@ -115,6 +126,10 @@ std::string Parser::VarDecl::toString() {
 
 std::string Parser::NullExpr::toString() {
   return "Null\n";
+}
+
+std::string Parser::VoidExpr::toString() {
+  return "Void\n";
 }
 
 std::string Parser::IdentExpr::toString() {

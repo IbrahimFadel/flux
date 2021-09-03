@@ -13,6 +13,15 @@ namespace Parser {
 
 class IdentExpr;
 class BlockStmt;
+class TypeDecl;
+class VarDecl;
+class FnDecl;
+
+struct AST {
+  std::vector<unique_ptr<TypeDecl>> types;
+  std::vector<unique_ptr<FnDecl>> functions;
+  std::vector<unique_ptr<VarDecl>> variables;
+};
 
 class Node {
  public:
@@ -92,6 +101,8 @@ class FnDecl : public Decl {
  public:
   FnDecl(unique_ptr<FnReceiver> receiver, std::string name, unique_ptr<FnType> type, unique_ptr<BlockStmt> body) : receiver(std::move(receiver)), name(name), type(std::move(type)), body(std::move(body)){};
   std::string toString();
+
+  const unique_ptr<BlockStmt> &getBody() { return body; }
 };
 
 class VarDecl : public Decl {
@@ -166,6 +177,13 @@ class NullExpr : public Expr {
   std::string toString();
 };
 
+class VoidExpr : public Expr {
+ private:
+ public:
+  VoidExpr(){};
+  std::string toString();
+};
+
 class IdentExpr : public Expr {
  private:
   std::string value;
@@ -232,6 +250,8 @@ class BlockStmt : public Stmt {
  public:
   BlockStmt(std::vector<unique_ptr<Node>> list) : list(std::move(list)){};
   std::string toString();
+
+  const std::vector<unique_ptr<Node>> &getList();
 };
 
 class ReturnStmt : public Stmt {

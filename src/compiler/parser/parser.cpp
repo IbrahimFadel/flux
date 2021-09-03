@@ -23,6 +23,8 @@ Parser::Parser::Parser(std::vector<Token::Token> tokens) : tokens(tokens) {
       {".", 50},
       {"->", 50},
   };
+
+  ast = std::make_unique<AST>();
 }
 
 // https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
@@ -39,26 +41,22 @@ std::string Parser::Parser::fmt(const std::string &format, Args... args) {
 }
 
 void Parser::Parser::parseTokens() {
-  auto cur = &tokens[0];
-  auto x = cur->pos;
-  auto y = cur->type;
-  auto z = cur->value;
-
-  auto a = curTok->pos;
-  // auto b = curTok->type;
-  // auto c = curTok->value;
-  // for (auto const &tok : tokens) {
-  //   auto x = tok.pos;
-  //   auto y = tok.type;
-  //   auto z = tok.value;
-  // }
-  // auto type = curTok->type;
-  // auto t = curTok->value;
-  // auto x = curTok->pos;
-  // while (curTok->type != Token::_EOF) {
-  //   auto node = parseToken(curTok);
-  //   nodes.push_back(std::move(node));
-  // }
+  while (curTok->type != Token::_EOF) {
+    if (curTok->type < Token::types_end && curTok->type > Token::types_begin)
+      ast->variables.push_back(parseVarDecl());
+    else if (curTok->type == Token::MUT) {
+      eat();
+      ast->variables.push_back(parseVarDecl(true));
+    } else if (curTok->type == Token::FN)
+      ast->functions.push_back(parseFn());
+    else if (curTok->type == Token::TYPE) {
+      ast->types.push_back(parseTypeDecl());
+    } else if (curTok->type == Token::COMMENT) {
+      eat();
+    } else {
+      error(curTok->pos, fmt("could not parse token: %s", curTok->value.c_str()));
+    }
+  }
 }
 
 void Parser::Parser::error(Token::Position pos, std::string msg) {
@@ -79,21 +77,24 @@ Token::Token *Parser::Parser::peek() {
 }
 
 Token::Token *Parser::Parser::expect(Token::TokenType type, std::string errMsg) {
-  if (curTok->type != type) error(curTok->pos, errMsg);
+  if (curTok->type != type)
+    error(curTok->pos, errMsg);
   auto tok = curTok;
   eat();
   return tok;
 }
 
 Token::Token *Parser::Parser::expectRange(Token::TokenType typeBegin, Token::TokenType typeEnd, std::string errMsg) {
-  if (curTok->type <= typeBegin || curTok->type >= typeEnd) error(curTok->pos, errMsg);
+  if (curTok->type <= typeBegin || curTok->type >= typeEnd)
+    error(curTok->pos, errMsg);
   auto tok = curTok;
   eat();
   return tok;
 }
 
 int Parser::Parser::getTokenPrecedence(Token::Token *tok) {
-  if (!opPrecedence.contains(tok->value)) return -1;
+  if (!opPrecedence.count(tok->value))
+    return -1;
   return opPrecedence[tok->value];
 }
 
@@ -164,7 +165,10 @@ unique_ptr<IdentExpr> Parser::Parser::parseIdentExpr() {
 
 unique_ptr<ReturnStmt> Parser::Parser::parseReturn() {
   expect(Token::RETURN, "expected 'return' statement");
-  auto expr = parseExpr();
+  std::unique_ptr<Expr> expr = std::make_unique<VoidExpr>();
+  if (curTok->type != Token::SEMICOLON)
+    expr = parseExpr();
+  expect(Token::SEMICOLON, "expected ';' after return expression");
   return std::make_unique<ReturnStmt>(std::move(expr));
 }
 
@@ -237,7 +241,8 @@ unique_ptr<ParamList> Parser::Parser::parseParamList() {
     auto param = parseParam();
     params.push_back(std::move(param));
     if (curTok->type != Token::COMMA) {
-      if (curTok->type != Token::RPAREN) error(curTok->pos, "expected ')' at end of param list");
+      if (curTok->type != Token::RPAREN)
+        error(curTok->pos, "expected ')' at end of param list");
     } else {
       eat();
     }
@@ -343,7 +348,8 @@ Field Parser::Parser::parseField() {
 
 unique_ptr<Expr> Parser::Parser::parsePrimitiveTypeExpr() {
   Token::TokenType ty = expectRange(Token::types_begin, Token::types_end, "expected a type in primitive type expression")->type;
-  if (curTok->type != Token::ASTERISK) return std::make_unique<PrimitiveTypeExpr>(ty);
+  if (curTok->type != Token::ASTERISK)
+    return std::make_unique<PrimitiveTypeExpr>(ty);
 
   auto ptrTy = std::make_unique<PointerTypeExpr>(std::make_unique<PrimitiveTypeExpr>(ty));
   eat();

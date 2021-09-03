@@ -6,15 +6,7 @@
 
 namespace Parser {
 
-class ASTDump {
- private:
-  std::vector<unique_ptr<Node>> &ast;
-
- public:
-  ASTDump(std::vector<unique_ptr<Node>> &ast) : ast(ast){};
-
-  std::string toString();
-};
+std::string astToString(const unique_ptr<AST> &ast);
 
 }  // namespace Parser
 

@@ -1,0 +1,1 @@
+add_library(LLVMTestPass MODULE pass.cpp)

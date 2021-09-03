@@ -12,7 +12,7 @@ void Token::init() {
 }
 
 Token::TokenType Token::lookup(std::string ident) {
-  if (keywords.contains(ident)) {
+  if (keywords.count(ident)) {
     return keywords[ident];
   }
   return IDENT;
