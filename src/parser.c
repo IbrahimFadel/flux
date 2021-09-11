@@ -112,12 +112,14 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
   return fn;
 }
 
-cvector_vector_type(Stmt) parse_block_stmt(ParseContext *ctx) {
+BlockStmt *parse_block_stmt(ParseContext *ctx) {
+  BlockStmt *block = malloc(sizeof *block);
   parser_expect(ctx, TOKTYPE_LBRACE, "expected '{' after function parameter listing");
-  cvector_vector_type(Stmt) block = NULL;
+  block->stmts = NULL;
   while (ctx->cur_tok.type != TOKTYPE_RBRACE)
-    cvector_push_back(block, *parse_stmt(ctx));
+    cvector_push_back(block->stmts, *parse_stmt(ctx));
   parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' after function body");
+  block->variables = NULL;
   return block;
 }
 
@@ -338,7 +340,21 @@ Expr *parse_basic_lit(ParseContext *ctx) {
   lit->type = EXPRTYPE_BASIC_LIT;
   lit->value.basic_lit = malloc(sizeof *lit->value.basic_lit);
   lit->value.basic_lit->type = tok.type;
-  lit->value.basic_lit->value = tok.value;
+  switch (tok.type) {
+    case TOKTYPE_INT:
+      lit->value.basic_lit->value.int_lit = malloc(sizeof *lit->value.basic_lit->value.int_lit);
+      lit->value.basic_lit->value.int_lit->bits = 32;
+      lit->value.basic_lit->value.int_lit->is_signed = true;
+      lit->value.basic_lit->value.int_lit->value = atoi(tok.value);
+      break;
+    case TOKTYPE_FLOAT:
+      lit->value.basic_lit->value.float_lit = malloc(sizeof *lit->value.basic_lit->value.float_lit);
+      lit->value.basic_lit->value.float_lit->bits = 32;
+      lit->value.basic_lit->value.float_lit->value = atoi(tok.value);
+      break;
+    default:
+      parser_fatal("unimplemented basic lit type");
+  }
   return lit;
 }
 

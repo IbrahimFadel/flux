@@ -2,6 +2,7 @@
 #define AST_H
 
 #include <cvec.h>
+#include <llvm-c/Core.h>
 #include <stdbool.h>
 
 #include "token.h"
@@ -18,10 +19,23 @@ typedef enum ExprType {
 typedef enum StmtType {
   STMTTYPE_VARDECL,
   STMTTYPE_RETURN,
+  STMTTYPE_BLOCK,
 } StmtType;
 
 struct Expr;
 struct VarDecl;
+struct Stmt;
+
+typedef struct IntExpr {
+  unsigned bits;
+  bool is_signed;
+  int value;
+} IntExpr;
+
+typedef struct FloatExpr {
+  unsigned bits;
+  double value;
+} FloatExpr;
 
 typedef struct PrimitiveTypeExpr {
   TokenType type;
@@ -37,7 +51,12 @@ typedef struct IdentExpr {
 
 typedef struct BasicLitExpr {
   TokenType type;
-  const char *value;
+  union {
+    struct IntExpr *int_lit;
+    struct FloatExpr *float_lit;
+    const char *str_lit;
+    char char_lit;
+  } value;
 } BasicLitExpr;
 
 typedef struct BinaryExpr {
@@ -49,6 +68,19 @@ typedef struct BinaryExpr {
 typedef struct ReturnStmt {
   struct Expr *v;
 } ReturnStmt;
+
+typedef struct Variable {
+  bool mut;
+  const char *name;
+  LLVMValueRef ptr;
+} Variable;
+
+typedef struct BlockStmt {
+  cvector_vector_type(struct Stmt) stmts;
+  cvector_vector_type(Variable) variables;
+  // cvector_vector_type(LLVMValueRef) constants;
+  // cvector_vector_type(LLVMValueRef) mutables;
+} BlockStmt;
 
 typedef struct _VoidTypeExpr VoidTypeExpr;
 
@@ -69,6 +101,7 @@ typedef struct Stmt {
   union {
     struct VarDecl *var_decl;
     struct ReturnStmt *ret;
+    struct BlockStmt *block;
   } value;
 } Stmt;
 
@@ -88,7 +121,7 @@ typedef struct FnDecl {
   const char *name;
   cvector_vector_type(Param) params;
   Expr *return_type;
-  cvector_vector_type(Stmt) body;
+  BlockStmt *body;
 } FnDecl;
 
 typedef struct VarDecl {

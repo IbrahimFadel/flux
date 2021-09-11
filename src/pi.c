@@ -96,6 +96,14 @@ int main(int argc, char **argv) {
     printf("===== IR Module =====\n");
     LLVMDumpModule(mod);
     printf("=====================\n");
+
+    char *err_msg[2] = {"could not write module to file", NULL};
+    char *file_ext = ".ll";
+    char *file_name = malloc(strlen(pkg_it->name) + strlen(file_ext));
+    strcpy(file_name, pkg_it->name);
+    strcat(file_name, file_ext);
+
+    LLVMPrintModuleToFile(mod, file_name, err_msg);
   }
 
   return 0;

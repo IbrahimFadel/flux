@@ -43,7 +43,7 @@ Expr *parse_unary_expr(ParseContext *ctx);
 Expr *parse_primary_expr(ParseContext *ctx);
 Expr *parse_ident_expr(ParseContext *ctx);
 Expr *parse_basic_lit(ParseContext *ctx);
-cvector_vector_type(Stmt) parse_block_stmt(ParseContext *ctx);
+BlockStmt *parse_block_stmt(ParseContext *ctx);
 Stmt *parse_return_stmt(ParseContext *ctx);
 
 void parse_pkg_file_tokens(ParseContext *ctx);

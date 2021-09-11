@@ -1,4 +1,4 @@
-pkg main
+pkg math
 
 pub fn sum(i32 x, i32 y) -> i32 {
   return x + y;
