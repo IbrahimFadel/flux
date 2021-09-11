@@ -1,7 +1,0 @@
-type Animal interface {
-	hello()
-}
-
-fn main() -> i32 {
-	return 0;
-}
