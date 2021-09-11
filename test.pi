@@ -1,5 +1,0 @@
-pkg main
-
-fn main() -> i32 {
-  i32 x, y, z;
-}

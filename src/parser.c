@@ -192,11 +192,29 @@ Stmt *parse_stmt(ParseContext *ctx) {
     case TOKTYPE_MUT:
       parser_eat(ctx);
       return parse_var_decl(ctx, false, true);
+    case TOKTYPE_RETURN:
+      return parse_return_stmt(ctx);
     default:
       parser_fatal("unknown token when parsing statement");
       break;
   }
   return NULL;
+}
+
+Stmt *parse_return_stmt(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_RETURN, "expected 'return' in return statement");
+  Stmt *ret = malloc(sizeof *ret);
+  ret->type = STMTTYPE_RETURN;
+
+  ret->value.ret = malloc(sizeof *ret->value.ret);
+  ret->value.ret->v = malloc(sizeof *ret->value.ret);
+  ret->value.ret->v->type = EXPRTYPE_VOID;
+  if (ctx->cur_tok.type != TOKTYPE_SEMICOLON)
+    ret->value.ret->v = parse_expr(ctx);
+
+  parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after return value");
+
+  return ret;
 }
 
 Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {

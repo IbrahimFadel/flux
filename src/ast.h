@@ -17,6 +17,7 @@ typedef enum ExprType {
 
 typedef enum StmtType {
   STMTTYPE_VARDECL,
+  STMTTYPE_RETURN,
 } StmtType;
 
 struct Expr;
@@ -45,6 +46,10 @@ typedef struct BinaryExpr {
   struct Expr *y;
 } BinaryExpr;
 
+typedef struct ReturnStmt {
+  struct Expr *v;
+} ReturnStmt;
+
 typedef struct _VoidTypeExpr VoidTypeExpr;
 
 typedef struct Expr {
@@ -63,11 +68,9 @@ typedef struct Stmt {
   StmtType type;
   union {
     struct VarDecl *var_decl;
+    struct ReturnStmt *ret;
   } value;
 } Stmt;
-
-typedef struct BlockStmt {
-} BlockStmt;
 
 typedef struct FnReceiver {
   Expr *type;

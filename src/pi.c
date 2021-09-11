@@ -3,6 +3,7 @@
 #include <cvec.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ir.h"
 #include "parser.h"
@@ -33,48 +34,69 @@ void package_print(Package *p) {
   }
 }
 
-int main() {
-  const char *file_content = read_file("./test.pi");
-  if (file_content == NULL) {
-    printf("Could not read file content\n");
+int main(int argc, char **argv) {
+  cvector_vector_type(const char *) input_files = NULL;
+  if (argc == 1) {
+    printf("Specify input files\n");
     exit(1);
-  }
-  printf("==== File Content ====\n%s\n======================\n", file_content);
-
-  Scanner *s = scanner_create(file_content);
-  Token *tokens = scan_file(s);
-
-  int i = 0;
-  while (tokens[i].type != TOKTYPE_EOF) {
-    printf("%s:%d\n", tokens[i].value, tokens[i].type);
-    i++;
-  }
-
-  ParseContext *ctx = parsecontext_create(tokens);
-  parse_pkg_file_tokens(ctx);
-
-  Package *pkg = package_create();
-  pkg->name = ctx->pkg;
-  FnDecl *it;
-  for (it = cvector_begin(ctx->functions); it != cvector_end(ctx->functions); it++) {
-    if (it->pub) {
-      cvector_push_back(pkg->public_functions, *it);
-    } else {
-      cvector_push_back(pkg->private_functions, *it);
+  } else {
+    int i;
+    for (i = 0; i < argc - 1; i++) {
+      cvector_push_back(input_files, argv[i + 1]);
     }
   }
 
-  package_print(pkg);
+  cvector_vector_type(Package) packages = NULL;
 
-  // LLVMModuleRef mod = codegen_pkg(pkg);
-  // printf("======= Module =======\n");
-  // LLVMDumpModule(mod);
-  // printf("======================\n");
+  int i;
+  for (i = 0; i < cvector_size(input_files); i++) {
+    const char *file_content = read_file(input_files[i]);
+    if (file_content == NULL) {
+      printf("Could not read file content\n");
+      exit(1);
+    }
 
-  free(s);
-  free(tokens);
-  free(ctx);
-  free(pkg);
+    Scanner *s = scanner_create(file_content);
+    Token *tokens = scan_file(s);
+
+    ParseContext *ctx = parsecontext_create(tokens);
+    parse_pkg_file_tokens(ctx);
+
+    Package *pkg_it;
+    bool pkg_found = false;
+    for (pkg_it = cvector_begin(packages); pkg_it != cvector_end(packages); pkg_it++) {
+      if (!strcmp(pkg_it->name, ctx->pkg)) {
+        pkg_found = true;
+        break;
+      }
+    }
+    if (!pkg_found) {
+      cvector_push_back(packages, *package_create());
+      pkg_it = &packages[cvector_size(packages) - 1];
+      pkg_it->name = ctx->pkg;
+    }
+    FnDecl *it;
+    for (it = cvector_begin(ctx->functions); it != cvector_end(ctx->functions); it++) {
+      if (it->pub) {
+        cvector_push_back(pkg_it->public_functions, *it);
+      } else {
+        cvector_push_back(pkg_it->private_functions, *it);
+      }
+    }
+
+    free(s);
+    free(tokens);
+    free(ctx);
+  }
+
+  Package *pkg_it;
+  for (pkg_it = cvector_begin(packages); pkg_it != cvector_end(packages); pkg_it++) {
+    package_print(pkg_it);
+    LLVMModuleRef mod = codegen_pkg(pkg_it);
+    printf("===== IR Module =====\n");
+    LLVMDumpModule(mod);
+    printf("=====================\n");
+  }
 
   return 0;
 }

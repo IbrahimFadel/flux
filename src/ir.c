@@ -6,11 +6,15 @@
 LLVMModuleRef codegen_pkg(Package *pkg) {
   CodegenContext *ctx = malloc(sizeof(CodegenContext));
   ctx->ctx = LLVMContextCreate();
-  ctx->mod = LLVMModuleCreateWithNameInContext("test_module", ctx->ctx);
-  // unsigned i;
-  // for (i = 0; i < pkg->private_functions_len; i++) {
-  //   codegen_function(ctx, &pkg->private_functions[i]);
-  // }
+  ctx->mod = LLVMModuleCreateWithNameInContext(pkg->name, ctx->ctx);
+  ctx->builder = LLVMCreateBuilderInContext(ctx->ctx);
+  unsigned i;
+  for (i = 0; i < cvector_size(pkg->private_functions); i++) {
+    codegen_function(ctx, &pkg->private_functions[i]);
+  }
+  for (i = 0; i < cvector_size(pkg->public_functions); i++) {
+    codegen_function(ctx, &pkg->public_functions[i]);
+  }
   return ctx->mod;
 }
 
@@ -49,13 +53,109 @@ LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *
   }
 }
 
+void coddegen_block_stmt(CodegenContext *ctx, Stmt *block) {
+  unsigned i;
+  for (i = 0; i < cvector_size(block); i++) {
+    codegen_stmt(ctx, &block[i]);
+  }
+}
+
+LLVMValueRef codegen_stmt(CodegenContext *ctx, Stmt *stmt) {
+  switch (stmt->type) {
+    case STMTTYPE_RETURN:
+      return LLVMBuildRet(ctx->builder, codegen_expr(ctx, stmt->value.ret->v));
+    default:
+      printf("unimplemented stmt\n");
+      exit(1);
+      break;
+  }
+  return NULL;
+}
+
+LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
+  switch (expr->type) {
+    case EXPRTYPE_BASIC_LIT:
+      return codegen_basic_lit_expr(ctx, expr->value.basic_lit);
+    case EXPRTYPE_BINARY:
+      return codegen_binary_expr(ctx, expr->value.binop);
+    case EXPRTYPE_IDENT:
+      return codegen_ident_expr(ctx, expr->value.ident);
+    default:
+      printf("unimplemented expr\n");
+      exit(1);
+  }
+  return NULL;
+}
+
+// maybe BlockStmt should be a struct
+// and it'll have a list of stmts and a map for mutables and constants
+// that way all closures can have local variables
+LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
+  return LLVMConstInt(LLVMInt32TypeInContext(ctx->ctx), 5, false);
+}
+
+LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
+  switch (binop->op) {
+    case TOKTYPE_PLUS:
+    case TOKTYPE_MINUS:
+    case TOKTYPE_ASTERISK:
+    case TOKTYPE_SLASH:
+      return codegen_binop_arithmetic(ctx, binop);
+    default:
+      break;
+  }
+  return NULL;
+}
+
+// TODO: don't hardcode signed and floats
+LLVMValueRef codegen_binop_arithmetic(CodegenContext *ctx, BinaryExpr *binop) {
+  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
+  LLVMValueRef rhs = codegen_expr(ctx, binop->y);
+
+  // LLVMDumpValue(lhs);
+  // LLVMDumpValue(rhs);
+
+  printf("%d\n", binop->op);
+  switch (binop->op) {
+    case TOKTYPE_PLUS:
+      return LLVMBuildAdd(ctx->builder, lhs, rhs, "tmp");
+    case TOKTYPE_MINUS:
+      return LLVMBuildSub(ctx->builder, lhs, rhs, "tmp");
+    case TOKTYPE_ASTERISK:
+      return LLVMBuildMul(ctx->builder, lhs, rhs, "tmp");
+    case TOKTYPE_SLASH:
+      return LLVMBuildSDiv(ctx->builder, lhs, rhs, "tmp");
+    default:
+      break;
+  }
+
+  return NULL;
+}
+
+// TODO: pi-lang needs a type-checking stage
+// TODO: don't hardcode false for signed
+LLVMValueRef codegen_basic_lit_expr(CodegenContext *ctx, BasicLitExpr *lit) {
+  switch (lit->type) {
+    case TOKTYPE_INT:
+      return LLVMConstInt(LLVMInt32TypeInContext(ctx->ctx), atoi(lit->value), false);
+    case TOKTYPE_FLOAT:
+      return LLVMConstInt(LLVMFloatTypeInContext(ctx->ctx), atof(lit->value), false);
+    default:
+      break;
+  }
+  return NULL;
+}
+
 void codegen_function(CodegenContext *ctx, FnDecl *fn) {
-  // LLVMTypeRef param_types[fn->params->length];
-  // int i;
-  // for (i = 0; i < fn->params->length; i++) {
-  //   param_types[i] = codegen_type_expr(ctx, fn->params->params[i].type);
-  // }
-  // LLVMTypeRef ret_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, fn->params->length, false);
-  // LLVMValueRef func = LLVMAddFunction(ctx->mod, fn->name, ret_type);
-  // LLVMAppendBasicBlock(func, "entry");
+  unsigned param_len = cvector_size(fn->params);
+  LLVMTypeRef param_types[param_len];
+  unsigned i;
+  for (i = 0; i < param_len; i++) {
+    param_types[i] = codegen_type_expr(ctx, fn->params[i].type);
+  }
+  LLVMTypeRef ret_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
+  LLVMValueRef func = LLVMAddFunction(ctx->mod, fn->name, ret_type);
+  ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
+  LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
+  coddegen_block_stmt(ctx, fn->body);
 }
