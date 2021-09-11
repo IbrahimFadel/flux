@@ -343,17 +343,73 @@ Token *scan(Scanner *s) {
         tok->type = TOKTYPE_RBRACE;
         tok->value = "}";
         break;
+      case '+':
+        tok->type = TOKTYPE_PLUS;
+        tok->value = "+";
+        break;
       case '*':
         tok->type = TOKTYPE_ASTERISK;
         tok->value = "*";
+        break;
+      case '/':
+        tok->type = TOKTYPE_SLASH;
+        tok->value = "/";
         break;
       case ',':
         tok->type = TOKTYPE_COMMA;
         tok->value = ",";
         break;
+      case '!':
+        if (s->ch == '=') {
+          tok->type = TOKTYPE_CMP_NEQ;
+          tok->value = "!=";
+          scanner_next(s);
+        }
+        break;
       case '=':
         tok->type = TOKTYPE_EQ;
         tok->value = "=";
+        if (s->ch == '=') {
+          tok->type = TOKTYPE_CMP_EQ;
+          tok->value = "==";
+          scanner_next(s);
+        }
+        break;
+      case '&':
+        tok->type = TOKTYPE_AMPERSAND;
+        tok->value = "=";
+        if (s->ch == '&') {
+          tok->type = TOKTYPE_CMP_AND;
+          tok->value = "&&";
+          scanner_next(s);
+        }
+        break;
+      case '|':
+        tok->type = TOKTYPE_PIPE;
+        tok->value = "|";
+        if (s->ch == '|') {
+          tok->type = TOKTYPE_CMP_OR;
+          tok->value = "||";
+          scanner_next(s);
+        }
+        break;
+      case '<':
+        tok->type = TOKTYPE_CMP_LT;
+        tok->value = "<";
+        if (s->ch == '=') {
+          tok->type = TOKTYPE_CMP_LTE;
+          tok->value = "<=";
+          scanner_next(s);
+        }
+        break;
+      case '>':
+        tok->type = TOKTYPE_CMP_GT;
+        tok->value = ">";
+        if (s->ch == '=') {
+          tok->type = TOKTYPE_CMP_GTE;
+          tok->value = ">=";
+          scanner_next(s);
+        }
         break;
       case '-':
         tok->type = TOKTYPE_MINUS;
@@ -363,6 +419,10 @@ Token *scan(Scanner *s) {
           tok->value = "->";
           scanner_next(s);
         }
+        break;
+      case '.':
+        tok->type = TOKTYPE_PERIOD;
+        tok->value = ".";
         break;
     }
   }

@@ -17,7 +17,7 @@ LLVMModuleRef codegen_pkg(Package *pkg) {
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
   switch (expr->type) {
     case EXPRTYPE_PRIMITIVE:
-      return codegen_primitive_type_expr(ctx, &expr->value.primitive_type);
+      return codegen_primitive_type_expr(ctx, expr->value.primitive_type);
     default:
       break;
   }

@@ -9,6 +9,10 @@
 typedef enum ExprType {
   EXPRTYPE_PRIMITIVE,
   EXPRTYPE_PTR,
+  EXPRTYPE_VOID,
+  EXPRTYPE_IDENT,
+  EXPRTYPE_BASIC_LIT,
+  EXPRTYPE_BINARY,
 } ExprType;
 
 typedef enum StmtType {
@@ -26,6 +30,21 @@ typedef struct PointerTypeExpr {
   struct Expr *pointer_to_type;
 } PointerTypeExpr;
 
+typedef struct IdentExpr {
+  const char *value;
+} IdentExpr;
+
+typedef struct BasicLitExpr {
+  TokenType type;
+  const char *value;
+} BasicLitExpr;
+
+typedef struct BinaryExpr {
+  struct Expr *x;
+  TokenType op;
+  struct Expr *y;
+} BinaryExpr;
+
 typedef struct _VoidTypeExpr VoidTypeExpr;
 
 typedef struct Expr {
@@ -33,6 +52,10 @@ typedef struct Expr {
   union {
     struct PrimitiveTypeExpr *primitive_type;
     struct PointerTypeExpr *pointer_type;
+    struct VoidTypeExpr *void_type;
+    struct IdentExpr *ident;
+    struct BasicLitExpr *basic_lit;
+    struct BinaryExpr *binop;
   } value;
 } Expr;
 
@@ -62,6 +85,7 @@ typedef struct FnDecl {
   const char *name;
   cvector_vector_type(Param) params;
   Expr *return_type;
+  cvector_vector_type(Stmt) body;
 } FnDecl;
 
 typedef struct VarDecl {

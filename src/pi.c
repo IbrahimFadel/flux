@@ -74,7 +74,7 @@ int main() {
   free(s);
   free(tokens);
   free(ctx);
-  // free(pkg);
+  free(pkg);
 
   return 0;
 }
