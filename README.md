@@ -21,9 +21,9 @@ type Animal interface {
 
 type Dog struct {
 	pub mut i32 Age
-	pub const i32* X, Y, Z
+	pub i32 *X, Y, Z
 	mut i32 Weight
-	const i32 Name
+	i32 Name
 }
 
 // -------------------------
@@ -42,9 +42,9 @@ fn (dog Dog*) Other() {
 
 fn main() -> i32 {
 	// Initialized to null
-	const Animal animal
+	Animal animal
 	// This is really an i32
-	const Foo x = 0
+	Foo x = 0
 
 	// Three mutable floats
 	mut f32 a, b, c = 1, 2, 3
