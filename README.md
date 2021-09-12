@@ -29,7 +29,7 @@ type Dog struct {
 // -------------------------
 
 // This method implements the Animal interface
-fn (dog Dog*) Hello() -> i32 {
+fn (Dog *dog) Hello() -> i32 {
 	return 0
 }
 
@@ -37,7 +37,7 @@ fn (dog Dog*) Hello() -> i32 {
  * This is just a method
  * No return type specified = void
 */
-fn (dog Dog*) Other() {
+fn (Dog *dog) Other() {
 }
 
 fn main() -> i32 {
