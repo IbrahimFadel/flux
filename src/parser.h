@@ -18,6 +18,7 @@ typedef struct ParseContext {
   int tok_ptr;
   TokPrecKeyVal tok_precedence_map[15];
   cvector_vector_type(FnDecl) functions;
+  cvector_vector_type(TypeDecl) types;
 } ParseContext;
 
 ParseContext *parsecontext_create(Token *toks);
@@ -45,6 +46,11 @@ Expr *parse_ident_expr(ParseContext *ctx);
 Expr *parse_basic_lit(ParseContext *ctx);
 BlockStmt *parse_block_stmt(ParseContext *ctx);
 Stmt *parse_return_stmt(ParseContext *ctx);
+TypeDecl *parse_type_decl(ParseContext *ctx, bool pub);
+Expr *parse_interface_type_expr(ParseContext *ctx);
+Method *parse_method_decl(ParseContext *ctx);
+Expr *parse_struct_type_expr(ParseContext *ctx);
+Property *parse_property(ParseContext *ctx);
 
 void parse_pkg_file_tokens(ParseContext *ctx);
 

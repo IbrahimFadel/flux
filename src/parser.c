@@ -9,6 +9,7 @@ ParseContext *parsecontext_create(Token *toks) {
   ctx->tok_ptr = 0;
   ctx->cur_tok = ctx->toks[ctx->tok_ptr];
   ctx->functions = NULL;
+  ctx->types = NULL;
   // there is a better way im just stupid
   ctx->tok_precedence_map[0].type = TOKTYPE_EQ;
   ctx->tok_precedence_map[0].prec = 2;
@@ -88,9 +89,9 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
   FnDecl *fn = malloc(sizeof(FnDecl));
   parser_expect(ctx, TOKTYPE_FN, "expected 'fn' in function declaration");
 
-  FnReceiver *receiver = NULL;
+  fn->receiver = NULL;
   if (ctx->cur_tok.type == TOKTYPE_LPAREN) {
-    receiver = parse_fn_receiver(ctx);
+    fn->receiver = parse_fn_receiver(ctx);
   }
 
   fn->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in function name").value;
@@ -161,9 +162,119 @@ Param *parse_param(ParseContext *ctx) {
 Expr *parse_type_expr(ParseContext *ctx) {
   if (ctx->cur_tok.type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok.type < TOKTYPE_TYPES_END)
     return parse_primitive_type_expr(ctx);
-  else
-    parser_fatal("unimplemented type expression");
+
+  switch (ctx->cur_tok.type) {
+    case TOKTYPE_INTERFACE:
+      return parse_interface_type_expr(ctx);
+    case TOKTYPE_STRUCT:
+      return parse_struct_type_expr(ctx);
+    case TOKTYPE_IDENT: {
+      Expr *e = parse_ident_expr(ctx);
+      if (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
+        e->type = EXPRTYPE_PTR;
+        e->value.pointer_type->pointer_to_type = e;
+        parser_eat(ctx);
+        while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
+          e->value.pointer_type->pointer_to_type = e;
+          parser_eat(ctx);
+        }
+      }
+      return e;
+    }
+    default:
+      parser_fatal("unimplemented type expression");
+  }
   return NULL;
+}
+
+Expr *parse_struct_type_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_STRUCT, "expected 'struct' in struct type expression");
+  parser_expect(ctx, TOKTYPE_LBRACE, "expected '{' in struct type expression");
+
+  Expr *s = malloc(sizeof *s);
+  s->type = EXPRTYPE_STRUCT;
+  s->value.struct_type = malloc(sizeof *s->value.struct_type);
+  s->value.struct_type->properties = NULL;
+  s->value.struct_type->interface_implementations = NULL;
+  while (ctx->cur_tok.type != TOKTYPE_RBRACE) {
+    cvector_push_back(s->value.struct_type->properties, *parse_property(ctx));
+    parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after property in struct type property list");
+    if (ctx->cur_tok.type != TOKTYPE_RBRACE && ctx->cur_tok.type != TOKTYPE_IDENT) {
+      parser_fatal("expected a property or '}' in struct type property list");
+    }
+  }
+
+  parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' in struct type expression");
+  return s;
+}
+
+Property *parse_property(ParseContext *ctx) {
+  Property *p = malloc(sizeof *p);
+  p->pub = false;
+  p->mut = false;
+  if (ctx->cur_tok.type == TOKTYPE_PUB) {
+    p->pub = true;
+    parser_eat(ctx);
+  }
+  if (ctx->cur_tok.type == TOKTYPE_MUT) {
+    p->mut = true;
+    parser_eat(ctx);
+  }
+  p->type = parse_type_expr(ctx);
+  p->names = NULL;
+  while (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+    cvector_push_back(p->names, parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in property identifier list").value);
+    if (ctx->cur_tok.type == TOKTYPE_COMMA) {
+      parser_eat(ctx);
+    } else if (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+      parser_fatal("expected ';' at end of property");
+    }
+  }
+
+  return p;
+}
+
+Expr *parse_interface_type_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_INTERFACE, "expected 'interface' in interface type expression");
+  parser_expect(ctx, TOKTYPE_LBRACE, "expected '{' in interface type expression");
+
+  Expr *interface = malloc(sizeof *interface);
+  interface->type = EXPRTYPE_INTERFACE;
+  interface->value.interface_type = malloc(sizeof *interface->value.interface_type);
+  interface->value.interface_type->methods = NULL;
+  while (ctx->cur_tok.type != TOKTYPE_RBRACE) {
+    cvector_push_back(interface->value.interface_type->methods, *parse_method_decl(ctx));
+    parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after method in interface type method list");
+    if (ctx->cur_tok.type != TOKTYPE_RBRACE && ctx->cur_tok.type != TOKTYPE_IDENT) {
+      parser_fatal("expected a method or '}' in interface type method list");
+    }
+  }
+
+  parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' at end of interface type expression");
+
+  return interface;
+}
+
+Method *parse_method_decl(ParseContext *ctx) {
+  Method *m = malloc(sizeof *m);
+  m->pub = false;
+  if (ctx->cur_tok.type == TOKTYPE_PUB) {
+    m->pub = true;
+    parser_eat(ctx);
+  }
+  m->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in method declaration").value;
+  parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' before method param list");
+  m->params = parse_paramlist(ctx);
+  parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' after method param list");
+
+  m->return_type = malloc(sizeof *m->return_type);
+  m->return_type->type = EXPRTYPE_VOID;
+  if (ctx->cur_tok.type == TOKTYPE_ARROW) {
+    parser_eat(ctx);
+    m->return_type = parse_type_expr(ctx);
+  }
+
+  return m;
 }
 
 Expr *parse_primitive_type_expr(ParseContext *ctx) {
@@ -196,6 +307,16 @@ Stmt *parse_stmt(ParseContext *ctx) {
       return parse_var_decl(ctx, false, true);
     case TOKTYPE_RETURN:
       return parse_return_stmt(ctx);
+    case TOKTYPE_IDENT:
+      switch (ctx->toks[ctx->tok_ptr + 1].type) {
+        case TOKTYPE_LPAREN:
+          parser_fatal("function calls unimplemented");
+        case TOKTYPE_IDENT:
+          return parse_var_decl(ctx, false, false);
+        default:
+          parser_fatal("unknown token when parsing statement");
+      }
+      break;
     default:
       parser_fatal("unknown token when parsing statement");
       break;
@@ -358,25 +479,43 @@ Expr *parse_basic_lit(ParseContext *ctx) {
   return lit;
 }
 
+TypeDecl *parse_type_decl(ParseContext *ctx, bool pub) {
+  parser_expect(ctx, TOKTYPE_TYPE, "expected 'type' in type declaration");
+  TypeDecl *ty = malloc(sizeof *ty);
+  ty->pub = pub;
+  ty->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in type declaration").value;
+  ty->value = parse_type_expr(ctx);
+  return ty;
+}
+
 void parse_pkg_file_tokens(ParseContext *ctx) {
-  if (ctx->cur_tok.type != TOKTYPE_PACKAGE) {
-    parser_fatal("first token in file must be package statement");
-  }
+  ctx->pkg = parse_pkg(ctx);
   int i = 0;
   while (ctx->cur_tok.type != TOKTYPE_EOF) {
     switch (ctx->cur_tok.type) {
       case TOKTYPE_PACKAGE:
-        ctx->pkg = parse_pkg(ctx);
-        break;
+        parser_fatal("cannot have more than one 'pkg' in file");
       case TOKTYPE_FN:
         cvector_push_back(ctx->functions, *parse_fn_decl(ctx, false));
         break;
       case TOKTYPE_PUB:
         parser_eat(ctx);
-        cvector_push_back(ctx->functions, *parse_fn_decl(ctx, true));
+        switch (ctx->cur_tok.type) {
+          case TOKTYPE_FN:
+            cvector_push_back(ctx->functions, *parse_fn_decl(ctx, true));
+            break;
+          case TOKTYPE_TYPE:
+            cvector_push_back(ctx->types, *parse_type_decl(ctx, true));
+            break;
+          default:
+            break;
+        }
+        break;
+      case TOKTYPE_TYPE:
+        cvector_push_back(ctx->types, *parse_type_decl(ctx, false));
         break;
       default:
-        break;
+        parser_fatal("unimplemented token");
     }
     i++;
   }

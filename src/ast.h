@@ -14,6 +14,8 @@ typedef enum ExprType {
   EXPRTYPE_IDENT,
   EXPRTYPE_BASIC_LIT,
   EXPRTYPE_BINARY,
+  EXPRTYPE_INTERFACE,
+  EXPRTYPE_STRUCT,
 } ExprType;
 
 typedef enum StmtType {
@@ -25,6 +27,7 @@ typedef enum StmtType {
 struct Expr;
 struct VarDecl;
 struct Stmt;
+struct Param;
 
 typedef struct IntExpr {
   unsigned bits;
@@ -69,6 +72,12 @@ typedef struct ReturnStmt {
   struct Expr *v;
 } ReturnStmt;
 
+typedef struct Type {
+  bool pub;
+  const char *name;
+  LLVMTypeRef value;
+} Type;
+
 typedef struct Variable {
   bool mut;
   const char *name;
@@ -78,9 +87,30 @@ typedef struct Variable {
 typedef struct BlockStmt {
   cvector_vector_type(struct Stmt) stmts;
   cvector_vector_type(Variable) variables;
-  // cvector_vector_type(LLVMValueRef) constants;
-  // cvector_vector_type(LLVMValueRef) mutables;
 } BlockStmt;
+
+typedef struct Method {
+  bool pub;
+  const char *name;
+  cvector_vector_type(struct Param) params;
+  struct Expr *return_type;
+} Method;
+
+typedef struct InterfaceTypeExpr {
+  cvector_vector_type(Method) methods;
+} InterfaceTypeExpr;
+
+typedef struct Property {
+  bool pub;
+  bool mut;
+  struct Expr *type;
+  cvector_vector_type(const char *) names;
+} Property;
+
+typedef struct StructTypeExpr {
+  cvector_vector_type(Property) properties;
+  cvector_vector_type(cvector_vector_type(const char *)) interface_implementations;
+} StructTypeExpr;
 
 typedef struct _VoidTypeExpr VoidTypeExpr;
 
@@ -90,6 +120,8 @@ typedef struct Expr {
     struct PrimitiveTypeExpr *primitive_type;
     struct PointerTypeExpr *pointer_type;
     struct VoidTypeExpr *void_type;
+    struct InterfaceTypeExpr *interface_type;
+    struct StructTypeExpr *struct_type;
     struct IdentExpr *ident;
     struct BasicLitExpr *basic_lit;
     struct BinaryExpr *binop;
@@ -119,9 +151,11 @@ typedef struct Param {
 typedef struct FnDecl {
   bool pub;
   const char *name;
+  FnReceiver *receiver;
   cvector_vector_type(Param) params;
   Expr *return_type;
   BlockStmt *body;
+  cvector_vector_type(Type) implements;
 } FnDecl;
 
 typedef struct VarDecl {
@@ -133,7 +167,9 @@ typedef struct VarDecl {
 } VarDecl;
 
 typedef struct TypeDecl {
+  bool pub;
   const char *name;
+  Expr *value;
 } TypeDecl;
 
 #endif

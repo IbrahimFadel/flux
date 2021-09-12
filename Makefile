@@ -4,7 +4,7 @@ BUILD_DIR=./build
 CC=/usr/bin/clang
 CXX=/usr/bin/clang++
 CFLAGS=-std=c89 -Wall -Werror -Wno-comment
-CPPFLAGS=$(shell llvm-config --cxxflags --ldflags --libs core bitwriter --system-libs)
+CPPFLAGS=$(shell llvm-config --cxxflags --ldflags --libs core --system-libs)
 INCFLAGS=-Ilib/
 
 SRC_DIR=./src

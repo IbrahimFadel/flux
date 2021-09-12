@@ -24,13 +24,22 @@ Package *package_create() {
 void package_print(Package *p) {
   printf("+----- PKG: %s -----+\n", p->name);
   printf("| Public Functions:\n");
-  FnDecl *it;
-  for (it = cvector_begin(p->public_functions); it != cvector_end(p->public_functions); it++) {
-    printf("| \t%s\n", it->name);
+  FnDecl *f_it;
+  for (f_it = cvector_begin(p->public_functions); f_it != cvector_end(p->public_functions); f_it++) {
+    printf("| \t%s\n", f_it->name);
   }
   printf("| Private Functions:\n");
-  for (it = cvector_begin(p->private_functions); it != cvector_end(p->private_functions); it++) {
-    printf("| \t%s\n", it->name);
+  for (f_it = cvector_begin(p->private_functions); f_it != cvector_end(p->private_functions); f_it++) {
+    printf("| \t%s\n", f_it->name);
+  }
+  printf("| Public Types:\n");
+  TypeDecl *t_it;
+  for (t_it = cvector_begin(p->public_types); t_it != cvector_end(p->public_types); t_it++) {
+    printf("| \t%s\n", t_it->name);
+  }
+  printf("| Private Types:\n");
+  for (t_it = cvector_begin(p->private_types); t_it != cvector_end(p->private_types); t_it++) {
+    printf("| \t%s\n", t_it->name);
   }
 }
 
@@ -75,12 +84,20 @@ int main(int argc, char **argv) {
       pkg_it = &packages[cvector_size(packages) - 1];
       pkg_it->name = ctx->pkg;
     }
-    FnDecl *it;
-    for (it = cvector_begin(ctx->functions); it != cvector_end(ctx->functions); it++) {
-      if (it->pub) {
-        cvector_push_back(pkg_it->public_functions, *it);
+    FnDecl *f_it;
+    for (f_it = cvector_begin(ctx->functions); f_it != cvector_end(ctx->functions); f_it++) {
+      if (f_it->pub) {
+        cvector_push_back(pkg_it->public_functions, *f_it);
       } else {
-        cvector_push_back(pkg_it->private_functions, *it);
+        cvector_push_back(pkg_it->private_functions, *f_it);
+      }
+    }
+    TypeDecl *t_it;
+    for (t_it = cvector_begin(ctx->types); t_it != cvector_end(ctx->types); t_it++) {
+      if (t_it->pub) {
+        cvector_push_back(pkg_it->public_types, *t_it);
+      } else {
+        cvector_push_back(pkg_it->private_types, *t_it);
       }
     }
 

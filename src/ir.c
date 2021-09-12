@@ -6,10 +6,16 @@
 
 LLVMModuleRef codegen_pkg(Package *pkg) {
   CodegenContext *ctx = malloc(sizeof(CodegenContext));
+  ctx->pkg = pkg;
   ctx->ctx = LLVMContextCreate();
   ctx->mod = LLVMModuleCreateWithNameInContext(pkg->name, ctx->ctx);
   ctx->builder = LLVMCreateBuilderInContext(ctx->ctx);
+  ctx->interfaces = NULL;
+  ctx->structs = NULL;
   unsigned i;
+  for (i = 0; i < cvector_size(pkg->private_types); i++) {
+    codegen_type_decl(ctx, &pkg->private_types[i]);
+  }
   for (i = 0; i < cvector_size(pkg->private_functions); i++) {
     codegen_function(ctx, &pkg->private_functions[i]);
   }
@@ -19,15 +25,72 @@ LLVMModuleRef codegen_pkg(Package *pkg) {
   return ctx->mod;
 }
 
+LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty) {
+  Type *t = malloc(sizeof *t);
+  t->pub = ty->pub;
+  t->name = ty->name;
+  t->value = codegen_type_expr(ctx, ty->value);
+  if (ty->value->type == EXPRTYPE_INTERFACE) {
+    cvector_push_back(ctx->interfaces, *t);
+  } else if (ty->value->type == EXPRTYPE_STRUCT) {
+    cvector_push_back(ctx->structs, *t);
+  } else {
+    printf("HUH?? fixme\n");
+    exit(1);
+  }
+  return NULL;
+}
+
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
   switch (expr->type) {
     case EXPRTYPE_PRIMITIVE:
       return codegen_primitive_type_expr(ctx, expr->value.primitive_type);
+    case EXPRTYPE_VOID:
+      return LLVMVoidTypeInContext(ctx->ctx);
+    case EXPRTYPE_INTERFACE:
+      return codegen_interface_type_expr(ctx, expr->value.interface_type);
+    case EXPRTYPE_STRUCT:
+      return codegen_struct_type_expr(ctx, expr->value.struct_type);
+    case EXPRTYPE_IDENT:
+      return codegen_ident_type_expr(ctx, expr->value.ident);
     default:
-      break;
+      printf("unimpemented type expr:  %d\n", expr->type);
+      exit(1);
   }
-  printf("unimpemented type expr:  %d\n", expr->type);
+  return NULL;
+}
+
+LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident) {
+  Type *it;
+  for (it = cvector_begin(ctx->interfaces); it != cvector_end(ctx->interfaces); it++) {
+    if (!strcmp(it->name, ident->value)) return it->value;
+  }
+  for (it = cvector_begin(ctx->structs); it != cvector_end(ctx->structs); it++) {
+    if (!strcmp(it->name, ident->value)) return it->value;
+  }
+  printf("could not find type with same name as ident expression");
   exit(1);
+}
+
+LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s) {
+  cvector_vector_type(LLVMTypeRef) prop_types = NULL;
+  Property *p_it;
+  for (p_it = cvector_begin(s->properties); p_it != cvector_end(s->properties); p_it++) {
+    unsigned i;
+    for (i = 0; i < cvector_size(p_it->names); i++) {
+      cvector_push_back(prop_types, codegen_type_expr(ctx, p_it->type));
+    }
+  }
+  LLVMTypeRef struct_ty = LLVMStructCreateNamed(ctx->ctx, "");
+  LLVMStructSetBody(struct_ty, prop_types, cvector_size(prop_types), false);
+  return struct_ty;
+}
+
+LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *interface) {
+  LLVMTypeRef vtable_ty = LLVMStructCreateNamed(ctx->ctx, "");
+  LLVMTypeRef interface_ty = LLVMStructCreateNamed(ctx->ctx, "");
+  LLVMStructSetBody(interface_ty, &vtable_ty, 1, false);
+  return interface_ty;
 }
 
 LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *expr) {
@@ -81,13 +144,13 @@ LLVMValueRef codegen_var_decl(CodegenContext *ctx, VarDecl *var) {
   unsigned num_vals = cvector_size(var->values);
   bool init_all_to_one_val = false;
   LLVMValueRef val_to_init_vars = NULL;
-  if (num_names > num_vals) {
+  if (num_names > num_vals && var->values != NULL) {
     init_all_to_one_val = true;
     val_to_init_vars = codegen_expr(ctx, var->values[0]);
   }
   for (i = 0; i < num_names; i++) {
     LLVMValueRef ptr = LLVMBuildAlloca(ctx->builder, codegen_type_expr(ctx, var->type), "");
-    if (init_all_to_one_val) {
+    if (init_all_to_one_val && var->values != NULL) {
       LLVMBuildStore(ctx->builder, val_to_init_vars, ptr);
     }
     Variable *v = malloc(sizeof *v);
@@ -229,6 +292,28 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
     param_types[i] = codegen_type_expr(ctx, fn->params[i].type);
   }
   LLVMTypeRef ret_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
+
+  if (fn->receiver != NULL) {
+    StructTypeExpr *s = NULL;
+    const char *recv_name = get_type_name(fn->receiver->type);
+    printf("%s\n", recv_name);
+    for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
+      // printf("%s/%s\n", ctx->pkg->private_types[i].name, fn->receiver->name);
+      if (ctx->pkg->private_types[i].value->type == EXPRTYPE_STRUCT && !strcmp(ctx->pkg->private_types[i].name, recv_name)) {
+        s = ctx->pkg->private_types[i].value->value.struct_type;
+        break;
+      }
+    }
+    // if (s == NULL) {
+    //   printf("function receiver struct type was not found\n");
+    //   exit(1);
+    // }
+    // s->
+    // for(i = 0; i < cvector_size())
+    // Type *interface_ty = find_interface_implemented(ctx, fn);
+    // find_interface_implemented(ctx, fn);
+  }
+
   LLVMValueRef func = LLVMAddFunction(ctx->mod, fn->name, ret_type);
   ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
   ctx->cur_block = fn->body;
@@ -236,4 +321,47 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
 
   codegen_function_params(ctx, func, fn->params);
   coddegen_block_stmt(ctx, fn->body);
+}
+
+const char *get_type_name(Expr *e) {
+  if (e->type == EXPRTYPE_IDENT) return e->value.ident->value;
+  if (e->type != EXPRTYPE_PTR) {
+    printf("could not get type name: it wasn't a ident or ptr to ident\n");
+    exit(1);
+  }
+  Expr expr = *e;
+  while (expr.type != TOKTYPE_IDENT) {
+    printf("%d\n", expr.type);
+    expr = *expr.value.pointer_type->pointer_to_type;
+  }
+  return expr.value.ident->value;
+}
+
+//TODO: check which methods have been implemented already, because it has to implement all the methods to implement an interface
+Type *find_interface_implemented(CodegenContext *ctx, FnDecl *fn) {
+  // StructTypeExpr *s;
+  TypeDecl *type_decl;
+  for (type_decl = cvector_begin(ctx->pkg->private_types); type_decl != cvector_end(ctx->pkg->private_types); type_decl++) {
+    if (type_decl->value->type != EXPRTYPE_INTERFACE) continue;
+
+    Method *method;
+    for (method = cvector_begin(type_decl->value->value.interface_type->methods); method != cvector_end(type_decl->value->value.interface_type->methods); method++) {
+      // bool method_implemented = fn_implements_interface_method(fn, method);
+      // if (fn->implements)
+      // if (!implemented) continue;
+    }
+  }
+  return NULL;
+}
+
+bool fn_implements_interface_method(FnDecl *fn, Method *method) {
+  Param *method_param;
+  Param *fn_param;
+  for (method_param = cvector_begin(method->params); method_param != cvector_end(method->params); method_param++) {
+    for (fn_param = cvector_begin(fn->params); fn_param != cvector_end(fn->params); fn_param++) {
+      if (method_param->mut != fn_param->mut) return false;
+      if (method_param->type->type != fn_param->type->type) return false;
+    }
+  }
+  return true;
 }

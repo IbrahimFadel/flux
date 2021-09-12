@@ -13,6 +13,12 @@ TokenType lookup_keyword(const char *str) {
     return TOKTYPE_RETURN;
   if (!strcmp(str, "mut"))
     return TOKTYPE_MUT;
+  if (!strcmp(str, "type"))
+    return TOKTYPE_TYPE;
+  if (!strcmp(str, "interface"))
+    return TOKTYPE_INTERFACE;
+  if (!strcmp(str, "struct"))
+    return TOKTYPE_STRUCT;
   if (!strcmp(str, "i64"))
     return TOKTYPE_i64;
   if (!strcmp(str, "i32"))

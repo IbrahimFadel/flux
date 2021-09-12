@@ -1,6 +1,20 @@
 pkg main
 
+type Animal interface {
+  pub hello();
+  age() -> i32;
+}
+
+type Dog struct {
+  pub mut i32 x, y, z;
+}
+
+pub fn (Dog *d) hello() {
+
+}
+
 fn main() -> i32 {
-  i32 x, y, z = 0;
-  return x + y - z;
+  Dog d;
+  Animal a;
+  return 0;
 }

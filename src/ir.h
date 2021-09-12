@@ -6,15 +6,22 @@
 #include "pi.h"
 
 typedef struct CodegenContext {
+  Package *pkg;
   LLVMContextRef ctx;
   LLVMModuleRef mod;
   LLVMBuilderRef builder;
   LLVMBasicBlockRef cur_bb;
   BlockStmt *cur_block;
+
+  cvector_vector_type(Type) structs;
+  cvector_vector_type(Type) interfaces;
 } CodegenContext;
 
 LLVMModuleRef codegen_pkg(Package *pkg);
 LLVMValueRef block_get_var(BlockStmt *block, const char *name);
+Type *find_interface_implemented(CodegenContext *ctx, FnDecl *fn);
+bool fn_implements_interface_method(FnDecl *fn, Method *method);
+const char *get_type_name(Expr *e);
 
 void codegen_function(CodegenContext *ctx, FnDecl *fn);
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr);
@@ -30,5 +37,9 @@ LLVMValueRef codegen_int_expr(CodegenContext *ctx, IntExpr *e);
 LLVMValueRef codegen_float_expr(CodegenContext *ctx, FloatExpr *e);
 LLVMValueRef codegen_var_decl(CodegenContext *ctx, VarDecl *var);
 LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param) params);
+LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty);
+LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *interface);
+LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s);
+LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident);
 
 #endif
