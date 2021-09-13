@@ -198,7 +198,8 @@ Expr *parse_struct_type_expr(ParseContext *ctx) {
   s->type = EXPRTYPE_STRUCT;
   s->value.struct_type = malloc(sizeof *s->value.struct_type);
   s->value.struct_type->properties = NULL;
-  s->value.struct_type->interface_implementations = NULL;
+  s->value.struct_type->interface_method_implementations = NULL;
+  s->value.struct_type->interfaces_implemented = NULL;
   while (ctx->cur_tok.type != TOKTYPE_RBRACE) {
     cvector_push_back(s->value.struct_type->properties, *parse_property(ctx));
     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after property in struct type property list");

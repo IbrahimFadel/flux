@@ -4,6 +4,7 @@
 #include <llvm-c/Core.h>
 
 #include "pi.h"
+#include "typecheck.h"
 
 typedef struct CodegenContext {
   Package *pkg;
@@ -19,9 +20,7 @@ typedef struct CodegenContext {
 
 LLVMModuleRef codegen_pkg(Package *pkg);
 LLVMValueRef block_get_var(BlockStmt *block, const char *name);
-Type *find_interface_implemented(CodegenContext *ctx, FnDecl *fn);
-bool fn_implements_interface_method(FnDecl *fn, Method *method);
-const char *get_type_name(Expr *e);
+const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name);
 
 void codegen_function(CodegenContext *ctx, FnDecl *fn);
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr);

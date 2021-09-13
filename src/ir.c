@@ -293,28 +293,15 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   }
   LLVMTypeRef ret_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
 
+  const char *fn_name = fn->name;
   if (fn->receiver != NULL) {
-    StructTypeExpr *s = NULL;
-    const char *recv_name = get_type_name(fn->receiver->type);
-    printf("%s\n", recv_name);
-    for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
-      // printf("%s/%s\n", ctx->pkg->private_types[i].name, fn->receiver->name);
-      if (ctx->pkg->private_types[i].value->type == EXPRTYPE_STRUCT && !strcmp(ctx->pkg->private_types[i].name, recv_name)) {
-        s = ctx->pkg->private_types[i].value->value.struct_type;
-        break;
-      }
-    }
-    // if (s == NULL) {
-    //   printf("function receiver struct type was not found\n");
-    //   exit(1);
-    // }
-    // s->
-    // for(i = 0; i < cvector_size())
-    // Type *interface_ty = find_interface_implemented(ctx, fn);
-    // find_interface_implemented(ctx, fn);
+    const char *struct_name = get_type_name(fn->receiver->type);
+    fn_name = fn_name_to_struct_method_name(fn->name, struct_name);
+    printf("--- ir ---\n");
+    printf("%s\n", struct_name);
   }
 
-  LLVMValueRef func = LLVMAddFunction(ctx->mod, fn->name, ret_type);
+  LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, ret_type);
   ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
   ctx->cur_block = fn->body;
   LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
@@ -323,45 +310,11 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   coddegen_block_stmt(ctx, fn->body);
 }
 
-const char *get_type_name(Expr *e) {
-  if (e->type == EXPRTYPE_IDENT) return e->value.ident->value;
-  if (e->type != EXPRTYPE_PTR) {
-    printf("could not get type name: it wasn't a ident or ptr to ident\n");
-    exit(1);
-  }
-  Expr expr = *e;
-  while (expr.type != EXPRTYPE_IDENT) {
-    printf("%d\n", expr.type);
-    expr = *expr.value.pointer_type->pointer_to_type;
-  }
-  return expr.value.ident->value;
-}
-
-//TODO: check which methods have been implemented already, because it has to implement all the methods to implement an interface
-Type *find_interface_implemented(CodegenContext *ctx, FnDecl *fn) {
-  // StructTypeExpr *s;
-  TypeDecl *type_decl;
-  for (type_decl = cvector_begin(ctx->pkg->private_types); type_decl != cvector_end(ctx->pkg->private_types); type_decl++) {
-    if (type_decl->value->type != EXPRTYPE_INTERFACE) continue;
-
-    Method *method;
-    for (method = cvector_begin(type_decl->value->value.interface_type->methods); method != cvector_end(type_decl->value->value.interface_type->methods); method++) {
-      // bool method_implemented = fn_implements_interface_method(fn, method);
-      // if (fn->implements)
-      // if (!implemented) continue;
-    }
-  }
-  return NULL;
-}
-
-bool fn_implements_interface_method(FnDecl *fn, Method *method) {
-  Param *method_param;
-  Param *fn_param;
-  for (method_param = cvector_begin(method->params); method_param != cvector_end(method->params); method_param++) {
-    for (fn_param = cvector_begin(fn->params); fn_param != cvector_end(fn->params); fn_param++) {
-      if (method_param->mut != fn_param->mut) return false;
-      if (method_param->type->type != fn_param->type->type) return false;
-    }
-  }
-  return true;
+// is this memory leak?
+const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {
+  char *method_name = malloc(strlen(fn_name) + 1 + strlen(struct_name));
+  strcpy(method_name, struct_name);
+  strcat(method_name, "_");
+  strcat(method_name, fn_name);
+  return method_name;
 }

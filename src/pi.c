@@ -87,8 +87,6 @@ int main(int argc, char **argv) {
     }
     FnDecl *f_it;
     for (f_it = cvector_begin(ctx->functions); f_it != cvector_end(ctx->functions); f_it++) {
-      TypecheckContext *typecheck_ctx = malloc(sizeof *typecheck_ctx);
-      typecheck_function(typecheck_ctx, f_it);
       if (f_it->pub) {
         cvector_push_back(pkg_it->public_functions, *f_it);
       } else {
@@ -109,8 +107,10 @@ int main(int argc, char **argv) {
     free(ctx);
   }
 
+  TypecheckContext *typecheck_ctx = malloc(sizeof *typecheck_ctx);
   Package *pkg_it;
   for (pkg_it = cvector_begin(packages); pkg_it != cvector_end(packages); pkg_it++) {
+    typecheck_pkg(typecheck_ctx, pkg_it);
     package_print(pkg_it);
     LLVMModuleRef mod = codegen_pkg(pkg_it);
     printf("===== IR Module =====\n");
@@ -125,6 +125,7 @@ int main(int argc, char **argv) {
 
     LLVMPrintModuleToFile(mod, file_name, err_msg);
   }
+  free(typecheck_ctx);
 
   return 0;
 }

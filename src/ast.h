@@ -109,17 +109,15 @@ typedef struct Property {
 
 typedef struct StructTypeExpr {
   cvector_vector_type(Property) properties;
-  cvector_vector_type(cvector_vector_type(const char *)) interface_implementations;
+  cvector_vector_type(cvector_vector_type(const char *)) interface_method_implementations;
+  cvector_vector_type(const char *) interfaces_implemented;
 } StructTypeExpr;
-
-typedef struct _VoidTypeExpr VoidTypeExpr;
 
 typedef struct Expr {
   ExprType type;
   union {
     struct PrimitiveTypeExpr *primitive_type;
     struct PointerTypeExpr *pointer_type;
-    struct VoidTypeExpr *void_type;
     struct InterfaceTypeExpr *interface_type;
     struct StructTypeExpr *struct_type;
     struct IdentExpr *ident;
