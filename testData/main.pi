@@ -13,7 +13,7 @@ pub fn (Dog *d) hello() {
 
 }
 
-fn main() -> i32 {
+fn main() -> i64 {
   Dog d;
   Animal a;
   return 0;

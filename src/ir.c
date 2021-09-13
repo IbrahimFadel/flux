@@ -95,13 +95,13 @@ LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *
 
 LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *expr) {
   switch (expr->type) {
-    case TOKTYPE_i64:
+    case TOKTYPE_I64:
       return LLVMInt64TypeInContext(ctx->ctx);
-    case TOKTYPE_i32:
+    case TOKTYPE_I32:
       return LLVMInt32TypeInContext(ctx->ctx);
-    case TOKTYPE_i16:
+    case TOKTYPE_I16:
       return LLVMInt16TypeInContext(ctx->ctx);
-    case TOKTYPE_i8:
+    case TOKTYPE_I8:
       return LLVMInt8TypeInContext(ctx->ctx);
     case TOKTYPE_u64:
       return LLVMInt64TypeInContext(ctx->ctx);
@@ -330,7 +330,7 @@ const char *get_type_name(Expr *e) {
     exit(1);
   }
   Expr expr = *e;
-  while (expr.type != TOKTYPE_IDENT) {
+  while (expr.type != EXPRTYPE_IDENT) {
     printf("%d\n", expr.type);
     expr = *expr.value.pointer_type->pointer_to_type;
   }

@@ -8,6 +8,7 @@
 #include "ir.h"
 #include "parser.h"
 #include "scanner.h"
+#include "typecheck.h"
 
 Package *package_create() {
   Package *pkg = malloc(sizeof(Package));
@@ -86,6 +87,8 @@ int main(int argc, char **argv) {
     }
     FnDecl *f_it;
     for (f_it = cvector_begin(ctx->functions); f_it != cvector_end(ctx->functions); f_it++) {
+      TypecheckContext *typecheck_ctx = malloc(sizeof *typecheck_ctx);
+      typecheck_function(typecheck_ctx, f_it);
       if (f_it->pub) {
         cvector_push_back(pkg_it->public_functions, *f_it);
       } else {

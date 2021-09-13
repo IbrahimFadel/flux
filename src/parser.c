@@ -159,6 +159,14 @@ Param *parse_param(ParseContext *ctx) {
   return p;
 }
 
+Expr *ptr_type_make(Expr *to) {
+  Expr *ptr = malloc(sizeof *ptr);
+  ptr->type = EXPRTYPE_PTR;
+  ptr->value.pointer_type = malloc(sizeof *ptr->value.pointer_type);
+  ptr->value.pointer_type->pointer_to_type = to;
+  return ptr;
+}
+
 Expr *parse_type_expr(ParseContext *ctx) {
   if (ctx->cur_tok.type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok.type < TOKTYPE_TYPES_END)
     return parse_primitive_type_expr(ctx);
@@ -170,14 +178,9 @@ Expr *parse_type_expr(ParseContext *ctx) {
       return parse_struct_type_expr(ctx);
     case TOKTYPE_IDENT: {
       Expr *e = parse_ident_expr(ctx);
-      if (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
-        e->type = EXPRTYPE_PTR;
-        e->value.pointer_type->pointer_to_type = e;
+      while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
+        e = ptr_type_make(e);
         parser_eat(ctx);
-        while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
-          e->value.pointer_type->pointer_to_type = e;
-          parser_eat(ctx);
-        }
       }
       return e;
     }

@@ -29,6 +29,8 @@ Token parser_expect(ParseContext *ctx, TokenType type, const char *msg);
 Token parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg);
 int parser_get_tokprec(ParseContext *ctx, TokenType tok);
 
+Expr *ptr_type_make(Expr *to);
+
 const char *parse_pkg(ParseContext *ctx);
 FnDecl *parse_fn_decl(ParseContext *ctx, bool pub);
 FnReceiver *parse_fn_receiver(ParseContext *ctx);
