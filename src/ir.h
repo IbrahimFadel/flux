@@ -7,20 +7,23 @@
 #include "typecheck.h"
 
 typedef struct CodegenContext {
-  Package *pkg;
+  TypecheckContext *typecheck_ctx;
   LLVMContextRef ctx;
   LLVMModuleRef mod;
   LLVMBuilderRef builder;
   LLVMBasicBlockRef cur_bb;
   BlockStmt *cur_block;
+  const char *cur_typedecl_name;
 
   cvector_vector_type(Type) structs;
   cvector_vector_type(Type) interfaces;
 } CodegenContext;
 
-LLVMModuleRef codegen_pkg(Package *pkg);
+LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx);
 LLVMValueRef block_get_var(BlockStmt *block, const char *name);
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name);
+const char *interface_name_to_interface_vtable_name(const char *interface_name);
+void add_method_to_interface_vtable(CodegenContext *ctx, const char *fn_name, LLVMTypeRef fn_type, const char *interface_name);
 
 void codegen_function(CodegenContext *ctx, FnDecl *fn);
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr);
@@ -40,5 +43,6 @@ LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty);
 LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *interface);
 LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s);
 LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident);
+LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_type);
 
 #endif

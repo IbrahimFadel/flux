@@ -12,7 +12,7 @@ type Dog struct {
 pub fn (Dog *d) hello() {
 }
 
-pub fn (Dog *d) age() -> i32 {
+fn (Dog *d) age() -> i32 {
 }
 
 fn main() -> i64 {

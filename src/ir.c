@@ -4,23 +4,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-LLVMModuleRef codegen_pkg(Package *pkg) {
+LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   CodegenContext *ctx = malloc(sizeof(CodegenContext));
-  ctx->pkg = pkg;
+  ctx->typecheck_ctx = typecheck_ctx;
   ctx->ctx = LLVMContextCreate();
-  ctx->mod = LLVMModuleCreateWithNameInContext(pkg->name, ctx->ctx);
+  ctx->mod = LLVMModuleCreateWithNameInContext(typecheck_ctx->pkg->name, ctx->ctx);
   ctx->builder = LLVMCreateBuilderInContext(ctx->ctx);
   ctx->interfaces = NULL;
   ctx->structs = NULL;
   unsigned i;
-  for (i = 0; i < cvector_size(pkg->private_types); i++) {
-    codegen_type_decl(ctx, &pkg->private_types[i]);
+  for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_types); i++) {
+    codegen_type_decl(ctx, &typecheck_ctx->pkg->private_types[i]);
   }
-  for (i = 0; i < cvector_size(pkg->private_functions); i++) {
-    codegen_function(ctx, &pkg->private_functions[i]);
+  for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_functions); i++) {
+    codegen_function(ctx, &typecheck_ctx->pkg->private_functions[i]);
   }
-  for (i = 0; i < cvector_size(pkg->public_functions); i++) {
-    codegen_function(ctx, &pkg->public_functions[i]);
+  for (i = 0; i < cvector_size(typecheck_ctx->pkg->public_functions); i++) {
+    codegen_function(ctx, &typecheck_ctx->pkg->public_functions[i]);
   }
   return ctx->mod;
 }
@@ -29,6 +29,7 @@ LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty) {
   Type *t = malloc(sizeof *t);
   t->pub = ty->pub;
   t->name = ty->name;
+  ctx->cur_typedecl_name = ty->name;
   t->value = codegen_type_expr(ctx, ty->value);
   if (ty->value->type == EXPRTYPE_INTERFACE) {
     cvector_push_back(ctx->interfaces, *t);
@@ -45,6 +46,8 @@ LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
   switch (expr->type) {
     case EXPRTYPE_PRIMITIVE:
       return codegen_primitive_type_expr(ctx, expr->value.primitive_type);
+    case EXPRTYPE_PTR:
+      return codegen_ptr_type_expr(ctx, expr->value.pointer_type);
     case EXPRTYPE_VOID:
       return LLVMVoidTypeInContext(ctx->ctx);
     case EXPRTYPE_INTERFACE:
@@ -54,10 +57,14 @@ LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
     case EXPRTYPE_IDENT:
       return codegen_ident_type_expr(ctx, expr->value.ident);
     default:
-      printf("unimpemented type expr:  %d\n", expr->type);
+      printf("unimplemented type expr:  %d\n", expr->type);
       exit(1);
   }
   return NULL;
+}
+
+LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_type) {
+  return LLVMPointerType(codegen_type_expr(ctx, pointer_type->pointer_to_type), 0);
 }
 
 LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident) {
@@ -81,14 +88,14 @@ LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s) {
       cvector_push_back(prop_types, codegen_type_expr(ctx, p_it->type));
     }
   }
-  LLVMTypeRef struct_ty = LLVMStructCreateNamed(ctx->ctx, "");
+  LLVMTypeRef struct_ty = LLVMStructCreateNamed(ctx->ctx, ctx->cur_typedecl_name);
   LLVMStructSetBody(struct_ty, prop_types, cvector_size(prop_types), false);
   return struct_ty;
 }
 
 LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *interface) {
-  LLVMTypeRef vtable_ty = LLVMStructCreateNamed(ctx->ctx, "");
-  LLVMTypeRef interface_ty = LLVMStructCreateNamed(ctx->ctx, "");
+  LLVMTypeRef vtable_ty = LLVMStructCreateNamed(ctx->ctx, interface_name_to_interface_vtable_name(ctx->cur_typedecl_name));
+  LLVMTypeRef interface_ty = LLVMStructCreateNamed(ctx->ctx, ctx->cur_typedecl_name);
   LLVMStructSetBody(interface_ty, &vtable_ty, 1, false);
   return interface_ty;
 }
@@ -291,17 +298,22 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   for (i = 0; i < param_len; i++) {
     param_types[i] = codegen_type_expr(ctx, fn->params[i].type);
   }
-  LLVMTypeRef ret_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
+  LLVMTypeRef fn_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
 
   const char *fn_name = fn->name;
   if (fn->receiver != NULL) {
     const char *struct_name = get_type_name(fn->receiver->type);
     fn_name = fn_name_to_struct_method_name(fn->name, struct_name);
-    printf("--- ir ---\n");
-    printf("%s\n", struct_name);
+    for (i = 0; i < cvector_size(ctx->typecheck_ctx->struct_implements_interfaces_map); i++) {
+      const char *stored_struct_name = ctx->typecheck_ctx->struct_implements_interfaces_map[i][0];
+      const char *stored_interface_name = ctx->typecheck_ctx->struct_implements_interfaces_map[i][1];
+      if (!strcmp(stored_struct_name, struct_name)) {
+        add_method_to_interface_vtable(ctx, fn_name, fn_type, stored_interface_name);
+      }
+    }
   }
 
-  LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, ret_type);
+  LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, fn_type);
   ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
   ctx->cur_block = fn->body;
   LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
@@ -310,11 +322,39 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   coddegen_block_stmt(ctx, fn->body);
 }
 
-// is this memory leak?
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {
   char *method_name = malloc(strlen(fn_name) + 1 + strlen(struct_name));
   strcpy(method_name, struct_name);
   strcat(method_name, "_");
   strcat(method_name, fn_name);
   return method_name;
+}
+
+const char *interface_name_to_interface_vtable_name(const char *interface_name) {
+  // {interface_name}_VTable
+  char *vtable_name = malloc(strlen(interface_name) + 1 + 6);
+  strcpy(vtable_name, interface_name);
+  strcat(vtable_name, "_VTable");
+  return vtable_name;
+}
+
+/**
+ * This confusing mess grabs an interface, looks at the FIRST element for the vtable type
+ * Then it copies the vtable type's elements, and makes space for a new one
+ * And places a pointer to the struct method in the vtable
+ */
+void add_method_to_interface_vtable(CodegenContext *ctx, const char *fn_name, LLVMTypeRef fn_type, const char *interface_name) {
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->interfaces); i++) {
+    Type interface = ctx->interfaces[i];
+    if (!strcmp(interface.name, interface_name)) {
+      LLVMTypeRef vtable_type = LLVMStructGetTypeAtIndex(interface.value, 0);
+      LLVMDumpType(vtable_type);
+      unsigned num_vtable_els = LLVMCountStructElementTypes(vtable_type);
+      LLVMTypeRef *vtable_el_types = malloc((sizeof *vtable_el_types) * (num_vtable_els + 1));
+      LLVMGetStructElementTypes(vtable_type, vtable_el_types);
+      vtable_el_types[num_vtable_els] = LLVMPointerType(fn_type, 0);
+      LLVMStructSetBody(vtable_type, vtable_el_types, num_vtable_els + 1, false);
+    }
+  }
 }

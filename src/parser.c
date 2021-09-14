@@ -282,24 +282,16 @@ Method *parse_method_decl(ParseContext *ctx) {
 }
 
 Expr *parse_primitive_type_expr(ParseContext *ctx) {
-  Expr *expr = malloc(sizeof(Expr));
+  Expr *e = malloc(sizeof *e);
   TokenType ty = parser_expect_range(ctx, TOKTYPE_TYPES_BEGIN, TOKTYPE_TYPES_END, "expected a type in primitive type expression").type;
-
-  expr->type = EXPRTYPE_PRIMITIVE;
-  expr->value.primitive_type = malloc(sizeof *expr->value.primitive_type);
-  expr->value.primitive_type->type = ty;
-  if (ctx->cur_tok.type != TOKTYPE_ASTERISK) {
-    return (Expr *)expr;
-  }
-
-  expr->type = EXPRTYPE_PTR;
-  expr->value.pointer_type->pointer_to_type = expr;
-  parser_eat(ctx);
+  e->type = EXPRTYPE_PRIMITIVE;
+  e->value.primitive_type = malloc(sizeof *e->value.primitive_type);
+  e->value.primitive_type->type = ty;
   while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
-    expr->value.pointer_type->pointer_to_type = expr;
+    e = ptr_type_make(e);
     parser_eat(ctx);
   }
-  return expr;
+  return e;
 }
 
 Stmt *parse_stmt(ParseContext *ctx) {

@@ -107,12 +107,12 @@ int main(int argc, char **argv) {
     free(ctx);
   }
 
-  TypecheckContext *typecheck_ctx = malloc(sizeof *typecheck_ctx);
-  Package *pkg_it;
+  Package *pkg_it = NULL;
+  TypecheckContext *typecheck_ctx = typecheck_ctx_create(pkg_it);
   for (pkg_it = cvector_begin(packages); pkg_it != cvector_end(packages); pkg_it++) {
     typecheck_pkg(typecheck_ctx, pkg_it);
     package_print(pkg_it);
-    LLVMModuleRef mod = codegen_pkg(pkg_it);
+    LLVMModuleRef mod = codegen_pkg(typecheck_ctx);
     printf("===== IR Module =====\n");
     LLVMDumpModule(mod);
     printf("=====================\n");
