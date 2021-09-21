@@ -62,10 +62,10 @@ typedef enum TokenType {
   TOKTYPE_I16,
   TOKTYPE_I8,
 
-  TOKTYPE_u64,
-  TOKTYPE_u32,
-  TOKTYPE_u16,
-  TOKTYPE_u8,
+  TOKTYPE_U64,
+  TOKTYPE_U32,
+  TOKTYPE_U16,
+  TOKTYPE_U8,
 
   TOKTYPE_F64,
   TOKTYPE_F32,
@@ -80,5 +80,6 @@ typedef struct Token {
 } Token;
 
 TokenType lookup_keyword(const char *str);
+void token_destroy(Token *tok);
 
 #endif

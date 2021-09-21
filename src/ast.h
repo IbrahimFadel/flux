@@ -16,12 +16,14 @@ typedef enum ExprType {
   EXPRTYPE_BINARY,
   EXPRTYPE_INTERFACE,
   EXPRTYPE_STRUCT,
+  EXPRTYPE_FUNCTION_CALL,
 } ExprType;
 
 typedef enum StmtType {
   STMTTYPE_VARDECL,
   STMTTYPE_RETURN,
   STMTTYPE_BLOCK,
+  STMTTYPE_EXPR,
 } StmtType;
 
 struct Expr;
@@ -72,12 +74,6 @@ typedef struct ReturnStmt {
   struct Expr *v;
 } ReturnStmt;
 
-typedef struct Type {
-  bool pub;
-  const char *name;
-  LLVMTypeRef value;
-} Type;
-
 typedef struct Variable {
   bool mut;
   const char *name;
@@ -92,12 +88,12 @@ typedef struct BlockStmt {
 typedef struct Method {
   bool pub;
   const char *name;
-  cvector_vector_type(struct Param) params;
+  cvector_vector_type(struct Param *) params;
   struct Expr *return_type;
 } Method;
 
 typedef struct InterfaceTypeExpr {
-  cvector_vector_type(Method) methods;
+  cvector_vector_type(Method *) methods;
 } InterfaceTypeExpr;
 
 typedef struct Property {
@@ -109,9 +105,12 @@ typedef struct Property {
 
 typedef struct StructTypeExpr {
   cvector_vector_type(Property) properties;
-  cvector_vector_type(cvector_vector_type(const char *)) interface_method_implementations;
-  cvector_vector_type(const char *) interfaces_implemented;
 } StructTypeExpr;
+
+typedef struct FnCall {
+  struct Expr *callee;
+  cvector_vector_type(struct Expr *) args;
+} FnCall;
 
 typedef struct Expr {
   ExprType type;
@@ -123,6 +122,7 @@ typedef struct Expr {
     struct IdentExpr *ident;
     struct BasicLitExpr *basic_lit;
     struct BinaryExpr *binop;
+    struct FnCall *fn_call;
   } value;
 } Expr;
 
@@ -132,6 +132,7 @@ typedef struct Stmt {
     struct VarDecl *var_decl;
     struct ReturnStmt *ret;
     struct BlockStmt *block;
+    struct Expr *expr;
   } value;
 } Stmt;
 
@@ -150,10 +151,9 @@ typedef struct FnDecl {
   bool pub;
   const char *name;
   FnReceiver *receiver;
-  cvector_vector_type(Param) params;
+  cvector_vector_type(Param *) params;
   Expr *return_type;
   BlockStmt *body;
-  cvector_vector_type(Type) implements;
 } FnDecl;
 
 typedef struct VarDecl {
@@ -169,5 +169,18 @@ typedef struct TypeDecl {
   const char *name;
   Expr *value;
 } TypeDecl;
+
+void fndecl_destroy(FnDecl *fn);
+void typedecl_destroy(TypeDecl *ty);
+void param_destroy(Param *param);
+void blockstmt_destroy(BlockStmt *block);
+void stmt_destroy(Stmt *stmt);
+void expr_destroy(Expr *expr);
+void vardecl_destroy(VarDecl *var);
+void retstmt_destroy(ReturnStmt *ret);
+void interfacetype_destroy(InterfaceTypeExpr *interface);
+void method_destroy(Method *method);
+void basic_lit_destroy(BasicLitExpr *lit);
+void primitive_type_destroy(PrimitiveTypeExpr *prim);
 
 #endif

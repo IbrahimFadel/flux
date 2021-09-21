@@ -1,5 +1,6 @@
 #include "token.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 TokenType lookup_keyword(const char *str) {
@@ -28,17 +29,24 @@ TokenType lookup_keyword(const char *str) {
   if (!strcmp(str, "i8"))
     return TOKTYPE_I8;
   if (!strcmp(str, "u64"))
-    return TOKTYPE_u64;
+    return TOKTYPE_U64;
   if (!strcmp(str, "u32"))
-    return TOKTYPE_u32;
+    return TOKTYPE_U32;
   if (!strcmp(str, "u16"))
-    return TOKTYPE_u16;
+    return TOKTYPE_U16;
   if (!strcmp(str, "u8"))
-    return TOKTYPE_u8;
+    return TOKTYPE_U8;
   if (!strcmp(str, "f64"))
     return TOKTYPE_F64;
   if (!strcmp(str, "f32"))
     return TOKTYPE_F32;
   else
     return TOKTYPE_IDENT;
+}
+
+void token_destroy(Token *tok) {
+  if (tok->type == TOKTYPE_INT || tok->type == TOKTYPE_FLOAT) {
+    free((char *)tok->value);
+  }
+  free(tok);
 }

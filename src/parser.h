@@ -12,21 +12,22 @@ typedef struct TokPrecKeyVal {
 } TokPrecKeyVal;
 
 typedef struct ParseContext {
-  Token *toks;
-  Token cur_tok;
+  cvector_vector_type(Token *) toks;
+  Token *cur_tok;
   const char *pkg;
   int tok_ptr;
   TokPrecKeyVal tok_precedence_map[15];
-  cvector_vector_type(FnDecl) functions;
-  cvector_vector_type(TypeDecl) types;
+  cvector_vector_type(FnDecl *) functions;
+  cvector_vector_type(TypeDecl *) types;
 } ParseContext;
 
-ParseContext *parsecontext_create(Token *toks);
+ParseContext *parsecontext_create(cvector_vector_type(Token *) toks);
+void parsecontext_destroy(ParseContext *ctx);
 
 void parser_fatal(const char *msg);
-Token parser_eat(ParseContext *ctx);
-Token parser_expect(ParseContext *ctx, TokenType type, const char *msg);
-Token parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg);
+Token *parser_eat(ParseContext *ctx);
+Token *parser_expect(ParseContext *ctx, TokenType type, const char *msg);
+Token *parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg);
 int parser_get_tokprec(ParseContext *ctx, TokenType tok);
 
 Expr *ptr_type_make(Expr *to);
@@ -36,7 +37,7 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub);
 FnReceiver *parse_fn_receiver(ParseContext *ctx);
 Expr *parse_type_expr(ParseContext *ctx);
 Expr *parse_primitive_type_expr(ParseContext *ctx);
-cvector_vector_type(Param) parse_paramlist(ParseContext *ctx);
+cvector_vector_type(Param *) parse_paramlist(ParseContext *ctx);
 Param *parse_param(ParseContext *ctx);
 Stmt *parse_stmt(ParseContext *ctx);
 Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut);
@@ -53,6 +54,9 @@ Expr *parse_interface_type_expr(ParseContext *ctx);
 Method *parse_method_decl(ParseContext *ctx);
 Expr *parse_struct_type_expr(ParseContext *ctx);
 Property *parse_property(ParseContext *ctx);
+Expr *parse_postfix_expr(ParseContext *ctx, Expr *x);
+Expr *parse_fn_call(ParseContext *ctx, Expr *x);
+cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx);
 
 void parse_pkg_file_tokens(ParseContext *ctx);
 

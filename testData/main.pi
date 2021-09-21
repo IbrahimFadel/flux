@@ -1,22 +1,14 @@
 pkg main
 
-type Animal interface {
-  pub hello();
-  age() -> i32;
-}
-
 type Dog struct {
-  pub mut i32 x, y, z;
 }
 
-pub fn (Dog *d) hello() {
+fn (Dog *d) hello(i32 x) -> i32 {
+  return x + 1;
 }
 
-fn (Dog *d) age() -> i32 {
-}
-
-fn main() -> i64 {
+fn main() -> i32 {
   Dog d;
-  Animal a;
-  return 0;
+  i32 x = d.hello(23);
+  return x;
 }

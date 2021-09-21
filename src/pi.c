@@ -22,25 +22,47 @@ Package *package_create() {
   return pkg;
 }
 
+void package_destroy(Package *pkg) {
+  unsigned i;
+  for (i = 0; i < cvector_size(pkg->private_functions); i++) {
+    fndecl_destroy(pkg->private_functions[i]);
+  }
+  cvector_free(pkg->private_functions);
+  for (i = 0; i < cvector_size(pkg->public_functions); i++) {
+    fndecl_destroy(pkg->public_functions[i]);
+  }
+  cvector_free(pkg->public_functions);
+  for (i = 0; i < cvector_size(pkg->private_types); i++) {
+    typedecl_destroy(pkg->private_types[i]);
+  }
+  cvector_free(pkg->private_types);
+  for (i = 0; i < cvector_size(pkg->public_types); i++) {
+    typedecl_destroy(pkg->public_types[i]);
+  }
+  cvector_free(pkg->public_types);
+  // cvector_free(pkg->private_variables);
+  // cvector_free(pkg->public_variables);
+}
+
 void package_print(Package *p) {
   printf("+----- PKG: %s -----+\n", p->name);
   printf("| Public Functions:\n");
-  FnDecl *f_it;
+  FnDecl **f_it;
   for (f_it = cvector_begin(p->public_functions); f_it != cvector_end(p->public_functions); f_it++) {
-    printf("| \t%s\n", f_it->name);
+    printf("| \t%s\n", (*f_it)->name);
   }
   printf("| Private Functions:\n");
   for (f_it = cvector_begin(p->private_functions); f_it != cvector_end(p->private_functions); f_it++) {
-    printf("| \t%s\n", f_it->name);
+    printf("| \t%s\n", (*f_it)->name);
   }
   printf("| Public Types:\n");
-  TypeDecl *t_it;
+  TypeDecl **t_it;
   for (t_it = cvector_begin(p->public_types); t_it != cvector_end(p->public_types); t_it++) {
-    printf("| \t%s\n", t_it->name);
+    printf("| \t%s\n", (*t_it)->name);
   }
   printf("| Private Types:\n");
   for (t_it = cvector_begin(p->private_types); t_it != cvector_end(p->private_types); t_it++) {
-    printf("| \t%s\n", t_it->name);
+    printf("| \t%s\n", (*t_it)->name);
   }
 }
 
@@ -57,6 +79,7 @@ int main(int argc, char **argv) {
   }
 
   cvector_vector_type(Package) packages = NULL;
+  cvector_vector_type(cvector_vector_type(Token *)) tokens_list = NULL;
 
   int i;
   for (i = 0; i < cvector_size(input_files); i++) {
@@ -67,7 +90,8 @@ int main(int argc, char **argv) {
     }
 
     Scanner *s = scanner_create(file_content);
-    Token *tokens = scan_file(s);
+    cvector_vector_type(Token *) tokens = scan_file(s);
+    cvector_push_back(tokens_list, tokens);
 
     ParseContext *ctx = parsecontext_create(tokens);
     parse_pkg_file_tokens(ctx);
@@ -85,27 +109,27 @@ int main(int argc, char **argv) {
       pkg_it = &packages[cvector_size(packages) - 1];
       pkg_it->name = ctx->pkg;
     }
-    FnDecl *f_it;
+    FnDecl **f_it;
     for (f_it = cvector_begin(ctx->functions); f_it != cvector_end(ctx->functions); f_it++) {
-      if (f_it->pub) {
+      if ((*f_it)->pub) {
         cvector_push_back(pkg_it->public_functions, *f_it);
       } else {
         cvector_push_back(pkg_it->private_functions, *f_it);
       }
     }
-    TypeDecl *t_it;
+    TypeDecl **t_it;
     for (t_it = cvector_begin(ctx->types); t_it != cvector_end(ctx->types); t_it++) {
-      if (t_it->pub) {
+      if ((*t_it)->pub) {
         cvector_push_back(pkg_it->public_types, *t_it);
       } else {
         cvector_push_back(pkg_it->private_types, *t_it);
       }
     }
 
-    free(s);
-    free(tokens);
-    free(ctx);
+    scanner_destroy(s);
+    parsecontext_destroy(ctx);
   }
+  cvector_free(input_files);
 
   Package *pkg_it = NULL;
   TypecheckContext *typecheck_ctx = typecheck_ctx_create(pkg_it);
@@ -119,13 +143,27 @@ int main(int argc, char **argv) {
 
     char *err_msg[2] = {"could not write module to file", NULL};
     char *file_ext = ".ll";
-    char *file_name = malloc(strlen(pkg_it->name) + strlen(file_ext));
+    char *file_name = malloc(strlen(pkg_it->name) + strlen(file_ext) + 1);  // add 1 for '\0'
     strcpy(file_name, pkg_it->name);
     strcat(file_name, file_ext);
 
     LLVMPrintModuleToFile(mod, file_name, err_msg);
+
+    LLVMDisposeModule(mod);
   }
-  free(typecheck_ctx);
+
+  // typecheck_ctx_destroy(typecheck_ctx);
+
+  // for (i = 0; i < cvector_size(tokens_list); i++) {
+  //   unsigned j;
+  //   for (j = 0; j < cvector_size(tokens_list[i]); j++) {
+  //     token_destroy(tokens_list[i][j]);
+  //   }
+  //   cvector_free(tokens_list[i]);
+  // }
+  // cvector_free(tokens_list);
+
+  // cvector_free(packages);
 
   return 0;
 }

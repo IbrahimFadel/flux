@@ -11,8 +11,15 @@ TypecheckContext *typecheck_ctx_create(Package *pkg) {
   return ctx;
 }
 
+void typecheck_ctx_destroy(TypecheckContext *ctx) {
+  package_destroy(ctx->pkg);
+  cvector_free(ctx->interface_method_implementations_map);
+  cvector_free(ctx->struct_implements_interfaces_map);
+  free(ctx);
+}
+
 void typecheck_ctx_insert_interface_implementation(TypecheckContext *ctx, const char *struct_name, TypeDecl *interface, const char *method_name) {
-  char **interface_method_tuple = malloc(3);
+  char **interface_method_tuple = malloc((sizeof *interface_method_tuple) * 3);
 
   unsigned struct_name_len = strlen(struct_name);
   unsigned interface_name_len = strlen(interface->name);
@@ -37,7 +44,7 @@ void typecheck_ctx_insert_interface_implementation(TypecheckContext *ctx, const 
   }
 
   if (num_methods_implemented == cvector_size(interface->value->value.interface_type->methods)) {
-    char **full_implementation_pair = malloc(2);
+    char **full_implementation_pair = malloc((sizeof *full_implementation_pair) * 2);
     full_implementation_pair[0] = malloc(struct_name_len + 1);
     strcpy(full_implementation_pair[0], struct_name);
     full_implementation_pair[1] = malloc(interface_name_len + 1);
@@ -49,18 +56,18 @@ void typecheck_ctx_insert_interface_implementation(TypecheckContext *ctx, const 
 unsigned primitive_type_get_num_bits(TokenType ty) {
   switch (ty) {
     case TOKTYPE_I64:
-    case TOKTYPE_u64:
+    case TOKTYPE_U64:
     case TOKTYPE_F64:
       return 64;
     case TOKTYPE_I32:
-    case TOKTYPE_u32:
+    case TOKTYPE_U32:
     case TOKTYPE_F32:
       return 32;
     case TOKTYPE_I16:
-    case TOKTYPE_u16:
+    case TOKTYPE_U16:
       return 16;
     case TOKTYPE_I8:
-    case TOKTYPE_u8:
+    case TOKTYPE_U8:
       return 8;
     default:
       printf("could not get primitive type bits\n");
@@ -78,10 +85,10 @@ bool primitive_type_get_signed(TokenType ty) {
     case TOKTYPE_F64:
     case TOKTYPE_F32:
       return true;
-    case TOKTYPE_u64:
-    case TOKTYPE_u32:
-    case TOKTYPE_u16:
-    case TOKTYPE_u8:
+    case TOKTYPE_U64:
+    case TOKTYPE_U32:
+    case TOKTYPE_U16:
+    case TOKTYPE_U8:
       return false;
     default:
       printf("could not determine if primitive type is signed\n");
@@ -110,14 +117,14 @@ const char *get_type_name(Expr *e) {
 }
 
 bool fn_implements_interface_method(FnDecl *fn, Method *method) {
-  Param *method_param;
-  Param *fn_param;
+  Param **method_param;
+  Param **fn_param;
   if (method->pub != fn->pub) return false;
   if (method->return_type->type != fn->return_type->type) return false;
   for (method_param = cvector_begin(method->params); method_param != cvector_end(method->params); method_param++) {
     for (fn_param = cvector_begin(fn->params); fn_param != cvector_end(fn->params); fn_param++) {
-      if (method_param->mut != fn_param->mut) return false;
-      if (method_param->type->type != fn_param->type->type) return false;
+      if ((*method_param)->mut != (*fn_param)->mut) return false;
+      if ((*method_param)->type->type != (*fn_param)->type->type) return false;
     }
   }
   return true;
@@ -131,12 +138,12 @@ cvector_vector_type(TypeDecl *) struct_method_implements_interface(TypecheckCont
 
   unsigned i;
   for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
-    if (ctx->pkg->private_types[i].value->type != EXPRTYPE_INTERFACE) continue;
-    InterfaceTypeExpr *interface = ctx->pkg->private_types[i].value->value.interface_type;
+    if (ctx->pkg->private_types[i]->value->type != EXPRTYPE_INTERFACE) continue;
+    InterfaceTypeExpr *interface = ctx->pkg->private_types[i]->value->value.interface_type;
 
-    Method *m;
+    Method **m;
     for (m = cvector_begin(interface->methods); m != cvector_end(interface->methods); m++) {
-      if (fn_implements_interface_method(fn, m)) cvector_push_back(interfaces, &ctx->pkg->private_types[i]);
+      if (fn_implements_interface_method(fn, *m)) cvector_push_back(interfaces, ctx->pkg->private_types[i]);
     }
   }
 
@@ -148,10 +155,33 @@ void typecheck_pkg(TypecheckContext *ctx, Package *pkg) {
 
   unsigned i;
   for (i = 0; i < cvector_size(pkg->private_functions); i++) {
-    typecheck_function(ctx, &pkg->private_functions[i]);
+    typecheck_function(ctx, pkg->private_functions[i]);
   }
   for (i = 0; i < cvector_size(pkg->public_functions); i++) {
-    typecheck_function(ctx, &pkg->public_functions[i]);
+    typecheck_function(ctx, pkg->public_functions[i]);
+  }
+}
+
+void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty) {
+  switch (lit->type) {
+    case TOKTYPE_INT:
+      if (ty == TOKTYPE_F64 || ty == TOKTYPE_F32) {
+        float v = lit->value.int_lit->value;
+        free(lit->value.int_lit);
+        lit->type = TOKTYPE_FLOAT;
+        lit->value.float_lit = malloc(sizeof *lit->value.float_lit);
+        lit->value.float_lit->bits = primitive_type_get_num_bits(ty);
+        lit->value.float_lit->value = v;
+      }
+      lit->value.int_lit->bits = primitive_type_get_num_bits(ty);
+      lit->value.int_lit->is_signed = primitive_type_get_signed(ty);
+      break;
+    case TOKTYPE_FLOAT:
+      lit->value.float_lit->bits = primitive_type_get_num_bits(ty);
+      break;
+    default:
+      printf("typecheck: unimplemented basic lit\n");
+      exit(1);
   }
 }
 
@@ -161,11 +191,11 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
     unsigned i;
     TypeDecl *ty;
     for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
-      if (ctx->pkg->private_types[i].name == struct_name) ty = &ctx->pkg->private_types[i];
+      if (ctx->pkg->private_types[i]->name == struct_name) ty = ctx->pkg->private_types[i];
     }
     if (ty == NULL) {
       for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
-        if (ctx->pkg->public_types[i].name == struct_name) ty = &ctx->pkg->public_types[i];
+        if (ctx->pkg->public_types[i]->name == struct_name) ty = ctx->pkg->public_types[i];
       }
     }
     if (ty == NULL) {
@@ -183,33 +213,116 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
     if (stmt->type == STMTTYPE_RETURN) {
       ctx->expecting_type = fn->return_type;
       typecheck_return(ctx, stmt->value.ret);
+    } else if (stmt->type == STMTTYPE_VARDECL) {
+      typecheck_var_decl(ctx, stmt->value.var_decl);
+    } else if (stmt->type == STMTTYPE_EXPR) {
+      typecheck_expr(ctx, stmt->value.expr);
     }
   }
 }
 
-void typecheck_return(TypecheckContext *ctx, ReturnStmt *ret) {
-  if (ret->v->type == EXPRTYPE_BASIC_LIT) {
-    if (ctx->expecting_type->type != EXPRTYPE_PRIMITIVE) {
-      printf("typecheck: expected return types to match");
-      exit(1);
-    }
-    TokenType primitive_ty = ctx->expecting_type->value.primitive_type->type;
-    if (primitive_ty <= TOKTYPE_TYPES_BEGIN || primitive_ty >= TOKTYPE_TYPES_END) {
-      printf("typecheck: expected return types to match");
-      exit(1);
-    }
+void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var) {
+  ctx->expecting_type = var->type;
+  unsigned i;
+  for (i = 0; i < cvector_size(var->values); i++) {
+    typecheck_expr(ctx, var->values[i]);
+  }
+}
 
-    switch (ret->v->value.basic_lit->type) {
-      case TOKTYPE_INT:
-        ret->v->value.basic_lit->value.int_lit->bits = primitive_type_get_num_bits(primitive_ty);
-        ret->v->value.basic_lit->value.int_lit->is_signed = primitive_type_get_signed(primitive_ty);
-        break;
-      case TOKTYPE_FLOAT:
-        ret->v->value.basic_lit->value.float_lit->bits = primitive_type_get_num_bits(primitive_ty);
-        break;
-      default:
-        printf("typecheck: unimplemented basic lit\n");
-        exit(1);
+void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
+  switch (expr->type) {
+    case EXPRTYPE_FUNCTION_CALL:
+      typecheck_function_call(ctx, expr->value.fn_call);
+      break;
+    case EXPRTYPE_BINARY:
+      typecheck_expr(ctx, expr->value.binop->x);
+      typecheck_expr(ctx, expr->value.binop->y);
+      break;
+    case EXPRTYPE_BASIC_LIT:
+      typecheck_basic_lit(ctx, expr->value.basic_lit);
+      break;
+    default:
+      break;
+  }
+}
+
+void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit) {
+  if (ctx->expecting_type->type != EXPRTYPE_PRIMITIVE) {
+    printf("typecheck: expected primitive type");
+    exit(1);
+  }
+  TokenType needed_type = ctx->expecting_type->value.primitive_type->type;
+  if (needed_type <= TOKTYPE_TYPES_BEGIN || needed_type >= TOKTYPE_TYPES_END) {
+    printf("typecheck: expected primitive type");
+    exit(1);
+  }
+
+  coerce_basic_lit_to_type(lit, needed_type);
+}
+
+void typecheck_function_call(TypecheckContext *ctx, FnCall *call) {
+  FnDecl *callee_fn_decl = get_fn_decl_by_callee_expr(ctx, call->callee);
+  unsigned call_num_args = cvector_size(call->args);
+  unsigned fn_decl_num_args = cvector_size(callee_fn_decl->params);
+  if (callee_fn_decl->receiver) fn_decl_num_args--;
+  if (call_num_args != fn_decl_num_args) {
+    printf("incorrect number of arguments supplied to function call\n");
+    exit(1);
+  }
+  unsigned i;
+  for (i = 0; i < call_num_args; i++) {
+    unsigned j;
+    for (j = 0; j < fn_decl_num_args; j++) {
+      Param *p = callee_fn_decl->params[j];
+      if (callee_fn_decl->receiver) {
+        p = callee_fn_decl->params[j + 1];
+      }
+      if (p->type->type == EXPRTYPE_PRIMITIVE && call->args[i]->type == EXPRTYPE_BASIC_LIT) {
+        TokenType needed_type = p->type->value.primitive_type->type;
+        BasicLitExpr *lit = call->args[i]->value.basic_lit;
+        coerce_basic_lit_to_type(lit, needed_type);
+      }
     }
   }
+}
+
+FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee) {
+  switch (callee->type) {
+    case EXPRTYPE_IDENT: {
+      const char *fn_name = callee->value.ident->value;
+      unsigned i;
+      for (i = 0; i < cvector_size(ctx->pkg->private_functions); i++) {
+        if (!strcmp(ctx->pkg->private_functions[i]->name, fn_name)) return ctx->pkg->private_functions[i];
+      }
+      for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
+        if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
+      }
+      printf("unknown function referenced\n");
+      exit(1);
+    }
+    case EXPRTYPE_BINARY: {
+      if (callee->value.binop->y->type != EXPRTYPE_IDENT) {
+        printf("expected rhs of callee function binop expression to be identifier\n");
+        exit(1);
+      }
+      const char *fn_name = callee->value.binop->y->value.ident->value;
+      unsigned i;
+      for (i = 0; i < cvector_size(ctx->pkg->private_functions); i++) {
+        if (!strcmp(ctx->pkg->private_functions[i]->name, fn_name)) return ctx->pkg->private_functions[i];
+      }
+      for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
+        if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
+      }
+      printf("unknown function referenced\n");
+      exit(1);
+    }
+    default:
+      printf("typecheck: unimplemented callee expression\n");
+      break;
+  }
+  return NULL;
+}
+
+void typecheck_return(TypecheckContext *ctx, ReturnStmt *ret) {
+  typecheck_expr(ctx, ret->v);
 }

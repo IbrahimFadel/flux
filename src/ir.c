@@ -10,31 +10,40 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   ctx->ctx = LLVMContextCreate();
   ctx->mod = LLVMModuleCreateWithNameInContext(typecheck_ctx->pkg->name, ctx->ctx);
   ctx->builder = LLVMCreateBuilderInContext(ctx->ctx);
+  ctx->struct_currently_being_accessed = NULL;
   ctx->interfaces = NULL;
   ctx->structs = NULL;
   unsigned i;
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_types); i++) {
-    codegen_type_decl(ctx, &typecheck_ctx->pkg->private_types[i]);
+    codegen_type_decl(ctx, typecheck_ctx->pkg->private_types[i]);
   }
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_functions); i++) {
-    codegen_function(ctx, &typecheck_ctx->pkg->private_functions[i]);
+    codegen_function(ctx, typecheck_ctx->pkg->private_functions[i]);
   }
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->public_functions); i++) {
-    codegen_function(ctx, &typecheck_ctx->pkg->public_functions[i]);
+    codegen_function(ctx, typecheck_ctx->pkg->public_functions[i]);
   }
   return ctx->mod;
 }
 
 LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty) {
-  Type *t = malloc(sizeof *t);
-  t->pub = ty->pub;
-  t->name = ty->name;
   ctx->cur_typedecl_name = ty->name;
-  t->value = codegen_type_expr(ctx, ty->value);
   if (ty->value->type == EXPRTYPE_INTERFACE) {
-    cvector_push_back(ctx->interfaces, *t);
+    InterfaceType *t = malloc(sizeof *t);
+    t->pub = ty->pub;
+    t->name = ty->name;
+    t->value = codegen_type_expr(ctx, ty->value);
+    cvector_push_back(ctx->interfaces, t);
   } else if (ty->value->type == EXPRTYPE_STRUCT) {
-    cvector_push_back(ctx->structs, *t);
+    StructType *t = malloc(sizeof *t);
+    t->pub = ty->pub;
+    t->name = ty->name;
+    t->value = codegen_type_expr(ctx, ty->value);
+    cvector_push_back(ctx->structs, t);
+    unsigned i;
+    for (i = 0; i < cvector_size(ty->value->value.struct_type->properties); i++) {
+      cvector_push_back(t->properties, ty->value->value.struct_type->properties[i]);
+    }
   } else {
     printf("HUH?? fixme\n");
     exit(1);
@@ -68,12 +77,12 @@ LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_
 }
 
 LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident) {
-  Type *it;
-  for (it = cvector_begin(ctx->interfaces); it != cvector_end(ctx->interfaces); it++) {
-    if (!strcmp(it->name, ident->value)) return it->value;
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->interfaces); i++) {
+    if (!strcmp(ctx->interfaces[i]->name, ident->value)) return ctx->interfaces[i]->value;
   }
-  for (it = cvector_begin(ctx->structs); it != cvector_end(ctx->structs); it++) {
-    if (!strcmp(it->name, ident->value)) return it->value;
+  for (i = 0; i < cvector_size(ctx->structs); i++) {
+    if (!strcmp(ctx->structs[i]->name, ident->value)) return ctx->structs[i]->value;
   }
   printf("could not find type with same name as ident expression");
   exit(1);
@@ -110,16 +119,20 @@ LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *
       return LLVMInt16TypeInContext(ctx->ctx);
     case TOKTYPE_I8:
       return LLVMInt8TypeInContext(ctx->ctx);
-    case TOKTYPE_u64:
+    case TOKTYPE_U64:
       return LLVMInt64TypeInContext(ctx->ctx);
-    case TOKTYPE_u32:
+    case TOKTYPE_U32:
       return LLVMInt32TypeInContext(ctx->ctx);
-    case TOKTYPE_u16:
+    case TOKTYPE_U16:
       return LLVMInt16TypeInContext(ctx->ctx);
-    case TOKTYPE_u8:
+    case TOKTYPE_U8:
       return LLVMInt8TypeInContext(ctx->ctx);
+    case TOKTYPE_F64:
+      return LLVMDoubleTypeInContext(ctx->ctx);
+    case TOKTYPE_F32:
+      return LLVMFloatTypeInContext(ctx->ctx);
     default:
-      printf("unimpemented primitive type expr: %d\n", expr->type);
+      printf("unimplemented primitive type expr: %d\n", expr->type);
       exit(1);
   }
 }
@@ -137,6 +150,8 @@ LLVMValueRef codegen_stmt(CodegenContext *ctx, Stmt *stmt) {
       return codegen_var_decl(ctx, stmt->value.var_decl);
     case STMTTYPE_RETURN:
       return LLVMBuildRet(ctx->builder, codegen_expr(ctx, stmt->value.ret->v));
+    case STMTTYPE_EXPR:
+      return codegen_expr(ctx, stmt->value.expr);
     default:
       printf("unimplemented stmt\n");
       exit(1);
@@ -159,6 +174,8 @@ LLVMValueRef codegen_var_decl(CodegenContext *ctx, VarDecl *var) {
     LLVMValueRef ptr = LLVMBuildAlloca(ctx->builder, codegen_type_expr(ctx, var->type), "");
     if (init_all_to_one_val && var->values != NULL) {
       LLVMBuildStore(ctx->builder, val_to_init_vars, ptr);
+    } else if (!init_all_to_one_val && var->values != NULL) {
+      LLVMBuildStore(ctx->builder, codegen_expr(ctx, var->values[i]), ptr);
     }
     Variable *v = malloc(sizeof *v);
     v->mut = var->mut;
@@ -177,11 +194,41 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
       return codegen_binary_expr(ctx, expr->value.binop);
     case EXPRTYPE_IDENT:
       return codegen_ident_expr(ctx, expr->value.ident);
+    case EXPRTYPE_FUNCTION_CALL:
+      return codegen_function_call(ctx, expr->value.fn_call);
     default:
       printf("unimplemented expr\n");
       exit(1);
   }
   return NULL;
+}
+
+LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
+  LLVMValueRef callee;
+  switch (call->callee->type) {
+    case EXPRTYPE_BINARY:
+      callee = codegen_binary_expr(ctx, call->callee->value.binop);
+      break;
+    default:
+      printf("unimplemented function call callee type\n");
+      exit(1);
+  }
+
+  cvector_vector_type(LLVMValueRef) args = NULL;
+  unsigned num_args = 0;
+  if (ctx->struct_currently_being_accessed) {
+    // Is this GetOperand consistent? monitor this
+    cvector_push_back(args, LLVMGetOperand(ctx->struct_currently_being_accessed, 0));
+    num_args++;
+  }
+  unsigned i;
+  for (i = 0; i < cvector_size(call->args); i++) {
+    cvector_push_back(args, codegen_expr(ctx, call->args[i]));
+    num_args++;
+  }
+  ctx->struct_currently_being_accessed = NULL;
+
+  return LLVMBuildCall2(ctx->builder, LLVMGetReturnType(LLVMTypeOf(callee)), callee, args, num_args, "");
 }
 
 LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
@@ -208,9 +255,44 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
     case TOKTYPE_ASTERISK:
     case TOKTYPE_SLASH:
       return codegen_binop_arithmetic(ctx, binop);
+    case TOKTYPE_PERIOD:
+      return codegen_binop_struct_access(ctx, binop);
     default:
       break;
   }
+  return NULL;
+}
+
+LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop) {
+  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
+
+  ctx->struct_currently_being_accessed = lhs;
+
+  if (binop->y->type != EXPRTYPE_IDENT) {
+    printf("%d\n", binop->y->type);
+    printf("expected identifier in struct property access\n");
+    exit(1);
+  }
+  const char *prop_name = binop->y->value.ident->value;
+
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->structs); i++) {
+    LLVMTypeRef struct_ty = ctx->structs[i]->value;
+    const char *n = LLVMGetStructName(struct_ty);
+    LLVMTypeRef ty = LLVMTypeOf(lhs);
+    const char *actual_struct_name = LLVMGetStructName(ty);
+
+    if (!strcmp(n, actual_struct_name)) {
+      unsigned j;
+      for (j = 0; j < cvector_size(ctx->structs[i]->method_names); j++) {
+        const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
+        if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
+          return LLVMGetNamedFunction(ctx->mod, method_name);
+        }
+      }
+    }
+  }
+
   return NULL;
 }
 
@@ -235,8 +317,6 @@ LLVMValueRef codegen_binop_arithmetic(CodegenContext *ctx, BinaryExpr *binop) {
   return NULL;
 }
 
-// TODO: pi-lang needs a type-checking stage
-// TODO: don't hardcode false for signed
 LLVMValueRef codegen_basic_lit_expr(CodegenContext *ctx, BasicLitExpr *lit) {
   switch (lit->type) {
     case TOKTYPE_INT:
@@ -275,16 +355,16 @@ LLVMValueRef codegen_float_expr(CodegenContext *ctx, FloatExpr *e) {
   return NULL;
 }
 
-LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param) params) {
+LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param *) params) {
   unsigned i;
   for (i = 0; i < cvector_size(params); i++) {
     LLVMValueRef fn_param_val = LLVMGetParam(fn, i);
-    LLVMValueRef ptr = LLVMBuildAlloca(ctx->builder, codegen_type_expr(ctx, params[i].type), "");
+    LLVMValueRef ptr = LLVMBuildAlloca(ctx->builder, codegen_type_expr(ctx, params[i]->type), "");
     LLVMBuildStore(ctx->builder, fn_param_val, ptr);
 
     Variable *v = malloc(sizeof *v);
-    v->mut = params[i].mut;
-    v->name = params[i].name;
+    v->mut = params[i]->mut;
+    v->name = params[i]->name;
     v->ptr = ptr;
     cvector_push_back(ctx->cur_block->variables, *v);
   }
@@ -296,7 +376,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   LLVMTypeRef param_types[param_len];
   unsigned i;
   for (i = 0; i < param_len; i++) {
-    param_types[i] = codegen_type_expr(ctx, fn->params[i].type);
+    param_types[i] = codegen_type_expr(ctx, fn->params[i]->type);
   }
   LLVMTypeRef fn_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
 
@@ -304,11 +384,20 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   if (fn->receiver != NULL) {
     const char *struct_name = get_type_name(fn->receiver->type);
     fn_name = fn_name_to_struct_method_name(fn->name, struct_name);
+    bool added_to_vtable = false;
     for (i = 0; i < cvector_size(ctx->typecheck_ctx->struct_implements_interfaces_map); i++) {
       const char *stored_struct_name = ctx->typecheck_ctx->struct_implements_interfaces_map[i][0];
       const char *stored_interface_name = ctx->typecheck_ctx->struct_implements_interfaces_map[i][1];
       if (!strcmp(stored_struct_name, struct_name)) {
         add_method_to_interface_vtable(ctx, fn_name, fn_type, stored_interface_name);
+        added_to_vtable = true;
+      }
+    }
+    if (!added_to_vtable) {
+      for (i = 0; i < cvector_size(ctx->structs); i++) {
+        if (!strcmp(ctx->structs[i]->name, struct_name)) {
+          cvector_push_back(ctx->structs[i]->method_names, fn_name);
+        }
       }
     }
   }
@@ -323,7 +412,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
 }
 
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {
-  char *method_name = malloc(strlen(fn_name) + 1 + strlen(struct_name));
+  char *method_name = malloc(strlen(fn_name) + 1 + strlen(struct_name) + 1);  // add 1 for '\0'
   strcpy(method_name, struct_name);
   strcat(method_name, "_");
   strcat(method_name, fn_name);
@@ -332,7 +421,7 @@ const char *fn_name_to_struct_method_name(const char *fn_name, const char *struc
 
 const char *interface_name_to_interface_vtable_name(const char *interface_name) {
   // {interface_name}_VTable
-  char *vtable_name = malloc(strlen(interface_name) + 1 + 6);
+  char *vtable_name = malloc(strlen(interface_name) + 1 + 6 + 1);  // add 1 for '\0'
   strcpy(vtable_name, interface_name);
   strcat(vtable_name, "_VTable");
   return vtable_name;
@@ -346,10 +435,9 @@ const char *interface_name_to_interface_vtable_name(const char *interface_name) 
 void add_method_to_interface_vtable(CodegenContext *ctx, const char *fn_name, LLVMTypeRef fn_type, const char *interface_name) {
   unsigned i;
   for (i = 0; i < cvector_size(ctx->interfaces); i++) {
-    Type interface = ctx->interfaces[i];
-    if (!strcmp(interface.name, interface_name)) {
-      LLVMTypeRef vtable_type = LLVMStructGetTypeAtIndex(interface.value, 0);
-      LLVMDumpType(vtable_type);
+    InterfaceType *interface = ctx->interfaces[i];
+    if (!strcmp(interface->name, interface_name)) {
+      LLVMTypeRef vtable_type = LLVMStructGetTypeAtIndex(interface->value, 0);
       unsigned num_vtable_els = LLVMCountStructElementTypes(vtable_type);
       LLVMTypeRef *vtable_el_types = malloc((sizeof *vtable_el_types) * (num_vtable_els + 1));
       LLVMGetStructElementTypes(vtable_type, vtable_el_types);

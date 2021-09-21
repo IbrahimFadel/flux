@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-ParseContext *parsecontext_create(Token *toks) {
+ParseContext *parsecontext_create(cvector_vector_type(Token *) toks) {
   ParseContext *ctx = malloc(sizeof(ParseContext));
   ctx->toks = toks;
   ctx->tok_ptr = 0;
@@ -44,30 +44,35 @@ ParseContext *parsecontext_create(Token *toks) {
   return ctx;
 }
 
+void parsecontext_destroy(ParseContext *ctx) {
+  cvector_free(ctx->types);
+  free(ctx);
+}
+
 void parser_fatal(const char *msg) {
   printf("%s\n", msg);
   exit(1);
 }
 
-Token parser_eat(ParseContext *ctx) {
+Token *parser_eat(ParseContext *ctx) {
   ctx->tok_ptr++;
   ctx->cur_tok = ctx->toks[ctx->tok_ptr];
   return ctx->cur_tok;
 }
 
-Token parser_expect(ParseContext *ctx, TokenType type, const char *msg) {
-  if (ctx->cur_tok.type != type) {
+Token *parser_expect(ParseContext *ctx, TokenType type, const char *msg) {
+  if (ctx->cur_tok->type != type) {
     parser_fatal(msg);
   }
-  Token tok = ctx->cur_tok;
+  Token *tok = ctx->cur_tok;
   parser_eat(ctx);
   return tok;
 }
 
-Token parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg) {
-  if (ctx->cur_tok.type <= begin || ctx->cur_tok.type >= end)
+Token *parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg) {
+  if (ctx->cur_tok->type <= begin || ctx->cur_tok->type >= end)
     parser_fatal(msg);
-  Token tok = ctx->cur_tok;
+  Token *tok = ctx->cur_tok;
   parser_eat(ctx);
   return tok;
 }
@@ -82,27 +87,41 @@ int parser_get_tokprec(ParseContext *ctx, TokenType tok) {
 
 const char *parse_pkg(ParseContext *ctx) {
   parser_expect(ctx, TOKTYPE_PACKAGE, "expected 'pkg' in package statement");
-  return parser_expect(ctx, TOKTYPE_IDENT, "expected identifier following 'pkg'").value;
+  return parser_expect(ctx, TOKTYPE_IDENT, "expected identifier following 'pkg'")->value;
 }
 
 FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
-  FnDecl *fn = malloc(sizeof(FnDecl));
+  FnDecl *fn = malloc(sizeof *fn);
   parser_expect(ctx, TOKTYPE_FN, "expected 'fn' in function declaration");
 
+  fn->params = NULL;
   fn->receiver = NULL;
-  if (ctx->cur_tok.type == TOKTYPE_LPAREN) {
+  if (ctx->cur_tok->type == TOKTYPE_LPAREN) {
     fn->receiver = parse_fn_receiver(ctx);
+    Param *p = malloc(sizeof *p);
+    p->mut = false;
+    p->name = "this";
+    p->type = fn->receiver->type;
+    cvector_push_back(fn->params, p);
   }
 
-  fn->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in function name").value;
+  fn->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in function name")->value;
   parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' before function parameter listing");
 
-  fn->params = parse_paramlist(ctx);
+  if (fn->receiver == NULL) {
+    fn->params = parse_paramlist(ctx);
+  } else {
+    cvector_vector_type(Param *) params = parse_paramlist(ctx);
+    unsigned i;
+    for (i = 0; i < cvector_size(params); i++) {
+      cvector_push_back(fn->params, params[i]);
+    }
+  }
   parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' after function parameter listing");
 
   fn->return_type = malloc(sizeof *fn->return_type);
   fn->return_type->type = EXPRTYPE_VOID;
-  if (ctx->cur_tok.type == TOKTYPE_ARROW) {
+  if (ctx->cur_tok->type == TOKTYPE_ARROW) {
     parser_eat(ctx);
     fn->return_type = parse_type_expr(ctx);
   }
@@ -117,7 +136,7 @@ BlockStmt *parse_block_stmt(ParseContext *ctx) {
   BlockStmt *block = malloc(sizeof *block);
   parser_expect(ctx, TOKTYPE_LBRACE, "expected '{' after function parameter listing");
   block->stmts = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_RBRACE)
+  while (ctx->cur_tok->type != TOKTYPE_RBRACE)
     cvector_push_back(block->stmts, *parse_stmt(ctx));
   parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' after function body");
   block->variables = NULL;
@@ -128,19 +147,19 @@ FnReceiver *parse_fn_receiver(ParseContext *ctx) {
   FnReceiver *recv = malloc(sizeof(FnReceiver));
   parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' in function receiver");
   recv->type = parse_type_expr(ctx);
-  recv->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier after receiver type").value;
+  recv->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier after receiver type")->value;
   parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' in function receiver");
   return recv;
 }
 
-cvector_vector_type(Param) parse_paramlist(ParseContext *ctx) {
-  cvector_vector_type(Param) paramlist = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_RPAREN) {
+cvector_vector_type(Param *) parse_paramlist(ParseContext *ctx) {
+  cvector_vector_type(Param *) paramlist = NULL;
+  while (ctx->cur_tok->type != TOKTYPE_RPAREN) {
     Param *p = parse_param(ctx);
-    cvector_push_back(paramlist, *p);
-    if (ctx->cur_tok.type == TOKTYPE_COMMA) {
+    cvector_push_back(paramlist, p);
+    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
-    } else if (ctx->cur_tok.type != TOKTYPE_RPAREN) {
+    } else if (ctx->cur_tok->type != TOKTYPE_RPAREN) {
       parser_fatal("expected ')' at end of param list");
     }
   }
@@ -150,12 +169,12 @@ cvector_vector_type(Param) parse_paramlist(ParseContext *ctx) {
 Param *parse_param(ParseContext *ctx) {
   Param *p = malloc(sizeof(Param));
   p->mut = false;
-  if (ctx->cur_tok.type == TOKTYPE_MUT) {
+  if (ctx->cur_tok->type == TOKTYPE_MUT) {
     p->mut = true;
     parser_eat(ctx);
   }
   p->type = parse_type_expr(ctx);
-  p->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in parameter").value;
+  p->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in parameter")->value;
   return p;
 }
 
@@ -168,17 +187,17 @@ Expr *ptr_type_make(Expr *to) {
 }
 
 Expr *parse_type_expr(ParseContext *ctx) {
-  if (ctx->cur_tok.type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok.type < TOKTYPE_TYPES_END)
+  if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END)
     return parse_primitive_type_expr(ctx);
 
-  switch (ctx->cur_tok.type) {
+  switch (ctx->cur_tok->type) {
     case TOKTYPE_INTERFACE:
       return parse_interface_type_expr(ctx);
     case TOKTYPE_STRUCT:
       return parse_struct_type_expr(ctx);
     case TOKTYPE_IDENT: {
       Expr *e = parse_ident_expr(ctx);
-      while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
+      while (ctx->cur_tok->type == TOKTYPE_ASTERISK) {
         e = ptr_type_make(e);
         parser_eat(ctx);
       }
@@ -198,12 +217,10 @@ Expr *parse_struct_type_expr(ParseContext *ctx) {
   s->type = EXPRTYPE_STRUCT;
   s->value.struct_type = malloc(sizeof *s->value.struct_type);
   s->value.struct_type->properties = NULL;
-  s->value.struct_type->interface_method_implementations = NULL;
-  s->value.struct_type->interfaces_implemented = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_RBRACE) {
+  while (ctx->cur_tok->type != TOKTYPE_RBRACE) {
     cvector_push_back(s->value.struct_type->properties, *parse_property(ctx));
     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after property in struct type property list");
-    if (ctx->cur_tok.type != TOKTYPE_RBRACE && ctx->cur_tok.type != TOKTYPE_IDENT) {
+    if (ctx->cur_tok->type != TOKTYPE_RBRACE && ctx->cur_tok->type != TOKTYPE_IDENT) {
       parser_fatal("expected a property or '}' in struct type property list");
     }
   }
@@ -216,21 +233,21 @@ Property *parse_property(ParseContext *ctx) {
   Property *p = malloc(sizeof *p);
   p->pub = false;
   p->mut = false;
-  if (ctx->cur_tok.type == TOKTYPE_PUB) {
+  if (ctx->cur_tok->type == TOKTYPE_PUB) {
     p->pub = true;
     parser_eat(ctx);
   }
-  if (ctx->cur_tok.type == TOKTYPE_MUT) {
+  if (ctx->cur_tok->type == TOKTYPE_MUT) {
     p->mut = true;
     parser_eat(ctx);
   }
   p->type = parse_type_expr(ctx);
   p->names = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
-    cvector_push_back(p->names, parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in property identifier list").value);
-    if (ctx->cur_tok.type == TOKTYPE_COMMA) {
+  while (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
+    cvector_push_back(p->names, parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in property identifier list")->value);
+    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
-    } else if (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+    } else if (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
       parser_fatal("expected ';' at end of property");
     }
   }
@@ -246,10 +263,10 @@ Expr *parse_interface_type_expr(ParseContext *ctx) {
   interface->type = EXPRTYPE_INTERFACE;
   interface->value.interface_type = malloc(sizeof *interface->value.interface_type);
   interface->value.interface_type->methods = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_RBRACE) {
-    cvector_push_back(interface->value.interface_type->methods, *parse_method_decl(ctx));
+  while (ctx->cur_tok->type != TOKTYPE_RBRACE) {
+    cvector_push_back(interface->value.interface_type->methods, parse_method_decl(ctx));
     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after method in interface type method list");
-    if (ctx->cur_tok.type != TOKTYPE_RBRACE && ctx->cur_tok.type != TOKTYPE_IDENT) {
+    if (ctx->cur_tok->type != TOKTYPE_RBRACE && ctx->cur_tok->type != TOKTYPE_IDENT) {
       parser_fatal("expected a method or '}' in interface type method list");
     }
   }
@@ -262,18 +279,18 @@ Expr *parse_interface_type_expr(ParseContext *ctx) {
 Method *parse_method_decl(ParseContext *ctx) {
   Method *m = malloc(sizeof *m);
   m->pub = false;
-  if (ctx->cur_tok.type == TOKTYPE_PUB) {
+  if (ctx->cur_tok->type == TOKTYPE_PUB) {
     m->pub = true;
     parser_eat(ctx);
   }
-  m->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in method declaration").value;
+  m->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in method declaration")->value;
   parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' before method param list");
   m->params = parse_paramlist(ctx);
   parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' after method param list");
 
   m->return_type = malloc(sizeof *m->return_type);
   m->return_type->type = EXPRTYPE_VOID;
-  if (ctx->cur_tok.type == TOKTYPE_ARROW) {
+  if (ctx->cur_tok->type == TOKTYPE_ARROW) {
     parser_eat(ctx);
     m->return_type = parse_type_expr(ctx);
   }
@@ -283,11 +300,11 @@ Method *parse_method_decl(ParseContext *ctx) {
 
 Expr *parse_primitive_type_expr(ParseContext *ctx) {
   Expr *e = malloc(sizeof *e);
-  TokenType ty = parser_expect_range(ctx, TOKTYPE_TYPES_BEGIN, TOKTYPE_TYPES_END, "expected a type in primitive type expression").type;
+  TokenType ty = parser_expect_range(ctx, TOKTYPE_TYPES_BEGIN, TOKTYPE_TYPES_END, "expected a type in primitive type expression")->type;
   e->type = EXPRTYPE_PRIMITIVE;
   e->value.primitive_type = malloc(sizeof *e->value.primitive_type);
   e->value.primitive_type->type = ty;
-  while (ctx->cur_tok.type == TOKTYPE_ASTERISK) {
+  while (ctx->cur_tok->type == TOKTYPE_ASTERISK) {
     e = ptr_type_make(e);
     parser_eat(ctx);
   }
@@ -295,20 +312,28 @@ Expr *parse_primitive_type_expr(ParseContext *ctx) {
 }
 
 Stmt *parse_stmt(ParseContext *ctx) {
-  if (ctx->cur_tok.type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok.type < TOKTYPE_TYPES_END)
+  if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END)
     return parse_var_decl(ctx, false, false);
-  switch (ctx->cur_tok.type) {
+  switch (ctx->cur_tok->type) {
     case TOKTYPE_MUT:
       parser_eat(ctx);
       return parse_var_decl(ctx, false, true);
     case TOKTYPE_RETURN:
       return parse_return_stmt(ctx);
     case TOKTYPE_IDENT:
-      switch (ctx->toks[ctx->tok_ptr + 1].type) {
+      switch (ctx->toks[ctx->tok_ptr + 1]->type) {
         case TOKTYPE_LPAREN:
           parser_fatal("function calls unimplemented");
         case TOKTYPE_IDENT:
           return parse_var_decl(ctx, false, false);
+        case TOKTYPE_PERIOD: {
+          Expr *e = parse_expr(ctx);
+          Stmt *stmt = malloc(sizeof *stmt);
+          stmt->type = STMTTYPE_EXPR;
+          stmt->value.expr = e;
+          parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+          return stmt;
+        }
         default:
           parser_fatal("unknown token when parsing statement");
       }
@@ -328,7 +353,7 @@ Stmt *parse_return_stmt(ParseContext *ctx) {
   ret->value.ret = malloc(sizeof *ret->value.ret);
   ret->value.ret->v = malloc(sizeof *ret->value.ret);
   ret->value.ret->v->type = EXPRTYPE_VOID;
-  if (ctx->cur_tok.type != TOKTYPE_SEMICOLON)
+  if (ctx->cur_tok->type != TOKTYPE_SEMICOLON)
     ret->value.ret->v = parse_expr(ctx);
 
   parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after return value");
@@ -345,18 +370,18 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
   var->value.var_decl->type = parse_type_expr(ctx);
   var->value.var_decl->names = NULL;
   var->value.var_decl->values = NULL;
-  while (ctx->cur_tok.type != TOKTYPE_EQ && ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
-    const char *ident = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in var decl").value;
+  while (ctx->cur_tok->type != TOKTYPE_EQ && ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
+    const char *ident = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in var decl")->value;
     cvector_push_back(var->value.var_decl->names, ident);
 
-    if (ctx->cur_tok.type == TOKTYPE_COMMA) {
+    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
-    } else if (ctx->cur_tok.type != TOKTYPE_EQ && ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+    } else if (ctx->cur_tok->type != TOKTYPE_EQ && ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
       parser_fatal("expected '=' or ';' after var decl ident list");
     }
   }
 
-  if (ctx->cur_tok.type == TOKTYPE_SEMICOLON) {
+  if (ctx->cur_tok->type == TOKTYPE_SEMICOLON) {
     parser_eat(ctx);
     return var;
   }
@@ -364,16 +389,16 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
   parser_expect(ctx, TOKTYPE_EQ, "expected '=' in var decl");
 
   int i = 0;
-  while (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+  while (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
     if (i + 1 > cvector_size(var->value.var_decl->names)) {
       parser_fatal("too many values in var decl");
     }
     Expr *v = parse_expr(ctx);
     cvector_push_back(var->value.var_decl->values, v);
 
-    if (ctx->cur_tok.type == TOKTYPE_COMMA) {
+    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
-    } else if (ctx->cur_tok.type != TOKTYPE_SEMICOLON) {
+    } else if (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
       parser_fatal("expected ';' after var decl value list");
     }
     i++;
@@ -395,8 +420,8 @@ Expr *parse_expr(ParseContext *ctx) {
 Expr *parse_binary_expr(ParseContext *ctx, int prec1) {
   Expr *x = parse_unary_expr(ctx);
   while (true) {
-    int oprec = parser_get_tokprec(ctx, ctx->cur_tok.type);
-    TokenType op = ctx->cur_tok.type;
+    int oprec = parser_get_tokprec(ctx, ctx->cur_tok->type);
+    TokenType op = ctx->cur_tok->type;
 
     if (oprec < prec1) {
       return x;
@@ -412,11 +437,50 @@ Expr *parse_binary_expr(ParseContext *ctx, int prec1) {
     binop->value.binop->op = op;
     binop->value.binop->y = y;
     x = binop;
+
+    Expr *postfix = parse_postfix_expr(ctx, binop);
+    x = postfix;
   }
 }
 
+Expr *parse_postfix_expr(ParseContext *ctx, Expr *x) {
+  switch (ctx->cur_tok->type) {
+    case TOKTYPE_LPAREN:
+      return parse_fn_call(ctx, x);
+    default:
+      return x;
+  }
+}
+
+Expr *parse_fn_call(ParseContext *ctx, Expr *x) {
+  parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' in function call expression");
+  cvector_vector_type(Expr *) args = parse_call_args(ctx);
+  parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' in function call expression");
+
+  Expr *call = malloc(sizeof *call);
+  call->type = EXPRTYPE_FUNCTION_CALL;
+  call->value.fn_call = malloc(sizeof *call->value.fn_call);
+  call->value.fn_call->callee = x;
+  call->value.fn_call->args = args;
+  return call;
+}
+
+cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx) {
+  cvector_vector_type(Expr *) args = NULL;
+  while (ctx->cur_tok->type != TOKTYPE_RPAREN) {
+    cvector_push_back(args, parse_expr(ctx));
+    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
+      parser_eat(ctx);
+    } else if (ctx->cur_tok->type != TOKTYPE_RPAREN) {
+      parser_fatal("expected either ',' or ')' in function call args");
+    }
+  }
+
+  return args;
+}
+
 Expr *parse_unary_expr(ParseContext *ctx) {
-  switch (ctx->cur_tok.type) {
+  switch (ctx->cur_tok->type) {
     case TOKTYPE_AMPERSAND:
       parser_fatal("unimplemented unary expression");
       break;
@@ -427,7 +491,7 @@ Expr *parse_unary_expr(ParseContext *ctx) {
 }
 
 Expr *parse_primary_expr(ParseContext *ctx) {
-  switch (ctx->cur_tok.type) {
+  switch (ctx->cur_tok->type) {
     case TOKTYPE_IDENT:
       return parse_ident_expr(ctx);
     case TOKTYPE_INT:
@@ -443,7 +507,7 @@ Expr *parse_primary_expr(ParseContext *ctx) {
 }
 
 Expr *parse_ident_expr(ParseContext *ctx) {
-  const char *value = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier").value;
+  const char *value = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier")->value;
   Expr *ident = malloc(sizeof *ident);
   ident->type = EXPRTYPE_IDENT;
   ident->value.ident = malloc(sizeof *ident->value.ident);
@@ -452,22 +516,22 @@ Expr *parse_ident_expr(ParseContext *ctx) {
 }
 
 Expr *parse_basic_lit(ParseContext *ctx) {
-  Token tok = parser_expect_range(ctx, TOKTYPE_BASIC_LIT_BEGIN, TOKTYPE_BASIC_LIT_END, "expected literal");
+  Token *tok = parser_expect_range(ctx, TOKTYPE_BASIC_LIT_BEGIN, TOKTYPE_BASIC_LIT_END, "expected literal");
   Expr *lit = malloc(sizeof *lit);
   lit->type = EXPRTYPE_BASIC_LIT;
   lit->value.basic_lit = malloc(sizeof *lit->value.basic_lit);
-  lit->value.basic_lit->type = tok.type;
-  switch (tok.type) {
+  lit->value.basic_lit->type = tok->type;
+  switch (tok->type) {
     case TOKTYPE_INT:
       lit->value.basic_lit->value.int_lit = malloc(sizeof *lit->value.basic_lit->value.int_lit);
       lit->value.basic_lit->value.int_lit->bits = 32;
       lit->value.basic_lit->value.int_lit->is_signed = true;
-      lit->value.basic_lit->value.int_lit->value = atoi(tok.value);
+      lit->value.basic_lit->value.int_lit->value = atoi(tok->value);
       break;
     case TOKTYPE_FLOAT:
       lit->value.basic_lit->value.float_lit = malloc(sizeof *lit->value.basic_lit->value.float_lit);
       lit->value.basic_lit->value.float_lit->bits = 32;
-      lit->value.basic_lit->value.float_lit->value = atoi(tok.value);
+      lit->value.basic_lit->value.float_lit->value = atoi(tok->value);
       break;
     default:
       parser_fatal("unimplemented basic lit type");
@@ -479,7 +543,7 @@ TypeDecl *parse_type_decl(ParseContext *ctx, bool pub) {
   parser_expect(ctx, TOKTYPE_TYPE, "expected 'type' in type declaration");
   TypeDecl *ty = malloc(sizeof *ty);
   ty->pub = pub;
-  ty->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in type declaration").value;
+  ty->name = parser_expect(ctx, TOKTYPE_IDENT, "expected identifier in type declaration")->value;
   ty->value = parse_type_expr(ctx);
   return ty;
 }
@@ -487,28 +551,28 @@ TypeDecl *parse_type_decl(ParseContext *ctx, bool pub) {
 void parse_pkg_file_tokens(ParseContext *ctx) {
   ctx->pkg = parse_pkg(ctx);
   int i = 0;
-  while (ctx->cur_tok.type != TOKTYPE_EOF) {
-    switch (ctx->cur_tok.type) {
+  while (ctx->cur_tok->type != TOKTYPE_EOF) {
+    switch (ctx->cur_tok->type) {
       case TOKTYPE_PACKAGE:
         parser_fatal("cannot have more than one 'pkg' in file");
       case TOKTYPE_FN:
-        cvector_push_back(ctx->functions, *parse_fn_decl(ctx, false));
+        cvector_push_back(ctx->functions, parse_fn_decl(ctx, false));
         break;
       case TOKTYPE_PUB:
         parser_eat(ctx);
-        switch (ctx->cur_tok.type) {
+        switch (ctx->cur_tok->type) {
           case TOKTYPE_FN:
-            cvector_push_back(ctx->functions, *parse_fn_decl(ctx, true));
+            cvector_push_back(ctx->functions, parse_fn_decl(ctx, true));
             break;
           case TOKTYPE_TYPE:
-            cvector_push_back(ctx->types, *parse_type_decl(ctx, true));
+            cvector_push_back(ctx->types, parse_type_decl(ctx, true));
             break;
           default:
             break;
         }
         break;
       case TOKTYPE_TYPE:
-        cvector_push_back(ctx->types, *parse_type_decl(ctx, false));
+        cvector_push_back(ctx->types, parse_type_decl(ctx, false));
         break;
       default:
         parser_fatal("unimplemented token");

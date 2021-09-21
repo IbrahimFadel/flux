@@ -51,38 +51,29 @@ char *substr(const char *str, int i, int len) {
 
 Scanner *scanner_create(const char *src) {
   Scanner *s = malloc(sizeof(Scanner));
-  if (s != NULL) {
-    s->src = src;
-    s->offset = 0;
-    Position starting_pos = {.line = 1, .col = 1};
-    s->pos = starting_pos;
-    s->ch = s->src[s->offset];
-  }
+  s->src = src;
+  s->offset = 0;
+  Position starting_pos = {.line = 1, .col = 1};
+  s->pos = starting_pos;
+  s->ch = s->src[s->offset];
   return s;
 }
 
-Token *scan_file(Scanner *s) {
-  unsigned num_tokens_allocated = TOKENS_ALLOCATION_FACTOR;
-  unsigned tokens_len = 0;
-  Token *tokens = malloc(sizeof(Token) * num_tokens_allocated);
+void scanner_destroy(Scanner *s) {
+  free(s);
+}
+
+cvector_vector_type(Token *) scan_file(Scanner *s) {
+  cvector_vector_type(Token *) tokens = NULL;
 
   while (s->ch != -1 && s->offset < strlen(s->src)) {
-    Token *tok = scan(s);
-    if (tokens_len == num_tokens_allocated) {
-      num_tokens_allocated += TOKENS_ALLOCATION_FACTOR;
-      tokens = realloc(tokens, (sizeof *tokens) * num_tokens_allocated);
-    }
-    tokens[tokens_len] = *tok;
-    tokens_len++;
+    cvector_push_back(tokens, scan(s));
   }
 
-  Token tok = {.pos = {.col = -1, .line = -1}, .type = TOKTYPE_EOF, .value = "EOF"};
-  if (tokens_len == num_tokens_allocated) {
-    num_tokens_allocated += 1;
-    tokens = realloc(tokens, (sizeof *tokens) * num_tokens_allocated);
-  }
-  tokens[tokens_len] = tok;
-  tokens_len++;
+  Token *tok = malloc(sizeof *tok);
+  tok->type = TOKTYPE_EOF;
+  tok->value = "EOF";
+  cvector_push_back(tokens, tok);
 
   return tokens;
 }
@@ -290,7 +281,7 @@ const char *scan_char(Scanner *s) {
 Token *scan(Scanner *s) {
   scan_whitespace(s);
 
-  Token *tok = malloc(sizeof(Token));
+  Token *tok = malloc(sizeof *tok);
   tok->type = TOKTYPE_ILLEGAL;
   tok->value = "";
 

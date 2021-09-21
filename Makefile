@@ -3,7 +3,7 @@ BUILD_DIR=./build
 
 CC=/usr/bin/clang
 CXX=/usr/bin/clang++
-CFLAGS=-std=c89 -Wall -Werror -Wno-comment
+CFLAGS=-std=c89 -Wall -Werror -Wno-comment -g
 CPPFLAGS=$(shell llvm-config --cxxflags --ldflags --libs core --system-libs)
 INCFLAGS=-Ilib/
 

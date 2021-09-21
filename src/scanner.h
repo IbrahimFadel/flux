@@ -1,13 +1,12 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
+#include <cvec.h>
 #include <stdbool.h>
 
 #include "token.h"
 
 const char *read_file(const char *path);
-
-#define TOKENS_ALLOCATION_FACTOR 16  // allocate 16 tokens at a time
 
 typedef struct Scanner {
   unsigned offset;
@@ -19,10 +18,11 @@ typedef struct Scanner {
 char *substr(const char *str, int i, int len);
 
 Scanner *scanner_create(const char *src);
+void scanner_destroy(Scanner *s);
 void scanner_fatal(Scanner *s, unsigned offset, const char *msg, ...);
 void scanner_next(Scanner *s);
 char scanner_peek(Scanner *s);
-Token *scan_file(Scanner *s);
+cvector_vector_type(Token *) scan_file(Scanner *s);
 Token *scan(Scanner *s);
 void scan_whitespace(Scanner *s);
 const char *scan_identifier(Scanner *s);

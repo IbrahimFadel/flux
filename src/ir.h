@@ -6,6 +6,20 @@
 #include "pi.h"
 #include "typecheck.h"
 
+typedef struct StructType {
+  bool pub;
+  const char *name;
+  LLVMTypeRef value;
+  cvector_vector_type(const char *) method_names;
+  cvector_vector_type(Property) properties;
+} StructType;
+
+typedef struct InterfaceType {
+  bool pub;
+  const char *name;
+  LLVMTypeRef value;
+} InterfaceType;
+
 typedef struct CodegenContext {
   TypecheckContext *typecheck_ctx;
   LLVMContextRef ctx;
@@ -15,8 +29,10 @@ typedef struct CodegenContext {
   BlockStmt *cur_block;
   const char *cur_typedecl_name;
 
-  cvector_vector_type(Type) structs;
-  cvector_vector_type(Type) interfaces;
+  LLVMValueRef struct_currently_being_accessed;
+
+  cvector_vector_type(StructType *) structs;
+  cvector_vector_type(InterfaceType *) interfaces;
 } CodegenContext;
 
 LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx);
@@ -38,11 +54,13 @@ LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident);
 LLVMValueRef codegen_int_expr(CodegenContext *ctx, IntExpr *e);
 LLVMValueRef codegen_float_expr(CodegenContext *ctx, FloatExpr *e);
 LLVMValueRef codegen_var_decl(CodegenContext *ctx, VarDecl *var);
-LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param) params);
+LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param *) params);
 LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty);
 LLVMTypeRef codegen_interface_type_expr(CodegenContext *ctx, InterfaceTypeExpr *interface);
 LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s);
 LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident);
 LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_type);
+LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call);
+LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop);
 
 #endif
