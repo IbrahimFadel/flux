@@ -13,6 +13,9 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   ctx->struct_currently_being_accessed = NULL;
   ctx->interfaces = NULL;
   ctx->structs = NULL;
+
+  declare_cstd_functions(ctx);
+
   unsigned i;
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_types); i++) {
     codegen_type_decl(ctx, typecheck_ctx->pkg->private_types[i]);
@@ -27,6 +30,68 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
     codegen_function(ctx, typecheck_ctx->pkg->public_functions[i]);
   }
   return ctx->mod;
+}
+
+void declare_cstd_functions(CodegenContext *ctx) {
+  // ParseContext *parse_ctx = malloc(sizeof *parse_ctx);
+
+  // Token *toks[20];
+  // toks[0] = malloc(sizeof(Token));
+  // toks[0]->type = TOKTYPE_FN;
+  // // Token *toks[20] = {
+  // //     {.type = TOKTYPE_FN, .value = "fn"}, {.type = TOKTYPE_IDENT, .value = "malloc"}, {.type = TOKTYPE_LPAREN}, {.type = TOKTYPE_I32}, {.type = TOKTYPE_IDENT, .value = "size"}, {.type = TOKTYPE_RPAREN}, {.type = TOKTYPE_ARROW}, {.type = TOKTYPE_I8}, {.type = TOKTYPE_ASTERISK}, {.type = TOKTYPE_SEMICOLON}};
+  // parse_ctx->toks = toks;
+  // parse_ctx->tok_ptr = 0;
+  // parse_ctx->cur_tok = toks[0];
+  // parse_ctx->functions = NULL;
+  // printf("fi\n");
+  // FnDecl *malloc_decl = parse_fn_decl(parse_ctx, false);
+  // cvector_push_back(ctx->typecheck_ctx->pkg->private_functions, malloc_decl);
+  // const char *code = "fn malloc(i32 size) -> i8*;\n";
+
+  // FnDecl *malloc_decl = malloc(sizeof *malloc_decl);
+  // Expr *malloc_ret = malloc(sizeof *malloc_ret);
+  // Expr *
+  // PrimitiveTypeExpr *prim_expr = malloc(sizeof *prim_expr);
+  // prim_expr->type = TOKTYPE_I8;
+  // PointerTypeExpr *ptr_expr = malloc(sizeof *ptr_expr);
+  // ptr_expr->pointer_to_type = prim_expr;
+  // malloc_ret->type = EXPRTYPE_PTR;
+  // malloc_ret->value.pointer_type = ptr_expr;
+  // malloc_decl->name = "malloc";
+
+  // Expr *param_expr = malloc(sizeof *param_expr);
+  // param_expr->type = EXPRTYPE_PRIMITIVE;
+  // PrimitiveTypeExpr *prim_expr2 = malloc(sizeof *prim_expr2);
+  // prim_expr2->type = TOKTYPE_I32;
+  // param_expr->value.primitive_type = prim_expr2;
+  // Param *malloc_params = malloc(sizeof *malloc_params);
+  // malloc_params->type = param_expr;
+
+  // cvector_push_back(ctx->typecheck_ctx->pkg->private_functions, malloc_decl);
+  // malloc_params->type
+  // malloc_decl->params
+  // mallocDecl->return_type =
+  // LLVMTypeRef params[3];
+  // LLVMTypeRef ret = LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0);
+  // params[0] = LLVMInt32TypeInContext(ctx->ctx);
+  // unsigned param_count = 1;
+  // LLVMTypeRef type = LLVMFunctionType(ret, params, param_count, false);
+  // LLVMAddFunction(ctx->mod, "malloc", type);
+
+  // ret = LLVMVoidTypeInContext(ctx->ctx);
+  // params[0] = LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0);
+  // param_count = 1;
+  // type = LLVMFunctionType(ret, params, param_count, false);
+  // LLVMAddFunction(ctx->mod, "free", type);
+
+  // ret = LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0);
+  // params[0] = LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0);
+  // params[1] = LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0);
+  // params[2] = LLVMInt32TypeInContext(ctx->ctx);
+  // param_count = 3;
+  // type = LLVMFunctionType(ret, params, param_count, false);
+  // LLVMAddFunction(ctx->mod, "memcpy", type);
 }
 
 LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty) {
@@ -140,7 +205,7 @@ LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *
   }
 }
 
-void coddegen_block_stmt(CodegenContext *ctx, BlockStmt *block) {
+void codegen_block_stmt(CodegenContext *ctx, BlockStmt *block) {
   unsigned i;
   for (i = 0; i < cvector_size(block->stmts); i++) {
     codegen_stmt(ctx, &block->stmts[i]);
@@ -218,15 +283,17 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
     case EXPRTYPE_BINARY:
       callee = codegen_binary_expr(ctx, call->callee->value.binop);
       break;
+    case EXPRTYPE_IDENT:
+      callee = LLVMGetNamedFunction(ctx->mod, call->callee->value.ident->value);
+      break;
     default:
-      printf("unimplemented function call callee type\n");
+      printf("unimplemented function call callee type: %d\n", call->callee->type);
       exit(1);
   }
 
   cvector_vector_type(LLVMValueRef) args = NULL;
   unsigned num_args = 0;
   if (ctx->struct_currently_being_accessed) {
-    // Is this GetOperand consistent? monitor this
     cvector_push_back(args, LLVMGetOperand(ctx->struct_currently_being_accessed, 0));
     num_args++;
   }
@@ -279,7 +346,7 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
   LLVMValueRef lhs = codegen_expr(ctx, binop->x);
   LLVMValueRef rhs = codegen_expr(ctx, binop->y);
-
+  ctx->struct_currently_being_accessed = NULL;
   return LLVMBuildStore(ctx->builder, rhs, LLVMGetOperand(lhs, 0));
 }
 
@@ -482,11 +549,17 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   }
 
   LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, fn_type);
-  ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
-  ctx->cur_block = fn->body;
-  LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
-  codegen_function_params(ctx, func, fn->params);
-  coddegen_block_stmt(ctx, fn->body);
+  if (fn->body->stmts != NULL) {
+    ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
+    ctx->cur_block = fn->body;
+    LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
+    codegen_function_params(ctx, func, fn->params);
+    codegen_block_stmt(ctx, fn->body);
+    LLVMValueRef term = LLVMGetBasicBlockTerminator(ctx->cur_bb);
+    if (term == NULL) {
+      LLVMBuildRetVoid(ctx->builder);
+    }
+  }
 }
 
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {

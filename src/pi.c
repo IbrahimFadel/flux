@@ -66,6 +66,42 @@ void package_print(Package *p) {
   }
 }
 
+cvector_vector_type(FnDecl *) create_cstd_functions() {
+  cvector_vector_type(FnDecl *) functions = NULL;
+  const char *file_content = "fn malloc(i32 size) -> i8*;\n";
+  Scanner *s = scanner_create(file_content);
+  cvector_vector_type(Token *) tokens = scan_file(s);
+  ParseContext *ctx = parsecontext_create(tokens);
+  FnDecl *malloc_decl = parse_fn_decl(ctx, false);
+  cvector_push_back(functions, malloc_decl);
+
+  file_content = "fn free(i8 *buf);\n";
+  s->src = file_content;
+  s->offset = 0;
+  s->ch = file_content[0];
+  tokens = scan_file(s);
+  ctx->toks = tokens;
+  ctx->tok_ptr = 0;
+  ctx->cur_tok = tokens[0];
+  FnDecl *free_decl = parse_fn_decl(ctx, false);
+  cvector_push_back(functions, free_decl);
+
+  file_content = "fn memcpy(i8 *buf1, i8 *buf2, i32 size);\n";
+  s->src = file_content;
+  s->offset = 0;
+  s->ch = file_content[0];
+  tokens = scan_file(s);
+  ctx->toks = tokens;
+  ctx->tok_ptr = 0;
+  ctx->cur_tok = tokens[0];
+  FnDecl *memcpy_decl = parse_fn_decl(ctx, false);
+  cvector_push_back(functions, memcpy_decl);
+
+  scanner_destroy(s);
+  parsecontext_destroy(ctx);
+  return functions;
+}
+
 int main(int argc, char **argv) {
   cvector_vector_type(const char *) input_files = NULL;
   if (argc == 1) {
@@ -80,6 +116,8 @@ int main(int argc, char **argv) {
 
   cvector_vector_type(Package) packages = NULL;
   cvector_vector_type(cvector_vector_type(Token *)) tokens_list = NULL;
+
+  cvector_vector_type(FnDecl *) cstd_functions = create_cstd_functions();
 
   int i;
   for (i = 0; i < cvector_size(input_files); i++) {
@@ -110,6 +148,9 @@ int main(int argc, char **argv) {
       pkg_it->name = ctx->pkg;
     }
     FnDecl **f_it;
+    for (f_it = cvector_begin(cstd_functions); f_it != cvector_end(cstd_functions); f_it++) {
+      cvector_push_back(pkg_it->private_functions, *f_it);
+    }
     for (f_it = cvector_begin(ctx->functions); f_it != cvector_end(ctx->functions); f_it++) {
       if ((*f_it)->pub) {
         cvector_push_back(pkg_it->public_functions, *f_it);

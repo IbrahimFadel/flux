@@ -2,10 +2,16 @@ pkg std
 
 type string struct {
 	u8 *buf;
+	u32 len;
+	u32 maxlen;
 	u64 factor;
 }
 
 fn (string *s) init() {
 	s->buf = nil;
-	s->factor = 32;
+	s->len = 0;
+	s->maxlen = 0;
+	s->factor = 16;
+
+	malloc(1);
 }

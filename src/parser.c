@@ -126,6 +126,14 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
     fn->return_type = parse_type_expr(ctx);
   }
 
+  if (ctx->cur_tok->type == TOKTYPE_SEMICOLON) {
+    parser_eat(ctx);
+    fn->body = malloc(sizeof *fn->body);
+    fn->body->stmts = NULL;
+    fn->body->variables = NULL;
+    return fn;
+  }
+
   fn->body = parse_block_stmt(ctx);
 
   fn->pub = pub;
@@ -322,8 +330,14 @@ Stmt *parse_stmt(ParseContext *ctx) {
       return parse_return_stmt(ctx);
     case TOKTYPE_IDENT:
       switch (ctx->toks[ctx->tok_ptr + 1]->type) {
-        case TOKTYPE_LPAREN:
-          parser_fatal("function calls unimplemented");
+        case TOKTYPE_LPAREN: {
+          Expr *e = parse_fn_call(ctx, parse_ident_expr(ctx));
+          Stmt *stmt = malloc(sizeof *stmt);
+          stmt->type = STMTTYPE_EXPR;
+          stmt->value.expr = e;
+          parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+          return stmt;
+        }
         case TOKTYPE_IDENT:
           return parse_var_decl(ctx, false, false);
         case TOKTYPE_EQ:

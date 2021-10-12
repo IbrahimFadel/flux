@@ -3,6 +3,7 @@
 
 #include <llvm-c/Core.h>
 
+#include "parser.h"
 #include "pi.h"
 #include "typecheck.h"
 
@@ -40,11 +41,12 @@ LLVMValueRef block_get_var(BlockStmt *block, const char *name);
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name);
 const char *interface_name_to_interface_vtable_name(const char *interface_name);
 void add_method_to_interface_vtable(CodegenContext *ctx, const char *fn_name, LLVMTypeRef fn_type, const char *interface_name);
+void declare_cstd_functions(CodegenContext *ctx);
 
 void codegen_function(CodegenContext *ctx, FnDecl *fn);
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr);
 LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *expr);
-void coddegen_block_stmt(CodegenContext *ctx, BlockStmt *block);
+void codegen_block_stmt(CodegenContext *ctx, BlockStmt *block);
 LLVMValueRef codegen_stmt(CodegenContext *ctx, Stmt *stmt);
 LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr);
 LLVMValueRef codegen_basic_lit_expr(CodegenContext *ctx, BasicLitExpr *lit);

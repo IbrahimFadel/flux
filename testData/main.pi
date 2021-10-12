@@ -1,18 +1,7 @@
 pkg main
 
-type Dog struct {
-  i32 age;
-}
-
-fn (Dog *d) hello(i32 x) -> i32 {
-  return x + 1;
-}
-
-fn main() -> i32 {
-  Dog d;
-  i32 x = d.hello(23);
-
-  d.age = 0;
-
-  return x;
+fn main() {
+  if(1 == 1) {
+    
+  }
 }
