@@ -17,6 +17,7 @@ typedef enum ExprType {
   EXPRTYPE_INTERFACE,
   EXPRTYPE_STRUCT,
   EXPRTYPE_FUNCTION_CALL,
+  EXPRTYPE_NIL,
 } ExprType;
 
 typedef enum StmtType {
@@ -123,6 +124,7 @@ typedef struct Expr {
     struct BasicLitExpr *basic_lit;
     struct BinaryExpr *binop;
     struct FnCall *fn_call;
+    struct Expr *nil_type;
   } value;
 } Expr;
 

@@ -57,6 +57,7 @@ Property *parse_property(ParseContext *ctx);
 Expr *parse_postfix_expr(ParseContext *ctx, Expr *x);
 Expr *parse_fn_call(ParseContext *ctx, Expr *x);
 cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx);
+Expr *parse_nil_expr(ParseContext *ctx);
 
 void parse_pkg_file_tokens(ParseContext *ctx);
 

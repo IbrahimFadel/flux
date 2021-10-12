@@ -1,11 +1,11 @@
 pkg std
 
-pub type string struct {
-	u8 buf;
+type string struct {
+	u8 *buf;
 	u64 factor;
 }
 
 fn (string *s) init() {
-	s->buf = 0;
-	s->factor = 0;
+	s->buf = nil;
+	s->factor = 32;
 }

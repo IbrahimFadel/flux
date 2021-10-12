@@ -208,7 +208,6 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
       typecheck_ctx_insert_interface_implementation(ctx, struct_name, implements[i], fn->name);
     }
 
-    // need function receiver as a var decl
     Symbol *recv_symbol = malloc(sizeof *recv_symbol);
     recv_symbol->name = fn->receiver->name;
     recv_symbol->type = fn->receiver->type;
@@ -226,7 +225,11 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
       typecheck_expr(ctx, stmt->value.expr);
     }
   }
-  //TODO: free data
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+    free(ctx->symbol_table[i]);
+  }
+  cvector_free(ctx->symbol_table);
   ctx->symbol_table = NULL;
 }
 
@@ -258,9 +261,97 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
     case EXPRTYPE_BASIC_LIT:
       typecheck_basic_lit(ctx, expr->value.basic_lit);
       break;
+    case EXPRTYPE_NIL:
+      expr->value.nil_type = ctx->expecting_type;
+      break;
     default:
       break;
   }
+}
+
+StructTypeExpr *get_struct_type(TypecheckContext *ctx, const char *name) {
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
+    TypeDecl *type_decl = ctx->pkg->private_types[i];
+    if (!strcmp(type_decl->name, name)) {
+      if (type_decl->value->type == EXPRTYPE_STRUCT) {
+        return type_decl->value->value.struct_type;
+      }
+    }
+  }
+  for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
+    TypeDecl *type_decl = ctx->pkg->public_types[i];
+    if (!strcmp(type_decl->name, name)) {
+      if (type_decl->value->type == EXPRTYPE_STRUCT) {
+        return type_decl->value->value.struct_type;
+      }
+    }
+  }
+
+  printf("typecheck: could not find struct called '%s'\n", name);
+  exit(1);
+}
+
+Property get_struct_prop(StructTypeExpr *struct_ty, const char *prop_name) {
+  unsigned j;
+  for (j = 0; j < cvector_size(struct_ty->properties); j++) {
+    const char **name = NULL;
+    for (name = cvector_begin(struct_ty->properties[j].names); name != cvector_end(struct_ty->properties[j].names); name++) {
+      if (!strcmp(*name, prop_name)) {
+        return struct_ty->properties[j];
+      }
+    }
+  }
+
+  printf("typecheck: could not find struct property called '%s'\n", prop_name);
+  exit(1);
+}
+
+Expr *get_struct_ptr_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
+  Expr *ptr_ty = get_struct_prop_type(ctx, binop);
+  if (ptr_ty->type != EXPRTYPE_PTR) {
+    printf("typecheck: lhs of '->' must be a pointer\n");
+    exit(1);
+  }
+  Expr *val_ty = ptr_ty->value.pointer_type->pointer_to_type;
+  if (val_ty->type != EXPRTYPE_IDENT) {
+    printf("typecheck: lhs of '->' must be a pointer to a struct\n");
+    exit(1);
+  }
+  const char *struct_name = val_ty->value.ident->value;
+  StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
+  Property prop = get_struct_prop(struct_ty, binop->y->value.ident->value);
+  return prop.type;
+}
+
+Expr *get_struct_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
+  Expr *val_ty = get_struct_prop_type(ctx, binop);
+  if (val_ty->type != EXPRTYPE_IDENT) {
+    printf("typecheck: lhs of '.' must be a struct\n");
+    exit(1);
+  }
+  const char *struct_name = val_ty->value.ident->value;
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
+    TypeDecl *type_decl = ctx->pkg->public_types[i];
+    if (!strcmp(type_decl->name, struct_name)) {
+      if (type_decl->value->type == EXPRTYPE_STRUCT) {
+        cvector_vector_type(Property) props = type_decl->value->value.struct_type->properties;
+        unsigned j;
+        for (j = 0; j < cvector_size(props); j++) {
+          const char **name = NULL;
+          for (name = cvector_begin(props[j].names); name != cvector_end(props[j].names); name++) {
+            if (!strcmp(*name, binop->y->value.ident->value)) {
+              return props[j].type;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  printf("typecheck: could not get struct access type\n");
+  exit(1);
 }
 
 void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
@@ -274,40 +365,9 @@ void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
         exit(1);
       }
       if (lhs->op == TOKTYPE_ARROW) {
-        Expr *ptr_ty = get_struct_prop_type(ctx, binop->x->value.binop);
-        if (ptr_ty->type != EXPRTYPE_PTR) {
-          printf("typecheck: lhs of '->' must be a pointer\n");
-          exit(1);
-        }
-        Expr *val_ty = ptr_ty->value.pointer_type->pointer_to_type;
-        if (val_ty->type != EXPRTYPE_IDENT) {
-          printf("typecheck: lhs of '->' must be a pointer to a struct\n");
-          exit(1);
-        }
-        const char *struct_name = val_ty->value.ident->value;
-        unsigned i;
-        for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
-          TypeDecl *type_decl = ctx->pkg->public_types[i];
-          if (!strcmp(type_decl->name, struct_name)) {
-            if (type_decl->value->type == EXPRTYPE_STRUCT) {
-              cvector_vector_type(Property) props = type_decl->value->value.struct_type->properties;
-              unsigned j;
-              for (j = 0; j < cvector_size(props); j++) {
-                const char **name = NULL;
-                for (name = cvector_begin(props[j].names); name != cvector_end(props[j].names); name++) {
-                  if (!strcmp(*name, lhs->y->value.ident->value)) {
-                    Expr *rhs_type = props[j].type;
-                    ctx->expecting_type = rhs_type;
-                  }
-                }
-              }
-            }
-          }
-        }
-
+        ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
       } else if (lhs->op == TOKTYPE_PERIOD) {
-        printf("typecheck: TODO\n");
-        exit(1);
+        ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
       } else {
         printf("typecheck: expected lhs of assignment to be variable\n");
         exit(1);

@@ -199,11 +199,17 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
       return codegen_ident_expr(ctx, expr->value.ident);
     case EXPRTYPE_FUNCTION_CALL:
       return codegen_function_call(ctx, expr->value.fn_call);
+    case EXPRTYPE_NIL:
+      return codegen_nil_expr(ctx, expr->value.nil_type);
     default:
       printf("unimplemented expr\n");
       exit(1);
   }
   return NULL;
+}
+
+LLVMValueRef codegen_nil_expr(CodegenContext *ctx, Expr *nil_type) {
+  return LLVMConstNull(codegen_type_expr(ctx, nil_type));
 }
 
 LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
@@ -270,7 +276,6 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
   return NULL;
 }
 
-// TODO: handle issues with mut and pub in typechecking stage
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
   LLVMValueRef lhs = codegen_expr(ctx, binop->x);
   LLVMValueRef rhs = codegen_expr(ctx, binop->y);

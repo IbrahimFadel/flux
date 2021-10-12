@@ -64,4 +64,6 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call);
 LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop);
 LLVMValueRef codegen_binop_struct_ptr_access(CodegenContext *ctx, BinaryExpr *binop);
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop);
+LLVMValueRef codegen_nil_expr(CodegenContext *ctx, Expr *nil_type);
+
 #endif

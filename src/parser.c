@@ -494,6 +494,8 @@ Expr *parse_unary_expr(ParseContext *ctx) {
 
 Expr *parse_primary_expr(ParseContext *ctx) {
   switch (ctx->cur_tok->type) {
+    case TOKTYPE_NIL:
+      return parse_nil_expr(ctx);
     case TOKTYPE_IDENT:
       return parse_ident_expr(ctx);
     case TOKTYPE_INT:
@@ -506,6 +508,14 @@ Expr *parse_primary_expr(ParseContext *ctx) {
       break;
   }
   return NULL;
+}
+
+Expr *parse_nil_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_NIL, "expected 'nil'");
+  Expr *nil = malloc(sizeof *nil);
+  nil->type = EXPRTYPE_NIL;
+  nil->value.nil_type = malloc(sizeof *nil->value.nil_type);
+  return nil;
 }
 
 Expr *parse_ident_expr(ParseContext *ctx) {
