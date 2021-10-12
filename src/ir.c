@@ -17,6 +17,9 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_types); i++) {
     codegen_type_decl(ctx, typecheck_ctx->pkg->private_types[i]);
   }
+  for (i = 0; i < cvector_size(typecheck_ctx->pkg->public_types); i++) {
+    codegen_type_decl(ctx, typecheck_ctx->pkg->public_types[i]);
+  }
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_functions); i++) {
     codegen_function(ctx, typecheck_ctx->pkg->private_functions[i]);
   }
@@ -255,11 +258,67 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
     case TOKTYPE_ASTERISK:
     case TOKTYPE_SLASH:
       return codegen_binop_arithmetic(ctx, binop);
+    case TOKTYPE_ARROW:
+      return codegen_binop_struct_ptr_access(ctx, binop);
     case TOKTYPE_PERIOD:
       return codegen_binop_struct_access(ctx, binop);
+    case TOKTYPE_EQ:
+      return codegen_binop_assignment(ctx, binop);
     default:
       break;
   }
+  return NULL;
+}
+
+// TODO: handle issues with mut and pub in typechecking stage
+LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
+  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
+  LLVMValueRef rhs = codegen_expr(ctx, binop->y);
+
+  return LLVMBuildStore(ctx->builder, rhs, LLVMGetOperand(lhs, 0));
+}
+
+LLVMValueRef codegen_binop_struct_ptr_access(CodegenContext *ctx, BinaryExpr *binop) {
+  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
+
+  ctx->struct_currently_being_accessed = lhs;
+
+  if (binop->y->type != EXPRTYPE_IDENT) {
+    printf("%d\n", binop->y->type);
+    printf("expected identifier in struct property access\n");
+    exit(1);
+  }
+  const char *prop_name = binop->y->value.ident->value;
+
+  unsigned i;
+  for (i = 0; i < cvector_size(ctx->structs); i++) {
+    LLVMTypeRef struct_ty = ctx->structs[i]->value;
+    const char *n = LLVMGetStructName(struct_ty);
+    LLVMTypeRef ty = LLVMGetElementType(LLVMTypeOf(lhs));
+    const char *actual_struct_name = LLVMGetStructName(ty);
+
+    if (!strcmp(n, actual_struct_name)) {
+      unsigned j;
+      for (j = 0; j < cvector_size(ctx->structs[i]->method_names); j++) {
+        const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
+        if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
+          return LLVMGetNamedFunction(ctx->mod, method_name);
+        }
+      }
+
+      for (j = 0; j < cvector_size(ctx->structs[i]->properties); j++) {
+        Property p = ctx->structs[i]->properties[j];
+        unsigned x;
+        for (x = 0; x < cvector_size(p.names); x++) {
+          if (!strcmp(p.names[x], prop_name)) {
+            LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
+            return LLVMBuildLoad(ctx->builder, gep, "");
+          }
+        }
+      }
+    }
+  }
+
   return NULL;
 }
 
@@ -288,6 +347,17 @@ LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop)
         const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
         if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
           return LLVMGetNamedFunction(ctx->mod, method_name);
+        }
+      }
+
+      for (j = 0; j < cvector_size(ctx->structs[i]->properties); j++) {
+        Property p = ctx->structs[i]->properties[j];
+        unsigned x;
+        for (x = 0; x < cvector_size(p.names); x++) {
+          if (!strcmp(p.names[x], prop_name)) {
+            LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, LLVMGetOperand(lhs, 0), x, "");
+            return LLVMBuildLoad(ctx->builder, gep, "");
+          }
         }
       }
     }
@@ -335,6 +405,10 @@ LLVMValueRef codegen_int_expr(CodegenContext *ctx, IntExpr *e) {
       return LLVMConstInt(LLVMInt64TypeInContext(ctx->ctx), e->value, e->is_signed);
     case 32:
       return LLVMConstInt(LLVMInt32TypeInContext(ctx->ctx), e->value, e->is_signed);
+    case 16:
+      return LLVMConstInt(LLVMInt16TypeInContext(ctx->ctx), e->value, e->is_signed);
+    case 8:
+      return LLVMConstInt(LLVMInt8TypeInContext(ctx->ctx), e->value, e->is_signed);
     default:
       printf("unimplemented integer bit count\n");
       exit(1);
@@ -406,7 +480,6 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
   ctx->cur_block = fn->body;
   LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
-
   codegen_function_params(ctx, func, fn->params);
   coddegen_block_stmt(ctx, fn->body);
 }

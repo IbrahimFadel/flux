@@ -62,5 +62,6 @@ LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident);
 LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_type);
 LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call);
 LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop);
-
+LLVMValueRef codegen_binop_struct_ptr_access(CodegenContext *ctx, BinaryExpr *binop);
+LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop);
 #endif

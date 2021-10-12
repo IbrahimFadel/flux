@@ -6,6 +6,7 @@
 TypecheckContext *typecheck_ctx_create(Package *pkg) {
   TypecheckContext *ctx = malloc(sizeof *ctx);
   ctx->pkg = pkg;
+  ctx->symbol_table = NULL;
   ctx->interface_method_implementations_map = NULL;
   ctx->struct_implements_interfaces_map = NULL;
   return ctx;
@@ -206,12 +207,18 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
     for (i = 0; i < cvector_size(implements); i++) {
       typecheck_ctx_insert_interface_implementation(ctx, struct_name, implements[i], fn->name);
     }
+
+    // need function receiver as a var decl
+    Symbol *recv_symbol = malloc(sizeof *recv_symbol);
+    recv_symbol->name = fn->receiver->name;
+    recv_symbol->type = fn->receiver->type;
+    cvector_push_back(ctx->symbol_table, recv_symbol);
   }
 
+  ctx->expecting_type = fn->return_type;
   Stmt *stmt;
   for (stmt = cvector_begin(fn->body->stmts); stmt != cvector_end(fn->body->stmts); stmt++) {
     if (stmt->type == STMTTYPE_RETURN) {
-      ctx->expecting_type = fn->return_type;
       typecheck_return(ctx, stmt->value.ret);
     } else if (stmt->type == STMTTYPE_VARDECL) {
       typecheck_var_decl(ctx, stmt->value.var_decl);
@@ -219,11 +226,22 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
       typecheck_expr(ctx, stmt->value.expr);
     }
   }
+  //TODO: free data
+  ctx->symbol_table = NULL;
 }
 
 void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var) {
-  ctx->expecting_type = var->type;
   unsigned i;
+  if (var->type->type == EXPRTYPE_IDENT) {
+    for (i = 0; i < cvector_size(var->names); i++) {
+      Symbol *s = malloc(sizeof *s);
+      s->name = var->names[i];
+      s->type = var->type;
+      cvector_push_back(ctx->symbol_table, s);
+    }
+  }
+
+  ctx->expecting_type = var->type;
   for (i = 0; i < cvector_size(var->values); i++) {
     typecheck_expr(ctx, var->values[i]);
   }
@@ -235,8 +253,7 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
       typecheck_function_call(ctx, expr->value.fn_call);
       break;
     case EXPRTYPE_BINARY:
-      typecheck_expr(ctx, expr->value.binop->x);
-      typecheck_expr(ctx, expr->value.binop->y);
+      typecheck_binop(ctx, expr->value.binop);
       break;
     case EXPRTYPE_BASIC_LIT:
       typecheck_basic_lit(ctx, expr->value.basic_lit);
@@ -244,6 +261,83 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
     default:
       break;
   }
+}
+
+void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
+  if (binop->op == TOKTYPE_EQ) {
+    ctx->expecting_type = binop->x;
+
+    if (binop->x->type == EXPRTYPE_BINARY) {
+      BinaryExpr *lhs = binop->x->value.binop;
+      if (lhs->y->type != EXPRTYPE_IDENT) {
+        printf("typecheck: rhs of '->' must be an identifier\n");
+        exit(1);
+      }
+      if (lhs->op == TOKTYPE_ARROW) {
+        Expr *ptr_ty = get_struct_prop_type(ctx, binop->x->value.binop);
+        if (ptr_ty->type != EXPRTYPE_PTR) {
+          printf("typecheck: lhs of '->' must be a pointer\n");
+          exit(1);
+        }
+        Expr *val_ty = ptr_ty->value.pointer_type->pointer_to_type;
+        if (val_ty->type != EXPRTYPE_IDENT) {
+          printf("typecheck: lhs of '->' must be a pointer to a struct\n");
+          exit(1);
+        }
+        const char *struct_name = val_ty->value.ident->value;
+        unsigned i;
+        for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
+          TypeDecl *type_decl = ctx->pkg->public_types[i];
+          if (!strcmp(type_decl->name, struct_name)) {
+            if (type_decl->value->type == EXPRTYPE_STRUCT) {
+              cvector_vector_type(Property) props = type_decl->value->value.struct_type->properties;
+              unsigned j;
+              for (j = 0; j < cvector_size(props); j++) {
+                const char **name = NULL;
+                for (name = cvector_begin(props[j].names); name != cvector_end(props[j].names); name++) {
+                  if (!strcmp(*name, lhs->y->value.ident->value)) {
+                    Expr *rhs_type = props[j].type;
+                    ctx->expecting_type = rhs_type;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+      } else if (lhs->op == TOKTYPE_PERIOD) {
+        printf("typecheck: TODO\n");
+        exit(1);
+      } else {
+        printf("typecheck: expected lhs of assignment to be variable\n");
+        exit(1);
+      }
+    }
+  }
+
+  typecheck_expr(ctx, binop->x);
+  typecheck_expr(ctx, binop->y);
+}
+
+Expr *get_struct_prop_type(TypecheckContext *ctx, BinaryExpr *binop) {
+  switch (binop->x->type) {
+    case EXPRTYPE_BINARY:
+      printf("kill me\n");
+      exit(1);
+    case EXPRTYPE_IDENT: {
+      unsigned i;
+      for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+        if (!strcmp(ctx->symbol_table[i]->name, binop->x->value.ident->value)) return ctx->symbol_table[i]->type;
+      }
+      break;
+    }
+    default:
+      printf("kill me\n");
+      exit(1);
+      break;
+  }
+
+  return NULL;
 }
 
 void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit) {

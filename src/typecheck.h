@@ -4,9 +4,16 @@
 #include "ast.h"
 #include "pi.h"
 
+typedef struct Symbol {
+  const char *name;
+  Expr *type;
+} Symbol;
+
 typedef struct TypecheckContext {
   Package *pkg;
   Expr *expecting_type;
+
+  cvector_vector_type(Symbol *) symbol_table;
 
   //TODO: better naming, or document (both probably)
   cvector_vector_type(cvector_vector_type(char *)) interface_method_implementations_map;
@@ -24,6 +31,7 @@ cvector_vector_type(TypeDecl *) struct_method_implements_interface(TypecheckCont
 bool fn_implements_interface_method(FnDecl *fn, Method *method);
 FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee);
 void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty);
+Expr *get_struct_prop_type(TypecheckContext *ctx, BinaryExpr *binop);
 
 void typecheck_pkg(TypecheckContext *ctx, Package *pkg);
 void typecheck_function(TypecheckContext *ctx, FnDecl *fn);
@@ -32,5 +40,6 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr);
 void typecheck_function_call(TypecheckContext *ctx, FnCall *call);
 void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var);
 void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit);
+void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop);
 
 #endif

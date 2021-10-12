@@ -100,7 +100,7 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
     fn->receiver = parse_fn_receiver(ctx);
     Param *p = malloc(sizeof *p);
     p->mut = false;
-    p->name = "this";
+    p->name = fn->receiver->name;
     p->type = fn->receiver->type;
     cvector_push_back(fn->params, p);
   }
@@ -220,9 +220,9 @@ Expr *parse_struct_type_expr(ParseContext *ctx) {
   while (ctx->cur_tok->type != TOKTYPE_RBRACE) {
     cvector_push_back(s->value.struct_type->properties, *parse_property(ctx));
     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after property in struct type property list");
-    if (ctx->cur_tok->type != TOKTYPE_RBRACE && ctx->cur_tok->type != TOKTYPE_IDENT) {
-      parser_fatal("expected a property or '}' in struct type property list");
-    }
+    // if (ctx->cur_tok->type != TOKTYPE_RBRACE && ctx->cur_tok->type != TOKTYPE_IDENT) {
+    //   parser_fatal("expected a property or '}' in struct type property list");
+    // }
   }
 
   parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' in struct type expression");
@@ -326,6 +326,8 @@ Stmt *parse_stmt(ParseContext *ctx) {
           parser_fatal("function calls unimplemented");
         case TOKTYPE_IDENT:
           return parse_var_decl(ctx, false, false);
+        case TOKTYPE_EQ:
+        case TOKTYPE_ARROW:
         case TOKTYPE_PERIOD: {
           Expr *e = parse_expr(ctx);
           Stmt *stmt = malloc(sizeof *stmt);
