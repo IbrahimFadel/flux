@@ -10,6 +10,7 @@ ParseContext *parsecontext_create(cvector_vector_type(Token *) toks) {
   ctx->cur_tok = ctx->toks[ctx->tok_ptr];
   ctx->functions = NULL;
   ctx->types = NULL;
+  ctx->cur_block = NULL;
   // there is a better way im just stupid
   ctx->tok_precedence_map[0].type = TOKTYPE_EQ;
   ctx->tok_precedence_map[0].prec = 2;
@@ -142,12 +143,14 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
 
 BlockStmt *parse_block_stmt(ParseContext *ctx) {
   BlockStmt *block = malloc(sizeof *block);
+  ctx->cur_block = block;
   parser_expect(ctx, TOKTYPE_LBRACE, "expected '{' after function parameter listing");
   block->stmts = NULL;
   while (ctx->cur_tok->type != TOKTYPE_RBRACE)
     cvector_push_back(block->stmts, *parse_stmt(ctx));
   parser_expect(ctx, TOKTYPE_RBRACE, "expected '}' after function body");
   block->variables = NULL;
+  block->parent = NULL;
   return block;
 }
 
@@ -328,6 +331,8 @@ Stmt *parse_stmt(ParseContext *ctx) {
       return parse_var_decl(ctx, false, true);
     case TOKTYPE_RETURN:
       return parse_return_stmt(ctx);
+    case TOKTYPE_IF:
+      return parse_if_stmt(ctx);
     case TOKTYPE_IDENT:
       switch (ctx->toks[ctx->tok_ptr + 1]->type) {
         case TOKTYPE_LPAREN: {
@@ -359,6 +364,31 @@ Stmt *parse_stmt(ParseContext *ctx) {
       break;
   }
   return NULL;
+}
+
+Stmt *parse_if_stmt(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_IF, "expected 'if'");
+  parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' in if statement");
+  Stmt *stmt = malloc(sizeof *stmt);
+  IfStmt *if_stmt = malloc(sizeof *if_stmt);
+  if_stmt->condition = parse_expr(ctx);
+  parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' in if statement");
+
+  BlockStmt *outer = ctx->cur_block;
+  if_stmt->then_block = parse_block_stmt(ctx);
+  if_stmt->then_block->parent = outer;
+  if_stmt->else_block = malloc(sizeof *if_stmt->else_block);
+  if_stmt->else_block->stmts = NULL;
+  if_stmt->else_block->variables = NULL;
+  if (ctx->cur_tok->type == TOKTYPE_ELSE) {
+    parser_eat(ctx);
+    if_stmt->else_block = parse_block_stmt(ctx);
+    if_stmt->else_block->parent = outer;
+  }
+
+  stmt->type = STMTTYPE_IF;
+  stmt->value.if_stmt = if_stmt;
+  return stmt;
 }
 
 Stmt *parse_return_stmt(ParseContext *ctx) {

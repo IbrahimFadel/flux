@@ -22,6 +22,10 @@ TokenType lookup_keyword(const char *str) {
     return TOKTYPE_STRUCT;
   if (!strcmp(str, "nil"))
     return TOKTYPE_NIL;
+  if (!strcmp(str, "if"))
+    return TOKTYPE_IF;
+  if (!strcmp(str, "else"))
+    return TOKTYPE_ELSE;
   if (!strcmp(str, "i64"))
     return TOKTYPE_I64;
   if (!strcmp(str, "i32"))

@@ -1,7 +1,11 @@
 pkg main
 
 fn main() {
-  if(1 == 1) {
-    
+  i32 x = 0;
+  if(x == 0) {
+    i32 x = 5;
+    x = 1;
+  } else {
+    return;
   }
 }

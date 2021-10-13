@@ -26,6 +26,7 @@ typedef struct CodegenContext {
   LLVMContextRef ctx;
   LLVMModuleRef mod;
   LLVMBuilderRef builder;
+  LLVMValueRef cur_fn;
   LLVMBasicBlockRef cur_bb;
   BlockStmt *cur_block;
   const char *cur_typedecl_name;
@@ -67,5 +68,7 @@ LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop)
 LLVMValueRef codegen_binop_struct_ptr_access(CodegenContext *ctx, BinaryExpr *binop);
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop);
 LLVMValueRef codegen_nil_expr(CodegenContext *ctx, Expr *nil_type);
+LLVMValueRef codegen_if_stmt(CodegenContext *ctx, IfStmt *if_stmt);
+LLVMValueRef codegen_binop_cmp(CodegenContext *ctx, BinaryExpr *binop);
 
 #endif

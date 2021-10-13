@@ -220,11 +220,53 @@ LLVMValueRef codegen_stmt(CodegenContext *ctx, Stmt *stmt) {
       return LLVMBuildRet(ctx->builder, codegen_expr(ctx, stmt->value.ret->v));
     case STMTTYPE_EXPR:
       return codegen_expr(ctx, stmt->value.expr);
+    case STMTTYPE_IF:
+      return codegen_if_stmt(ctx, stmt->value.if_stmt);
     default:
       printf("unimplemented stmt\n");
       exit(1);
       break;
   }
+  return NULL;
+}
+
+LLVMValueRef codegen_if_stmt(CodegenContext *ctx, IfStmt *if_stmt) {
+  LLVMValueRef condition = codegen_expr(ctx, if_stmt->condition);
+  BlockStmt *outer_block = ctx->cur_block;
+
+  LLVMBasicBlockRef then_bb = LLVMAppendBasicBlock(ctx->cur_fn, "then");
+  LLVMBasicBlockRef else_bb = LLVMAppendBasicBlock(ctx->cur_fn, "else");
+  LLVMBasicBlockRef cont_bb;
+  if (if_stmt->else_block->stmts)
+    cont_bb = LLVMAppendBasicBlock(ctx->cur_fn, "continue");
+
+  LLVMBuildCondBr(ctx->builder, condition, then_bb, else_bb);
+
+  ctx->cur_bb = then_bb;
+  ctx->cur_block = if_stmt->then_block;
+  LLVMPositionBuilderAtEnd(ctx->builder, then_bb);
+  codegen_block_stmt(ctx, if_stmt->then_block);
+  bool needs_br = (LLVMGetBasicBlockTerminator(then_bb) == NULL);
+  if (if_stmt->else_block->stmts && needs_br) {
+    LLVMBuildBr(ctx->builder, cont_bb);
+  } else if (needs_br) {
+    LLVMBuildBr(ctx->builder, else_bb);
+  }
+
+  ctx->cur_bb = else_bb;
+  ctx->cur_block = if_stmt->else_block;
+  LLVMPositionBuilderAtEnd(ctx->builder, else_bb);
+  codegen_block_stmt(ctx, if_stmt->else_block);
+  needs_br = (LLVMGetBasicBlockTerminator(else_bb) == NULL);
+  if (if_stmt->else_block->stmts && needs_br)
+    LLVMBuildBr(ctx->builder, cont_bb);
+
+  ctx->cur_block = outer_block;
+  if (if_stmt->else_block->stmts) {
+    ctx->cur_bb = cont_bb;
+    LLVMPositionBuilderAtEnd(ctx->builder, cont_bb);
+  }
+
   return NULL;
 }
 
@@ -266,8 +308,10 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
       return codegen_function_call(ctx, expr->value.fn_call);
     case EXPRTYPE_NIL:
       return codegen_nil_expr(ctx, expr->value.nil_type);
+    case EXPRTYPE_VOID:
+      return NULL;
     default:
-      printf("unimplemented expr\n");
+      printf("unimplemented expr: %d\n", expr->type);
       exit(1);
   }
   return NULL;
@@ -308,10 +352,14 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
 }
 
 LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
-  LLVMValueRef ptr = block_get_var(ctx->cur_block, ident->value);
-  if (ptr == NULL) {
-    printf("unknown variable referenced\n");
-    exit(1);
+  BlockStmt *block = ctx->cur_block;
+  LLVMValueRef ptr;
+  while ((ptr = block_get_var(block, ident->value)) == NULL) {
+    if (block->parent == NULL) {
+      printf("unknown variable referenced\n");
+      exit(1);
+    }
+    block = block->parent;
   }
   return LLVMBuildLoad(ctx->builder, ptr, "");
 }
@@ -337,10 +385,30 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
       return codegen_binop_struct_access(ctx, binop);
     case TOKTYPE_EQ:
       return codegen_binop_assignment(ctx, binop);
+    case TOKTYPE_CMP_EQ:
+    case TOKTYPE_CMP_AND:
+    case TOKTYPE_CMP_OR:
+      return codegen_binop_cmp(ctx, binop);
     default:
-      break;
+      printf("unimplemented binary expr\n");
+      exit(1);
   }
   return NULL;
+}
+
+// TODO: fix assumptions
+LLVMValueRef codegen_binop_cmp(CodegenContext *ctx, BinaryExpr *binop) {
+  switch (binop->op) {
+    case TOKTYPE_CMP_EQ:
+      return LLVMBuildICmp(ctx->builder, LLVMIntEQ, codegen_expr(ctx, binop->x), codegen_expr(ctx, binop->y), "");
+    case TOKTYPE_CMP_AND:
+      return LLVMBuildAnd(ctx->builder, codegen_expr(ctx, binop->x), codegen_expr(ctx, binop->y), "");
+    case TOKTYPE_CMP_OR:
+      return LLVMBuildOr(ctx->builder, codegen_expr(ctx, binop->x), codegen_expr(ctx, binop->y), "");
+    default:
+      printf("unimplemented cmp operator\n");
+      exit(1);
+  }
 }
 
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
@@ -549,6 +617,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   }
 
   LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, fn_type);
+  ctx->cur_fn = func;
   if (fn->body->stmts != NULL) {
     ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
     ctx->cur_block = fn->body;

@@ -25,12 +25,14 @@ typedef enum StmtType {
   STMTTYPE_RETURN,
   STMTTYPE_BLOCK,
   STMTTYPE_EXPR,
+  STMTTYPE_IF,
 } StmtType;
 
 struct Expr;
 struct VarDecl;
 struct Stmt;
 struct Param;
+struct IfStmt;
 
 typedef struct IntExpr {
   unsigned bits;
@@ -84,6 +86,7 @@ typedef struct Variable {
 typedef struct BlockStmt {
   cvector_vector_type(struct Stmt) stmts;
   cvector_vector_type(Variable) variables;
+  struct BlockStmt *parent;
 } BlockStmt;
 
 typedef struct Method {
@@ -135,6 +138,7 @@ typedef struct Stmt {
     struct ReturnStmt *ret;
     struct BlockStmt *block;
     struct Expr *expr;
+    struct IfStmt *if_stmt;
   } value;
 } Stmt;
 
@@ -165,6 +169,12 @@ typedef struct VarDecl {
   cvector_vector_type(const char *) names;
   cvector_vector_type(Expr *) values;
 } VarDecl;
+
+typedef struct IfStmt {
+  Expr *condition;
+  BlockStmt *then_block;
+  BlockStmt *else_block;
+} IfStmt;
 
 typedef struct TypeDecl {
   bool pub;
