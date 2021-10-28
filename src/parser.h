@@ -1,7 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include <cvec.h>
+#include <c-vector/cvector.h>
 
 #include "pi.h"
 #include "token.h"
@@ -19,6 +19,7 @@ typedef struct ParseContext {
   TokPrecKeyVal tok_precedence_map[15];
   cvector_vector_type(FnDecl *) functions;
   cvector_vector_type(TypeDecl *) types;
+  cvector_vector_type(VarDecl *) variables;
   BlockStmt *cur_block;
 } ParseContext;
 
@@ -43,6 +44,7 @@ Param *parse_param(ParseContext *ctx);
 Stmt *parse_stmt(ParseContext *ctx);
 Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut);
 Expr *parse_expr(ParseContext *ctx);
+Expr *parse_operand(ParseContext *ctx);
 Expr *parse_binary_expr(ParseContext *ctx, int prec1);
 Expr *parse_unary_expr(ParseContext *ctx);
 Expr *parse_primary_expr(ParseContext *ctx);
@@ -60,6 +62,8 @@ Expr *parse_fn_call(ParseContext *ctx, Expr *x);
 cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx);
 Expr *parse_nil_expr(ParseContext *ctx);
 Stmt *parse_if_stmt(ParseContext *ctx);
+Expr *parse_indexed_memory_access(ParseContext *ctx, Expr *x);
+Expr *parse_prop_access_expr(ParseContext *ctx, Expr *x, bool ptr_access);
 
 void parse_pkg_file_tokens(ParseContext *ctx);
 

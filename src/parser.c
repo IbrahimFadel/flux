@@ -10,6 +10,7 @@ ParseContext *parsecontext_create(cvector_vector_type(Token *) toks) {
   ctx->cur_tok = ctx->toks[ctx->tok_ptr];
   ctx->functions = NULL;
   ctx->types = NULL;
+  ctx->variables = NULL;
   ctx->cur_block = NULL;
   // there is a better way im just stupid
   ctx->tok_precedence_map[0].type = TOKTYPE_EQ;
@@ -333,32 +334,39 @@ Stmt *parse_stmt(ParseContext *ctx) {
       return parse_return_stmt(ctx);
     case TOKTYPE_IF:
       return parse_if_stmt(ctx);
-    case TOKTYPE_IDENT:
-      switch (ctx->toks[ctx->tok_ptr + 1]->type) {
-        case TOKTYPE_LPAREN: {
-          Expr *e = parse_fn_call(ctx, parse_ident_expr(ctx));
-          Stmt *stmt = malloc(sizeof *stmt);
-          stmt->type = STMTTYPE_EXPR;
-          stmt->value.expr = e;
-          parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
-          return stmt;
-        }
-        case TOKTYPE_IDENT:
-          return parse_var_decl(ctx, false, false);
-        case TOKTYPE_EQ:
-        case TOKTYPE_ARROW:
-        case TOKTYPE_PERIOD: {
-          Expr *e = parse_expr(ctx);
-          Stmt *stmt = malloc(sizeof *stmt);
-          stmt->type = STMTTYPE_EXPR;
-          stmt->value.expr = e;
-          parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
-          return stmt;
-        }
-        default:
-          parser_fatal("unknown token when parsing statement");
-      }
-      break;
+    case TOKTYPE_IDENT: {
+      if (ctx->toks[ctx->tok_ptr + 1]->type == TOKTYPE_IDENT || ctx->toks[ctx->tok_ptr + 1]->type == TOKTYPE_ASTERISK) return parse_var_decl(ctx, false, false);
+      Stmt *stmt = malloc(sizeof *stmt);
+      stmt->type = STMTTYPE_EXPR;
+      stmt->value.expr = parse_expr(ctx);
+      parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+      return stmt;
+      // switch (ctx->toks[ctx->tok_ptr + 1]->type) {
+      //   case TOKTYPE_LPAREN: {
+      //     Expr *e = parse_fn_call(ctx, parse_ident_expr(ctx));
+      //     Stmt *stmt = malloc(sizeof *stmt);
+      //     stmt->type = STMTTYPE_EXPR;
+      //     stmt->value.expr = e;
+      //     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+      //     return stmt;
+      //   }
+      //   case TOKTYPE_IDENT:
+      //     return parse_var_decl(ctx, false, false);
+      //   case TOKTYPE_EQ:
+      //   case TOKTYPE_ARROW:
+      //   case TOKTYPE_PERIOD: {
+      //     Expr *e = parse_expr(ctx);
+      //     Expr *final_e = parse_postfix_expr(ctx, e);
+      //     Stmt *stmt = malloc(sizeof *stmt);
+      //     stmt->type = STMTTYPE_EXPR;
+      //     stmt->value.expr = final_e;
+      //     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+      //     return stmt;
+      //   }
+      //   default:
+      //     parser_fatal("unknown token when parsing statement");
+      // }
+    }
     default:
       parser_fatal("unknown token when parsing statement");
       break;
@@ -440,7 +448,8 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
       parser_fatal("too many values in var decl");
     }
     Expr *v = parse_expr(ctx);
-    cvector_push_back(var->value.var_decl->values, v);
+    Expr *final_v = parse_postfix_expr(ctx, v);
+    cvector_push_back(var->value.var_decl->values, final_v);
 
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
@@ -483,9 +492,6 @@ Expr *parse_binary_expr(ParseContext *ctx, int prec1) {
     binop->value.binop->op = op;
     binop->value.binop->y = y;
     x = binop;
-
-    Expr *postfix = parse_postfix_expr(ctx, binop);
-    x = postfix;
   }
 }
 
@@ -493,9 +499,23 @@ Expr *parse_postfix_expr(ParseContext *ctx, Expr *x) {
   switch (ctx->cur_tok->type) {
     case TOKTYPE_LPAREN:
       return parse_fn_call(ctx, x);
+    case TOKTYPE_LBRACKET:
+      return parse_indexed_memory_access(ctx, x);
     default:
       return x;
   }
+}
+
+Expr *parse_indexed_memory_access(ParseContext *ctx, Expr *x) {
+  parser_expect(ctx, TOKTYPE_LBRACKET, "expected '[' in indexed memory access");
+  Expr *index = parse_expr(ctx);
+  parser_expect(ctx, TOKTYPE_RBRACKET, "expected ']' at end of indexed memory access");
+  Expr *e = malloc(sizeof *e);
+  e->type = EXPRTYPE_IDX_MEM_ACCESS;
+  e->value.idx_mem_access = malloc(sizeof *e->value.idx_mem_access);
+  e->value.idx_mem_access->memory = x;
+  e->value.idx_mem_access->index = index;
+  return e;
 }
 
 Expr *parse_fn_call(ParseContext *ctx, Expr *x) {
@@ -537,21 +557,88 @@ Expr *parse_unary_expr(ParseContext *ctx) {
 }
 
 Expr *parse_primary_expr(ParseContext *ctx) {
+  Expr *x = parse_operand(ctx);
+
+  while (true) {
+    switch (ctx->cur_tok->type) {
+      case TOKTYPE_PERIOD:
+        parser_eat(ctx);
+        switch (ctx->cur_tok->type) {
+          case TOKTYPE_IDENT:
+            x = parse_prop_access_expr(ctx, x, false);
+            break;
+          default:
+            printf("expected identifier following '.' in binary operation expression: %s\n", ctx->cur_tok->value);
+            exit(1);
+        }
+        break;
+      case TOKTYPE_ARROW:
+        parser_eat(ctx);
+        switch (ctx->cur_tok->type) {
+          case TOKTYPE_IDENT:
+            x = parse_prop_access_expr(ctx, x, true);
+            break;
+          default:
+            printf("expected identifier following '->' in binary operation expression: %s\n", ctx->cur_tok->value);
+            exit(1);
+        }
+        break;
+      case TOKTYPE_LPAREN:
+        x = parse_fn_call(ctx, x);
+        break;
+      case TOKTYPE_LBRACKET:
+        x = parse_indexed_memory_access(ctx, x);
+        break;
+      default:
+        return x;
+        // printf("could not parse primary expr: %s\n", ctx->cur_tok->value);
+        // exit(1);
+    }
+  }
+  // switch (ctx->cur_tok->type) {
+  //   case TOKTYPE_NIL:
+  //     return parse_nil_expr(ctx);
+  //   case TOKTYPE_IDENT:
+  //     return parse_ident_expr(ctx);
+  //   case TOKTYPE_INT:
+  //   case TOKTYPE_FLOAT:
+  //   case TOKTYPE_STRING_LIT:
+  //   case TOKTYPE_CHAR_LIT:
+  //     return parse_basic_lit(ctx);
+  //   default:
+  //     parser_fatal("unimplemented primary expr");
+  //     break;
+  // }
+  return NULL;
+}
+
+Expr *parse_prop_access_expr(ParseContext *ctx, Expr *x, bool ptr_access) {
+  IdentExpr *prop = parse_ident_expr(ctx)->value.ident;
+  Expr *e = malloc(sizeof *e);
+  e->type = EXPRTYPE_PROP_ACCESS;
+  e->value.prop_access = malloc(sizeof *e->value.prop_access);
+  e->value.prop_access->x = x;
+  e->value.prop_access->prop = prop;
+  e->value.prop_access->ptr_access = ptr_access;
+  return e;
+}
+
+Expr *parse_operand(ParseContext *ctx) {
   switch (ctx->cur_tok->type) {
-    case TOKTYPE_NIL:
-      return parse_nil_expr(ctx);
     case TOKTYPE_IDENT:
       return parse_ident_expr(ctx);
     case TOKTYPE_INT:
     case TOKTYPE_FLOAT:
-    case TOKTYPE_STRING_LIT:
     case TOKTYPE_CHAR_LIT:
+    case TOKTYPE_STRING_LIT:
       return parse_basic_lit(ctx);
+
+    case TOKTYPE_LPAREN:
+      // in the future, type casts
     default:
-      parser_fatal("unimplemented primary expr");
-      break;
+      printf("unimplemented expression operand\n");
+      exit(1);
   }
-  return NULL;
 }
 
 Expr *parse_nil_expr(ParseContext *ctx) {
@@ -623,14 +710,37 @@ void parse_pkg_file_tokens(ParseContext *ctx) {
           case TOKTYPE_TYPE:
             cvector_push_back(ctx->types, parse_type_decl(ctx, true));
             break;
-          default:
+          case TOKTYPE_MUT:
+            parser_eat(ctx);
+            if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END) {
+              Stmt *var_decl = parse_var_decl(ctx, true, true);
+              cvector_push_back(ctx->variables, var_decl->value.var_decl);
+            }
             break;
+          default:
+            if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END) {
+              Stmt *var_decl = parse_var_decl(ctx, true, false);
+              cvector_push_back(ctx->variables, var_decl->value.var_decl);
+            }
+            break;
+        }
+        break;
+      case TOKTYPE_MUT:
+        parser_eat(ctx);
+        if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END) {
+          Stmt *var_decl = parse_var_decl(ctx, false, true);
+          cvector_push_back(ctx->variables, var_decl->value.var_decl);
         }
         break;
       case TOKTYPE_TYPE:
         cvector_push_back(ctx->types, parse_type_decl(ctx, false));
         break;
       default:
+        if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END) {
+          Stmt *var_decl = parse_var_decl(ctx, false, false);
+          cvector_push_back(ctx->variables, var_decl->value.var_decl);
+          break;
+        }
         parser_fatal("unimplemented token");
     }
     i++;

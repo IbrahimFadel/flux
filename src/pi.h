@@ -1,7 +1,8 @@
 #ifndef PI_H
 #define PI_H
 
-#include <cvec.h>
+#include <c-vector/cvector.h>
+#include <sds/sds.h>
 
 struct Package;
 
@@ -20,5 +21,6 @@ typedef struct Package {
 Package *package_create();
 void package_destroy(Package *pkg);
 void package_print(Package *p);
+sds package_tostring(Package *pkg);
 
 #endif

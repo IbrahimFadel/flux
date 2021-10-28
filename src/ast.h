@@ -1,8 +1,9 @@
 #ifndef AST_H
 #define AST_H
 
-#include <cvec.h>
+#include <c-vector/cvector.h>
 #include <llvm-c/Core.h>
+#include <sds/sds.h>
 #include <stdbool.h>
 
 #include "token.h"
@@ -18,6 +19,8 @@ typedef enum ExprType {
   EXPRTYPE_STRUCT,
   EXPRTYPE_FUNCTION_CALL,
   EXPRTYPE_NIL,
+  EXPRTYPE_IDX_MEM_ACCESS,
+  EXPRTYPE_PROP_ACCESS,
 } ExprType;
 
 typedef enum StmtType {
@@ -33,6 +36,13 @@ struct VarDecl;
 struct Stmt;
 struct Param;
 struct IfStmt;
+struct IdentExpr;
+
+typedef struct PropAccessExpr {
+  struct Expr *x;
+  struct IdentExpr *prop;
+  bool ptr_access;
+} PropAccessExpr;
 
 typedef struct IntExpr {
   unsigned bits;
@@ -116,6 +126,11 @@ typedef struct FnCall {
   cvector_vector_type(struct Expr *) args;
 } FnCall;
 
+typedef struct IndexedMemAccess {
+  struct Expr *memory;
+  struct Expr *index;
+} IndexedMemAccess;
+
 typedef struct Expr {
   ExprType type;
   union {
@@ -128,6 +143,8 @@ typedef struct Expr {
     struct BinaryExpr *binop;
     struct FnCall *fn_call;
     struct Expr *nil_type;
+    struct IndexedMemAccess *idx_mem_access;
+    struct PropAccessExpr *prop_access;
   } value;
 } Expr;
 
@@ -194,5 +211,14 @@ void interfacetype_destroy(InterfaceTypeExpr *interface);
 void method_destroy(Method *method);
 void basic_lit_destroy(BasicLitExpr *lit);
 void primitive_type_destroy(PrimitiveTypeExpr *prim);
+
+sds fn_tostring(FnDecl *fn);
+sds param_tostring(Param *param);
+sds type_expr_tostring(Expr *e);
+sds type_expr_primitive_tostring(PrimitiveTypeExpr *prim);
+sds type_expr_ptr_tostring(PointerTypeExpr *ptr);
+sds stmt_tostring(Stmt *stmt);
+sds expr_tostring(Expr *expr);
+sds ident_expr_tostring(IdentExpr *ident);
 
 #endif

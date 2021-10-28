@@ -334,6 +334,14 @@ Token *scan(Scanner *s) {
         tok->type = TOKTYPE_RBRACE;
         tok->value = "}";
         break;
+      case '[':
+        tok->type = TOKTYPE_LBRACKET;
+        tok->value = "[";
+        break;
+      case ']':
+        tok->type = TOKTYPE_RBRACKET;
+        tok->value = "]";
+        break;
       case '+':
         tok->type = TOKTYPE_PLUS;
         tok->value = "+";

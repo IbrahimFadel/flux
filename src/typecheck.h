@@ -45,5 +45,6 @@ void typecheck_function_call(TypecheckContext *ctx, FnCall *call);
 void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var);
 void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit);
 void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop);
+void typecheck_if(TypecheckContext *ctx, IfStmt *if_stmt);
 
 #endif

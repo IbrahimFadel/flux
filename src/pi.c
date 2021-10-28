@@ -1,6 +1,7 @@
 #include "pi.h"
 
-#include <cvec.h>
+#include <c-vector/cvector.h>
+#include <sds/sds.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,9 +67,30 @@ void package_print(Package *p) {
   }
 }
 
+sds package_tostring(Package *p) {
+  sds repr = sdsnew("+----- PKG -----+\n");
+  printf("| Public Functions:\n");
+  FnDecl **f_it;
+  for (f_it = cvector_begin(p->public_functions); f_it != cvector_end(p->public_functions); f_it++) {
+    repr = sdscat(repr, fn_tostring(*f_it));
+  }
+  printf("| Private Functions:\n");
+  for (f_it = cvector_begin(p->private_functions); f_it != cvector_end(p->private_functions); f_it++) {
+    repr = sdscat(repr, fn_tostring(*f_it));
+  }
+  printf("| Public Types:\n");
+  TypeDecl **t_it;
+  for (t_it = cvector_begin(p->public_types); t_it != cvector_end(p->public_types); t_it++) {
+  }
+  printf("| Private Types:\n");
+  for (t_it = cvector_begin(p->private_types); t_it != cvector_end(p->private_types); t_it++) {
+  }
+  return repr;
+}
+
 cvector_vector_type(FnDecl *) create_cstd_functions() {
   cvector_vector_type(FnDecl *) functions = NULL;
-  const char *file_content = "fn malloc(i32 size) -> i8*;\n";
+  const char *file_content = "fn malloc(u64 size) -> i8*;\n";
   Scanner *s = scanner_create(file_content);
   cvector_vector_type(Token *) tokens = scan_file(s);
   ParseContext *ctx = parsecontext_create(tokens);
@@ -86,7 +108,7 @@ cvector_vector_type(FnDecl *) create_cstd_functions() {
   FnDecl *free_decl = parse_fn_decl(ctx, false);
   cvector_push_back(functions, free_decl);
 
-  file_content = "fn memcpy(i8 *buf1, i8 *buf2, i32 size);\n";
+  file_content = "fn memcpy(i8 *buf1, i8 *buf2, u64 size);\n";
   s->src = file_content;
   s->offset = 0;
   s->ch = file_content[0];
@@ -166,6 +188,14 @@ int main(int argc, char **argv) {
         cvector_push_back(pkg_it->private_types, *t_it);
       }
     }
+    VarDecl **v_it;
+    for (v_it = cvector_begin(ctx->variables); v_it != cvector_end(ctx->variables); v_it++) {
+      if ((*v_it)->pub) {
+        cvector_push_back(pkg_it->public_variables, *v_it);
+      } else {
+        cvector_push_back(pkg_it->private_variables, *v_it);
+      }
+    }
 
     scanner_destroy(s);
     parsecontext_destroy(ctx);
@@ -176,7 +206,10 @@ int main(int argc, char **argv) {
   TypecheckContext *typecheck_ctx = typecheck_ctx_create(pkg_it);
   for (pkg_it = cvector_begin(packages); pkg_it != cvector_end(packages); pkg_it++) {
     typecheck_pkg(typecheck_ctx, pkg_it);
-    package_print(pkg_it);
+    // package_print(pkg_it);
+    sds str = package_tostring(pkg_it);
+    // printf("%s\n", str);
+    sdsfree(str);
     LLVMModuleRef mod = codegen_pkg(typecheck_ctx);
     printf("===== IR Module =====\n");
     LLVMDumpModule(mod);

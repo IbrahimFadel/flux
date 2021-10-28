@@ -1,7 +1,7 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
-#include <cvec.h>
+#include <c-vector/cvector.h>
 #include <stdbool.h>
 
 #include "token.h"

@@ -223,6 +223,8 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
       typecheck_var_decl(ctx, stmt->value.var_decl);
     } else if (stmt->type == STMTTYPE_EXPR) {
       typecheck_expr(ctx, stmt->value.expr);
+    } else if (stmt->type == STMTTYPE_IF) {
+      typecheck_if(ctx, stmt->value.if_stmt);
     }
   }
   unsigned i;
@@ -231,6 +233,10 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
   }
   cvector_free(ctx->symbol_table);
   ctx->symbol_table = NULL;
+}
+
+void typecheck_if(TypecheckContext *ctx, IfStmt *if_stmt) {
+  typecheck_expr(ctx, if_stmt->condition);
 }
 
 void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var) {
@@ -264,6 +270,30 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
     case EXPRTYPE_NIL:
       expr->value.nil_type = ctx->expecting_type;
       break;
+    case EXPRTYPE_IDX_MEM_ACCESS: {
+      IndexedMemAccess *access = expr->value.idx_mem_access;
+      Expr *mem_type = NULL;
+      if (access->memory->type == EXPRTYPE_BINARY) {
+        if (access->memory->value.binop->op == TOKTYPE_ARROW) {
+          mem_type = get_struct_ptr_access_type(ctx, access->memory->value.binop);
+        } else if (access->memory->value.binop->op == TOKTYPE_PERIOD) {
+          mem_type = get_struct_access_type(ctx, access->memory->value.binop);
+        }
+      } else if (access->memory->type == EXPRTYPE_IDENT) {
+        unsigned i;
+        for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+          if (!strcmp(ctx->symbol_table[i]->name, access->memory->value.ident->value)) {
+            mem_type = ctx->symbol_table[i]->type;
+          }
+        }
+      }
+      if (mem_type->type != EXPRTYPE_PTR) {
+        printf("typecheck: expected indexed memory access to be done on a pointer type");
+        exit(1);
+      }
+      ctx->expecting_type = mem_type->value.pointer_type->pointer_to_type;
+      break;
+    }
     default:
       break;
   }
@@ -331,48 +361,88 @@ Expr *get_struct_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
     exit(1);
   }
   const char *struct_name = val_ty->value.ident->value;
-  unsigned i;
-  for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
-    TypeDecl *type_decl = ctx->pkg->public_types[i];
-    if (!strcmp(type_decl->name, struct_name)) {
-      if (type_decl->value->type == EXPRTYPE_STRUCT) {
-        cvector_vector_type(Property) props = type_decl->value->value.struct_type->properties;
-        unsigned j;
-        for (j = 0; j < cvector_size(props); j++) {
-          const char **name = NULL;
-          for (name = cvector_begin(props[j].names); name != cvector_end(props[j].names); name++) {
-            if (!strcmp(*name, binop->y->value.ident->value)) {
-              return props[j].type;
-            }
-          }
-        }
-      }
+  StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
+  // printf("%s\n", struct_name);
+  // printf("%u\n", binop->y->type);
+  if (binop->y->type == EXPRTYPE_IDX_MEM_ACCESS) {
+    const char *prop_name = binop->y->value.idx_mem_access->memory->value.ident->value;
+    // printf("%s\n", binop->y->value.idx_mem_access->memory->value.ident->value);
+    Expr *ty = get_struct_prop(struct_ty, prop_name).type;
+    printf("%d\n", ty->type);
+    if (ty->type != EXPRTYPE_PTR) {
+      printf("typecheck: cannot access memory of non-pointer type\n");
+      exit(1);
     }
+    printf("%d\n", ty->value.pointer_type->pointer_to_type->type);
+    return ty->value.pointer_type->pointer_to_type;
   }
+
+  return get_struct_prop(struct_ty, binop->y->value.ident->value).type;
 
   printf("typecheck: could not get struct access type\n");
   exit(1);
 }
 
 void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
-  if (binop->op == TOKTYPE_EQ) {
-    ctx->expecting_type = binop->x;
-
-    if (binop->x->type == EXPRTYPE_BINARY) {
-      BinaryExpr *lhs = binop->x->value.binop;
-      if (lhs->y->type != EXPRTYPE_IDENT) {
-        printf("typecheck: rhs of '->' must be an identifier\n");
-        exit(1);
+  switch (binop->op) {
+    case TOKTYPE_EQ: {
+      ctx->expecting_type = binop->x;
+      if (binop->x->type == EXPRTYPE_BINARY) {
+        BinaryExpr *lhs = binop->x->value.binop;
+        // if (lhs->y->type != EXPRTYPE_IDENT) {
+        //   printf("typecheck: rhs of '->' must be an identifier\n");
+        //   exit(1);
+        // }
+        if (lhs->op == TOKTYPE_ARROW) {
+          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
+        } else if (lhs->op == TOKTYPE_PERIOD) {
+          ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
+        } else {
+          printf("typecheck: expected lhs of assignment to be variable\n");
+          exit(1);
+        }
       }
-      if (lhs->op == TOKTYPE_ARROW) {
-        ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
-      } else if (lhs->op == TOKTYPE_PERIOD) {
-        ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
-      } else {
-        printf("typecheck: expected lhs of assignment to be variable\n");
-        exit(1);
-      }
+      break;
     }
+    case TOKTYPE_CMP_NEQ: {
+      unsigned i;
+      if (binop->x->type == EXPRTYPE_IDENT) {
+        for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+          if (!strcmp(ctx->symbol_table[i]->name, binop->x->value.ident->value)) {
+            ctx->expecting_type = ctx->symbol_table[i]->type;
+          }
+        }
+      } else if (binop->y->type == EXPRTYPE_IDENT) {
+        for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+          if (!strcmp(ctx->symbol_table[i]->name, binop->y->value.ident->value)) {
+            ctx->expecting_type = ctx->symbol_table[i]->type;
+          }
+        }
+      } else if (binop->x->type == EXPRTYPE_BINARY) {
+        BinaryExpr *lhs = binop->x->value.binop;
+        if (lhs->op == TOKTYPE_ARROW) {
+          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
+        } else if (lhs->op == TOKTYPE_PERIOD) {
+          ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
+        } else {
+          printf("typecheck: expected lhs of comparison to be variable\n");
+          exit(1);
+        }
+      } else if (binop->y->type == EXPRTYPE_BINARY) {
+        BinaryExpr *rhs = binop->y->value.binop;
+        if (rhs->op == TOKTYPE_ARROW) {
+          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->y->value.binop);
+        } else if (rhs->op == TOKTYPE_PERIOD) {
+          ctx->expecting_type = get_struct_access_type(ctx, binop->y->value.binop);
+        } else {
+          printf("typecheck: expected rhs of comparison to be variable\n");
+          exit(1);
+        }
+      }
+      break;
+    }
+    default:
+      break;
   }
 
   typecheck_expr(ctx, binop->x);
@@ -460,6 +530,18 @@ FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee) {
         exit(1);
       }
       const char *fn_name = callee->value.binop->y->value.ident->value;
+      unsigned i;
+      for (i = 0; i < cvector_size(ctx->pkg->private_functions); i++) {
+        if (!strcmp(ctx->pkg->private_functions[i]->name, fn_name)) return ctx->pkg->private_functions[i];
+      }
+      for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
+        if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
+      }
+      printf("unknown function referenced\n");
+      exit(1);
+    }
+    case EXPRTYPE_PROP_ACCESS: {
+      const char *fn_name = callee->value.prop_access->prop->value;
       unsigned i;
       for (i = 0; i < cvector_size(ctx->pkg->private_functions); i++) {
         if (!strcmp(ctx->pkg->private_functions[i]->name, fn_name)) return ctx->pkg->private_functions[i];

@@ -1,6 +1,85 @@
 #include "ast.h"
 
 #include <stdio.h>
+#include <string.h>
+
+sds fn_tostring(FnDecl *fn) {
+  sds repr = sdsnew("Fn Decl: {\n");
+  repr = sdscatfmt(repr, "Pub: %s\n", (fn->pub ? "true" : "false"));
+  repr = sdscatfmt(repr, "Name: %s\n", fn->name);
+  repr = sdscat(repr, "Params: {\n");
+  unsigned i;
+  for (i = 0; i < cvector_size(fn->params); i++) {
+    repr = sdscat(repr, param_tostring(fn->params[i]));
+  }
+  repr = sdscat(repr, "}\n");
+  repr = sdscat(repr, "Then: {\n");
+  for (i = 0; i < cvector_size(fn->body->stmts); i++) {
+    repr = sdscat(repr, stmt_tostring(&fn->body->stmts[i]));
+  }
+  repr = sdscat(repr, "}\n");
+  repr = sdscat(repr, "}\n");
+  return repr;
+}
+
+sds stmt_tostring(Stmt *stmt) {
+  switch (stmt->type) {
+    case STMTTYPE_EXPR:
+      return expr_tostring(stmt->value.expr);
+    default: {
+      return sdsnew("ERROR STMT TYPE\n");
+    }
+  }
+}
+
+sds expr_tostring(Expr *expr) {
+  switch (expr->type) {
+    case EXPRTYPE_IDENT:
+      return ident_expr_tostring(expr->value.ident);
+    default:
+      return sdsnew("ERROR EXPR TYPE\n");
+  }
+}
+
+sds ident_expr_tostring(IdentExpr *ident) {
+  sds repr = sdsnew("Ident Expr: {\n");
+  repr = sdscatfmt(repr, "Value: %s\n}\n", ident->value);
+  return repr;
+}
+
+sds param_tostring(Param *param) {
+  sds repr = sdsnew("Param: {\n");
+  repr = sdscatfmt(repr, "Mut: %s\n", (param->mut ? "true" : "false"));
+  repr = sdscat(repr, "Type: {\n");
+  repr = sdscat(repr, type_expr_tostring(param->type));
+  repr = sdscat(repr, "}\n");
+  repr = sdscat(repr, "}\n");
+  return repr;
+}
+
+sds type_expr_tostring(Expr *e) {
+  switch (e->type) {
+    case EXPRTYPE_PRIMITIVE:
+      return type_expr_primitive_tostring(e->value.primitive_type);
+    case EXPRTYPE_PTR:
+      return type_expr_ptr_tostring(e->value.pointer_type);
+    default:
+      return "ERROR TYPE\n";
+  }
+}
+
+sds type_expr_ptr_tostring(PointerTypeExpr *ptr) {
+  sds repr = sdsnew("Pointer Type Expr: {\n");
+  repr = sdscatfmt(repr, "Pointer To: {\n%s}\n}\n", type_expr_tostring(ptr->pointer_to_type));
+  return repr;
+}
+
+sds type_expr_primitive_tostring(PrimitiveTypeExpr *prim) {
+  sds repr = sdsnew("Primitive Type Expr: {\n");
+  repr = sdscatfmt(repr, "Token: %u\n", (unsigned)prim->type);
+  repr = sdscat(repr, "}\n");
+  return repr;
+}
 
 void fndecl_destroy(FnDecl *fn) {
   unsigned i;
