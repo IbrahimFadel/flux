@@ -348,6 +348,8 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
       return codegen_idx_mem_access(ctx, expr->value.idx_mem_access);
     case EXPRTYPE_VOID:
       return NULL;
+    case EXPRTYPE_PROP_ACCESS:
+      return codegen_prop_access_expr(ctx, expr->value.prop_access);
     default:
       printf("unimplemented expr: %d\n", expr->type);
       exit(1);
@@ -356,7 +358,8 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
 }
 
 LLVMValueRef codegen_idx_mem_access(CodegenContext *ctx, IndexedMemAccess *mem_access) {
-  LLVMValueRef mem = codegen_expr(ctx, mem_access->memory);
+  LLVMValueRef mem_ptr = codegen_expr(ctx, mem_access->memory);
+  LLVMValueRef mem = LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(mem_ptr)), mem_ptr, "");
   LLVMValueRef idx = codegen_expr(ctx, mem_access->index);
   LLVMValueRef gep = LLVMBuildGEP2(ctx->builder, LLVMGetElementType(LLVMTypeOf(mem)), mem, &idx, 1, "");
   return gep;
@@ -400,10 +403,11 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
 }
 
 LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_access) {
-  LLVMValueRef lhs = codegen_expr(ctx, prop_access->x);
+  LLVMValueRef lhs_ptr = codegen_expr(ctx, prop_access->x);
+  LLVMValueRef lhs = LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(lhs_ptr)), lhs_ptr, "");
 
   if (prop_access->ptr_access) {
-    ctx->struct_currently_being_accessed = lhs, 0;
+    ctx->struct_currently_being_accessed = lhs;
   } else {
     ctx->struct_currently_being_accessed = LLVMGetOperand(lhs, 0);
   }
@@ -459,7 +463,8 @@ LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
     }
     block = block->parent;
   }
-  return LLVMBuildLoad(ctx->builder, ptr, "");
+  // return LLVMBuildLoad(ctx->builder, ptr, "");
+  return ptr;
 }
 
 LLVMValueRef block_get_var(BlockStmt *block, const char *name) {
@@ -477,10 +482,6 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
     case TOKTYPE_ASTERISK:
     case TOKTYPE_SLASH:
       return codegen_binop_arithmetic(ctx, binop);
-    case TOKTYPE_ARROW:
-      return codegen_binop_struct_ptr_access(ctx, binop);
-    case TOKTYPE_PERIOD:
-      return codegen_binop_struct_access(ctx, binop);
     case TOKTYPE_EQ:
       return codegen_binop_assignment(ctx, binop);
     case TOKTYPE_CMP_EQ:
@@ -516,155 +517,7 @@ LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
   LLVMValueRef lhs = codegen_expr(ctx, binop->x);
   LLVMValueRef rhs = codegen_expr(ctx, binop->y);
   ctx->struct_currently_being_accessed = NULL;
-  // return LLVMBuildStore(ctx->builder, rhs, LLVMGetOperand(lhs, 0));
-  // LLVMDumpValue(rhs);
   return LLVMBuildStore(ctx->builder, rhs, lhs);
-}
-
-LLVMValueRef codegen_binop_struct_ptr_access(CodegenContext *ctx, BinaryExpr *binop) {
-  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
-
-  ctx->struct_currently_being_accessed = lhs;
-
-  if (binop->y->type != EXPRTYPE_IDENT) {
-    printf("%d\n", binop->y->type);
-    printf("expected identifier in struct property access\n");
-    exit(1);
-  }
-  const char *prop_name = binop->y->value.ident->value;
-
-  unsigned i;
-  for (i = 0; i < cvector_size(ctx->structs); i++) {
-    LLVMTypeRef struct_ty = ctx->structs[i]->value;
-    const char *n = LLVMGetStructName(struct_ty);
-    LLVMTypeRef ty = LLVMGetElementType(LLVMTypeOf(lhs));
-    const char *actual_struct_name = LLVMGetStructName(ty);
-
-    if (!strcmp(n, actual_struct_name)) {
-      unsigned j;
-      for (j = 0; j < cvector_size(ctx->structs[i]->method_names); j++) {
-        const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
-        if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
-          return LLVMGetNamedFunction(ctx->mod, method_name);
-        }
-      }
-
-      for (j = 0; j < cvector_size(ctx->structs[i]->properties); j++) {
-        Property p = ctx->structs[i]->properties[j];
-        unsigned x;
-        for (x = 0; x < cvector_size(p.names); x++) {
-          if (!strcmp(p.names[x], prop_name)) {
-            ctx->struct_currently_being_accessed = NULL;
-            LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
-            return gep;
-            // return LLVMBuildLoad(ctx->builder, gep, "");
-          }
-        }
-      }
-    }
-  }
-
-  return NULL;
-}
-
-LLVMValueRef codegen_binop_struct_access(CodegenContext *ctx, BinaryExpr *binop) {
-  LLVMValueRef lhs = codegen_expr(ctx, binop->x);
-
-  ctx->struct_currently_being_accessed = LLVMGetOperand(lhs, 0);
-
-  if (binop->y->type != EXPRTYPE_IDENT) {
-    const char *prop_name = binop->y->value.ident->value;
-    unsigned i;
-    for (i = 0; i < cvector_size(ctx->structs); i++) {
-      LLVMTypeRef struct_ty = ctx->structs[i]->value;
-      const char *n = LLVMGetStructName(struct_ty);
-      LLVMTypeRef ty = LLVMTypeOf(lhs);
-      const char *actual_struct_name = LLVMGetStructName(ty);
-
-      if (!strcmp(n, actual_struct_name)) {
-        unsigned j;
-        for (j = 0; j < cvector_size(ctx->structs[i]->properties); j++) {
-          Property p = ctx->structs[i]->properties[j];
-          unsigned x;
-          for (x = 0; x < cvector_size(p.names); x++) {
-            if (!strcmp(p.names[x], prop_name)) {
-              ctx->struct_currently_being_accessed = NULL;
-              LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, LLVMGetOperand(lhs, 0), x, "");
-              return gep;
-            }
-          }
-        }
-      }
-    }
-  } else if (binop->y->type != EXPRTYPE_FUNCTION_CALL) {
-    Expr *callee = binop->y->value.fn_call->callee;
-    if (callee->type != EXPRTYPE_IDENT) {
-      printf("expected method call rhs to be identifier: %d\n", callee->type);
-      exit(1);
-    }
-    const char *prop_name = callee->value.ident->value;
-
-    unsigned i;
-    for (i = 0; i < cvector_size(ctx->structs); i++) {
-      LLVMTypeRef struct_ty = ctx->structs[i]->value;
-      const char *n = LLVMGetStructName(struct_ty);
-      LLVMTypeRef ty = LLVMTypeOf(lhs);
-      const char *actual_struct_name = LLVMGetStructName(ty);
-
-      if (!strcmp(n, actual_struct_name)) {
-        unsigned j;
-        for (j = 0; j < cvector_size(ctx->structs[i]->method_names); j++) {
-          const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
-          if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
-            return LLVMGetNamedFunction(ctx->mod, method_name);
-          }
-        }
-      }
-    }
-  } else {
-    printf("expected identifier or functionc all in struct property access\n");
-    exit(1);
-  }
-
-  // if (binop->y->type != EXPRTYPE_IDENT && binop->y->type != EXPRTYPE_FUNCTION_CALL) {
-  //   printf("%d\n", binop->y->type);
-  //   printf("expected identifier in struct property access\n");
-  //   exit(1);
-  // }
-  // const char *prop_name = binop->y->value.ident->value;
-
-  // unsigned i;
-  // for (i = 0; i < cvector_size(ctx->structs); i++) {
-  //   LLVMTypeRef struct_ty = ctx->structs[i]->value;
-  //   const char *n = LLVMGetStructName(struct_ty);
-  //   LLVMTypeRef ty = LLVMTypeOf(lhs);
-  //   const char *actual_struct_name = LLVMGetStructName(ty);
-
-  //   if (!strcmp(n, actual_struct_name)) {
-  //     unsigned j;
-  //     for (j = 0; j < cvector_size(ctx->structs[i]->method_names); j++) {
-  //       const char *method_name = fn_name_to_struct_method_name(prop_name, actual_struct_name);
-  //       if (!strcmp(ctx->structs[i]->method_names[j], method_name)) {
-  //         return LLVMGetNamedFunction(ctx->mod, method_name);
-  //       }
-  //     }
-
-  //     for (j = 0; j < cvector_size(ctx->structs[i]->properties); j++) {
-  //       Property p = ctx->structs[i]->properties[j];
-  //       unsigned x;
-  //       for (x = 0; x < cvector_size(p.names); x++) {
-  //         if (!strcmp(p.names[x], prop_name)) {
-  //           ctx->struct_currently_being_accessed = NULL;
-  //           LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, LLVMGetOperand(lhs, 0), x, "");
-  //           return gep;
-  //           // return LLVMBuildLoad(ctx->builder, gep, "");
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
-
-  return NULL;
 }
 
 // TODO: don't hardcode signed and floats

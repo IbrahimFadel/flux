@@ -241,14 +241,42 @@ void typecheck_if(TypecheckContext *ctx, IfStmt *if_stmt) {
 
 void typecheck_var_decl(TypecheckContext *ctx, VarDecl *var) {
   unsigned i;
-  if (var->type->type == EXPRTYPE_IDENT) {
-    for (i = 0; i < cvector_size(var->names); i++) {
-      Symbol *s = malloc(sizeof *s);
-      s->name = var->names[i];
-      s->type = var->type;
-      cvector_push_back(ctx->symbol_table, s);
+  // if (var->type->type == EXPRTYPE_IDENT) {
+  for (i = 0; i < cvector_size(var->names); i++) {
+    if (var->type->type == EXPRTYPE_PTR) {
+      Expr *ty = var->type;
+      while (ty->type == EXPRTYPE_PTR) {
+        ty = var->type->value.pointer_type->pointer_to_type;
+      }
+      if (ty->type == EXPRTYPE_IDENT) {
+        for (i = 0; i < cvector_size(var->names); i++) {
+          Symbol *s = malloc(sizeof *s);
+          s->name = var->names[i];
+          s->type = ty;
+          cvector_push_back(ctx->symbol_table, s);
+        }
+        break;
+      }
     }
+    Symbol *s = malloc(sizeof *s);
+    s->name = var->names[i];
+    s->type = var->type;
+    cvector_push_back(ctx->symbol_table, s);
   }
+  // } else if (var->type->type == EXPRTYPE_PTR) {
+  //   Expr *ty = var->type;
+  //   while (ty->type == EXPRTYPE_PTR) {
+  //     ty = var->type->value.pointer_type->pointer_to_type;
+  //   }
+  //   if (ty->type == EXPRTYPE_IDENT) {
+  //     for (i = 0; i < cvector_size(var->names); i++) {
+  //       Symbol *s = malloc(sizeof *s);
+  //       s->name = var->names[i];
+  //       s->type = ty;
+  //       cvector_push_back(ctx->symbol_table, s);
+  //     }
+  //   }
+  // }
 
   ctx->expecting_type = var->type;
   for (i = 0; i < cvector_size(var->values); i++) {
@@ -273,12 +301,8 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
     case EXPRTYPE_IDX_MEM_ACCESS: {
       IndexedMemAccess *access = expr->value.idx_mem_access;
       Expr *mem_type = NULL;
-      if (access->memory->type == EXPRTYPE_BINARY) {
-        if (access->memory->value.binop->op == TOKTYPE_ARROW) {
-          mem_type = get_struct_ptr_access_type(ctx, access->memory->value.binop);
-        } else if (access->memory->value.binop->op == TOKTYPE_PERIOD) {
-          mem_type = get_struct_access_type(ctx, access->memory->value.binop);
-        }
+      if (access->memory->type == EXPRTYPE_PROP_ACCESS) {
+        mem_type = get_prop_access_type(ctx, access->memory->value.prop_access);
       } else if (access->memory->type == EXPRTYPE_IDENT) {
         unsigned i;
         for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
@@ -337,6 +361,28 @@ Property get_struct_prop(StructTypeExpr *struct_ty, const char *prop_name) {
   exit(1);
 }
 
+Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access) {
+  Expr *lhs_ty = NULL;
+  if (prop_access->x->type == EXPRTYPE_PROP_ACCESS) {
+    lhs_ty = get_prop_access_type(ctx, prop_access->x->value.prop_access);
+  } else if (prop_access->x->type == EXPRTYPE_IDENT) {
+    unsigned i;
+    for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
+      if (!strcmp(ctx->symbol_table[i]->name, prop_access->x->value.ident->value)) lhs_ty = ctx->symbol_table[i]->type;
+    }
+  }
+
+  if (lhs_ty == NULL) {
+    printf("could not get type of lhs of prop access\n");
+    exit(1);
+  }
+
+  const char *struct_name = lhs_ty->value.ident->value;
+  StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
+  Property prop = get_struct_prop(struct_ty, prop_access->prop->value);
+  return prop.type;
+}
+
 Expr *get_struct_ptr_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
   Expr *ptr_ty = get_struct_prop_type(ctx, binop);
   if (ptr_ty->type != EXPRTYPE_PTR) {
@@ -387,20 +433,9 @@ void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
   switch (binop->op) {
     case TOKTYPE_EQ: {
       ctx->expecting_type = binop->x;
-      if (binop->x->type == EXPRTYPE_BINARY) {
-        BinaryExpr *lhs = binop->x->value.binop;
-        // if (lhs->y->type != EXPRTYPE_IDENT) {
-        //   printf("typecheck: rhs of '->' must be an identifier\n");
-        //   exit(1);
-        // }
-        if (lhs->op == TOKTYPE_ARROW) {
-          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
-        } else if (lhs->op == TOKTYPE_PERIOD) {
-          ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
-        } else {
-          printf("typecheck: expected lhs of assignment to be variable\n");
-          exit(1);
-        }
+      if (binop->x->type == EXPRTYPE_PROP_ACCESS) {
+        PropAccessExpr *prop_access = binop->x->value.prop_access;
+        ctx->expecting_type = get_prop_access_type(ctx, prop_access);
       }
       break;
     }

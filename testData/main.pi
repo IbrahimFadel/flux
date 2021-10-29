@@ -1,10 +1,5 @@
 pkg main
 
-i32 x = 0;
-mut i32 y = 0;
-pub i64 z = 0;
-pub mut i32 a = 0;
-
 fn main() {
-	i32 mytest = x;
+	i8 *buffer = malloc(16);
 }

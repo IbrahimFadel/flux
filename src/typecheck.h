@@ -34,6 +34,7 @@ void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty);
 Expr *get_struct_prop_type(TypecheckContext *ctx, BinaryExpr *binop);
 Expr *get_struct_ptr_access_type(TypecheckContext *ctx, BinaryExpr *binop);
 Expr *get_struct_access_type(TypecheckContext *ctx, BinaryExpr *binop);
+Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access);
 StructTypeExpr *get_struct_type(TypecheckContext *ctx, const char *name);
 Property get_struct_prop(StructTypeExpr *struct_ty, const char *name);
 
