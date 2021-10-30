@@ -632,11 +632,12 @@ Expr *parse_operand(ParseContext *ctx) {
     case TOKTYPE_CHAR_LIT:
     case TOKTYPE_STRING_LIT:
       return parse_basic_lit(ctx);
-
+    case TOKTYPE_NIL:
+      return parse_nil_expr(ctx);
     case TOKTYPE_LPAREN:
       // in the future, type casts
     default:
-      printf("unimplemented expression operand\n");
+      printf("unimplemented expression operand: %s\n", ctx->cur_tok->value);
       exit(1);
   }
 }

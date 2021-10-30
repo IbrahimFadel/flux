@@ -1,5 +1,10 @@
 pkg main
 
+type string struct {
+	i8 *buf;
+}
+
 fn main() {
-	i8 *buffer = malloc(16);
+	string *s;
+	s->buf[9] = 0;
 }

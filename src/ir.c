@@ -3,6 +3,7 @@
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Transforms/InstCombine.h>
 #include <llvm-c/Transforms/PassManagerBuilder.h>
+#include <llvm-c/Transforms/Scalar.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,9 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
 
   ctx->fpm = LLVMCreateFunctionPassManagerForModule(ctx->mod);
   LLVMAddInstructionCombiningPass(ctx->fpm);
+  LLVMAddReassociatePass(ctx->fpm);
+  LLVMAddGVNPass(ctx->fpm);
+  LLVMAddCFGSimplificationPass(ctx->fpm);
   LLVMInitializeFunctionPassManager(ctx->fpm);
 
   unsigned i;
@@ -38,7 +42,7 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
     codegen_global_var_decl(ctx, typecheck_ctx->pkg->public_variables[i]);
   }
 
-  ctx->global_variable_initialization_function = construct_global_variable_initialization_function(ctx);
+  // ctx->global_variable_initialization_function = construct_global_variable_initialization_function(ctx);
 
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->private_functions); i++) {
     codegen_function(ctx, typecheck_ctx->pkg->private_functions[i]);
@@ -46,9 +50,9 @@ LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   for (i = 0; i < cvector_size(typecheck_ctx->pkg->public_functions); i++) {
     codegen_function(ctx, typecheck_ctx->pkg->public_functions[i]);
   }
-  // char *errMsg;
-  // LLVMVerifyModule(ctx->mod, LLVMAbortProcessAction, &errMsg);
-  // LLVMDisposeMessage(errMsg);
+  char *errMsg;
+  LLVMVerifyModule(ctx->mod, LLVMAbortProcessAction, &errMsg);
+  LLVMDisposeMessage(errMsg);
 
   return ctx->mod;
 }
@@ -121,6 +125,11 @@ LLVMValueRef codegen_global_var_decl(CodegenContext *ctx, VarDecl *var) {
   unsigned i;
   for (i = 0; i < cvector_size(var->names); i++) {
     LLVMValueRef ptr = LLVMAddGlobal(ctx->mod, codegen_type_expr(ctx, var->type), var->names[i]);
+    LLVMSetLinkage(ptr, LLVMPrivateLinkage);
+    LLVMSetInitializer(ptr, codegen_expr(ctx, var->values[i]));
+    if (!var->mut) {
+      LLVMSetGlobalConstant(ptr, true);
+    }
     Variable *v = malloc(sizeof *v);
     v->mut = var->mut;
     v->name = var->names[i];
@@ -358,11 +367,10 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
 }
 
 LLVMValueRef codegen_idx_mem_access(CodegenContext *ctx, IndexedMemAccess *mem_access) {
-  LLVMValueRef mem_ptr = codegen_expr(ctx, mem_access->memory);
-  LLVMValueRef mem = LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(mem_ptr)), mem_ptr, "");
+  LLVMValueRef mem = codegen_expr(ctx, mem_access->memory);
   LLVMValueRef idx = codegen_expr(ctx, mem_access->index);
   LLVMValueRef gep = LLVMBuildGEP2(ctx->builder, LLVMGetElementType(LLVMTypeOf(mem)), mem, &idx, 1, "");
-  return gep;
+  return LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(gep)), gep, "");
 }
 
 LLVMValueRef codegen_nil_expr(CodegenContext *ctx, Expr *nil_type) {
@@ -403,8 +411,7 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
 }
 
 LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_access) {
-  LLVMValueRef lhs_ptr = codegen_expr(ctx, prop_access->x);
-  LLVMValueRef lhs = LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(lhs_ptr)), lhs_ptr, "");
+  LLVMValueRef lhs = codegen_expr(ctx, prop_access->x);
 
   if (prop_access->ptr_access) {
     ctx->struct_currently_being_accessed = lhs;
@@ -438,7 +445,8 @@ LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_
         for (x = 0; x < cvector_size(p.names); x++) {
           if (!strcmp(p.names[x], prop_name)) {
             ctx->struct_currently_being_accessed = NULL;
-            return LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
+            LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
+            return LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(gep)), gep, "");
           }
         }
       }
@@ -463,8 +471,8 @@ LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
     }
     block = block->parent;
   }
-  // return LLVMBuildLoad(ctx->builder, ptr, "");
-  return ptr;
+  return LLVMBuildLoad(ctx->builder, ptr, "");
+  // return ptr;
 }
 
 LLVMValueRef block_get_var(BlockStmt *block, const char *name) {
@@ -515,9 +523,11 @@ LLVMValueRef codegen_binop_cmp(CodegenContext *ctx, BinaryExpr *binop) {
 
 LLVMValueRef codegen_binop_assignment(CodegenContext *ctx, BinaryExpr *binop) {
   LLVMValueRef lhs = codegen_expr(ctx, binop->x);
+  // printf("TESY\n");
+  // LLVMDumpValue(lhs);
   LLVMValueRef rhs = codegen_expr(ctx, binop->y);
   ctx->struct_currently_being_accessed = NULL;
-  return LLVMBuildStore(ctx->builder, rhs, lhs);
+  return LLVMBuildStore(ctx->builder, rhs, LLVMGetOperand(lhs, 0));
 }
 
 // TODO: don't hardcode signed and floats
@@ -638,9 +648,9 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   ctx->cur_bb = LLVMAppendBasicBlock(func, "entry");
   ctx->cur_block = fn->body;
   LLVMPositionBuilderAtEnd(ctx->builder, ctx->cur_bb);
-  if (!strcmp(fn->name, "main")) {
-    LLVMBuildCall2(ctx->builder, LLVMTypeOf(ctx->global_variable_initialization_function), ctx->global_variable_initialization_function, NULL, 0, "");
-  }
+  // if (!strcmp(fn->name, "main")) {
+  //   LLVMBuildCall2(ctx->builder, LLVMGetReturnType(LLVMTypeOf(ctx->global_variable_initialization_function)), ctx->global_variable_initialization_function, NULL, 0, "");
+  // }
   if (fn->body->stmts != NULL) {
     codegen_function_params(ctx, func, fn->params);
     codegen_block_stmt(ctx, fn->body);
@@ -649,7 +659,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
     LLVMBuildRetVoid(ctx->builder);
   }
 
-  // LLVMRunFunctionPassManager(ctx->fpm, func);
+  LLVMRunFunctionPassManager(ctx->fpm, func);
 }
 
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {

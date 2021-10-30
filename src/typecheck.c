@@ -161,6 +161,12 @@ void typecheck_pkg(TypecheckContext *ctx, Package *pkg) {
   for (i = 0; i < cvector_size(pkg->public_functions); i++) {
     typecheck_function(ctx, pkg->public_functions[i]);
   }
+  for (i = 0; i < cvector_size(pkg->private_variables); i++) {
+    typecheck_var_decl(ctx, pkg->private_variables[i]);
+  }
+  for (i = 0; i < cvector_size(pkg->public_variables); i++) {
+    typecheck_var_decl(ctx, pkg->public_variables[i]);
+  }
 }
 
 void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty) {
@@ -377,6 +383,9 @@ Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access) {
     exit(1);
   }
 
+  while (lhs_ty->type == EXPRTYPE_PTR) {
+    lhs_ty = lhs_ty->value.pointer_type->pointer_to_type;
+  }
   const char *struct_name = lhs_ty->value.ident->value;
   StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
   Property prop = get_struct_prop(struct_ty, prop_access->prop->value);
@@ -453,26 +462,12 @@ void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
             ctx->expecting_type = ctx->symbol_table[i]->type;
           }
         }
-      } else if (binop->x->type == EXPRTYPE_BINARY) {
-        BinaryExpr *lhs = binop->x->value.binop;
-        if (lhs->op == TOKTYPE_ARROW) {
-          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->x->value.binop);
-        } else if (lhs->op == TOKTYPE_PERIOD) {
-          ctx->expecting_type = get_struct_access_type(ctx, binop->x->value.binop);
-        } else {
-          printf("typecheck: expected lhs of comparison to be variable\n");
-          exit(1);
-        }
+      } else if (binop->x->type == EXPRTYPE_PROP_ACCESS) {
+        PropAccessExpr *lhs = binop->x->value.prop_access;
+        ctx->expecting_type = get_prop_access_type(ctx, lhs);
       } else if (binop->y->type == EXPRTYPE_BINARY) {
-        BinaryExpr *rhs = binop->y->value.binop;
-        if (rhs->op == TOKTYPE_ARROW) {
-          ctx->expecting_type = get_struct_ptr_access_type(ctx, binop->y->value.binop);
-        } else if (rhs->op == TOKTYPE_PERIOD) {
-          ctx->expecting_type = get_struct_access_type(ctx, binop->y->value.binop);
-        } else {
-          printf("typecheck: expected rhs of comparison to be variable\n");
-          exit(1);
-        }
+        PropAccessExpr *rhs = binop->y->value.prop_access;
+        ctx->expecting_type = get_prop_access_type(ctx, rhs);
       }
       break;
     }

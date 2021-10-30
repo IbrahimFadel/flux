@@ -1,20 +1,21 @@
 pkg std
 
+u64 initialCapacity = 16;
+u64 factor = 2;
+
 type string struct {
 	i8 *buf;
 	u64 len;
-	u64 maxlen;
-	u64 factor;
+	u64 capacity;
 }
 
 fn (string *s) init() {
-	s->buf = nil;
+	s->buf = malloc(initialCapacity);
 	s->len = 0;
-	s->maxlen = 0;
-	s->factor = 16;
+	s->capacity = initialCapacity;
 }
 
-fn (string *s) delete() {
+fn (string *s) destroy() {
 	if(s->buf != nil) {
 		free(s->buf);
 	}
@@ -26,12 +27,13 @@ fn (string *s) resize(u64 value) {
 	memcpy(output, buf, len);
 	free(buf);
 	s->buf = output;
-	s->maxlen = value;
+	s->capacity = value;
 }
 
 fn (string *s) addChar(i8 value) {
-	if(s->len == s->maxlen) {
-		s->resize(s->maxlen + s->factor);
+	if(s->len == s->capacity) {
+		s->resize(s->capacity * factor);
 	}
+	s->buf[s->len] = value;
 	s->len = s->len + 1;
 }
