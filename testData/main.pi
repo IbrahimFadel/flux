@@ -2,9 +2,10 @@ pkg main
 
 type string struct {
 	i8 *buf;
+	u64 len;
+	u64 capacity;
 }
 
 fn main() {
-	string *s;
-	s->buf[9] = 0;
+	string *s = (string *) malloc(sizeof string);
 }

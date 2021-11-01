@@ -31,12 +31,9 @@ cvector_vector_type(TypeDecl *) struct_method_implements_interface(TypecheckCont
 bool fn_implements_interface_method(FnDecl *fn, Method *method);
 FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee);
 void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty);
-Expr *get_struct_prop_type(TypecheckContext *ctx, BinaryExpr *binop);
-Expr *get_struct_ptr_access_type(TypecheckContext *ctx, BinaryExpr *binop);
-Expr *get_struct_access_type(TypecheckContext *ctx, BinaryExpr *binop);
 Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access);
 StructTypeExpr *get_struct_type(TypecheckContext *ctx, const char *name);
-Property get_struct_prop(StructTypeExpr *struct_ty, const char *name);
+Property *get_struct_prop(StructTypeExpr *struct_ty, const char *name);
 
 void typecheck_pkg(TypecheckContext *ctx, Package *pkg);
 void typecheck_function(TypecheckContext *ctx, FnDecl *fn);

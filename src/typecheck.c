@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "error.h"
+
 TypecheckContext *typecheck_ctx_create(Package *pkg) {
   TypecheckContext *ctx = malloc(sizeof *ctx);
   ctx->pkg = pkg;
@@ -71,8 +73,7 @@ unsigned primitive_type_get_num_bits(TokenType ty) {
     case TOKTYPE_U8:
       return 8;
     default:
-      printf("could not get primitive type bits\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "could not get primitive type bits");
   }
   return -1;
 }
@@ -92,8 +93,7 @@ bool primitive_type_get_signed(TokenType ty) {
     case TOKTYPE_U8:
       return false;
     default:
-      printf("could not determine if primitive type is signed\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "could not determine if primitive type is signed");
   }
   return true;
 }
@@ -101,8 +101,7 @@ bool primitive_type_get_signed(TokenType ty) {
 const char *get_type_name(Expr *e) {
   if (e->type == EXPRTYPE_IDENT) return e->value.ident->value;
   if (e->type != EXPRTYPE_PTR) {
-    printf("could not get type name: it wasn't a ident or ptr to ident\n");
-    exit(1);
+    log_error(ERRTYPE_TYPECHECK, "could not get type name: it wasn't a ident or ptr to ident");
   }
   int i = 0;
   Expr expr = *e;
@@ -110,8 +109,7 @@ const char *get_type_name(Expr *e) {
     i++;
     expr = *expr.value.pointer_type->pointer_to_type;
     if (i > 1) {
-      printf("typecheck: function receiver can take struct as value or pointer\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "function receiver can take struct as value or pointer");
     }
   }
   return expr.value.ident->value;
@@ -187,8 +185,7 @@ void coerce_basic_lit_to_type(BasicLitExpr *lit, TokenType ty) {
       lit->value.float_lit->bits = primitive_type_get_num_bits(ty);
       break;
     default:
-      printf("typecheck: unimplemented basic lit\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "unimplemented basic lit");
   }
 }
 
@@ -198,16 +195,15 @@ void typecheck_function(TypecheckContext *ctx, FnDecl *fn) {
     unsigned i;
     TypeDecl *ty;
     for (i = 0; i < cvector_size(ctx->pkg->private_types); i++) {
-      if (ctx->pkg->private_types[i]->name == struct_name) ty = ctx->pkg->private_types[i];
+      if (!strcmp(ctx->pkg->private_types[i]->name, struct_name)) ty = ctx->pkg->private_types[i];
     }
     if (ty == NULL) {
       for (i = 0; i < cvector_size(ctx->pkg->public_types); i++) {
-        if (ctx->pkg->public_types[i]->name == struct_name) ty = ctx->pkg->public_types[i];
+        if (!strcmp(ctx->pkg->public_types[i]->name, struct_name)) ty = ctx->pkg->public_types[i];
       }
     }
     if (ty == NULL) {
-      printf("typecheck: receiver references undefined struct\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "receiver references undefined struct");
     }
     cvector_vector_type(TypeDecl *) implements = struct_method_implements_interface(ctx, fn);
     for (i = 0; i < cvector_size(implements); i++) {
@@ -318,8 +314,7 @@ void typecheck_expr(TypecheckContext *ctx, Expr *expr) {
         }
       }
       if (mem_type->type != EXPRTYPE_PTR) {
-        printf("typecheck: expected indexed memory access to be done on a pointer type");
-        exit(1);
+        log_error(ERRTYPE_TYPECHECK, "expected indexed memory access to be done on a pointer type");
       }
       ctx->expecting_type = mem_type->value.pointer_type->pointer_to_type;
       break;
@@ -348,23 +343,23 @@ StructTypeExpr *get_struct_type(TypecheckContext *ctx, const char *name) {
     }
   }
 
-  printf("typecheck: could not find struct called '%s'\n", name);
-  exit(1);
+  log_error(ERRTYPE_TYPECHECK, "could not find struct called '%s'", name);
+  return NULL;
 }
 
-Property get_struct_prop(StructTypeExpr *struct_ty, const char *prop_name) {
+Property *get_struct_prop(StructTypeExpr *struct_ty, const char *prop_name) {
   unsigned j;
   for (j = 0; j < cvector_size(struct_ty->properties); j++) {
     const char **name = NULL;
     for (name = cvector_begin(struct_ty->properties[j].names); name != cvector_end(struct_ty->properties[j].names); name++) {
       if (!strcmp(*name, prop_name)) {
-        return struct_ty->properties[j];
+        return &struct_ty->properties[j];
       }
     }
   }
 
-  printf("typecheck: could not find struct property called '%s'\n", prop_name);
-  exit(1);
+  log_error(ERRTYPE_TYPECHECK, "could not find struct property called '%s'", prop_name);
+  return NULL;
 }
 
 Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access) {
@@ -379,8 +374,7 @@ Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access) {
   }
 
   if (lhs_ty == NULL) {
-    printf("could not get type of lhs of prop access\n");
-    exit(1);
+    log_error(ERRTYPE_TYPECHECK, "could not get type of lhs of prop access");
   }
 
   while (lhs_ty->type == EXPRTYPE_PTR) {
@@ -388,54 +382,8 @@ Expr *get_prop_access_type(TypecheckContext *ctx, PropAccessExpr *prop_access) {
   }
   const char *struct_name = lhs_ty->value.ident->value;
   StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
-  Property prop = get_struct_prop(struct_ty, prop_access->prop->value);
-  return prop.type;
-}
-
-Expr *get_struct_ptr_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
-  Expr *ptr_ty = get_struct_prop_type(ctx, binop);
-  if (ptr_ty->type != EXPRTYPE_PTR) {
-    printf("typecheck: lhs of '->' must be a pointer\n");
-    exit(1);
-  }
-  Expr *val_ty = ptr_ty->value.pointer_type->pointer_to_type;
-  if (val_ty->type != EXPRTYPE_IDENT) {
-    printf("typecheck: lhs of '->' must be a pointer to a struct\n");
-    exit(1);
-  }
-  const char *struct_name = val_ty->value.ident->value;
-  StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
-  Property prop = get_struct_prop(struct_ty, binop->y->value.ident->value);
-  return prop.type;
-}
-
-Expr *get_struct_access_type(TypecheckContext *ctx, BinaryExpr *binop) {
-  Expr *val_ty = get_struct_prop_type(ctx, binop);
-  if (val_ty->type != EXPRTYPE_IDENT) {
-    printf("typecheck: lhs of '.' must be a struct\n");
-    exit(1);
-  }
-  const char *struct_name = val_ty->value.ident->value;
-  StructTypeExpr *struct_ty = get_struct_type(ctx, struct_name);
-  // printf("%s\n", struct_name);
-  // printf("%u\n", binop->y->type);
-  if (binop->y->type == EXPRTYPE_IDX_MEM_ACCESS) {
-    const char *prop_name = binop->y->value.idx_mem_access->memory->value.ident->value;
-    // printf("%s\n", binop->y->value.idx_mem_access->memory->value.ident->value);
-    Expr *ty = get_struct_prop(struct_ty, prop_name).type;
-    printf("%d\n", ty->type);
-    if (ty->type != EXPRTYPE_PTR) {
-      printf("typecheck: cannot access memory of non-pointer type\n");
-      exit(1);
-    }
-    printf("%d\n", ty->value.pointer_type->pointer_to_type->type);
-    return ty->value.pointer_type->pointer_to_type;
-  }
-
-  return get_struct_prop(struct_ty, binop->y->value.ident->value).type;
-
-  printf("typecheck: could not get struct access type\n");
-  exit(1);
+  Property *prop = get_struct_prop(struct_ty, prop_access->prop->value);
+  return prop->type;
 }
 
 void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
@@ -479,36 +427,13 @@ void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
   typecheck_expr(ctx, binop->y);
 }
 
-Expr *get_struct_prop_type(TypecheckContext *ctx, BinaryExpr *binop) {
-  switch (binop->x->type) {
-    case EXPRTYPE_BINARY:
-      printf("kill me\n");
-      exit(1);
-    case EXPRTYPE_IDENT: {
-      unsigned i;
-      for (i = 0; i < cvector_size(ctx->symbol_table); i++) {
-        if (!strcmp(ctx->symbol_table[i]->name, binop->x->value.ident->value)) return ctx->symbol_table[i]->type;
-      }
-      break;
-    }
-    default:
-      printf("kill me\n");
-      exit(1);
-      break;
-  }
-
-  return NULL;
-}
-
 void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit) {
   if (ctx->expecting_type->type != EXPRTYPE_PRIMITIVE) {
-    printf("typecheck: expected primitive type");
-    exit(1);
+    log_error(ERRTYPE_TYPECHECK, "expected primitive type");
   }
   TokenType needed_type = ctx->expecting_type->value.primitive_type->type;
   if (needed_type <= TOKTYPE_TYPES_BEGIN || needed_type >= TOKTYPE_TYPES_END) {
-    printf("typecheck: expected primitive type");
-    exit(1);
+    log_error(ERRTYPE_TYPECHECK, "expected primitive type");
   }
 
   coerce_basic_lit_to_type(lit, needed_type);
@@ -520,8 +445,7 @@ void typecheck_function_call(TypecheckContext *ctx, FnCall *call) {
   unsigned fn_decl_num_args = cvector_size(callee_fn_decl->params);
   if (callee_fn_decl->receiver) fn_decl_num_args--;
   if (call_num_args != fn_decl_num_args) {
-    printf("incorrect number of arguments supplied to function call\n");
-    exit(1);
+    log_error(ERRTYPE_TYPECHECK, "incorrect number of arguments supplied to function call");
   }
   unsigned i;
   for (i = 0; i < call_num_args; i++) {
@@ -551,8 +475,7 @@ FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee) {
       for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
         if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
       }
-      printf("unknown function referenced\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "unknown function referenced");
     }
     case EXPRTYPE_BINARY: {
       if (callee->value.binop->y->type != EXPRTYPE_IDENT) {
@@ -567,8 +490,7 @@ FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee) {
       for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
         if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
       }
-      printf("unknown function referenced\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "unknown function referenced");
     }
     case EXPRTYPE_PROP_ACCESS: {
       const char *fn_name = callee->value.prop_access->prop->value;
@@ -579,11 +501,10 @@ FnDecl *get_fn_decl_by_callee_expr(TypecheckContext *ctx, Expr *callee) {
       for (i = 0; i < cvector_size(ctx->pkg->public_functions); i++) {
         if (!strcmp(ctx->pkg->public_functions[i]->name, fn_name)) return ctx->pkg->public_functions[i];
       }
-      printf("unknown function referenced\n");
-      exit(1);
+      log_error(ERRTYPE_TYPECHECK, "unknown function referenced");
     }
     default:
-      printf("typecheck: unimplemented callee expression\n");
+      log_error(ERRTYPE_TYPECHECK, "unimplemented callee expression");
       break;
   }
   return NULL;

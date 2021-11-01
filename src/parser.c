@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "error.h"
+
 ParseContext *parsecontext_create(cvector_vector_type(Token *) toks) {
   ParseContext *ctx = malloc(sizeof(ParseContext));
   ctx->toks = toks;
@@ -51,11 +53,6 @@ void parsecontext_destroy(ParseContext *ctx) {
   free(ctx);
 }
 
-void parser_fatal(const char *msg) {
-  printf("%s\n", msg);
-  exit(1);
-}
-
 Token *parser_eat(ParseContext *ctx) {
   ctx->tok_ptr++;
   ctx->cur_tok = ctx->toks[ctx->tok_ptr];
@@ -64,7 +61,7 @@ Token *parser_eat(ParseContext *ctx) {
 
 Token *parser_expect(ParseContext *ctx, TokenType type, const char *msg) {
   if (ctx->cur_tok->type != type) {
-    parser_fatal(msg);
+    log_error(ERRTYPE_PARSE, msg);
   }
   Token *tok = ctx->cur_tok;
   parser_eat(ctx);
@@ -73,7 +70,7 @@ Token *parser_expect(ParseContext *ctx, TokenType type, const char *msg) {
 
 Token *parser_expect_range(ParseContext *ctx, TokenType begin, TokenType end, const char *msg) {
   if (ctx->cur_tok->type <= begin || ctx->cur_tok->type >= end)
-    parser_fatal(msg);
+    log_error(ERRTYPE_PARSE, msg);
   Token *tok = ctx->cur_tok;
   parser_eat(ctx);
   return tok;
@@ -137,7 +134,6 @@ FnDecl *parse_fn_decl(ParseContext *ctx, bool pub) {
   }
 
   fn->body = parse_block_stmt(ctx);
-
   fn->pub = pub;
   return fn;
 }
@@ -172,7 +168,7 @@ cvector_vector_type(Param *) parse_paramlist(ParseContext *ctx) {
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_RPAREN) {
-      parser_fatal("expected ')' at end of param list");
+      log_error(ERRTYPE_PARSE, "expected ')' at end of param list");
     }
   }
   return paramlist;
@@ -216,7 +212,7 @@ Expr *parse_type_expr(ParseContext *ctx) {
       return e;
     }
     default:
-      parser_fatal("unimplemented type expression");
+      log_error(ERRTYPE_PARSE, "unimplemented type expression");
   }
   return NULL;
 }
@@ -260,7 +256,7 @@ Property *parse_property(ParseContext *ctx) {
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
-      parser_fatal("expected ';' at end of property");
+      log_error(ERRTYPE_PARSE, "expected ';' at end of property");
     }
   }
 
@@ -279,7 +275,7 @@ Expr *parse_interface_type_expr(ParseContext *ctx) {
     cvector_push_back(interface->value.interface_type->methods, parse_method_decl(ctx));
     parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' after method in interface type method list");
     if (ctx->cur_tok->type != TOKTYPE_RBRACE && ctx->cur_tok->type != TOKTYPE_IDENT) {
-      parser_fatal("expected a method or '}' in interface type method list");
+      log_error(ERRTYPE_PARSE, "expected a method or '}' in interface type method list");
     }
   }
 
@@ -367,9 +363,15 @@ Stmt *parse_stmt(ParseContext *ctx) {
       //     parser_fatal("unknown token when parsing statement");
       // }
     }
-    default:
-      parser_fatal("unknown token when parsing statement");
-      break;
+    default: {
+      Stmt *stmt = malloc(sizeof *stmt);
+      stmt->type = STMTTYPE_EXPR;
+      stmt->value.expr = parse_expr(ctx);
+      parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' following expression in function body");
+      return stmt;
+    }
+      // log_error(ERRTYPE_PARSE, "unknown token when parsing statement");
+      // break;
   }
   return NULL;
 }
@@ -431,7 +433,7 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_EQ && ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
-      parser_fatal("expected '=' or ';' after var decl ident list");
+      log_error(ERRTYPE_PARSE, "expected '=' or ';' after var decl ident list");
     }
   }
 
@@ -445,7 +447,7 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
   int i = 0;
   while (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
     if (i + 1 > cvector_size(var->value.var_decl->names)) {
-      parser_fatal("too many values in var decl");
+      log_error(ERRTYPE_PARSE, "too many values in var decl");
     }
     Expr *v = parse_expr(ctx);
     Expr *final_v = parse_postfix_expr(ctx, v);
@@ -454,13 +456,13 @@ Stmt *parse_var_decl(ParseContext *ctx, bool pub, bool mut) {
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_SEMICOLON) {
-      parser_fatal("expected ';' after var decl value list");
+      log_error(ERRTYPE_PARSE, "expected ';' after var decl value list");
     }
     i++;
   }
 
   if (i < cvector_size(var->value.var_decl->names) && i != 1) {
-    parser_fatal("too few values in var decl");
+    log_error(ERRTYPE_PARSE, "too few values in var decl");
   }
 
   parser_expect(ctx, TOKTYPE_SEMICOLON, "expected ';' in var decl");
@@ -538,7 +540,7 @@ cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx) {
     if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_RPAREN) {
-      parser_fatal("expected either ',' or ')' in function call args");
+      log_error(ERRTYPE_PARSE, "expected either ',' or ')' in function call args");
     }
   }
 
@@ -548,12 +550,23 @@ cvector_vector_type(Expr *) parse_call_args(ParseContext *ctx) {
 Expr *parse_unary_expr(ParseContext *ctx) {
   switch (ctx->cur_tok->type) {
     case TOKTYPE_AMPERSAND:
-      parser_fatal("unimplemented unary expression");
+      log_error(ERRTYPE_PARSE, "unimplemented unary expression");
       break;
+    case TOKTYPE_SIZEOF:
+      return parse_sizeof_expr(ctx);
     default:
       return parse_primary_expr(ctx);
   }
   return NULL;
+}
+
+Expr *parse_sizeof_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_SIZEOF, "expected 'sizeof' operator");
+  Expr *type = parse_type_expr(ctx);
+  Expr *sizeof_expr = malloc(sizeof *sizeof_expr);
+  sizeof_expr->type = EXPRTYPE_SIZEOF;
+  sizeof_expr->value.sizeof_operation = type;
+  return sizeof_expr;
 }
 
 Expr *parse_primary_expr(ParseContext *ctx) {
@@ -635,11 +648,23 @@ Expr *parse_operand(ParseContext *ctx) {
     case TOKTYPE_NIL:
       return parse_nil_expr(ctx);
     case TOKTYPE_LPAREN:
-      // in the future, type casts
+      return parse_type_cast_expr(ctx);
     default:
       printf("unimplemented expression operand: %s\n", ctx->cur_tok->value);
       exit(1);
   }
+}
+
+Expr *parse_type_cast_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_LPAREN, "expected '(' in type cast expr");
+  Expr *ty = parse_type_expr(ctx);
+  parser_expect(ctx, TOKTYPE_RPAREN, "expected ')' in type cast expr");
+  Expr *cast = malloc(sizeof *cast);
+  cast->type = EXPRTYPE_TYPE_CAST;
+  cast->value.typecast = malloc(sizeof *cast->value.typecast);
+  cast->value.typecast->type = ty;
+  cast->value.typecast->x = parse_expr(ctx);
+  return cast;
 }
 
 Expr *parse_nil_expr(ParseContext *ctx) {
@@ -678,7 +703,7 @@ Expr *parse_basic_lit(ParseContext *ctx) {
       lit->value.basic_lit->value.float_lit->value = atoi(tok->value);
       break;
     default:
-      parser_fatal("unimplemented basic lit type");
+      log_error(ERRTYPE_PARSE, "unimplemented basic lit type");
   }
   return lit;
 }
@@ -698,7 +723,7 @@ void parse_pkg_file_tokens(ParseContext *ctx) {
   while (ctx->cur_tok->type != TOKTYPE_EOF) {
     switch (ctx->cur_tok->type) {
       case TOKTYPE_PACKAGE:
-        parser_fatal("cannot have more than one 'pkg' in file");
+        log_error(ERRTYPE_PARSE, "cannot have more than one 'pkg' in file");
       case TOKTYPE_FN:
         cvector_push_back(ctx->functions, parse_fn_decl(ctx, false));
         break;
@@ -742,7 +767,7 @@ void parse_pkg_file_tokens(ParseContext *ctx) {
           cvector_push_back(ctx->variables, var_decl->value.var_decl);
           break;
         }
-        parser_fatal("unimplemented token");
+        log_error(ERRTYPE_PARSE, "unimplemented token");
     }
     i++;
   }

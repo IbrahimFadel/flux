@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "error.h"
+
 const char *read_file(const char *path) {
   char *buffer = 0;
   long length = 0;
@@ -49,14 +51,18 @@ char *substr(const char *str, int i, int len) {
   return sub;
 }
 
-Scanner *scanner_create(const char *src) {
+Scanner *scanner_create() {
   Scanner *s = malloc(sizeof(Scanner));
-  s->src = src;
   s->offset = 0;
   Position starting_pos = {.line = 1, .col = 1};
   s->pos = starting_pos;
-  s->ch = s->src[s->offset];
   return s;
+}
+
+void scanner_reset(Scanner *s) {
+  s->offset = 0;
+  Position starting_pos = {.line = 1, .col = 1};
+  s->pos = starting_pos;
 }
 
 void scanner_destroy(Scanner *s) {
@@ -82,27 +88,25 @@ void scanner_fatal(Scanner *s, unsigned offset, const char *msg, ...) {
   va_list args;
   va_start(args, msg);
 
-  printf("%s\n", msg);
+  log_error(ERRTYPE_LEX, msg, args);
 
-  int max_padding = 10;
-  unsigned start_pos = offset;
-  int len = max_padding;
+  // int max_padding = 10;
+  // unsigned start_pos = offset;
+  // int len = max_padding;
 
-  if (offset - max_padding >= 0) {
-    start_pos -= max_padding;
-    len += max_padding + 1;
-  } else {
-    start_pos = 0;
-    len += (offset) + 1;
-  }
-  if (offset + max_padding >= strlen(s->src)) {
-    len -= strlen(s->src) - offset;
-  }
+  // if (offset - max_padding >= 0) {
+  //   start_pos -= max_padding;
+  //   len += max_padding + 1;
+  // } else {
+  //   start_pos = 0;
+  //   len += (offset) + 1;
+  // }
+  // if (offset + max_padding >= strlen(s->src)) {
+  //   len -= strlen(s->src) - offset;
+  // }
 
-  char *str = substr(s->src, start_pos, len);
-  printf("%d:%d\t%s\n", s->pos.line, s->pos.col, str);
-
-  exit(1);
+  // char *str = substr(s->src, start_pos, len);
+  // printf("%d:%d\t%s\n", s->pos.line, s->pos.col, str);
 }
 
 void scanner_next(Scanner *s) {

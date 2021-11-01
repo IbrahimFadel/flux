@@ -46,7 +46,7 @@ const char *fn_name_to_struct_method_name(const char *fn_name, const char *struc
 const char *interface_name_to_interface_vtable_name(const char *interface_name);
 void add_method_to_interface_vtable(CodegenContext *ctx, const char *fn_name, LLVMTypeRef fn_type, const char *interface_name);
 LLVMValueRef construct_global_variable_initialization_function(CodegenContext *ctx);
-Variable get_global_variable(CodegenContext *ctx, const char *name);
+Variable *get_global_variable(CodegenContext *ctx, const char *name);
 
 void codegen_function(CodegenContext *ctx, FnDecl *fn);
 LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr);
@@ -75,5 +75,7 @@ LLVMValueRef codegen_binop_cmp(CodegenContext *ctx, BinaryExpr *binop);
 LLVMValueRef codegen_idx_mem_access(CodegenContext *ctx, IndexedMemAccess *mem_access);
 LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_access);
 LLVMValueRef codegen_global_var_decl(CodegenContext *ctx, VarDecl *var);
+LLVMValueRef codegen_sizeof_expr(CodegenContext *ctx, Expr *sizeof_operation);
+LLVMValueRef codegen_typecast_expr(CodegenContext *ctx, TypeCastExpr *typecast);
 
 #endif

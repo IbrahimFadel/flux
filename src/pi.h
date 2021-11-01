@@ -7,6 +7,7 @@
 struct Package;
 
 #include "ast.h"
+#include "parser.h"
 
 typedef struct Package {
   const char *name;
@@ -20,7 +21,10 @@ typedef struct Package {
 
 Package *package_create();
 void package_destroy(Package *pkg);
-void package_print(Package *p);
 sds package_tostring(Package *pkg);
+
+cvector_vector_type(const char *) get_input_files(int argc, char **argv);
+Package *insert_package(Package *pkgs, struct ParseContext *ctx);
+void add_declarations_to_package(Package *pkg, cvector_vector_type(FnDecl *) cstd_functions, struct ParseContext *ctx);
 
 #endif

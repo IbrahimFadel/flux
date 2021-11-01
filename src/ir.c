@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "error.h"
+
 LLVMModuleRef codegen_pkg(TypecheckContext *typecheck_ctx) {
   CodegenContext *ctx = malloc(sizeof(CodegenContext));
   ctx->typecheck_ctx = typecheck_ctx;
@@ -76,8 +78,8 @@ LLVMValueRef construct_global_variable_initialization_function(CodegenContext *c
       val_to_init_vars = codegen_expr(ctx, var->values[0]);
     }
     for (j = 0; j < num_names; j++) {
-      Variable v = get_global_variable(ctx, var->names[j]);
-      LLVMValueRef ptr = v.ptr;
+      Variable *v = get_global_variable(ctx, var->names[j]);
+      LLVMValueRef ptr = v->ptr;
       if (init_all_to_one_val && var->values != NULL) {
         LLVMBuildStore(ctx->builder, val_to_init_vars, ptr);
       } else if (!init_all_to_one_val && var->values != NULL) {
@@ -97,8 +99,8 @@ LLVMValueRef construct_global_variable_initialization_function(CodegenContext *c
       val_to_init_vars = codegen_expr(ctx, var->values[0]);
     }
     for (j = 0; j < num_names; j++) {
-      Variable v = get_global_variable(ctx, var->names[j]);
-      LLVMValueRef ptr = v.ptr;
+      Variable *v = get_global_variable(ctx, var->names[j]);
+      LLVMValueRef ptr = v->ptr;
       if (init_all_to_one_val && var->values != NULL) {
         LLVMBuildStore(ctx->builder, val_to_init_vars, ptr);
       } else if (!init_all_to_one_val && var->values != NULL) {
@@ -112,13 +114,13 @@ LLVMValueRef construct_global_variable_initialization_function(CodegenContext *c
   return func;
 }
 
-Variable get_global_variable(CodegenContext *ctx, const char *name) {
+Variable *get_global_variable(CodegenContext *ctx, const char *name) {
   unsigned i;
   for (i = 0; i < cvector_size(ctx->variables); i++) {
-    if (!strcmp(ctx->variables[i].name, name)) return ctx->variables[i];
+    if (!strcmp(ctx->variables[i].name, name)) return &ctx->variables[i];
   }
-  printf("could not get global variable: %s", name);
-  exit(1);
+  log_error(ERRTYPE_CODEGEN, "could not get global variable: %s", name);
+  return NULL;
 }
 
 LLVMValueRef codegen_global_var_decl(CodegenContext *ctx, VarDecl *var) {
@@ -158,8 +160,7 @@ LLVMValueRef codegen_type_decl(CodegenContext *ctx, TypeDecl *ty) {
       cvector_push_back(t->properties, ty->value->value.struct_type->properties[i]);
     }
   } else {
-    printf("HUH?? fixme\n");
-    exit(1);
+    log_error(ERRTYPE_CODEGEN, "HUH?? fixme");
   }
   return NULL;
 }
@@ -179,8 +180,7 @@ LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
     case EXPRTYPE_IDENT:
       return codegen_ident_type_expr(ctx, expr->value.ident);
     default:
-      printf("unimplemented type expr:  %d\n", expr->type);
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented type expr:  %d", expr->type);
   }
   return NULL;
 }
@@ -197,8 +197,8 @@ LLVMTypeRef codegen_ident_type_expr(CodegenContext *ctx, IdentExpr *ident) {
   for (i = 0; i < cvector_size(ctx->structs); i++) {
     if (!strcmp(ctx->structs[i]->name, ident->value)) return ctx->structs[i]->value;
   }
-  printf("could not find type with same name as ident expression");
-  exit(1);
+  log_error(ERRTYPE_CODEGEN, "could not find type with same name as ident expression");
+  return NULL;
 }
 
 LLVMTypeRef codegen_struct_type_expr(CodegenContext *ctx, StructTypeExpr *s) {
@@ -245,8 +245,8 @@ LLVMTypeRef codegen_primitive_type_expr(CodegenContext *ctx, PrimitiveTypeExpr *
     case TOKTYPE_F32:
       return LLVMFloatTypeInContext(ctx->ctx);
     default:
-      printf("unimplemented primitive type expr: %d\n", expr->type);
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented primitive type expr: %d", expr->type);
+      return NULL;
   }
 }
 
@@ -268,8 +268,7 @@ LLVMValueRef codegen_stmt(CodegenContext *ctx, Stmt *stmt) {
     case STMTTYPE_IF:
       return codegen_if_stmt(ctx, stmt->value.if_stmt);
     default:
-      printf("unimplemented stmt\n");
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented stmt");
       break;
   }
   return NULL;
@@ -359,11 +358,40 @@ LLVMValueRef codegen_expr(CodegenContext *ctx, Expr *expr) {
       return NULL;
     case EXPRTYPE_PROP_ACCESS:
       return codegen_prop_access_expr(ctx, expr->value.prop_access);
+    case EXPRTYPE_SIZEOF:
+      return codegen_sizeof_expr(ctx, expr->value.sizeof_operation);
+    case EXPRTYPE_TYPE_CAST:
+      return codegen_typecast_expr(ctx, expr->value.typecast);
     default:
-      printf("unimplemented expr: %d\n", expr->type);
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented expr: %d", expr->type);
   }
   return NULL;
+}
+
+LLVMValueRef codegen_typecast_expr(CodegenContext *ctx, TypeCastExpr *typecast) {
+  LLVMTypeRef ty = codegen_type_expr(ctx, typecast->type);
+  LLVMTypeKind ty_kind = LLVMGetTypeKind(ty);
+
+  LLVMValueRef v = codegen_expr(ctx, typecast->x);
+
+  switch (ty_kind) {
+    case LLVMPointerTypeKind:
+      return LLVMBuildCast(ctx->builder, LLVMBitCast, v, ty, "");
+    case LLVMIntegerTypeKind:
+      return LLVMBuildCast(ctx->builder, LLVMTrunc, v, ty, "");
+    default:
+      break;
+  }
+  return NULL;
+}
+
+LLVMValueRef codegen_sizeof_expr(CodegenContext *ctx, Expr *sizeof_operation) {
+  LLVMTypeRef ty = codegen_type_expr(ctx, sizeof_operation);
+  LLVMValueRef index = LLVMConstInt(LLVMInt32TypeInContext(ctx->ctx), 1, false);
+  LLVMValueRef null_val = LLVMConstNull(LLVMPointerType(ty, 0));
+  LLVMValueRef gep = LLVMBuildGEP2(ctx->builder, ty, null_val, &index, 1, "");
+  LLVMValueRef cast = LLVMBuildCast(ctx->builder, LLVMPtrToInt, gep, LLVMInt64TypeInContext(ctx->ctx), "");
+  return cast;
 }
 
 LLVMValueRef codegen_idx_mem_access(CodegenContext *ctx, IndexedMemAccess *mem_access) {
@@ -390,8 +418,7 @@ LLVMValueRef codegen_function_call(CodegenContext *ctx, FnCall *call) {
       callee = LLVMGetNamedFunction(ctx->mod, call->callee->value.ident->value);
       break;
     default:
-      printf("unimplemented function call callee type: %d\n", call->callee->type);
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented function call callee type: %d", call->callee->type);
   }
 
   cvector_vector_type(LLVMValueRef) args = NULL;
@@ -453,8 +480,8 @@ LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_
     }
   }
 
-  printf("could not codegen prop access expr\n");
-  exit(1);
+  log_error(ERRTYPE_CODEGEN, "could not codegen prop access expr");
+  return NULL;
 }
 
 LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
@@ -462,9 +489,8 @@ LLVMValueRef codegen_ident_expr(CodegenContext *ctx, IdentExpr *ident) {
   LLVMValueRef ptr;
   while ((ptr = block_get_var(block, ident->value)) == NULL) {
     if (block->parent == NULL) {
-      if ((ptr = get_global_variable(ctx, ident->value).ptr) == NULL) {
-        printf("unknown variable referenced: %s\n", ident->value);
-        exit(1);
+      if ((ptr = get_global_variable(ctx, ident->value)->ptr) == NULL) {
+        log_error(ERRTYPE_CODEGEN, "unknown variable referenced: %s", ident->value);
       } else {
         break;
       }
@@ -498,8 +524,7 @@ LLVMValueRef codegen_binary_expr(CodegenContext *ctx, BinaryExpr *binop) {
     case TOKTYPE_CMP_OR:
       return codegen_binop_cmp(ctx, binop);
     default:
-      printf("unimplemented binary expr\n");
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented binary expr");
   }
   return NULL;
 }
@@ -516,8 +541,8 @@ LLVMValueRef codegen_binop_cmp(CodegenContext *ctx, BinaryExpr *binop) {
     case TOKTYPE_CMP_OR:
       return LLVMBuildOr(ctx->builder, codegen_expr(ctx, binop->x), codegen_expr(ctx, binop->y), "");
     default:
-      printf("unimplemented cmp operator\n");
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented cmp operator");
+      return NULL;
   }
 }
 
@@ -574,8 +599,7 @@ LLVMValueRef codegen_int_expr(CodegenContext *ctx, IntExpr *e) {
     case 8:
       return LLVMConstInt(LLVMInt8TypeInContext(ctx->ctx), e->value, e->is_signed);
     default:
-      printf("unimplemented integer bit count\n");
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented integer bit count");
   }
   return NULL;
 }
@@ -587,8 +611,7 @@ LLVMValueRef codegen_float_expr(CodegenContext *ctx, FloatExpr *e) {
     case 32:
       return LLVMConstReal(LLVMFloatTypeInContext(ctx->ctx), e->value);
     default:
-      printf("unimplemented float bit count\n");
-      exit(1);
+      log_error(ERRTYPE_CODEGEN, "unimplemented float bit count");
   }
   return NULL;
 }

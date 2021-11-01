@@ -37,3 +37,11 @@ fn (string *s) addChar(i8 value) {
 	s->buf[s->len] = value;
 	s->len = s->len + 1;
 }
+
+fn main() -> i32 {
+	string *s = (string *) malloc(sizeof string);
+	s->init();
+	s->addChar(33);
+	s->destroy();
+	return (i32)s->capacity;
+}

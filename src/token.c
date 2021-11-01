@@ -26,6 +26,8 @@ TokenType lookup_keyword(const char *str) {
     return TOKTYPE_IF;
   if (!strcmp(str, "else"))
     return TOKTYPE_ELSE;
+  if (!strcmp(str, "sizeof"))
+    return TOKTYPE_SIZEOF;
   if (!strcmp(str, "i64"))
     return TOKTYPE_I64;
   if (!strcmp(str, "i32"))

@@ -21,6 +21,8 @@ typedef enum ExprType {
   EXPRTYPE_NIL,
   EXPRTYPE_IDX_MEM_ACCESS,
   EXPRTYPE_PROP_ACCESS,
+  EXPRTYPE_SIZEOF,
+  EXPRTYPE_TYPE_CAST,
 } ExprType;
 
 typedef enum StmtType {
@@ -131,6 +133,11 @@ typedef struct IndexedMemAccess {
   struct Expr *index;
 } IndexedMemAccess;
 
+typedef struct TypeCastExpr {
+  struct Expr *type;
+  struct Expr *x;
+} TypeCastExpr;
+
 typedef struct Expr {
   ExprType type;
   union {
@@ -145,6 +152,8 @@ typedef struct Expr {
     struct Expr *nil_type;
     struct IndexedMemAccess *idx_mem_access;
     struct PropAccessExpr *prop_access;
+    struct Expr *sizeof_operation;
+    struct TypeCastExpr *typecast;
   } value;
 } Expr;
 

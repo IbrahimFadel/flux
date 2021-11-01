@@ -17,7 +17,8 @@ typedef struct Scanner {
 
 char *substr(const char *str, int i, int len);
 
-Scanner *scanner_create(const char *src);
+Scanner *scanner_create();
+void scanner_reset(Scanner *s);
 void scanner_destroy(Scanner *s);
 void scanner_fatal(Scanner *s, unsigned offset, const char *msg, ...);
 void scanner_next(Scanner *s);
