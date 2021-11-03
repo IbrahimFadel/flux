@@ -122,6 +122,17 @@ cvector_vector_type(FnDecl *) create_cstd_functions() {
   FnDecl *memcpy_decl = parse_fn_decl(ctx, false);
   cvector_push_back(functions, memcpy_decl);
 
+  file_content = "fn printf(i8 *msg, ...);\n";
+  s->src = file_content;
+  s->offset = 0;
+  s->ch = file_content[0];
+  tokens = scan_file(s);
+  ctx->toks = tokens;
+  ctx->tok_ptr = 0;
+  ctx->cur_tok = tokens[0];
+  FnDecl *printf_decl = parse_fn_decl(ctx, false);
+  cvector_push_back(functions, printf_decl);
+
   scanner_destroy(s);
   parsecontext_destroy(ctx);
   return functions;

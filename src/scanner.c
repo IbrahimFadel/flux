@@ -219,7 +219,7 @@ Token *scan_number(Scanner *s) {
 
 void scan_escape(Scanner *s, char quote) {
   int initial_offset = s->offset;
-
+  scanner_next(s);
   if (s->ch == quote)
     return scanner_next(s);
   switch (s->ch) {
@@ -245,6 +245,7 @@ const char *scan_string(Scanner *s) {
     }
     if (s->ch == '\\') {
       scan_escape(s, '"');
+      continue;
     }
     scanner_next(s);
   }

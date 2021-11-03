@@ -48,6 +48,8 @@ TokenType lookup_keyword(const char *str) {
     return TOKTYPE_F64;
   if (!strcmp(str, "f32"))
     return TOKTYPE_F32;
+  if (!strcmp(str, "array"))
+    return TOKTYPE_ARRAY;
   else
     return TOKTYPE_IDENT;
 }

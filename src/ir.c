@@ -179,10 +179,16 @@ LLVMTypeRef codegen_type_expr(CodegenContext *ctx, Expr *expr) {
       return codegen_struct_type_expr(ctx, expr->value.struct_type);
     case EXPRTYPE_IDENT:
       return codegen_ident_type_expr(ctx, expr->value.ident);
+    case EXPRTYPE_ARRAY:
+      return codegen_array_type_expr(ctx, expr->value.array_type);
     default:
       log_error(ERRTYPE_CODEGEN, "unimplemented type expr:  %d", expr->type);
   }
   return NULL;
+}
+
+LLVMTypeRef codegen_array_type_expr(CodegenContext *ctx, ArrayTypeExpr *array_type) {
+  return LLVMArrayType(codegen_type_expr(ctx, array_type->type), array_type->len);
 }
 
 LLVMTypeRef codegen_ptr_type_expr(CodegenContext *ctx, PointerTypeExpr *pointer_type) {
@@ -472,7 +478,12 @@ LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_
         for (x = 0; x < cvector_size(p.names); x++) {
           if (!strcmp(p.names[x], prop_name)) {
             ctx->struct_currently_being_accessed = NULL;
-            LLVMValueRef gep = LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
+            LLVMValueRef gep = NULL;
+            if (prop_access->ptr_access) {
+              gep = LLVMBuildStructGEP2(ctx->builder, ty, lhs, j + x, "");
+            } else {
+              gep = LLVMBuildStructGEP2(ctx->builder, ty, LLVMGetOperand(lhs, 0), j + x, "");
+            }
             return LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(gep)), gep, "");
           }
         }
@@ -582,10 +593,29 @@ LLVMValueRef codegen_basic_lit_expr(CodegenContext *ctx, BasicLitExpr *lit) {
       return codegen_int_expr(ctx, lit->value.int_lit);
     case TOKTYPE_FLOAT:
       return codegen_float_expr(ctx, lit->value.float_lit);
+    case TOKTYPE_STRING_LIT:
+      return codegen_string_lit_expr(ctx, lit->value.str_lit);
     default:
       break;
   }
   return NULL;
+}
+
+LLVMValueRef codegen_string_lit_expr(CodegenContext *ctx, const char *str) {
+  unsigned i;
+  unsigned len = strlen(str);
+  LLVMValueRef vals[len + 1];
+  for (i = 0; i < len; i++) {
+    vals[i] = LLVMConstInt(LLVMInt8TypeInContext(ctx->ctx), (unsigned long long)str[i], false);
+  }
+  vals[len] = LLVMConstInt(LLVMInt8TypeInContext(ctx->ctx), 0, false);
+  LLVMValueRef v = LLVMConstArray(LLVMInt8TypeInContext(ctx->ctx), vals, len + 1);
+  LLVMValueRef i8_alloca = LLVMBuildAlloca(ctx->builder, LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0), "");
+  LLVMValueRef array_alloca = LLVMBuildAlloca(ctx->builder, LLVMTypeOf(v), "");
+  LLVMBuildStore(ctx->builder, v, array_alloca);
+  LLVMValueRef casted = LLVMBuildCast(ctx->builder, LLVMBitCast, array_alloca, LLVMPointerType(LLVMInt8TypeInContext(ctx->ctx), 0), "");
+  LLVMBuildStore(ctx->builder, casted, i8_alloca);
+  return LLVMBuildLoad2(ctx->builder, LLVMGetElementType(LLVMTypeOf(i8_alloca)), i8_alloca, "");
 }
 
 LLVMValueRef codegen_int_expr(CodegenContext *ctx, IntExpr *e) {
@@ -619,6 +649,7 @@ LLVMValueRef codegen_float_expr(CodegenContext *ctx, FloatExpr *e) {
 LLVMValueRef codegen_function_params(CodegenContext *ctx, LLVMValueRef fn, cvector_vector_type(Param *) params) {
   unsigned i;
   for (i = 0; i < cvector_size(params); i++) {
+    if (params[i]->variadic) return NULL;
     LLVMValueRef fn_param_val = LLVMGetParam(fn, i);
     LLVMValueRef ptr = LLVMBuildAlloca(ctx->builder, codegen_type_expr(ctx, params[i]->type), "");
     LLVMBuildStore(ctx->builder, fn_param_val, ptr);
@@ -636,10 +667,21 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   unsigned param_len = cvector_size(fn->params);
   LLVMTypeRef param_types[param_len];
   unsigned i;
+  bool variadic = false;
   for (i = 0; i < param_len; i++) {
+    if (fn->params[i]->variadic) {
+      variadic = true;
+      break;
+    }
     param_types[i] = codegen_type_expr(ctx, fn->params[i]->type);
   }
-  LLVMTypeRef fn_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, false);
+
+  LLVMTypeRef fn_type = NULL;
+  if (variadic) {
+    fn_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len - 1, variadic);
+  } else {
+    fn_type = LLVMFunctionType(codegen_type_expr(ctx, fn->return_type), param_types, param_len, variadic);
+  }
 
   const char *fn_name = fn->name;
   if (fn->receiver != NULL) {
@@ -664,7 +706,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
   }
 
   LLVMValueRef func = LLVMAddFunction(ctx->mod, fn_name, fn_type);
-  if (!strcmp(fn->name, "malloc") || !strcmp(fn->name, "free") || !strcmp(fn->name, "memcpy")) {
+  if (!strcmp(fn->name, "malloc") || !strcmp(fn->name, "free") || !strcmp(fn->name, "memcpy") || !strcmp(fn->name, "printf")) {
     return;
   }
   ctx->cur_fn = func;
@@ -682,7 +724,7 @@ void codegen_function(CodegenContext *ctx, FnDecl *fn) {
     LLVMBuildRetVoid(ctx->builder);
   }
 
-  LLVMRunFunctionPassManager(ctx->fpm, func);
+  // LLVMRunFunctionPassManager(ctx->fpm, func);
 }
 
 const char *fn_name_to_struct_method_name(const char *fn_name, const char *struct_name) {

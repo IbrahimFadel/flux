@@ -77,5 +77,7 @@ LLVMValueRef codegen_prop_access_expr(CodegenContext *ctx, PropAccessExpr *prop_
 LLVMValueRef codegen_global_var_decl(CodegenContext *ctx, VarDecl *var);
 LLVMValueRef codegen_sizeof_expr(CodegenContext *ctx, Expr *sizeof_operation);
 LLVMValueRef codegen_typecast_expr(CodegenContext *ctx, TypeCastExpr *typecast);
+LLVMValueRef codegen_string_lit_expr(CodegenContext *ctx, const char *str);
+LLVMTypeRef codegen_array_type_expr(CodegenContext *ctx, ArrayTypeExpr *array_type);
 
 #endif

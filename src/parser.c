@@ -165,7 +165,9 @@ cvector_vector_type(Param *) parse_paramlist(ParseContext *ctx) {
   while (ctx->cur_tok->type != TOKTYPE_RPAREN) {
     Param *p = parse_param(ctx);
     cvector_push_back(paramlist, p);
-    if (ctx->cur_tok->type == TOKTYPE_COMMA) {
+    if (p->variadic && ctx->cur_tok->type != TOKTYPE_RPAREN) {
+      log_error(ERRTYPE_PARSE, "expected ')' at end of param list");
+    } else if (ctx->cur_tok->type == TOKTYPE_COMMA) {
       parser_eat(ctx);
     } else if (ctx->cur_tok->type != TOKTYPE_RPAREN) {
       log_error(ERRTYPE_PARSE, "expected ')' at end of param list");
@@ -176,6 +178,15 @@ cvector_vector_type(Param *) parse_paramlist(ParseContext *ctx) {
 
 Param *parse_param(ParseContext *ctx) {
   Param *p = malloc(sizeof(Param));
+  p->variadic = false;
+  if (ctx->cur_tok->type == TOKTYPE_PERIOD && ctx->toks[ctx->tok_ptr + 1]->type == TOKTYPE_PERIOD && ctx->toks[ctx->tok_ptr + 2]->type == TOKTYPE_PERIOD) {
+    p->variadic = true;
+    parser_eat(ctx);
+    parser_eat(ctx);
+    parser_eat(ctx);
+    return p;
+  }
+
   p->mut = false;
   if (ctx->cur_tok->type == TOKTYPE_MUT) {
     p->mut = true;
@@ -195,6 +206,8 @@ Expr *ptr_type_make(Expr *to) {
 }
 
 Expr *parse_type_expr(ParseContext *ctx) {
+  if (ctx->cur_tok->type == TOKTYPE_ARRAY)
+    return parse_array_type_expr(ctx);
   if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END)
     return parse_primitive_type_expr(ctx);
 
@@ -215,6 +228,24 @@ Expr *parse_type_expr(ParseContext *ctx) {
       log_error(ERRTYPE_PARSE, "unimplemented type expression");
   }
   return NULL;
+}
+
+Expr *parse_array_type_expr(ParseContext *ctx) {
+  parser_expect(ctx, TOKTYPE_ARRAY, "expected 'array'");
+  parser_expect(ctx, TOKTYPE_CMP_LT, "expected '<' in array type");
+  Expr *ty = parse_type_expr(ctx);
+  parser_expect(ctx, TOKTYPE_COMMA, "expected ',' in array type");
+  if (ctx->cur_tok->type != TOKTYPE_INT)
+    log_error(ERRTYPE_PARSE, "expected const int in array type length");
+  int len = atoi(ctx->cur_tok->value);
+  parser_eat(ctx);
+  parser_expect(ctx, TOKTYPE_CMP_GT, "expected '>' in array type");
+  Expr *e = malloc(sizeof *e);
+  e->type = EXPRTYPE_ARRAY;
+  e->value.array_type = malloc(sizeof *e->value.array_type);
+  e->value.array_type->type = ty;
+  e->value.array_type->len = len;
+  return e;
 }
 
 Expr *parse_struct_type_expr(ParseContext *ctx) {
@@ -320,7 +351,7 @@ Expr *parse_primitive_type_expr(ParseContext *ctx) {
 }
 
 Stmt *parse_stmt(ParseContext *ctx) {
-  if (ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END)
+  if ((ctx->cur_tok->type > TOKTYPE_TYPES_BEGIN && ctx->cur_tok->type < TOKTYPE_TYPES_END) || ctx->cur_tok->type == TOKTYPE_ARRAY)
     return parse_var_decl(ctx, false, false);
   switch (ctx->cur_tok->type) {
     case TOKTYPE_MUT:
@@ -581,8 +612,7 @@ Expr *parse_primary_expr(ParseContext *ctx) {
             x = parse_prop_access_expr(ctx, x, false);
             break;
           default:
-            printf("expected identifier following '.' in binary operation expression: %s\n", ctx->cur_tok->value);
-            exit(1);
+            log_error(ERRTYPE_PARSE, "expected identifier following '.' in binary operation expression: %s", ctx->cur_tok->value);
         }
         break;
       case TOKTYPE_ARROW:
@@ -592,8 +622,7 @@ Expr *parse_primary_expr(ParseContext *ctx) {
             x = parse_prop_access_expr(ctx, x, true);
             break;
           default:
-            printf("expected identifier following '->' in binary operation expression: %s\n", ctx->cur_tok->value);
-            exit(1);
+            log_error(ERRTYPE_PARSE, "expected identifier following '->' in binary operation expression: %s", ctx->cur_tok->value);
         }
         break;
       case TOKTYPE_LPAREN:
@@ -701,6 +730,9 @@ Expr *parse_basic_lit(ParseContext *ctx) {
       lit->value.basic_lit->value.float_lit = malloc(sizeof *lit->value.basic_lit->value.float_lit);
       lit->value.basic_lit->value.float_lit->bits = 32;
       lit->value.basic_lit->value.float_lit->value = atoi(tok->value);
+      break;
+    case TOKTYPE_STRING_LIT:
+      lit->value.basic_lit->value.str_lit = tok->value;
       break;
     default:
       log_error(ERRTYPE_PARSE, "unimplemented basic lit type");

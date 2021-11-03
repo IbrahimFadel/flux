@@ -1,11 +1,11 @@
 pkg main
 
-type string struct {
-	i8 *buf;
-	u64 len;
-	u64 capacity;
+type test struct {
+	i32 v;
 }
 
 fn main() {
-	string *s = (string *) malloc(sizeof string);
+	test *t = (test *)malloc(sizeof test);
+	t->v = 0;
+	printf("Hello, world: %d\n", t->v);
 }

@@ -427,7 +427,33 @@ void typecheck_binop(TypecheckContext *ctx, BinaryExpr *binop) {
   typecheck_expr(ctx, binop->y);
 }
 
+char *replace_str(char *str, char *orig, char *rep, int start) {
+  static char temp[4096];
+  static char buffer[4096];
+  char *p;
+
+  strcpy(temp, str + start);
+
+  if (!(p = strstr(temp, orig)))  // Is 'orig' even in 'temp'?
+    return temp;
+
+  strncpy(buffer, temp, p - temp);  // Copy characters from 'temp' start to 'orig' str
+  buffer[p - temp] = '\0';
+
+  sprintf(buffer + (p - temp), "%s%s", rep, p + strlen(orig));
+  sprintf(str + start, "%s", buffer);
+
+  return str;
+}
+
 void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit) {
+  if (lit->type == TOKTYPE_STRING_LIT) {
+    char *str = replace_str((char *)lit->value.str_lit, "\\n", "\n", 0);
+    str = replace_str(str, "\\r", "\r", 0);
+    str = replace_str(str, "\\t", "\t", 0);
+    lit->value.str_lit = str;
+    return;
+  };
   if (ctx->expecting_type->type != EXPRTYPE_PRIMITIVE) {
     log_error(ERRTYPE_TYPECHECK, "expected primitive type");
   }
@@ -442,25 +468,21 @@ void typecheck_basic_lit(TypecheckContext *ctx, BasicLitExpr *lit) {
 void typecheck_function_call(TypecheckContext *ctx, FnCall *call) {
   FnDecl *callee_fn_decl = get_fn_decl_by_callee_expr(ctx, call->callee);
   unsigned call_num_args = cvector_size(call->args);
-  unsigned fn_decl_num_args = cvector_size(callee_fn_decl->params);
-  if (callee_fn_decl->receiver) fn_decl_num_args--;
-  if (call_num_args != fn_decl_num_args) {
-    log_error(ERRTYPE_TYPECHECK, "incorrect number of arguments supplied to function call");
-  }
+  // unsigned fn_decl_num_args = cvector_size(callee_fn_decl->params);
+  // if (callee_fn_decl->params[fn_decl_num_args - 1]->variadic) fn_decl_num_args--;
+  // if (callee_fn_decl->receiver) fn_decl_num_args--;
+  // if (call_num_args != fn_decl_num_args) {
+  // log_error(ERRTYPE_TYPECHECK, "incorrect number of arguments supplied to function call");
+  // }
   unsigned i;
   for (i = 0; i < call_num_args; i++) {
-    unsigned j;
-    for (j = 0; j < fn_decl_num_args; j++) {
-      Param *p = callee_fn_decl->params[j];
-      if (callee_fn_decl->receiver) {
-        p = callee_fn_decl->params[j + 1];
-      }
-      if (p->type->type == EXPRTYPE_PRIMITIVE && call->args[i]->type == EXPRTYPE_BASIC_LIT) {
-        TokenType needed_type = p->type->value.primitive_type->type;
-        BasicLitExpr *lit = call->args[i]->value.basic_lit;
-        coerce_basic_lit_to_type(lit, needed_type);
-      }
+    Param *p = callee_fn_decl->params[i];
+    if (callee_fn_decl->receiver) {
+      p = callee_fn_decl->params[i + 1];
     }
+    ctx->expecting_type = p->type;
+    if (p->variadic) break;
+    typecheck_expr(ctx, call->args[i]);
   }
 }
 

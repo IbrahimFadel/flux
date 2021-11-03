@@ -68,6 +68,7 @@ Expr *parse_indexed_memory_access(ParseContext *ctx, Expr *x);
 Expr *parse_prop_access_expr(ParseContext *ctx, Expr *x, bool ptr_access);
 Expr *parse_sizeof_expr(ParseContext *ctx);
 Expr *parse_type_cast_expr(ParseContext *ctx);
+Expr *parse_array_type_expr(ParseContext *ctx);
 
 void parse_pkg_file_tokens(ParseContext *ctx);
 

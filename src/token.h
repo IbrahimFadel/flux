@@ -63,6 +63,8 @@ typedef enum TokenType {
 
   TOKTYPE_TYPES_BEGIN,
 
+  TOKTYPE_ARRAY,
+
   TOKTYPE_I64,
   TOKTYPE_I32,
   TOKTYPE_I16,

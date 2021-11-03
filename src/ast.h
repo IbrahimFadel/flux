@@ -23,6 +23,7 @@ typedef enum ExprType {
   EXPRTYPE_PROP_ACCESS,
   EXPRTYPE_SIZEOF,
   EXPRTYPE_TYPE_CAST,
+  EXPRTYPE_ARRAY,
 } ExprType;
 
 typedef enum StmtType {
@@ -138,6 +139,11 @@ typedef struct TypeCastExpr {
   struct Expr *x;
 } TypeCastExpr;
 
+typedef struct ArrayTypeExpr {
+  struct Expr *type;
+  unsigned len;
+} ArrayTypeExpr;
+
 typedef struct Expr {
   ExprType type;
   union {
@@ -154,6 +160,7 @@ typedef struct Expr {
     struct PropAccessExpr *prop_access;
     struct Expr *sizeof_operation;
     struct TypeCastExpr *typecast;
+    struct ArrayTypeExpr *array_type;
   } value;
 } Expr;
 
@@ -174,6 +181,7 @@ typedef struct FnReceiver {
 } FnReceiver;
 
 typedef struct Param {
+  bool variadic;
   bool mut;
   Expr *type;
   const char *name;
