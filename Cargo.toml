@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+	"pi",
+	"pi-ast",
+	"pi-parser",
+]

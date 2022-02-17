@@ -1,6 +1,0 @@
-[submodule "lib/sds"]
-	path = lib/sds
-	url = https://github.com/antirez/sds.gitlib/sds
-[submodule "lib/c-vector"]
-	path = lib/c-vector
-	url = https://github.com/eteran/c-vector.git
