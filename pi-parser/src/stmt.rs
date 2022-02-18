@@ -8,12 +8,6 @@ pub fn block(input: &str) -> IResult<&str, ast::BlockStmt> {
         many0(delimited(opt(ws), stmt_, opt(ws))),
         preceded(opt(ws), char('}')),
     )(input);
-    // let x = map(block_stmt, |vals| {
-    //     return match vals {
-    //         Some(x) => x,
-    //         _ => Vec::new(),
-    //     };
-    // })(input);
     return block_stmt;
 }
 
@@ -21,7 +15,7 @@ fn stmt_(input: &str) -> IResult<&str, ast::Stmt> {
     let x = alt((
         map(var_decl_stmt, ast::Stmt::VarDecl),
         map(if_, ast::Stmt::If),
-        // map(for_, ast::Stmt::For),
+        map(expr::call, ast::Stmt::ExprStmt),
     ))(input);
     return x;
 }

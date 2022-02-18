@@ -1,5 +1,19 @@
 use super::*;
 
+pub fn call(input: &str) -> IResult<&str, ast::Expr> {
+    let call_args = separated_list0(char(','), delimited(opt(ws), expr, opt(ws)));
+    let call = tuple((
+        expr,
+        delimited(char('('), call_args, char(')')),
+        delimited(opt(ws), char(';'), opt(ws)),
+    ));
+    let x = map(call, |(callee, args, _)| {
+        let y: Vec<Box<ast::Expr>> = args.into_iter().map(|x| Box::from(x)).collect();
+        ast::Expr::CallExpr(ast::CallExpr::new(Box::from(callee), y))
+    })(input);
+    return x;
+}
+
 pub fn type_expr(input: &str) -> IResult<&str, ast::Expr> {
     let res = alt((
         map(tag("i64"), |_| {
@@ -14,15 +28,28 @@ pub fn type_expr(input: &str) -> IResult<&str, ast::Expr> {
         map(tag("u32"), |_| {
             ast::Expr::PrimitiveType(ast::PrimitiveType::new(ast::PrimitiveKind::U32))
         }),
+        map(ident, |x| ast::Expr::Ident(ast::Ident::from(x))),
     ))(input);
     return res;
 }
 
 pub fn expr(input: &str) -> IResult<&str, ast::Expr> {
-    let (mut rest, mut curr) = atom(input).unwrap();
+    let (mut rest, mut curr) = atom(input)?;
 
     match pair(
-        delimited(opt(ws), alt((tag("=="), tag("!="))), opt(ws)),
+        delimited(
+            opt(ws),
+            alt((
+                tag("=="),
+                tag("!="),
+                tag("+"),
+                tag("-"),
+                tag("*"),
+                tag("/"),
+                tag("::"),
+            )),
+            opt(ws),
+        ),
         atom,
     )(rest)
     {
@@ -30,6 +57,11 @@ pub fn expr(input: &str) -> IResult<&str, ast::Expr> {
             let binop = match op {
                 "==" => ast::OpKind::CmpEq,
                 "!=" => ast::OpKind::CmpNEq,
+                "+" => ast::OpKind::Plus,
+                "-" => ast::OpKind::Minus,
+                "*" => ast::OpKind::Asterisk,
+                "/" => ast::OpKind::Slash,
+                "::" => ast::OpKind::Doublecolon,
                 _ => ast::OpKind::Illegal,
             };
             rest = r;
@@ -69,10 +101,12 @@ pub fn expr(input: &str) -> IResult<&str, ast::Expr> {
 }
 
 fn atom(input: &str) -> IResult<&str, ast::Expr> {
-    alt((
+    let x = alt((
         map(float_lit, ast::Expr::FloatLit),
         map(int_lit, ast::Expr::IntLit),
-    ))(input)
+        map(utils::ident, |v| ast::Expr::Ident(ast::Ident::from(v))),
+    ))(input);
+    return x;
 }
 
 fn int_lit(input: &str) -> IResult<&str, ast::IntLit> {

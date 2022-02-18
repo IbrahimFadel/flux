@@ -1,13 +1,18 @@
 use smol_str::SmolStr;
 
+mod print;
+
 #[derive(Debug)]
 pub struct AST {
-    pub functions: Vec<FnDecl>,
+    pub top_level_declarations: Vec<Decl>,
+    // pub functions: Vec<FnDecl>,
 }
 
 impl AST {
-    pub fn new(functions: Vec<FnDecl>) -> AST {
-        AST { functions }
+    pub fn new(top_level_declarations: Vec<Decl>) -> AST {
+        AST {
+            top_level_declarations,
+        }
     }
 }
 
@@ -71,6 +76,7 @@ pub enum OpKind {
     CmpNEq,
     And,
     Or,
+    Doublecolon,
     Illegal,
 }
 
@@ -81,6 +87,19 @@ pub enum Expr {
     IntLit(IntLit),
     FloatLit(FloatLit),
     PrimitiveType(PrimitiveType),
+    CallExpr(CallExpr),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallExpr {
+    callee: Box<Expr>,
+    args: Vec<Box<Expr>>,
+}
+
+impl CallExpr {
+    pub fn new(callee: Box<Expr>, args: Vec<Box<Expr>>) -> CallExpr {
+        CallExpr { callee, args }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -129,6 +148,7 @@ pub enum Stmt {
     VarDecl(VarDecl),
     If(If),
     For(For),
+    ExprStmt(Expr),
 }
 
 #[derive(Debug, PartialEq)]

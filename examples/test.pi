@@ -1,7 +1,3 @@
-fn main<T,Y>(mut i32 argc, i32 argv) -> i32 {
-	i32 x = 0;
-	i32 y, z = 1, 2;
-	if 1 == 2 {
-		
-	}
+fn test<T>(T x, T y, mut u32 z) -> i32 {
+	math::sum(x, y, z);
 }

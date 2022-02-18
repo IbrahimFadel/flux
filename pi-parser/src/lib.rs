@@ -13,17 +13,25 @@ use nom::sequence::*;
 use nom::IResult;
 
 mod decl;
-mod expr;
+pub mod expr;
 mod stmt;
 mod token;
 mod utils;
 
 pub fn parse(input: &str) -> Box<ast::AST> {
-    let fns = Vec::new();
-    let ast = ast::AST::new(fns);
+    let mut top_level_declarations = Vec::new();
 
-    let res = top_level_decl(input);
-
+    let (_, decl) = top_level_decl(input).unwrap();
+    top_level_declarations.push(decl);
+    // let top_level_declarations = many0(top_level_decl)(input);
+    // println!("{:?}", top_level_declarations);
+    // let res = match top_level_declarations {
+    //     Ok((_, decls)) => decls,
+    //     Err(_) => vec![],
+    // };
+    // println!("{:?}", res);
+    // let ast = ast::AST::new(vec![]);
+    let ast = ast::AST::new(top_level_declarations);
     return Box::new(ast);
 }
 
