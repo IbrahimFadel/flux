@@ -1,3 +1,0 @@
-fn test<T>(T x, T y, mut u32 z) -> i32 {
-	math::sum(x, y, z);
-}

@@ -1,12 +1,11 @@
 [package]
-name = "pi-parser"
+name = "pi-cfg"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pi-ast = { path = "../pi-ast" }
-nom = "5.1"
-nom_locate = "2.0"
-smol_str = "0.1.21"
+toml = "0.5.8"
+serde = "1.0.136"
+serde_derive = "1.0.136"

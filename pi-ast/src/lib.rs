@@ -21,6 +21,7 @@ impl AST {
 pub enum Decl {
     FnDecl(FnDecl),
     TypeDecl(TypeDecl),
+    Error,
 }
 
 #[derive(Debug, PartialEq)]
@@ -88,6 +89,8 @@ pub enum Expr {
     FloatLit(FloatLit),
     PrimitiveType(PrimitiveType),
     CallExpr(CallExpr),
+    Paren(Box<Expr>),
+    Error,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -192,5 +195,5 @@ impl For {
 pub type Ident = SmolStr;
 pub type IntLit = i128;
 pub type FloatLit = f64;
-pub type GenericTypes = Vec<SmolStr>;
+pub type GenericTypes = Vec<Ident>;
 pub type BlockStmt = Vec<Stmt>;

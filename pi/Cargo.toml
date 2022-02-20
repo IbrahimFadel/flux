@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 pi-parser = { path = "../pi-parser" }
+colored = "2.0.0"
