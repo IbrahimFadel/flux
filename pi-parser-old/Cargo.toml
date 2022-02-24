@@ -1,10 +1,12 @@
 [package]
-name = "pi"
+name = "pi-parser"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pi-lexer = { path = "../pi-lexer" }
-colored = "2.0.0"
+pi-ast = { path = "../pi-ast" }
+nom = "5.1"
+nom_locate = "2.0"
+smol_str = "0.1.21"

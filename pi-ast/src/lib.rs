@@ -26,7 +26,7 @@ pub enum Decl {
 
 #[derive(Debug, PartialEq)]
 pub struct FnDecl {
-    pub name: SmolStr,
+    pub name: Expr,
     pub generics: GenericTypes,
     pub params: Vec<FnParam>,
     pub ret_ty: Expr,
@@ -48,7 +48,7 @@ impl FnParam {
 
 impl FnDecl {
     pub fn new(
-        name: SmolStr,
+        name: Expr,
         generics: GenericTypes,
         params: Vec<FnParam>,
         ret_ty: Expr,
@@ -152,6 +152,8 @@ pub enum Stmt {
     If(If),
     For(For),
     ExprStmt(Expr),
+    Return(Return),
+    Error,
 }
 
 #[derive(Debug, PartialEq)]
@@ -192,8 +194,19 @@ impl For {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Return {
+    val: Option<Expr>,
+}
+
+impl Return {
+    pub fn new(val: Option<Expr>) -> Return {
+        Return { val }
+    }
+}
+
 pub type Ident = SmolStr;
 pub type IntLit = i128;
 pub type FloatLit = f64;
-pub type GenericTypes = Vec<Ident>;
+pub type GenericTypes = Vec<Expr>;
 pub type BlockStmt = Vec<Stmt>;

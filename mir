@@ -1,0 +1,27 @@
+LOCAL:
+	mut,
+	type
+
+INSTRUCTIONS:
+	STACK_ALLOC(LOCAL)
+	HEAP_ALLOC(usize)
+	CHECKED_ADD(x, y) -> { result, overflowed }
+	CHECKED_MUL(x, y) -> { result, overflowed } (do fmul and stuff during LLVM IR stage)
+	EQ(EXPR, EXPR) -> bool
+	JMP_EQ(BOOL, BB1, BB2)
+
+BASIC_BLOCK:
+	statements
+
+MEM_REF:
+	LOCAL
+
+RVAL:
+	LOCAL | CONST_VAL
+
+ASSIGN:
+	MEM_REF
+	RVAL
+
+STORAGE_LIVE(LOCAL) llvm.lifetime.start
+STORAGE_DEAD(LOCAL) llvm.lifetime.end

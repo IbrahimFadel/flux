@@ -2,6 +2,7 @@
 
 members = [
 	"pi",
+	"pi-lexer",
 	"pi-ast",
-	"pi-parser",
+	"pi-error",
 ]
