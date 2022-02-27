@@ -1,197 +1,160 @@
-use nom::branch::alt;
-use nom::bytes::complete::{is_a, tag, take_till1, take_while};
-use nom::character::complete::{anychar, char, digit1, hex_digit1, multispace1, not_line_ending};
-use nom::combinator::{all_consuming, map, not, opt, recognize, rest, verify};
-use nom::multi::{many0, many1, many1_count, separated_list};
-use nom::sequence::{delimited, pair, preceded, terminated, tuple};
-use pi_ast as ast;
-use smol_str::SmolStr;
-use std::cell::RefCell;
+use std::ops::Range;
+
+use pi_ast::OpKind;
+use pi_error::{filesystem::FileId, PIError, PIErrorCode};
+use pi_lexer::token::{Token, TokenKind};
 
 mod decl;
-pub mod err;
 mod expr;
 mod stmt;
-mod utils;
 
-use ast::{Decl, Expr, Stmt};
-use err::{expect, Error, LocatedSpan, PIResult, State, ToRange};
-use utils::ws;
-
-fn top_level_declarations(input: LocatedSpan) -> PIResult<Vec<Decl>> {
-    let decls = many0(decl::fn_);
-    return decls(input);
-    // let decls = map(decl::fn_, |x| vec![x]);
-    // terminated(
-    //     decls,
-    //     expect(not(anychar), "expected top level declaration or EOF"),
-    // )(input)
+struct Parser<'a> {
+	program: &'a str,
+	tokens: Vec<Token>,
+	offset: usize,
+	file_id: FileId,
+	errors: &'a mut Vec<PIError>,
 }
 
-pub fn parse(source: &str) -> (Vec<Decl>, Vec<Error>) {
-    let errors = RefCell::new(Vec::new());
-    let input = LocatedSpan::new_extra(source, State(&errors));
-    let (_, decls) = top_level_declarations(input).expect(
-        "internal compiler error: parser should not fail. A bug report would be appreciated",
-    );
-    // println!("{:?}", errors);
-    (decls, errors.into_inner())
+impl<'a> Parser<'a> {
+	pub fn new(
+		program: &'a str,
+		tokens: Vec<Token>,
+		file_id: FileId,
+		errors: &'a mut Vec<PIError>,
+	) -> Parser<'a> {
+		Parser {
+			program,
+			tokens,
+			offset: 0,
+			file_id,
+			errors,
+		}
+	}
+
+	pub fn error(
+		&self,
+		msg: String,
+		code: PIErrorCode,
+		labels: Vec<(String, Range<usize>)>,
+	) -> PIError {
+		PIError::new(msg, code, labels, self.file_id)
+	}
+
+	pub fn fatal_error(&mut self, error: PIError) {
+		self.errors.push(error);
+		self.offset = self.tokens.len() - 1;
+	}
+
+	pub fn tok_val(program: &str, tok: &Token) -> String {
+		String::from(&program[tok.span.clone()])
+	}
+
+	pub fn get_tokprec(kind: &TokenKind) -> i8 {
+		match kind {
+			TokenKind::Eq => 2,
+			TokenKind::CmpAnd => 3,
+			TokenKind::CmpOr => 5,
+			TokenKind::CmpLT => 10,
+			TokenKind::CmpGT => 10,
+			TokenKind::CmpLTE => 10,
+			TokenKind::CmpGTE => 10,
+			TokenKind::CmpEQ => 10,
+			TokenKind::CmpNE => 10,
+			TokenKind::Plus => 20,
+			TokenKind::Minus => 20,
+			TokenKind::Asterisk => 40,
+			TokenKind::Slash => 40,
+			TokenKind::Period => 50,
+			TokenKind::Arrow => 50,
+			_ => -1,
+		}
+	}
+
+	pub fn next(&mut self) -> &Token {
+		self.offset += 1;
+		if self.offset == self.tokens.len() {
+			self.fatal_error(self.error(
+				"unexpected EOF".to_owned(),
+				PIErrorCode::ParseUnexpectedEOF,
+				vec![],
+			))
+		}
+		self.tok()
+	}
+
+	pub fn tok(&self) -> &Token {
+		&self.tokens[self.offset]
+	}
+
+	pub fn expect(&mut self, kind: TokenKind, error: PIError) -> &Token {
+		if self.tok().kind != kind {
+			self.errors.push(error);
+		}
+		self.tok()
+	}
+
+	pub fn expect_range(&mut self, begin: TokenKind, end: TokenKind, error: PIError) -> &Token {
+		if self.tok().kind <= begin && self.tok().kind >= end {
+			self.errors.push(error);
+		}
+		self.tok()
+	}
+
+	fn token_kind_to_op_kind(&self, kind: &TokenKind) -> OpKind {
+		match kind {
+			TokenKind::Plus => OpKind::Plus,
+			TokenKind::Minus => OpKind::Minus,
+			TokenKind::Asterisk => OpKind::Asterisk,
+			TokenKind::Slash => OpKind::Slash,
+			TokenKind::CmpEQ => OpKind::CmpEQ,
+			TokenKind::CmpNE => OpKind::CmpNE,
+			TokenKind::CmpLT => OpKind::CmpLT,
+			TokenKind::CmpLTE => OpKind::CmpLTE,
+			TokenKind::CmpGT => OpKind::CmpGT,
+			TokenKind::CmpGTE => OpKind::CmpGTE,
+			_ => OpKind::Illegal,
+		}
+	}
+
+	pub fn top_level_decls(&mut self) {
+		let mut fn_decls = vec![];
+
+		while self.tok().kind != TokenKind::EOF {
+			match self.tok().kind {
+				TokenKind::Fn => fn_decls.push(self.fn_decl()),
+				_ => {
+					self.errors.push(self.error(
+						"expected top level declaration".to_owned(),
+						PIErrorCode::ParseExpectedTopLevelDecl,
+						vec![
+							(
+								format!(
+									"expected top level declaration, instead got `{}`",
+									Parser::tok_val(self.program, self.tok())
+								),
+								self.tok().span.clone(),
+							),
+							(
+								"(hint) declare a function, type or global variable".to_owned(),
+								self.tok().span.clone(),
+							),
+						],
+					));
+					self.next();
+				}
+			}
+		}
+
+		println!("{:#?}", fn_decls);
+	}
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::ops::Range;
+pub fn parse_tokens(program: &str, tokens: Vec<Token>, file_id: FileId) -> ((), Vec<PIError>) {
+	let mut errors = vec![];
+	let mut parse = Parser::new(program, tokens, file_id, &mut errors);
+	// println!("{:?}", parse.tokens);
+	parse.top_level_decls();
 
-    #[test]
-    fn expr_parsing() {
-        let ident = Expr::Ident(ast::Ident::from("foo"));
-        let programs = [
-            ("foo", ident.clone()),
-            ("(foo)", Expr::Paren(Box::from(ident.clone()))),
-            ("(foo))", Expr::Paren(Box::from(ident.clone()))),
-        ];
-        let expected_errors: Vec<Vec<Error>> = vec![
-            vec![],
-            vec![],
-            vec![Error(
-                Range { start: 5, end: 6 },
-                String::from("expected EOF"),
-            )],
-        ];
-
-        let mut i = 0;
-        for (src, target) in programs {
-            let (output, errs) = parse(src);
-            // assert_eq!(output, target);
-            assert!(errors_eq(&expected_errors[i], &errs));
-            i += 1;
-        }
-    }
-
-    fn errors_eq(x: &[Error], y: &[Error]) -> bool {
-        if x.len() != y.len() {
-            return false;
-        };
-        for xerr in x {
-            for yerr in y {
-                if xerr.0 != yerr.0 {
-                    return false;
-                }
-                if xerr.1 != yerr.1 {
-                    return false;
-                }
-            }
-        }
-        true
-    }
+	((), errors)
 }
-
-// use std::cell::RefCell;
-// use std::ops::Range;
-// // use std::cell::RefCell;
-
-// use pi_ast as ast;
-
-// use nom::branch::alt;
-// use nom::bytes::complete::{take, take_till1, take_while};
-// use nom::character::complete::{anychar, char};
-// use nom::combinator::{all_consuming, map, not, recognize, rest, verify};
-// use nom::sequence::{delimited, preceded, terminated};
-// // use utils::{ident, ws};
-
-// // use smol_str::SmolStr;
-
-// // use nom::branch::*;
-// // use nom::bytes::complete::*;
-// // use nom::character::complete::*;
-// // use nom::combinator::all_consuming;
-// // use nom::combinator::*;
-// // use nom::multi::*;
-// // use nom::sequence::*;
-// // use nom::IResult;
-
-// // mod decl;
-// mod err;
-// // pub mod expr;
-// // mod stmt;
-// // mod token;
-// // mod utils;
-
-// use ast::{Expr, Ident};
-
-// use err::{expect, Error, LocatedSpan, PIResult, State};
-
-// pub fn parse(input: &str) -> Box<ast::AST> {
-//     let errors = RefCell::new(Vec::new());
-//     let input = LocatedSpan::new_extra(input, State(&errors));
-//     let (_, expr) = all_consuming(source_file)(input).expect("parser cannot fail");
-//     // (expr, errors.into_inner())
-
-//     let ast = ast::AST::new(vec![]);
-//     return Box::new(ast);
-// }
-
-// fn ident(input: LocatedSpan) -> PIResult<Expr> {
-//     let first = verify(anychar, |c| c.is_ascii_alphabetic() || *c == '_');
-//     let rest = take_while(|c: char| c.is_ascii_alphanumeric() || "_-'".contains(c));
-//     let ident = recognize(preceded(first, rest));
-//     map(ident, |span: LocatedSpan| {
-//         Expr::Ident(Ident::from(span.fragment().to_string()))
-//     })(input)
-// }
-
-// fn error(input: LocatedSpan) -> PIResult<Expr> {
-//     map(take_till1(|c| c == ')'), |span: LocatedSpan| {
-//         let err = Error(span.to_range(), format!("unexpected `{}`", span.fragment()));
-//         span.extra.report_error(err);
-//         Expr::Error
-//     })(input)
-// }
-
-// fn expr(input: LocatedSpan) -> PIResult<Expr> {
-//     alt((ident, error))(input)
-// }
-
-// fn source_file(input: LocatedSpan) -> PIResult<Expr> {
-//     let expr = alt((expr, map(take(0usize), |_| Expr::Error)));
-//     terminated(expr, preceded(expect(not(anychar), "expected EOF"), rest))(input)
-// }
-
-// pub fn parse(input: &str) -> Box<ast::AST> {
-//     let errors: RefCell<Vec<Error>> = RefCell::new(Vec::new());
-//     let input = LocatedSpan::new_extra(input, State(&errors));
-//     let (_, expr) = all_consuming(parse_source)(input).expect("parser cannot fail");
-//     // let (_, expr) = all_consuming(source_file)(input).expect("parser cannot fail");
-//     // (expr, errors.into_inner())
-//     // let mut top_level_declarations = Vec::new();
-//     // let (_, decl) = top_level_decl(input).unwrap();
-//     // top_level_declarations.push(decl);
-//     // let ast = ast::AST::new(top_level_declarations);
-//     let ast = ast::AST::new(vec![]);
-//     return Box::new(ast);
-// }
-
-// fn parse_source(input: &str) -> PIResult<ast::Expr> {
-//     let expr = alt((expr::expr, map(take(0usize), |_| ast::Expr::Error)));
-//     terminated(expr, preceded(expect(not(anychar), "expected EOF"), rest))(input)
-// }
-
-// fn top_level_decl(input: &str) -> PIResult<ast::Decl> {
-//     alt((
-//         map(decl::fn_, ast::Decl::FnDecl),
-//         map(decl::type_, ast::Decl::TypeDecl),
-//     ))(input)
-// }
-
-// fn generic_types(input: &str) -> PIResult<ast::GenericTypes> {
-//     let generics = delimited(
-//         preceded(opt(ws), char('<')),
-//         separated_list1(char(','), delimited(opt(ws), ident, opt(ws))),
-//         preceded(opt(ws), char('>')),
-//     );
-//     let x = map(generics, |vals| {
-//         return vals.into_iter().map(|x| SmolStr::from(x)).collect();
-//     })(input);
-//     return x;
-// }

@@ -1,85 +1,225 @@
-use super::*;
+use pi_ast::{BlockStmt, If, Return, Stmt, VarDecl};
+use pi_error::PIErrorCode;
+use pi_lexer::token::TokenKind;
 
-pub fn block(input: LocatedSpan) -> PIResult<ast::BlockStmt> {
-    let block_stmt = delimited(
-        preceded(
-            opt(ws),
-            expect(char('{'), "expected '{' at beginning of block"),
-        ),
-        many0(delimited(opt(ws), stmt_, opt(ws))),
-        preceded(opt(ws), expect(char('}'), "expected '}' at end of block")),
-    )(input);
-    return block_stmt;
+use super::Parser;
+
+impl<'a> Parser<'a> {
+	pub fn block(&mut self) -> BlockStmt {
+		self.expect(
+			TokenKind::LBrace,
+			self.error(
+				"expected `{` at beginning of block".to_owned(),
+				PIErrorCode::ParseExpectedLBraceInBlock,
+				vec![(
+					format!(
+						"expected `{{` at beginning of block, instead got {}",
+						Parser::tok_val(self.program, self.tok())
+					),
+					self.tok().span.clone(),
+				)],
+			),
+		);
+		if self.tok().kind == TokenKind::LBrace {
+			self.next();
+		}
+
+		let mut stmts = vec![];
+		while self.tok().kind != TokenKind::RBrace && self.tok().kind != TokenKind::EOF {
+			let stmt = self.stmt();
+			stmts.push(stmt);
+		}
+
+		self.expect(
+			TokenKind::RBrace,
+			self.error(
+				"expected `}` at end of block".to_owned(),
+				PIErrorCode::ParseExpectedRBraceInBlock,
+				vec![(
+					format!(
+						"expected `}}` at end of block, instead got {}",
+						Parser::tok_val(self.program, self.tok())
+					),
+					self.tok().span.clone(),
+				)],
+			),
+		);
+		if self.tok().kind == TokenKind::RBrace {
+			self.next();
+		}
+
+		return stmts;
+	}
+
+	fn stmt(&mut self) -> Stmt {
+		if self.tok().kind > TokenKind::TypesBegin && self.tok().kind < TokenKind::TypesEnd {
+			return self.var_decl_stmt();
+		} else if self.tok().kind == TokenKind::Return {
+			return self.return_stmt();
+		} else if self.tok().kind == TokenKind::If {
+			return self.if_stmt();
+		}
+		Stmt::Error
+	}
+
+	fn if_stmt(&mut self) -> Stmt {
+		self.next();
+		let condition = self.expr();
+		let then = self.block();
+		let mut else_ = None;
+		if self.tok().kind == TokenKind::Else {
+			self.next();
+			if self.tok().kind == TokenKind::If {
+				let if_ = self.if_stmt();
+				else_ = Some(vec![if_]);
+			} else {
+				else_ = Some(self.block());
+			}
+		}
+		Stmt::If(If::new(Box::from(condition), then, else_))
+	}
+
+	fn return_stmt(&mut self) -> Stmt {
+		self.next();
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+			return Stmt::Return(Return::new(None));
+		}
+		let expr = self.expr();
+		self.expect(
+			TokenKind::Semicolon,
+			self.error(
+				"expected `;` after return statement".to_owned(),
+				PIErrorCode::ParseExpectedSemicolonAfterReturnStmt,
+				vec![],
+			),
+		);
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+		}
+		Stmt::Return(Return::new(Some(expr)))
+	}
+
+	fn var_decl_stmt(&mut self) -> Stmt {
+		let ty = self.type_expr();
+
+		if self.tok().kind != TokenKind::Ident {
+			self.errors.push(self.error(
+				"expected identifier in variable declaration".to_owned(),
+				PIErrorCode::ParseExpectedIdentVarDecl,
+				vec![(
+					format!(
+						"expected identifier in variable declaration, instead got `{}`",
+						Parser::tok_val(self.program, self.tok())
+					),
+					self.tok().span.clone(),
+				)],
+			));
+		}
+
+		let names_start = self.tok().span.start;
+		let mut names_end = self.tok().span.end;
+		let mut names = vec![];
+		while self.tok().kind != TokenKind::Eq && self.tok().kind != TokenKind::Semicolon {
+			names_end = self.tok().span.clone().end;
+			let name = self.ident();
+			names.push(name);
+			if self.tok().kind != TokenKind::Eq && self.tok().kind != TokenKind::Semicolon {
+				self.expect(
+					TokenKind::Comma,
+					self.error(
+						"expected `,` in variable declaration identifier list".to_owned(),
+						PIErrorCode::ParseExpectedCommaInVarDeclIdentList,
+						vec![(
+							format!(
+								"expected `,` in variable declaration identifier list, instead got `{}`",
+								Parser::tok_val(self.program, self.tok())
+							),
+							self.tok().span.clone(),
+						)],
+					),
+				);
+				if self.tok().kind == TokenKind::Comma {
+					self.next();
+				}
+			}
+		}
+
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+			return Stmt::VarDecl(VarDecl::new(ty, names, None));
+		}
+		self.expect(
+				TokenKind::Eq,
+				self.error(
+					"expected either `;` or `=` after variable declaration identifier list".to_owned(),
+					PIErrorCode::ParseExpectedSemicolonEqVarDeclIdentList,
+					vec![
+						(format!("expected either `;` or `=` after variable declaration identifier list, instead got `{}`", Parser::tok_val(self.program, self.tok())), self.tok().span.clone())
+					],
+				),
+			);
+		self.next();
+
+		let values_start = self.tok().span.start;
+		let mut values_end = self.tok().span.end;
+		let mut values = vec![];
+		while self.tok().kind != TokenKind::Semicolon {
+			values_end = self.tok().span.end;
+			let val = self.expr();
+			values.push(val);
+			if self.tok().kind == TokenKind::Comma {
+				self.next();
+				if self.tok().kind == TokenKind::Semicolon {
+					self.errors.push(self.error(
+						"expected expression after comma in variable declaration value list".to_owned(),
+						PIErrorCode::ParseExpectedExprAfterCommaVarDeclValueList,
+						vec![(
+							format!(
+								"expected expression after comma in variable declaration value list, instead got `{}`",
+								Parser::tok_val(self.program, self.tok())
+							),
+							self.tok().span.clone(),
+						)],
+					));
+					break;
+				}
+			} else if self.tok().kind != TokenKind::Semicolon {
+				self.errors.push(self.error(
+					"expected `;` after variable declaration".to_owned(),
+					PIErrorCode::ParseExpectedSemicolonAfterVarDecl,
+					vec![(
+						format!(
+							"expected `;` after variable declaration, instead got `{}`",
+							Parser::tok_val(self.program, self.tok())
+						),
+						self.tok().span.clone(),
+					)],
+				));
+				break;
+			}
+		}
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+		}
+
+		if names.len() > 1 && values.len() > 1 && values.len() != names.len() {
+			if names.len() > values.len() {
+				self.errors.push(self.error("more variables than values in variable declaration".to_owned(), PIErrorCode::ParseMoreIdentsThanValsVarDecl, vec![
+				(format!("more variables than values in variable declaration: {} values assigned to {} variables", values.len(), names.len()), names_start..self.tok().span.end),
+				(format!("{} variables declared", names.len()), names_start..names_end),
+				(format!("{} values assigned", values.len()), values_start..values_end),
+				("(hint) you can assign one value to multiple variables".to_owned(), names_start..self.tok().span.end),
+			]));
+			} else {
+				self.errors.push(self.error("more values than variables in variable declaration".to_owned(), PIErrorCode::ParseMoreValsThanIdentsVarDecl, vec![
+				(format!("more values than variables in variable declaration: {} values assigned to {} variables", values.len(), names.len()), names_start..self.tok().span.end),
+				(format!("{} variables declared", names.len()), names_start..names_end),
+				(format!("{} values assigned", values.len()), values_start..values_end),
+			]));
+			}
+		}
+
+		return Stmt::VarDecl(VarDecl::new(ty, names, Some(values)));
+	}
 }
-
-fn stmt_(input: LocatedSpan) -> PIResult<Stmt> {
-    let x = terminated(
-        alt((
-            map(var_decl_stmt, Stmt::VarDecl),
-            map(if_, Stmt::If),
-            map(return_, Stmt::Return),
-            map(expr::call, ast::Stmt::ExprStmt),
-        )),
-        delimited(
-            opt(ws),
-            expect(char(';'), "expected ';' after statement"),
-            opt(ws),
-        ),
-    )(input);
-    return x;
-}
-
-fn return_(input: LocatedSpan) -> PIResult<ast::Return> {
-    map(
-        preceded(delimited(opt(ws), tag("return"), opt(ws)), opt(expr::expr)),
-        |expr| ast::Return::new(expr),
-    )(input)
-}
-
-fn var_decl_stmt(input: LocatedSpan) -> PIResult<ast::VarDecl> {
-    let var_decl = tuple((
-        preceded(opt(ws), expr::type_expr),
-        delimited(
-            ws,
-            separated_list(char(','), preceded(opt(ws), expr::ident)),
-            opt(ws),
-        ),
-        opt(preceded(
-            char('='),
-            delimited(
-                ws,
-                separated_list(char(','), preceded(opt(ws), expr::expr)),
-                opt(ws),
-            ),
-        )),
-    ));
-    let x = map(var_decl, |(ty, names, values)| {
-        let n: Vec<SmolStr> = names
-            .into_iter()
-            .map(|x| ast::Ident::from(x.fragment()))
-            .collect();
-        if (1..n.len()).any(|i| n[i..].contains(&n[i - 1])) {
-            panic!("duplicate idents in var decl");
-        }
-        if let Some(ref v) = values {
-            let values_len = v.len();
-            if values_len != 1 && values_len != 0 {
-                if values_len != n.len() {
-                    panic!("invalid number of values in var decl");
-                }
-            }
-        }
-        return ast::VarDecl::new(ty, n, values);
-    })(input);
-    return x;
-}
-
-fn if_(input: LocatedSpan) -> PIResult<ast::If> {
-    let cond = preceded(tag("if"), preceded(ws, expr::expr));
-    let if_stmt = pair(cond, preceded(opt(ws), block));
-    map(if_stmt, |(cond, then)| ast::If::new(cond, then))(input)
-}
-
-// fn for_(input: &str) -> PIResult<ast::For> {
-//     Ok((input, ast::For::new()))
-// }

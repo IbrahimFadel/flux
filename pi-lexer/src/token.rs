@@ -1,85 +1,129 @@
-use codespan::Span;
+use std::ops::Range;
 
 #[derive(Debug)]
 pub struct Token {
-    pub kind: TokenKind,
-    pub span: Span,
+	pub kind: TokenKind,
+	pub span: Range<usize>,
 }
 
 impl Token {
-    pub fn new() -> Token {
-        Token {
-            kind: TokenKind::Illegal,
-            span: Span::new(0, 0),
-        }
-    }
+	pub fn new() -> Token {
+		Token {
+			kind: TokenKind::Illegal,
+			span: 0usize..0usize,
+		}
+	}
 
-    pub fn from(kind: TokenKind, span: Span) -> Token {
-        Token { kind, span }
-    }
+	pub fn from(kind: TokenKind, span: Range<usize>) -> Token {
+		Token { kind, span }
+	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, PartialOrd)]
 pub enum TokenKind {
-    LineComment,
-    BlockComment,
-    Whitespace,
-    Illegal,
+	LineComment,
+	BlockComment,
+	Whitespace,
+	Illegal,
+	EOF,
 
-    Pub,
-    Fn,
-    Return,
-    Mut,
-    Type,
-    Interface,
-    Struct,
-    Nil,
-    If,
-    Else,
+	Semicolon,
+	LParen,
+	RParen,
+	LBrace,
+	RBrace,
+	LBracket,
+	RBracket,
 
-    I64,
-    U64,
-    I32,
-    U32,
-    I16,
-    U16,
-    I8,
-    U8,
-    F64,
-    F32,
-    Bool,
+	Plus,
+	Minus,
+	Asterisk,
+	Ampersand,
+	Slash,
+	Comma,
+	Period,
+	Eq,
+	Arrow,
 
-    Int,
-    Float,
+	CmpNE,
+	CmpEQ,
+	CmpOr,
+	CmpAnd,
+	CmpLT,
+	CmpLTE,
+	CmpGT,
+	CmpGTE,
 
-    Ident,
+	Pub,
+	Fn,
+	Return,
+	Mut,
+	Type,
+	Interface,
+	Struct,
+	Nil,
+	If,
+	Else,
+
+	TypesBegin,
+
+	I64,
+	U64,
+	I32,
+	U32,
+	I16,
+	U16,
+	I8,
+	U8,
+	F64,
+	F32,
+	Bool,
+
+	TypesEnd,
+
+	BasicLitBegin,
+
+	Int,
+	Float,
+	StringLit,
+	CharLit,
+
+	BasicLitEnd,
+
+	Ident,
+}
+
+impl std::fmt::Display for TokenKind {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
 }
 
 pub fn lookup_keyword(v: &str) -> TokenKind {
-    match v {
-        "pub" => TokenKind::Pub,
-        "fn" => TokenKind::Fn,
-        "return" => TokenKind::Return,
-        "mut" => TokenKind::Mut,
-        "type" => TokenKind::Type,
-        "interface" => TokenKind::Interface,
-        "struct" => TokenKind::Struct,
-        "nil" => TokenKind::Nil,
-        "if" => TokenKind::If,
-        "else" => TokenKind::Else,
+	match v {
+		"pub" => TokenKind::Pub,
+		"fn" => TokenKind::Fn,
+		"return" => TokenKind::Return,
+		"mut" => TokenKind::Mut,
+		"type" => TokenKind::Type,
+		"interface" => TokenKind::Interface,
+		"struct" => TokenKind::Struct,
+		"nil" => TokenKind::Nil,
+		"if" => TokenKind::If,
+		"else" => TokenKind::Else,
 
-        "i64" => TokenKind::I64,
-        "u64" => TokenKind::U64,
-        "i32" => TokenKind::I32,
-        "u32" => TokenKind::U32,
-        "i16" => TokenKind::I16,
-        "u16" => TokenKind::U16,
-        "i8" => TokenKind::I8,
-        "u8" => TokenKind::U8,
-        "f64" => TokenKind::F64,
-        "f32" => TokenKind::F32,
-        "bool" => TokenKind::Bool,
+		"i64" => TokenKind::I64,
+		"u64" => TokenKind::U64,
+		"i32" => TokenKind::I32,
+		"u32" => TokenKind::U32,
+		"i16" => TokenKind::I16,
+		"u16" => TokenKind::U16,
+		"i8" => TokenKind::I8,
+		"u8" => TokenKind::U8,
+		"f64" => TokenKind::F64,
+		"f32" => TokenKind::F32,
+		"bool" => TokenKind::Bool,
 
-        _ => TokenKind::Ident,
-    }
+		_ => TokenKind::Ident,
+	}
 }

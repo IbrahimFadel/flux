@@ -6,7 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nom = "5.1"
-nom_locate = "2.0"
 codespan = "0.11.1"
 pi-error = { path = "../pi-error" }

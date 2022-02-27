@@ -1,172 +1,481 @@
-use std::{borrow::BorrowMut, str::Chars};
-
-use codespan::{ByteIndex, ByteOffset, RawIndex, Span};
-use nom::AsChar;
+use pi_error::{filesystem, PIError, PIErrorCode};
+use std::ops::Range;
 use token::{lookup_keyword, Token, TokenKind};
-mod token;
-use pi_error::{PIError, PIErrorCode};
 
-#[derive(Debug, Clone, Copy)]
-enum Mode {
-    Normal,
-    String,
-    LineComment,
-    BlockComment,
+pub mod token;
+
+struct Lexer<'a> {
+	offset: usize,
+	program: &'a str,
+	file_id: filesystem::FileId,
+	errors: &'a mut Vec<PIError>,
 }
 
-#[derive(Debug)]
-struct PISpan<'a> {
-    offset: usize,
-    line: u32,
-    fragment: &'a str,
-    errors: &'a mut Vec<PIError>,
+impl<'a> Lexer<'a> {
+	pub fn new(
+		program: &'a str,
+		file_id: filesystem::FileId,
+		errors: &'a mut Vec<PIError>,
+	) -> Lexer<'a> {
+		Lexer {
+			program,
+			offset: 0,
+			file_id,
+			errors,
+		}
+	}
+
+	fn ch(&self) -> char {
+		match self.program.chars().nth(self.offset) {
+			Some(x) => x,
+			_ => '\0',
+		}
+	}
+
+	fn peek(&self) -> char {
+		match self.program.chars().nth(self.offset + 1) {
+			Some(x) => x,
+			_ => '\0',
+		}
+	}
+
+	fn next(&mut self) {
+		self.offset += 1;
+	}
+
+	pub fn token(&mut self) -> Token {
+		let mut tok = Token::new();
+		self.whitespace();
+
+		let ch = self.ch();
+		if ch.is_alphabetic() {
+			tok.span = self.ident();
+			let s = &self.program[tok.span.clone()];
+			if s.len() > 1 {
+				tok.kind = lookup_keyword(s);
+			} else {
+				tok.kind = TokenKind::Ident;
+			}
+		} else if ch.is_digit(10) || (ch == '.' && self.peek().is_digit(10)) {
+			tok = self.number();
+		} else {
+			self.next();
+			let span = self.offset - 1..self.offset;
+			match ch {
+				' ' | '\n' | '\t' | '\r' => self.next(),
+				';' => {
+					tok.kind = TokenKind::Semicolon;
+					tok.span = span;
+				}
+				'"' => {
+					tok.kind = TokenKind::StringLit;
+					tok.span = self.string();
+				}
+				'\'' => {
+					tok.kind = TokenKind::CharLit;
+					tok.span = self.char();
+				}
+				'(' => {
+					tok.kind = TokenKind::LParen;
+					tok.span = span;
+				}
+				')' => {
+					tok.kind = TokenKind::RParen;
+					tok.span = span;
+				}
+				'{' => {
+					tok.kind = TokenKind::LBrace;
+					tok.span = span;
+				}
+				'}' => {
+					tok.kind = TokenKind::RBrace;
+					tok.span = span;
+				}
+				'[' => {
+					tok.kind = TokenKind::LBracket;
+					tok.span = span;
+				}
+				']' => {
+					tok.kind = TokenKind::RBracket;
+					tok.span = span;
+				}
+				'+' => {
+					tok.kind = TokenKind::Plus;
+					tok.span = span;
+				}
+				'*' => {
+					tok.kind = TokenKind::Asterisk;
+					tok.span = span;
+				}
+				'/' => {
+					tok.kind = TokenKind::Slash;
+					tok.span = span;
+					if self.ch() == '/' {
+						self.next();
+						tok.kind = TokenKind::LineComment;
+						tok.span = self.line_comment();
+					} else if self.ch() == '*' {
+						self.next();
+						tok.kind = TokenKind::BlockComment;
+						tok.span = self.block_comment();
+					}
+				}
+				',' => {
+					tok.kind = TokenKind::Comma;
+					tok.span = span;
+				}
+				'.' => {
+					tok.kind = TokenKind::Period;
+					tok.span = span;
+				}
+				'!' => {
+					if self.ch() == '=' {
+						self.next();
+						tok.kind = TokenKind::CmpNE;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'=' => {
+					tok.kind = TokenKind::Eq;
+					tok.span = span;
+					if self.ch() == '=' {
+						self.next();
+						tok.kind = TokenKind::CmpNE;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'&' => {
+					tok.kind = TokenKind::Ampersand;
+					tok.span = span;
+					if self.ch() == '&' {
+						self.next();
+						tok.kind = TokenKind::CmpAnd;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'|' => {
+					if self.ch() == '|' {
+						self.next();
+						tok.kind = TokenKind::CmpOr;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'<' => {
+					tok.kind = TokenKind::CmpLT;
+					tok.span = span;
+					if self.ch() == '=' {
+						self.next();
+						tok.kind = TokenKind::CmpLTE;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'>' => {
+					tok.kind = TokenKind::CmpGT;
+					tok.span = span;
+					if self.ch() == '=' {
+						self.next();
+						tok.kind = TokenKind::CmpGTE;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				'-' => {
+					tok.kind = TokenKind::Minus;
+					tok.span = span;
+					if self.ch() == '>' {
+						self.next();
+						tok.kind = TokenKind::Arrow;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
+				_ => self.errors.push(PIError::new(
+					"unknown character".to_owned(),
+					PIErrorCode::LexUnknownChar,
+					vec![(
+						format!("unknown character `{}`", ch),
+						self.offset - 1..self.offset - 1,
+					)],
+					self.file_id,
+				)),
+			}
+		}
+
+		return tok;
+	}
+
+	fn block_comment(&mut self) -> Range<usize> {
+		let initial_offset = self.offset - 2;
+		loop {
+			if self.ch() == '\0' {
+				self.errors.push(PIError::new(
+					"missing end of block comment".to_owned(),
+					PIErrorCode::LexMissingEndOfBlockComment,
+					vec![
+						(
+							"missing end of block comment".to_owned(),
+							initial_offset..self.offset,
+						),
+						("(hint) insert `*/`".to_owned(), initial_offset..self.offset),
+					],
+					self.file_id,
+				));
+				break;
+			}
+			if self.ch() == '*' && self.peek() == '/' {
+				self.next();
+				self.next();
+				break;
+			}
+			self.next();
+		}
+		initial_offset..self.offset
+	}
+
+	fn line_comment(&mut self) -> Range<usize> {
+		let initial_offset = self.offset - 2;
+		while self.ch() != '\n' && self.ch() != '\0' {
+			self.next();
+		}
+		initial_offset..self.offset
+	}
+
+	fn char(&mut self) -> Range<usize> {
+		let initial_offset = self.offset;
+		let mut n = 0;
+
+		loop {
+			match self.ch() {
+				'\n' | '\0' => {
+					self.errors.push(PIError::new(
+						"char literal not terminated".to_owned(),
+						PIErrorCode::LexCharLitUnterminated,
+						vec![
+							("".to_owned(), initial_offset - 1..self.offset),
+							(
+								"(hint) insert missing `\'`".to_owned(),
+								initial_offset - 1..self.offset,
+							),
+						],
+						self.file_id,
+					));
+					break;
+				}
+				'\'' => {
+					self.next();
+					break;
+				}
+				'\\' => {
+					self.escape('\'');
+				}
+				_ => (),
+			}
+			self.next();
+			n += 1;
+		}
+
+		if n != 1 {
+			self.errors.push(PIError::new(
+				format!(
+					"invalid char literal `{}`",
+					&self.program[initial_offset..self.offset]
+				),
+				PIErrorCode::LexInvalidCharLit,
+				vec![
+					(
+						format!(
+							"invalid char literal `{}`",
+							&self.program[initial_offset..self.offset]
+						),
+						initial_offset..self.offset,
+					),
+					(
+						"char literals can only be one character long".to_owned(),
+						initial_offset..self.offset,
+					),
+				],
+				self.file_id,
+			));
+		}
+
+		initial_offset..self.offset
+	}
+
+	fn string(&mut self) -> Range<usize> {
+		let initial_offset = self.offset;
+
+		loop {
+			if self.ch() == '\n' || self.ch() == '\0' {
+				self.errors.push(PIError::new(
+					"string literal not terminated".to_owned(),
+					PIErrorCode::LexStringLitUnterminated,
+					vec![(
+						"(hint) insert missing '\"'".to_owned(),
+						initial_offset..self.offset,
+					)],
+					self.file_id,
+				))
+			}
+			if self.ch() == '"' {
+				break;
+			}
+			if self.ch() == '\\' {
+				self.escape('"');
+				continue;
+			}
+			self.next();
+		}
+
+		initial_offset..self.offset
+	}
+
+	fn escape(&mut self, quote: char) -> char {
+		let initial_offset = self.offset;
+		self.next();
+		if self.ch() == quote {
+			self.next();
+			return self.ch();
+		}
+		match self.ch() {
+			'r' | 't' | 'n' => {
+				self.next();
+				return self.ch();
+			}
+			_ => {
+				self.errors.push(PIError::new(
+					format!(
+						"unknown escape sequence {}",
+						&self.program[initial_offset..self.offset]
+					),
+					PIErrorCode::LexUnknownEscapeSequence,
+					vec![(
+						"recognized escape sequences are '\\r', '\\t', '\\n', '\\\'', and '\\\"'".to_owned(),
+						initial_offset..self.offset,
+					)],
+					self.file_id,
+				));
+				return self.ch();
+			}
+		}
+	}
+
+	fn whitespace(&mut self) {
+		loop {
+			match self.ch() {
+				' ' | '\t' | '\n' | '\r' => self.next(),
+				_ => break,
+			}
+		}
+	}
+
+	fn ident(&mut self) -> Range<usize> {
+		let initial_offset = self.offset;
+		self.next();
+		while self.ch().is_alphabetic() || self.ch().is_digit(10) || self.ch() == '_' {
+			self.next();
+		}
+		initial_offset..self.offset
+	}
+
+	fn number(&mut self) -> Token {
+		let initial_offset = self.offset;
+		let mut tok = Token::new();
+
+		let mut base: u8 = 10;
+
+		if self.ch() != '.' {
+			tok.kind = TokenKind::Int;
+			let prefix_initial_offset = self.offset;
+			if self.ch() == '0' {
+				self.next();
+				match self.ch() {
+					'x' => {
+						self.next();
+						base = 16;
+					}
+					'8' => {
+						self.next();
+						base = 8;
+					}
+					'b' => {
+						self.next();
+						base = 2;
+					}
+					_ => base = 10,
+				}
+			}
+
+			self.digits(base);
+			if base != 10 && self.offset - prefix_initial_offset == 2 {
+				let prefix = if base == 16 {
+					"0x"
+				} else if base == 8 {
+					"08"
+				} else if base == 2 {
+					"0b"
+				} else {
+					""
+				};
+				self.errors.push(PIError::new(
+					format!("expected base {} digit(s) following {}", base, prefix),
+					PIErrorCode::LexExpectedDigitsFollowingIntPrefix,
+					vec![
+						(
+							format!(
+								"expected base {} digit(s) following {}, instead got `{}`",
+								base,
+								prefix,
+								&self.program[prefix_initial_offset + 2..self.offset + 1]
+							),
+							initial_offset..self.offset,
+						),
+						(
+							format!(
+								"`{}` found here",
+								&self.program[prefix_initial_offset + 2..self.offset + 1]
+							),
+							prefix_initial_offset + 2..self.offset + 1,
+						),
+					],
+					self.file_id,
+				))
+			}
+		}
+
+		if self.ch() == '.' {
+			tok.kind = TokenKind::Float;
+			if base != 10 {
+				self.errors.push(PIError::new(
+					"floating point numbers are only permitted in base 10".to_owned(),
+					PIErrorCode::LexFloatInWrongBase,
+					vec![(
+						format!("base {} literal", base),
+						initial_offset..self.offset,
+					)],
+					self.file_id,
+				))
+			}
+			self.next();
+			self.digits(base);
+		}
+
+		tok.span = initial_offset..self.offset;
+		return tok;
+	}
+
+	fn digits(&mut self, base: u8) {
+		while self.ch().is_digit(base as u32) {
+			self.next();
+		}
+	}
 }
 
-impl PISpan<'_> {
-    // pub fn new(src: &str) -> PISpan {
-    //     PISpan {
-    //         offset: 0,
-    //         line: 1,
-    //         fragment: src,
-    //         errors: vec![],
-    //     }
-    // }
-
-    pub fn to_span(&self) -> Span {
-        let start = self.offset() as u32;
-        let end = start + self.fragment().len() as u32;
-        Span::new(start, end)
-    }
-
-    pub fn fragment(&self) -> &str {
-        self.fragment
-    }
-
-    pub fn offset(&self) -> usize {
-        self.offset
-    }
-
-    pub fn ch(&self) -> char {
-        match self.fragment.chars().nth(self.offset) {
-            Some(x) => x,
-            _ => '\0',
-        }
-    }
-
-    pub fn next(&mut self) {
-        self.offset += 1;
-    }
-
-    pub fn peek(&self) -> char {
-        match self.fragment.chars().nth(self.offset + 1) {
-            Some(x) => x,
-            _ => '\0',
-        }
-    }
-}
-
-pub fn tokenize(program: &str) {
-    // let src = PISpan::new(program);
-    let mut errors = vec![];
-    let src = PISpan {
-        offset: 0,
-        line: 1,
-        fragment: program,
-        errors: &mut errors,
-    };
-    let mode = Mode::Normal;
-
-    let toks = std::iter::from_fn(move || {
-        let _ = get_tok(src, mode)?;
-        // src = rest;
-        // println!("{}", src);
-
-        // Some(out)
-        // Some(Token::new(TokenKind::LineComment, src.to_span()))
-        Some(1)
-    });
-    let arr: Vec<u32> = toks.collect();
-    println!("{:?}", arr);
-}
-
-fn get_tok<'a>(src: PISpan, mode: Mode) -> Option<(PISpan, Token)> {
-    let mut tok = Token::new();
-    match mode {
-        Mode::Normal => {
-            scan_whitespace(src);
-
-            let ch = src.ch();
-            if ch.is_alpha() {
-                tok.span = scan_ident(src);
-                if tok.span.to_string().len() > 1 {
-                    tok.kind = lookup_keyword(tok.span.to_string().as_str());
-                } else {
-                    tok.kind = TokenKind::Ident;
-                }
-            } else if ch.is_digit(10) || (ch == '.' && src.peek().is_digit(10)) {
-                tok = scan_number(src);
-            }
-
-            Some((src, tok))
-        }
-        _ => None,
-    }
-}
-
-fn scan_number(mut src: PISpan) -> Token {
-    let initial_offset = src.offset();
-    let mut tok = Token::new();
-
-    let mut base: u8 = 10;
-
-    if src.ch() != '.' {
-        tok.kind = TokenKind::Int;
-        if src.ch() == '0' {
-            src.next();
-            match src.ch() {
-                'x' => base = 16,
-                '8' => base = 8,
-                'b' => base = 2,
-                _ => base = 10,
-            }
-        }
-
-        scan_digits(src, base);
-    }
-
-    if src.ch() == '.' {
-        tok.kind = TokenKind::Float;
-        if base != 10 {
-            src.errors.push(PIError {
-                msg: "invalid digit",
-                code: PIErrorCode::LexInvalidDigit,
-            })
-        }
-    }
-
-    return tok;
-}
-
-fn scan_digits(mut src: PISpan, base: u8) {
-    while src.ch().is_digit(base as u32) {
-        src.next();
-    }
-}
-
-fn scan_ident(mut src: PISpan) -> Span {
-    let initial_offset = src.offset();
-    src.next();
-    while src.ch().is_alpha() || src.ch().is_digit(10) {
-        src.next();
-    }
-    return Span::new(initial_offset as u32, src.offset as u32);
-}
-
-fn scan_whitespace(mut src: PISpan) {
-    loop {
-        match src.ch() {
-            ' ' | '\t' | '\n' | '\r' => src.next(),
-            _ => (),
-        }
-    }
+pub fn tokenize(program: &str, file_id: filesystem::FileId) -> (Vec<Token>, Vec<PIError>) {
+	let mut errors = vec![];
+	let mut lex = Lexer::new(program, file_id, &mut errors);
+	let mut arr = vec![];
+	while lex.ch() != '\0' {
+		let res = lex.token();
+		arr.push(res);
+	}
+	arr.push(Token::from(TokenKind::EOF, 0..0));
+	(arr, errors)
 }

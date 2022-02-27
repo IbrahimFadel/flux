@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 pi-lexer = { path = "../pi-lexer" }
-colored = "2.0.0"
+pi-parser = { path = "../pi-parser" }
+pi-error = { path = "../pi-error" }
