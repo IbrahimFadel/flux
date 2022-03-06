@@ -1,3 +1,5 @@
+use std::fmt;
+
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
 
@@ -34,19 +36,6 @@ pub struct FnDecl {
 	pub block: BlockStmt,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct FnParam {
-	pub mut_: bool,
-	pub type_: Expr,
-	pub name: SmolStr,
-}
-
-impl FnParam {
-	pub fn new(mut_: bool, type_: Expr, name: SmolStr) -> FnParam {
-		FnParam { mut_, type_, name }
-	}
-}
-
 impl FnDecl {
 	pub fn new(
 		name: SmolStr,
@@ -62,6 +51,25 @@ impl FnDecl {
 			ret_ty,
 			block,
 		}
+	}
+}
+
+impl fmt::Display for FnDecl {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:#?}", self)
+	}
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FnParam {
+	pub mut_: bool,
+	pub type_: Expr,
+	pub name: SmolStr,
+}
+
+impl FnParam {
+	pub fn new(mut_: bool, type_: Expr, name: SmolStr) -> FnParam {
+		FnParam { mut_, type_, name }
 	}
 }
 

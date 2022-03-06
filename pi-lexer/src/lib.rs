@@ -2,6 +2,7 @@ use pi_error::{filesystem, PIError, PIErrorCode};
 use std::ops::Range;
 use token::{lookup_keyword, Token, TokenKind};
 
+mod tests;
 pub mod token;
 
 struct Lexer<'a> {
@@ -140,7 +141,7 @@ impl<'a> Lexer<'a> {
 					tok.span = span;
 					if self.ch() == '=' {
 						self.next();
-						tok.kind = TokenKind::CmpNE;
+						tok.kind = TokenKind::CmpEQ;
 						tok.span = self.offset - 2..self.offset;
 					}
 				}
@@ -239,9 +240,8 @@ impl<'a> Lexer<'a> {
 	}
 
 	fn char(&mut self) -> Range<usize> {
-		let initial_offset = self.offset;
+		let initial_offset = self.offset - 1;
 		let mut n = 0;
-
 		loop {
 			match self.ch() {
 				'\n' | '\0' => {
@@ -249,10 +249,10 @@ impl<'a> Lexer<'a> {
 						"char literal not terminated".to_owned(),
 						PIErrorCode::LexCharLitUnterminated,
 						vec![
-							("".to_owned(), initial_offset - 1..self.offset),
+							("".to_owned(), initial_offset..self.offset),
 							(
 								"(hint) insert missing `\'`".to_owned(),
-								initial_offset - 1..self.offset,
+								initial_offset..self.offset,
 							),
 						],
 						self.file_id,
@@ -265,13 +265,15 @@ impl<'a> Lexer<'a> {
 				}
 				'\\' => {
 					self.escape('\'');
+					n += 1;
+					continue;
 				}
-				_ => (),
+				_ => {
+					n += 1;
+				}
 			}
 			self.next();
-			n += 1;
 		}
-
 		if n != 1 {
 			self.errors.push(PIError::new(
 				format!(
@@ -300,7 +302,7 @@ impl<'a> Lexer<'a> {
 	}
 
 	fn string(&mut self) -> Range<usize> {
-		let initial_offset = self.offset;
+		let initial_offset = self.offset - 1;
 
 		loop {
 			if self.ch() == '\n' || self.ch() == '\0' {
@@ -312,9 +314,11 @@ impl<'a> Lexer<'a> {
 						initial_offset..self.offset,
 					)],
 					self.file_id,
-				))
+				));
+				break;
 			}
 			if self.ch() == '"' {
+				self.next();
 				break;
 			}
 			if self.ch() == '\\' {
@@ -334,6 +338,13 @@ impl<'a> Lexer<'a> {
 			self.next();
 			return self.ch();
 		}
+		let mut recognized_escapes_str =
+			String::from("recognized escape sequences are '\\r', '\\t', '\\n'");
+		if quote == '\'' {
+			recognized_escapes_str += " and '\\''";
+		} else {
+			recognized_escapes_str += " and '\"'";
+		}
 		match self.ch() {
 			'r' | 't' | 'n' => {
 				self.next();
@@ -343,13 +354,10 @@ impl<'a> Lexer<'a> {
 				self.errors.push(PIError::new(
 					format!(
 						"unknown escape sequence {}",
-						&self.program[initial_offset..self.offset]
+						&self.program[initial_offset..self.offset + 1]
 					),
 					PIErrorCode::LexUnknownEscapeSequence,
-					vec![(
-						"recognized escape sequences are '\\r', '\\t', '\\n', '\\\'', and '\\\"'".to_owned(),
-						initial_offset..self.offset,
-					)],
+					vec![(recognized_escapes_str, initial_offset..self.offset + 1)],
 					self.file_id,
 				));
 				return self.ch();
@@ -414,27 +422,20 @@ impl<'a> Lexer<'a> {
 				} else {
 					""
 				};
+				let mut got_str = "EOF";
+				if self.offset != self.program.len() {
+					got_str = &self.program[prefix_initial_offset + 2..self.offset + 1];
+				}
 				self.errors.push(PIError::new(
 					format!("expected base {} digit(s) following {}", base, prefix),
 					PIErrorCode::LexExpectedDigitsFollowingIntPrefix,
-					vec![
-						(
-							format!(
-								"expected base {} digit(s) following {}, instead got `{}`",
-								base,
-								prefix,
-								&self.program[prefix_initial_offset + 2..self.offset + 1]
-							),
-							initial_offset..self.offset,
+					vec![(
+						format!(
+							"expected base {} digit(s) following {}, instead got `{}`",
+							base, prefix, got_str
 						),
-						(
-							format!(
-								"`{}` found here",
-								&self.program[prefix_initial_offset + 2..self.offset + 1]
-							),
-							prefix_initial_offset + 2..self.offset + 1,
-						),
-					],
+						initial_offset..self.offset,
+					)],
 					self.file_id,
 				))
 			}

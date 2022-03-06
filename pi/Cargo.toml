@@ -8,4 +8,6 @@ edition = "2021"
 [dependencies]
 pi-lexer = { path = "../pi-lexer" }
 pi-parser = { path = "../pi-parser" }
+pi-mir = { path = "../pi-mir" }
 pi-error = { path = "../pi-error" }
+pi-cfg = { path = "../pi-cfg" }

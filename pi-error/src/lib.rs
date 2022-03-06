@@ -5,11 +5,10 @@ use std::ops::Range;
 
 pub mod filesystem;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PIErrorCode {
 	LexUnknownChar,
 	LexFloatInWrongBase,
-	LexInvalidDigit,
 	LexStringLitUnterminated,
 	LexCharLitUnterminated,
 	LexUnknownEscapeSequence,
@@ -50,10 +49,10 @@ impl std::fmt::Display for PIErrorCode {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PIError {
 	msg: String,
-	code: PIErrorCode,
+	pub code: PIErrorCode,
 	labels: Vec<(String, Range<usize>)>,
 	file_id: filesystem::FileId,
 }

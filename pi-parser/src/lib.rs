@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use pi_ast::OpKind;
+use pi_ast::{FnDecl, OpKind};
 use pi_error::{filesystem::FileId, PIError, PIErrorCode};
 use pi_lexer::token::{Token, TokenKind};
 
@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn top_level_decls(&mut self) {
+	pub fn top_level_decls(&mut self) -> Vec<FnDecl> {
 		let mut fn_decls = vec![];
 
 		while self.tok().kind != TokenKind::EOF {
@@ -145,16 +145,18 @@ impl<'a> Parser<'a> {
 				}
 			}
 		}
-
-		println!("{:#?}", fn_decls);
+		fn_decls
 	}
 }
 
-pub fn parse_tokens(program: &str, tokens: Vec<Token>, file_id: FileId) -> ((), Vec<PIError>) {
+pub fn parse_tokens(
+	program: &str,
+	tokens: Vec<Token>,
+	file_id: FileId,
+) -> (Vec<FnDecl>, Vec<PIError>) {
 	let mut errors = vec![];
 	let mut parse = Parser::new(program, tokens, file_id, &mut errors);
-	// println!("{:?}", parse.tokens);
-	parse.top_level_decls();
+	let fns = parse.top_level_decls();
 
-	((), errors)
+	(fns, errors)
 }
