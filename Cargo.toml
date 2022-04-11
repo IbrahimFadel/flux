@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+	"pi",
+	"pi-lexer",
+	"pi-ast",
+	"pi-error",
+]

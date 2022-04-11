@@ -1,0 +1,12 @@
+[package]
+name = "pi-parser"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+pi-error = { path = "../pi-error" }
+pi-lexer = { path = "../pi-lexer" }
+pi-ast = { path = "../pi-ast" }
+smol_str = "0.1.21"

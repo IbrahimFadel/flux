@@ -1,3 +1,2 @@
-.vscode/
-build/
-*.ll
+/target
+ast.txt

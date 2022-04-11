@@ -1,0 +1,13 @@
+[package]
+name = "pi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+pi-lexer = { path = "../pi-lexer" }
+pi-parser = { path = "../pi-parser" }
+pi-mir = { path = "../pi-mir" }
+pi-error = { path = "../pi-error" }
+pi-cfg = { path = "../pi-cfg" }
