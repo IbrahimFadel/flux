@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 pi-ast = { path = "../pi-ast" }
+pi-error = { path = "../pi-error" }
+smol_str = "0.1.21"

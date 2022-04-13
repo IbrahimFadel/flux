@@ -1,11 +1,13 @@
 use super::Parser;
-use pi_ast::{Expr, FnDecl, FnParam, GenericTypes, PrimitiveKind, PrimitiveType};
+use pi_ast::{
+	Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, Stmt, TypeDecl,
+};
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
 
 impl<'a> Parser<'a> {
-	pub fn fn_decl(&mut self) -> FnDecl {
+	pub fn fn_decl(&mut self, pub_: bool) -> FnDecl {
 		self.next();
 		let name = Parser::tok_val(
 			self.program,
@@ -43,7 +45,7 @@ impl<'a> Parser<'a> {
 		}
 		let block = self.block();
 
-		FnDecl::new(SmolStr::from(name), generics, params, ret_ty, block)
+		FnDecl::new(pub_, SmolStr::from(name), generics, params, ret_ty, block)
 	}
 
 	fn generic_types(&mut self) -> GenericTypes {
@@ -90,7 +92,7 @@ impl<'a> Parser<'a> {
 		return names;
 	}
 
-	fn params(&mut self) -> Vec<FnParam> {
+	pub fn params(&mut self) -> Vec<FnParam> {
 		self.expect(
 			TokenKind::LParen,
 			self.error(
@@ -159,5 +161,52 @@ impl<'a> Parser<'a> {
 			}
 		}
 		return ty;
+	}
+
+	pub fn type_decl(&mut self, pub_: bool) -> TypeDecl {
+		self.expect(
+			TokenKind::Type,
+			self.error(
+				"expected `type` at beginning of type declaration".to_owned(),
+				PIErrorCode::ParseExpectedTypeInTypeDecl,
+				vec![],
+			),
+		);
+		if self.tok().kind == TokenKind::Type {
+			self.next();
+		}
+
+		self.expect(
+			TokenKind::Ident,
+			self.error(
+				"expected identifier in type declaration".to_owned(),
+				PIErrorCode::ParseExpectedTypeInTypeDecl,
+				vec![(
+					"(hint) give your type a name".to_owned(),
+					self.tok().span.clone(),
+				)],
+			),
+		);
+		let mut name = String::new();
+		if self.tok().kind == TokenKind::Ident {
+			name = Parser::tok_val(self.program, &self.tok());
+			self.next();
+		}
+
+		let type_ = self.type_expr();
+
+		self.expect(
+			TokenKind::Semicolon,
+			self.error(
+				"expected `;` after type declaration".to_owned(),
+				PIErrorCode::ParseExpectedSemicolonAfterTypeDecl,
+				vec![("(hint) insert `;` here".to_owned(), self.tok().span.clone())],
+			),
+		);
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+		}
+
+		TypeDecl::new(pub_, Ident::from(name.as_str()), type_)
 	}
 }

@@ -1,10 +1,27 @@
-use pi_ast::{BlockStmt, If, Return, Stmt, VarDecl};
+use pi_ast::{BlockStmt, Expr, If, Mod, Return, Stmt, VarDecl};
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
 
 use super::Parser;
 
 impl<'a> Parser<'a> {
+	pub fn mod_stmt(&mut self, pub_: bool) -> Mod {
+		self.next();
+		let name = self.ident();
+		self.expect(
+			TokenKind::Semicolon,
+			self.error(
+				"expected `;` after mod statement".to_owned(),
+				PIErrorCode::ParseExpectedSemicolonAfterModStmt,
+				vec![],
+			),
+		);
+		if self.tok().kind == TokenKind::Semicolon {
+			self.next();
+		}
+		Mod::new(pub_, name)
+	}
+
 	pub fn block(&mut self) -> BlockStmt {
 		self.expect(
 			TokenKind::LBrace,
@@ -27,6 +44,9 @@ impl<'a> Parser<'a> {
 		let mut stmts = vec![];
 		while self.tok().kind != TokenKind::RBrace && self.tok().kind != TokenKind::EOF {
 			let stmt = self.stmt();
+			if stmt == Stmt::Error {
+				break;
+			}
 			stmts.push(stmt);
 		}
 
@@ -58,8 +78,24 @@ impl<'a> Parser<'a> {
 			return self.return_stmt();
 		} else if self.tok().kind == TokenKind::If {
 			return self.if_stmt();
+		} else {
+			let expr = self.expr();
+			self.expect(
+				TokenKind::Semicolon,
+				self.error(
+					"expected `;` after expression".to_owned(),
+					PIErrorCode::ParseExpectedSemicolonAfterExpr,
+					vec![],
+				),
+			);
+			if self.tok().kind == TokenKind::Semicolon {
+				self.next();
+			}
+			if expr == Expr::Error {
+				return Stmt::Error;
+			}
+			return Stmt::ExprStmt(expr);
 		}
-		Stmt::Error
 	}
 
 	fn if_stmt(&mut self) -> Stmt {

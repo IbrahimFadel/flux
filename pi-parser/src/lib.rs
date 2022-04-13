@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use pi_ast::{FnDecl, OpKind};
+use pi_ast::{FnDecl, Mod, OpKind, Stmt, TypeDecl, AST};
 use pi_error::{filesystem::FileId, PIError, PIErrorCode};
 use pi_lexer::token::{Token, TokenKind};
 
@@ -67,6 +67,7 @@ impl<'a> Parser<'a> {
 			TokenKind::Slash => 40,
 			TokenKind::Period => 50,
 			TokenKind::Arrow => 50,
+			TokenKind::DoubleColon => 50,
 			_ => -1,
 		}
 	}
@@ -113,16 +114,49 @@ impl<'a> Parser<'a> {
 			TokenKind::CmpLTE => OpKind::CmpLTE,
 			TokenKind::CmpGT => OpKind::CmpGT,
 			TokenKind::CmpGTE => OpKind::CmpGTE,
+			TokenKind::DoubleColon => OpKind::Doublecolon,
 			_ => OpKind::Illegal,
 		}
 	}
 
-	pub fn top_level_decls(&mut self) -> Vec<FnDecl> {
+	pub fn top_level_decls(&mut self) -> (Vec<Mod>, Vec<FnDecl>, Vec<TypeDecl>) {
 		let mut fn_decls = vec![];
+		let mut type_decls = vec![];
+		let mut mod_stmts = vec![];
 
 		while self.tok().kind != TokenKind::EOF {
 			match self.tok().kind {
-				TokenKind::Fn => fn_decls.push(self.fn_decl()),
+				TokenKind::Pub => {
+					self.next();
+					match self.tok().kind {
+						TokenKind::Fn => fn_decls.push(self.fn_decl(true)),
+						TokenKind::Type => type_decls.push(self.type_decl(true)),
+						TokenKind::Mod => mod_stmts.push(self.mod_stmt(true)),
+						_ => {
+							self.errors.push(self.error(
+								"expected declaration following `pub`".to_owned(),
+								PIErrorCode::ParseExpectedTopLevelDecl,
+								vec![
+									(
+										format!(
+											"expected declaration following `pub`, instead got `{}`",
+											Parser::tok_val(self.program, self.tok())
+										),
+										self.tok().span.clone(),
+									),
+									(
+										"(hint) declare a function, type or global variable".to_owned(),
+										self.tok().span.clone(),
+									),
+								],
+							));
+							self.next();
+						}
+					}
+				}
+				TokenKind::Fn => fn_decls.push(self.fn_decl(false)),
+				TokenKind::Type => type_decls.push(self.type_decl(false)),
+				TokenKind::Mod => mod_stmts.push(self.mod_stmt(false)),
 				_ => {
 					self.errors.push(self.error(
 						"expected top level declaration".to_owned(),
@@ -145,18 +179,21 @@ impl<'a> Parser<'a> {
 				}
 			}
 		}
-		fn_decls
+		(mod_stmts, fn_decls, type_decls)
 	}
 }
 
 pub fn parse_tokens(
+	name: String,
 	program: &str,
 	tokens: Vec<Token>,
 	file_id: FileId,
-) -> (Vec<FnDecl>, Vec<PIError>) {
+) -> (AST, Vec<PIError>) {
 	let mut errors = vec![];
 	let mut parse = Parser::new(program, tokens, file_id, &mut errors);
-	let fns = parse.top_level_decls();
+	let (mods, functions, types) = parse.top_level_decls();
 
-	(fns, errors)
+	let ast = AST::new(name, mods, functions, types);
+
+	(ast, errors)
 }

@@ -87,7 +87,7 @@ fn lexing() {
 			(vec![Token::from(TokenKind::BlockComment, 0..9)], vec![]),
 		),
 		(
-			";(){}[]+-*&/,.=->",
+			";(){}[]+-*&/,.=->::",
 			(
 				vec![
 					Token::from(TokenKind::Semicolon, 0..1),
@@ -106,6 +106,7 @@ fn lexing() {
 					Token::from(TokenKind::Period, 13..14),
 					Token::from(TokenKind::Eq, 14..15),
 					Token::from(TokenKind::Arrow, 15..17),
+					Token::from(TokenKind::DoubleColon, 17..19),
 				],
 				vec![],
 			),

@@ -7,28 +7,26 @@ mod print;
 
 #[derive(Debug)]
 pub struct AST {
-	pub top_level_declarations: Vec<Decl>,
-	// pub functions: Vec<FnDecl>,
+	pub name: String,
+	pub mods: Vec<Mod>,
+	pub functions: Vec<FnDecl>,
+	pub types: Vec<TypeDecl>,
 }
 
 impl AST {
-	pub fn new(top_level_declarations: Vec<Decl>) -> AST {
+	pub fn new(name: String, mods: Vec<Mod>, functions: Vec<FnDecl>, types: Vec<TypeDecl>) -> AST {
 		AST {
-			top_level_declarations,
+			name,
+			mods,
+			functions,
+			types,
 		}
 	}
 }
 
 #[derive(Debug, PartialEq)]
-
-pub enum Decl {
-	FnDecl(FnDecl),
-	TypeDecl(TypeDecl),
-	Error,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct FnDecl {
+	pub pub_: bool,
 	pub name: SmolStr,
 	pub generics: GenericTypes,
 	pub params: Vec<FnParam>,
@@ -38,6 +36,7 @@ pub struct FnDecl {
 
 impl FnDecl {
 	pub fn new(
+		pub_: bool,
 		name: SmolStr,
 		generics: GenericTypes,
 		params: Vec<FnParam>,
@@ -45,6 +44,7 @@ impl FnDecl {
 		block: BlockStmt,
 	) -> FnDecl {
 		FnDecl {
+			pub_,
 			name,
 			generics,
 			params,
@@ -60,7 +60,7 @@ impl fmt::Display for FnDecl {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FnParam {
 	pub mut_: bool,
 	pub type_: Expr,
@@ -74,7 +74,55 @@ impl FnParam {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct TypeDecl {}
+pub struct TypeDecl {
+	pub_: bool,
+	name: Ident,
+	type_: Expr,
+}
+
+impl TypeDecl {
+	pub fn new(pub_: bool, name: Ident, type_: Expr) -> TypeDecl {
+		TypeDecl { pub_, name, type_ }
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Field {
+	pub_: bool,
+	type_: Expr,
+	name: Ident,
+	val: Option<Expr>,
+}
+
+impl Field {
+	pub fn new(pub_: bool, type_: Expr, name: Ident, val: Option<Expr>) -> Field {
+		Field {
+			pub_,
+			type_,
+			name,
+			val,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Method {
+	pub_: bool,
+	name: Ident,
+	params: Vec<FnParam>,
+	ret_ty: Expr,
+}
+
+impl Method {
+	pub fn new(pub_: bool, name: Ident, params: Vec<FnParam>, ret_ty: Expr) -> Method {
+		Method {
+			pub_,
+			name,
+			params,
+			ret_ty,
+		}
+	}
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum OpKind {
@@ -104,6 +152,8 @@ pub enum Expr {
 	StringLit(StringLit),
 	BoolLit(BoolLit),
 	PrimitiveType(PrimitiveType),
+	StructType(StructType),
+	InterfaceType(InterfaceType),
 	CallExpr(CallExpr),
 	Paren(Box<Expr>),
 	Unary(Unary),
@@ -177,13 +227,28 @@ impl PrimitiveType {
 
 #[derive(Debug, PartialEq)]
 pub enum Stmt {
+	FnDecl(FnDecl),
+	TypeDecl(TypeDecl),
 	BlockStmt(BlockStmt),
 	VarDecl(VarDecl),
 	If(If),
 	For(For),
 	ExprStmt(Expr),
 	Return(Return),
+	Mod(Mod),
 	Error,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Mod {
+	pub_: bool,
+	pub name: Ident,
+}
+
+impl Mod {
+	pub fn new(pub_: bool, name: Ident) -> Mod {
+		Mod { pub_, name }
+	}
 }
 
 #[derive(Debug, PartialEq)]
@@ -248,3 +313,5 @@ pub type StringLit = SmolStr;
 pub type BoolLit = bool;
 pub type GenericTypes = Vec<Ident>;
 pub type BlockStmt = Vec<Stmt>;
+pub type StructType = Vec<Field>;
+pub type InterfaceType = Vec<Method>;

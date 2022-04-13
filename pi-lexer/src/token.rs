@@ -28,6 +28,7 @@ pub enum TokenKind {
 	EOF,
 
 	Semicolon,
+	DoubleColon,
 	LParen,
 	RParen,
 	LBrace,
@@ -64,6 +65,7 @@ pub enum TokenKind {
 	Nil,
 	If,
 	Else,
+	Mod,
 
 	TypesBegin,
 
@@ -111,6 +113,7 @@ pub fn lookup_keyword(v: &str) -> TokenKind {
 		"nil" => TokenKind::Nil,
 		"if" => TokenKind::If,
 		"else" => TokenKind::Else,
+		"mod" => TokenKind::Mod,
 
 		"i64" => TokenKind::I64,
 		"u64" => TokenKind::U64,

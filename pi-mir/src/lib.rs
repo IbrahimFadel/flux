@@ -1,11 +1,47 @@
-// use mir::{Assign, Instruction, Type};
-// use pi_ast::{FnDecl, Stmt, VarDecl};
+use mir::MirPackage;
+use pi_ast::AST;
+use pi_error::{filesystem::FileId, *};
+use std::collections::HashMap;
 
-// mod mir;
+mod mir;
 
-// pub fn generate_mir(fns: Vec<FnDecl>) {
-// 	for f in &fns {
-// 		lower_fn(f);
+//TODO Need MIRBuilder class to keep track of tags
+// builder.new_function();
+// builder.new_block();
+// builder.new_stack_alloc();
+
+pub fn generate_mir(
+	file_ast_map: &HashMap<FileId, AST>,
+	err_reporting: &mut PIErrorReporting,
+) -> MirPackage {
+	// Assume that fileID of entry file is `0`
+	let entry_fileid: FileId = FileId(0);
+	let main = file_ast_map.get(&entry_fileid).expect("could not get file");
+
+	let mut ctx = mir::MirContext::new(&main);
+	ctx.lower_functions();
+
+	// let _ = lower_functions(&main);
+
+	// for (k, v) in file_ast_map {
+	// 	// println!("{:?} {:?}", k, v);
+	// 	println!("{:?}", v.name);
+	// 	println!("{:?}", err_reporting.get_filename(*k));
+	// }
+
+	MirPackage {}
+}
+
+// pub fn generate_mir(ast: &AST) {
+// 	let m = MIRContext::new();
+// 	for f in &ast.functions {
+// 		// lower_fn(f);
+// 		let params: Vec<Type> = f
+// 			.params
+// 			.into_iter()
+// 			.map(|p| type_expr_to_mir_type(&p.type_))
+// 			.collect();
+// 		m.new_function(type_expr_to_mir_type(&f.ret_ty), f.name.clone(), params);
 // 	}
 // }
 
@@ -35,13 +71,6 @@
 // 	return instructions;
 // }
 
-// fn type_expr_to_mir_type(ty: &pi_ast::Expr) -> Type {
-// 	match ty {
-// 		pi_ast::Expr::PrimitiveType(x) => match x.kind {
-// 			pi_ast::PrimitiveKind::I64 => Type::I64,
-// 			pi_ast::PrimitiveKind::I32 => Type::I32,
-// 			_ => Type::I32,
-// 		},
-// 		_ => Type::I32,
-// 	}
+// fn expr_to_mir_rvalue(v: &pi_ast::Expr) -> mir::RValue {
+// 	match v {}
 // }
