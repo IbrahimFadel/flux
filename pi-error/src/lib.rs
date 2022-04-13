@@ -1,6 +1,7 @@
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use codespan_reporting::term::{self, Config};
+use filesystem::FileId;
 use std::ops::Range;
 
 pub mod filesystem;
@@ -41,6 +42,23 @@ pub enum PIErrorCode {
 	ParseExpectedSemicolonAfterVarDecl,
 	ParseExpectedExprAfterCommaVarDeclValueList,
 	ParseExpectedSemicolonAfterReturnStmt,
+	ParseExpectedLParenBeforeCallExpr,
+	ParseExpectedCommaInCallArgs,
+	ParseExpectedRParenAfterCallExpr,
+	ParseExpectedSemicolonAfterExpr,
+	ParseExpectedTypeInTypeDecl,
+	ParseExpectedLBraceInStructTypeExpr,
+	ParseExpectedRBraceInStructTypeExpr,
+	ParseExpectedIdentInField,
+	ParseExpectedEqInField,
+	ParseExpectedSemicolonInField,
+	ParseExpectedStructInStructTypeExpr,
+	ParseExpectedInterfaceInInterfaceTypeExpr,
+	ParseExpectedLBraceInInterfaceTypeExpr,
+	ParseExpectedRBraceInInterfaceTypeExpr,
+	ParseExpectedSemicolonAfterMethodInInterfaceTypeMethodList,
+	ParseExpectedSemicolonAfterTypeDecl,
+	ParseExpectedSemicolonAfterModStmt,
 }
 
 impl std::fmt::Display for PIErrorCode {
@@ -115,6 +133,13 @@ impl PIErrorReporting {
 
 	pub fn add_file(&mut self, name: String, source: String) -> Option<filesystem::FileId> {
 		self.files.add(name, source)
+	}
+
+	pub fn get_filename(&mut self, file_id: FileId) -> String {
+		match self.files.get(file_id) {
+			Ok(x) => x.name.clone(),
+			_ => "illegal".to_owned(),
+		}
 	}
 
 	pub fn report(&self, errs: Vec<PIError>) {

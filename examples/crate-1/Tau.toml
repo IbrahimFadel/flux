@@ -3,3 +3,4 @@ name = "testing"
 version = "0.1.0"
 
 [dependencies]
+crate-2 = { path = "../crate-2" }

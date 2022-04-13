@@ -3,9 +3,9 @@ use std::ops::Range;
 
 /// A file that is backed by an `Arc<String>`.
 #[derive(Debug, Clone)]
-struct File {
+pub struct File {
 	/// The name of the file.
-	name: String,
+	pub name: String,
 	/// The source code of the file.
 	source: String,
 	/// The starting byte indices in the source code.
@@ -33,12 +33,12 @@ impl File {
 }
 
 /// An opaque file identifier.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct FileId(pub u32);
 
 #[derive(Debug, Clone)]
 pub struct Files {
-	files: Vec<File>,
+	pub files: Vec<File>,
 }
 
 impl Files {
@@ -65,7 +65,7 @@ impl Files {
 	}
 
 	/// Get the file corresponding to the given id.
-	fn get(&self, file_id: FileId) -> Result<&File, files::Error> {
+	pub fn get(&self, file_id: FileId) -> Result<&File, files::Error> {
 		self
 			.files
 			.get(file_id.0 as usize)

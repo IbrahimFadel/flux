@@ -108,6 +108,13 @@ impl<'a> Lexer<'a> {
 					tok.kind = TokenKind::Asterisk;
 					tok.span = span;
 				}
+				':' => {
+					if self.ch() == ':' {
+						self.next();
+						tok.kind = TokenKind::DoubleColon;
+						tok.span = self.offset - 2..self.offset;
+					}
+				}
 				'/' => {
 					tok.kind = TokenKind::Slash;
 					tok.span = span;

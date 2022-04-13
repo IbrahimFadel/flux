@@ -25,6 +25,7 @@ dependencies = [
 name = "pi"
 version = "0.1.0"
 dependencies = [
+ "pi-ast",
  "pi-cfg",
  "pi-error",
  "pi-lexer",
@@ -70,6 +71,8 @@ name = "pi-mir"
 version = "0.1.0"
 dependencies = [
  "pi-ast",
+ "pi-error",
+ "smol_str",
 ]
 
 [[package]]
