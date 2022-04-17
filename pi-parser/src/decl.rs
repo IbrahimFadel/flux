@@ -1,212 +1,218 @@
-use super::Parser;
-use pi_ast::{
-	Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, Stmt, TypeDecl,
-};
+use pi_ast::{Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, TypeDecl};
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
 
-impl<'a> Parser<'a> {
-	pub fn fn_decl(&mut self, pub_: bool) -> FnDecl {
-		self.next();
-		let name = Parser::tok_val(
-			self.program,
-			self.expect(
-				TokenKind::Ident,
-				self.error(
-					"expected identifier in function declaration".to_owned(),
-					PIErrorCode::ParseExpectedIdentFnDecl,
-					vec![
-						(
-							"expected identifier following `fn` keyword".to_owned(),
-							self.tok().span.clone(),
-						),
-						(
-							"(hint) name the function".to_owned(),
-							self.tok().span.clone(),
-						),
-					],
-				),
-			),
-		);
-		if self.tok().kind != TokenKind::LParen && self.tok().kind != TokenKind::CmpLT {
-			// if someone forgets an indentifier, then we shouldn't advance so that params / generics can be parsed
-			self.next();
-		}
+use crate::{
+	expr::{ident, type_expr},
+	stmt::block,
+	tok_val, ParseInput,
+};
 
-		let mut generics = vec![];
-		if self.tok().kind == TokenKind::CmpLT {
-			generics = self.generic_types();
-		}
-		let params = self.params();
-		let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
-		if self.tok().kind == TokenKind::Arrow {
-			ret_ty = self.return_type();
-		}
-		let block = self.block();
-
-		FnDecl::new(pub_, SmolStr::from(name), generics, params, ret_ty, block)
-	}
-
-	fn generic_types(&mut self) -> GenericTypes {
-		self.next();
-		let mut names = vec![];
-		if self.tok().kind == TokenKind::CmpGT {
-			self.errors.push(self.error(
-				"expected indetifier in function generic type list".to_owned(),
-				PIErrorCode::ParseExpectedIdentGenericTypeList,
-				vec![(
-					format!(
-						"expected identifier, instead got `{}`",
-						Parser::tok_val(self.program, self.tok())
-					),
-					self.tok().span.clone(),
-				)],
-			))
-		}
-		while self.tok().kind != TokenKind::CmpGT {
-			let name = self.ident();
-			names.push(name);
-			if self.tok().kind != TokenKind::CmpGT {
-				self.expect(
-					TokenKind::Comma,
-					self.error(
-						"expected `,` between identifiers in generic type list".to_owned(),
-						PIErrorCode::ParseExpectedCommaInGenericTypeList,
-						vec![],
-					),
-				);
-				self.next();
-			}
-		}
-		self.expect(
-			TokenKind::CmpGT,
-			self.error(
-				"expected `>` after identifiers in generic type list".to_owned(),
-				PIErrorCode::ParseExpectedGTAfterGenericTypeList,
-				vec![],
-			),
-		);
-		self.next();
-
-		return names;
-	}
-
-	pub fn params(&mut self) -> Vec<FnParam> {
-		self.expect(
-			TokenKind::LParen,
-			self.error(
-				"expected `(` before function parameter list".to_owned(),
-				PIErrorCode::ParseExpectedLParenBeforeParamList,
-				vec![(
-					format!(
-						"expected `(` before function parameter list, instead got `{}`",
-						Parser::tok_val(self.program, self.tok())
-					),
-					self.tok().span.clone(),
-				)],
-			),
-		);
-		if self.tok().kind == TokenKind::LParen {
-			self.next();
-		}
-		let mut params = vec![];
-		while self.tok().kind != TokenKind::RParen {
-			let param = self.param();
-			params.push(param);
-			if self.tok().kind != TokenKind::RParen {
-				self.expect(
-					TokenKind::Comma,
-					self.error(
-						"expected `,` between parameters in function parameter list".to_owned(),
-						PIErrorCode::ParseExpectedCommaInParamList,
-						vec![],
-					),
-				);
-				self.next();
-			}
-		}
-		self.expect(
-			TokenKind::RParen,
-			self.error(
-				"expected `)` after function parameter list".to_owned(),
-				PIErrorCode::ParseExpectedRParenAfterParamList,
-				vec![],
-			),
-		);
-		self.next();
-
-		return params;
-	}
-
-	fn param(&mut self) -> FnParam {
-		let mut mut_ = false;
-		if self.tok().kind == TokenKind::Mut {
-			mut_ = true;
-			self.next();
-		}
-
-		let type_ = self.type_expr();
-		let name = self.ident();
-
-		FnParam::new(mut_, type_, name)
-	}
-
-	fn return_type(&mut self) -> Expr {
-		self.next();
-		let ty = self.type_expr();
-		if ty == Expr::Error {
-			if self.tok().kind != TokenKind::LBrace {
-				self.next();
-			}
-		}
-		return ty;
-	}
-
-	pub fn type_decl(&mut self, pub_: bool) -> TypeDecl {
-		self.expect(
-			TokenKind::Type,
-			self.error(
-				"expected `type` at beginning of type declaration".to_owned(),
-				PIErrorCode::ParseExpectedTypeInTypeDecl,
-				vec![],
-			),
-		);
-		if self.tok().kind == TokenKind::Type {
-			self.next();
-		}
-
-		self.expect(
+pub fn fn_decl(input: &mut ParseInput, pub_: bool) -> FnDecl {
+	input.next();
+	let program_clone = input.program.clone();
+	let name = tok_val(
+		&program_clone,
+		input.expect(
 			TokenKind::Ident,
-			self.error(
-				"expected identifier in type declaration".to_owned(),
-				PIErrorCode::ParseExpectedTypeInTypeDecl,
-				vec![(
-					"(hint) give your type a name".to_owned(),
-					self.tok().span.clone(),
-				)],
+			input.error(
+				"expected identifier in function declaration".to_owned(),
+				PIErrorCode::ParseExpectedIdentFnDecl,
+				vec![
+					(
+						"expected identifier following `fn` keyword".to_owned(),
+						input.tok().span.clone(),
+					),
+					(
+						"(hint) name the function".to_owned(),
+						input.tok().span.clone(),
+					),
+				],
 			),
-		);
-		let mut name = String::new();
-		if self.tok().kind == TokenKind::Ident {
-			name = Parser::tok_val(self.program, &self.tok());
-			self.next();
-		}
-
-		let type_ = self.type_expr();
-
-		self.expect(
-			TokenKind::Semicolon,
-			self.error(
-				"expected `;` after type declaration".to_owned(),
-				PIErrorCode::ParseExpectedSemicolonAfterTypeDecl,
-				vec![("(hint) insert `;` here".to_owned(), self.tok().span.clone())],
-			),
-		);
-		if self.tok().kind == TokenKind::Semicolon {
-			self.next();
-		}
-
-		TypeDecl::new(pub_, Ident::from(name.as_str()), type_)
+		),
+	);
+	if input.tok().kind != TokenKind::LParen && input.tok().kind != TokenKind::CmpLT {
+		// if someone forgets an indentifier, then we shouldn't advance so that params / generics can be parsed
+		input.next();
 	}
+
+	let mut generics = vec![];
+	if input.tok().kind == TokenKind::CmpLT {
+		generics = generic_types(input);
+	}
+	let params = params(input);
+	let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
+	if input.tok().kind == TokenKind::Arrow {
+		ret_ty = return_type(input);
+	}
+	let block = block(input);
+
+	FnDecl::new(pub_, SmolStr::from(name), generics, params, ret_ty, block)
+}
+
+fn generic_types(input: &mut ParseInput) -> GenericTypes {
+	input.next();
+	let mut names = vec![];
+	if input.tok().kind == TokenKind::CmpGT {
+		input.errs.push(input.error(
+			"expected indetifier in function generic type list".to_owned(),
+			PIErrorCode::ParseExpectedIdentGenericTypeList,
+			vec![(
+				format!(
+					"expected identifier, instead got `{}`",
+					tok_val(&input.program, input.tok())
+				),
+				input.tok().span.clone(),
+			)],
+		))
+	}
+	while input.tok().kind != TokenKind::CmpGT {
+		let name = ident(input);
+		names.push(name);
+		if input.tok().kind != TokenKind::CmpGT {
+			input.expect(
+				TokenKind::Comma,
+				input.error(
+					"expected `,` between identifiers in generic type list".to_owned(),
+					PIErrorCode::ParseExpectedCommaInGenericTypeList,
+					vec![],
+				),
+			);
+			input.next();
+		}
+	}
+	input.expect(
+		TokenKind::CmpGT,
+		input.error(
+			"expected `>` after identifiers in generic type list".to_owned(),
+			PIErrorCode::ParseExpectedGTAfterGenericTypeList,
+			vec![],
+		),
+	);
+	input.next();
+
+	return names;
+}
+
+pub fn params(input: &mut ParseInput) -> Vec<FnParam> {
+	input.expect(
+		TokenKind::LParen,
+		input.error(
+			"expected `(` before function parameter list".to_owned(),
+			PIErrorCode::ParseExpectedLParenBeforeParamList,
+			vec![(
+				format!(
+					"expected `(` before function parameter list, instead got `{}`",
+					tok_val(&input.program, input.tok())
+				),
+				input.tok().span.clone(),
+			)],
+		),
+	);
+	if input.tok().kind == TokenKind::LParen {
+		input.next();
+	}
+	let mut params = vec![];
+	while input.tok().kind != TokenKind::RParen {
+		let param = param(input);
+		params.push(param);
+		if input.tok().kind != TokenKind::RParen {
+			input.expect(
+				TokenKind::Comma,
+				input.error(
+					"expected `,` between parameters in function parameter list".to_owned(),
+					PIErrorCode::ParseExpectedCommaInParamList,
+					vec![],
+				),
+			);
+			input.next();
+		}
+	}
+	input.expect(
+		TokenKind::RParen,
+		input.error(
+			"expected `)` after function parameter list".to_owned(),
+			PIErrorCode::ParseExpectedRParenAfterParamList,
+			vec![],
+		),
+	);
+	input.next();
+
+	return params;
+}
+
+fn param(input: &mut ParseInput) -> FnParam {
+	let mut mut_ = false;
+	if input.tok().kind == TokenKind::Mut {
+		mut_ = true;
+		input.next();
+	}
+
+	let type_ = type_expr(input);
+	let name = ident(input);
+
+	FnParam::new(mut_, type_, name)
+}
+
+fn return_type(input: &mut ParseInput) -> Expr {
+	input.next();
+	let ty = type_expr(input);
+	if ty == Expr::Error {
+		if input.tok().kind != TokenKind::LBrace {
+			input.next();
+		}
+	}
+	return ty;
+}
+
+pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {
+	input.expect(
+		TokenKind::Type,
+		input.error(
+			"expected `type` at beginning of type declaration".to_owned(),
+			PIErrorCode::ParseExpectedTypeInTypeDecl,
+			vec![],
+		),
+	);
+	if input.tok().kind == TokenKind::Type {
+		input.next();
+	}
+
+	input.expect(
+		TokenKind::Ident,
+		input.error(
+			"expected identifier in type declaration".to_owned(),
+			PIErrorCode::ParseExpectedTypeInTypeDecl,
+			vec![(
+				"(hint) give your type a name".to_owned(),
+				input.tok().span.clone(),
+			)],
+		),
+	);
+	let mut name = String::new();
+	if input.tok().kind == TokenKind::Ident {
+		name = tok_val(&input.program, &input.tok());
+		input.next();
+	}
+
+	let type_ = type_expr(input);
+
+	input.expect(
+		TokenKind::Semicolon,
+		input.error(
+			"expected `;` after type declaration".to_owned(),
+			PIErrorCode::ParseExpectedSemicolonAfterTypeDecl,
+			vec![(
+				"(hint) insert `;` here".to_owned(),
+				input.tok().span.clone(),
+			)],
+		),
+	);
+	if input.tok().kind == TokenKind::Semicolon {
+		input.next();
+	}
+
+	input.typenames.push(name.clone());
+	TypeDecl::new(pub_, Ident::from(name.as_str()), type_)
 }

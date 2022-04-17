@@ -4,8 +4,10 @@ use pi_ast::AST;
 use pi_cfg::*;
 use pi_error::{filesystem::FileId, *};
 use pi_lexer::*;
-use pi_mir::*;
+// use pi_mir::*;
+use pi_codegen::*;
 use pi_parser::*;
+use pi_typecheck::*;
 
 fn parse_file(
 	project_dir: String,
@@ -20,7 +22,7 @@ fn parse_file(
 		.expect("could not add file");
 	let (toks, errs) = tokenize(&input, file_id);
 	err_reporting.report(errs);
-	let (ast, errs) = parse_tokens(file_name.to_owned(), &input, toks, file_id);
+	let (ast, errs) = parse_tokens(file_name.to_owned(), input, toks, file_id);
 	err_reporting.report(errs);
 
 	for mod_ in &ast.mods {
@@ -77,7 +79,19 @@ fn main() {
 		&mut err_reporting,
 	);
 
-	// println!("{:#?}", file_ast_map);
+	let entry_fileid: FileId = FileId(0);
+	let main = file_ast_map.get(&entry_fileid).expect("could not get file");
+	let _ = fs::write("ast.txt", main.to_string());
 
-	generate_mir(&file_ast_map, &mut err_reporting);
+	let errors = typecheck_ast(&mut file_ast_map);
+	err_reporting.report(errors);
+
+	let main = file_ast_map
+		.get_mut(&entry_fileid)
+		.expect("could not get file");
+	let _ = fs::write("ast_typechecked.txt", main.to_string());
+
+	codegen_ast(main);
+
+	// generate_mir(&file_ast_map, &mut err_reporting);
 }

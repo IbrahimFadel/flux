@@ -1,2 +1,4 @@
 /target
 ast.txt
+ast_typechecked.txt
+module.ll

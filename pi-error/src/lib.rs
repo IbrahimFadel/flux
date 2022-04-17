@@ -59,6 +59,8 @@ pub enum PIErrorCode {
 	ParseExpectedSemicolonAfterMethodInInterfaceTypeMethodList,
 	ParseExpectedSemicolonAfterTypeDecl,
 	ParseExpectedSemicolonAfterModStmt,
+
+	TypecheckUnexpectedSignednessInIntLit,
 }
 
 impl std::fmt::Display for PIErrorCode {

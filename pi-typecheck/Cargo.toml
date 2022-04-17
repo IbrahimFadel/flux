@@ -1,5 +1,5 @@
 [package]
-name = "pi-parser"
+name = "pi-typecheck"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,4 @@ edition = "2021"
 
 [dependencies]
 pi-ast = { path = "../pi-ast" }
-nom = "5.1"
-nom_locate = "2.0"
-smol_str = "0.1.21"
+pi-error = { path = "../pi-error" }

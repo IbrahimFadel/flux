@@ -1,9 +1,6 @@
-use std::fmt;
-
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
-
-mod print;
+use std::{fmt, ops::Range};
 
 #[derive(Debug)]
 pub struct AST {
@@ -21,6 +18,12 @@ impl AST {
 			functions,
 			types,
 		}
+	}
+}
+
+impl fmt::Display for AST {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:#?}", self)
 	}
 }
 
@@ -76,8 +79,8 @@ impl FnParam {
 #[derive(Debug, PartialEq)]
 pub struct TypeDecl {
 	pub_: bool,
-	name: Ident,
-	type_: Expr,
+	pub name: Ident,
+	pub type_: Expr,
 }
 
 impl TypeDecl {
@@ -89,7 +92,7 @@ impl TypeDecl {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
 	pub_: bool,
-	type_: Expr,
+	pub type_: Expr,
 	name: Ident,
 	val: Option<Expr>,
 }
@@ -124,7 +127,7 @@ impl Method {
 	}
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OpKind {
 	Plus,
 	Minus,
@@ -152,6 +155,7 @@ pub enum Expr {
 	StringLit(StringLit),
 	BoolLit(BoolLit),
 	PrimitiveType(PrimitiveType),
+	PtrType(PtrType),
 	StructType(StructType),
 	InterfaceType(InterfaceType),
 	CallExpr(CallExpr),
@@ -159,6 +163,62 @@ pub enum Expr {
 	Unary(Unary),
 	Void,
 	Error,
+}
+
+pub type PtrType = Box<Expr>;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct IntLit {
+	pub sign_span: Range<usize>,
+	pub val_span: Range<usize>,
+	pub signed: bool,
+	pub bits: u8,
+	pub val: u64,
+}
+
+impl IntLit {
+	pub fn new(
+		sign_span: Range<usize>,
+		val_span: Range<usize>,
+		signed: bool,
+		bits: u8,
+		val: u64,
+	) -> IntLit {
+		IntLit {
+			sign_span,
+			val_span,
+			signed,
+			bits,
+			val,
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FloatLit {
+	pub sign_span: Range<usize>,
+	pub val_span: Range<usize>,
+	pub signed: bool,
+	pub bits: u8,
+	pub val: f64,
+}
+
+impl FloatLit {
+	pub fn new(
+		sign_span: Range<usize>,
+		val_span: Range<usize>,
+		signed: bool,
+		bits: u8,
+		val: f64,
+	) -> FloatLit {
+		FloatLit {
+			sign_span,
+			val_span,
+			signed,
+			bits,
+			val,
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -187,9 +247,9 @@ impl CallExpr {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinOp {
-	x: Box<Expr>,
-	op: OpKind,
-	y: Box<Expr>,
+	pub x: Box<Expr>,
+	pub op: OpKind,
+	pub y: Box<Expr>,
 }
 
 impl BinOp {
@@ -253,14 +313,16 @@ impl Mod {
 
 #[derive(Debug, PartialEq)]
 pub struct VarDecl {
+	pub mut_: bool,
 	pub type_: Expr,
 	pub names: Vec<Ident>,
 	pub values: Option<Vec<Expr>>,
 }
 
 impl VarDecl {
-	pub fn new(type_: Expr, names: Vec<Ident>, values: Option<Vec<Expr>>) -> VarDecl {
+	pub fn new(mut_: bool, type_: Expr, names: Vec<Ident>, values: Option<Vec<Expr>>) -> VarDecl {
 		VarDecl {
+			mut_,
 			type_,
 			names,
 			values,
@@ -296,7 +358,7 @@ impl For {
 
 #[derive(Debug, PartialEq)]
 pub struct Return {
-	val: Option<Expr>,
+	pub val: Option<Expr>,
 }
 
 impl Return {
@@ -306,8 +368,6 @@ impl Return {
 }
 
 pub type Ident = SmolStr;
-pub type IntLit = i128;
-pub type FloatLit = f64;
 pub type CharLit = char;
 pub type StringLit = SmolStr;
 pub type BoolLit = bool;
