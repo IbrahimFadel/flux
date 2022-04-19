@@ -1,4 +1,4 @@
-use std::vec;
+use std::{collections::HashMap, vec};
 
 use pi_ast::{
 	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, Method, PrimitiveKind,
@@ -248,6 +248,7 @@ fn basic_lit(input: &mut ParseInput) -> Expr {
 }
 
 pub fn ident(input: &mut ParseInput) -> Ident {
+	let begin = input.tok().span.start;
 	let program_clone = input.program.clone(); // dirty hack because im too dumb to use rust
 	let x = SmolStr::from(tok_val(
 		&program_clone,
@@ -261,7 +262,7 @@ pub fn ident(input: &mut ParseInput) -> Ident {
 		),
 	));
 	input.next();
-	return x;
+	return Ident::new(begin..input.tok().span.start, x);
 }
 
 fn struct_type_expr(input: &mut ParseInput) -> Expr {
@@ -289,7 +290,7 @@ fn struct_type_expr(input: &mut ParseInput) -> Expr {
 		input.next();
 	}
 
-	let fields = field_list(input);
+	let fields = field_map(input);
 
 	input.expect(
 		TokenKind::RBrace,
@@ -306,16 +307,16 @@ fn struct_type_expr(input: &mut ParseInput) -> Expr {
 	return Expr::StructType(fields);
 }
 
-fn field_list(input: &mut ParseInput) -> Vec<Field> {
-	let mut fields = vec![];
+fn field_map(input: &mut ParseInput) -> HashMap<Ident, Field> {
+	let mut fields = HashMap::new();
 	while input.tok().kind != TokenKind::RBrace {
-		let field = field(input);
-		fields.push(field);
+		let (k, v) = field(input);
+		fields.insert(k, v);
 	}
 	fields
 }
 
-fn field(input: &mut ParseInput) -> Field {
+fn field(input: &mut ParseInput) -> (Ident, Field) {
 	let mut pub_ = false;
 	if input.tok().kind == TokenKind::Pub {
 		pub_ = true;
@@ -335,14 +336,20 @@ fn field(input: &mut ParseInput) -> Field {
 		),
 	);
 	let mut name = String::new();
+	let ident_begin = input.tok().span.start;
+	let mut ident_end = input.tok().span.start;
 	if input.tok().kind == TokenKind::Ident {
 		name = tok_val(&input.program, &input.tok());
 		input.next();
+		ident_end = input.tok().span.start;
 	}
 
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
-		return Field::new(pub_, type_, Ident::from(name), None);
+		return (
+			Ident::new(ident_begin..ident_end, SmolStr::from(name)),
+			Field::new(pub_, type_, None),
+		);
 	}
 
 	input.expect(
@@ -376,7 +383,10 @@ fn field(input: &mut ParseInput) -> Field {
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
 	}
-	return Field::new(pub_, type_, Ident::from(name.as_str()), Some(val));
+	return (
+		Ident::new(ident_begin..ident_end, SmolStr::from(name)),
+		Field::new(pub_, type_, Some(val)),
+	);
 }
 
 fn interface_type_expr(input: &mut ParseInput) -> Expr {

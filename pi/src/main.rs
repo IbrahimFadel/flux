@@ -28,7 +28,7 @@ fn parse_file(
 	for mod_ in &ast.mods {
 		parse_file(
 			project_dir.clone(),
-			mod_.name.to_string(),
+			mod_.name.val.to_string(),
 			file_ast_map,
 			err_reporting,
 		)
@@ -91,7 +91,8 @@ fn main() {
 		.expect("could not get file");
 	let _ = fs::write("ast_typechecked.txt", main.to_string());
 
-	codegen_ast(main);
+	let errors = codegen_ast(main, &entry_fileid);
+	err_reporting.report(errors);
 
 	// generate_mir(&file_ast_map, &mut err_reporting);
 }

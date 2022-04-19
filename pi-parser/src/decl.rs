@@ -191,9 +191,12 @@ pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {
 		),
 	);
 	let mut name = String::new();
+	let name_begin = input.tok().span.start;
+	let mut name_end = input.tok().span.end;
 	if input.tok().kind == TokenKind::Ident {
 		name = tok_val(&input.program, &input.tok());
 		input.next();
+		name_end = input.tok().span.start;
 	}
 
 	let type_ = type_expr(input);
@@ -214,5 +217,9 @@ pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {
 	}
 
 	input.typenames.push(name.clone());
-	TypeDecl::new(pub_, Ident::from(name.as_str()), type_)
+	TypeDecl::new(
+		pub_,
+		Ident::new(name_begin..name_end, SmolStr::from(name)),
+		type_,
+	)
 }

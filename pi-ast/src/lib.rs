@@ -1,6 +1,6 @@
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
-use std::{fmt, ops::Range};
+use std::{collections::HashMap, fmt, hash::Hash, ops::Range};
 
 #[derive(Debug)]
 pub struct AST {
@@ -27,7 +27,7 @@ impl fmt::Display for AST {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FnDecl {
 	pub pub_: bool,
 	pub name: SmolStr,
@@ -67,16 +67,16 @@ impl fmt::Display for FnDecl {
 pub struct FnParam {
 	pub mut_: bool,
 	pub type_: Expr,
-	pub name: SmolStr,
+	pub name: Ident,
 }
 
 impl FnParam {
-	pub fn new(mut_: bool, type_: Expr, name: SmolStr) -> FnParam {
+	pub fn new(mut_: bool, type_: Expr, name: Ident) -> FnParam {
 		FnParam { mut_, type_, name }
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TypeDecl {
 	pub_: bool,
 	pub name: Ident,
@@ -93,18 +93,12 @@ impl TypeDecl {
 pub struct Field {
 	pub_: bool,
 	pub type_: Expr,
-	name: Ident,
 	val: Option<Expr>,
 }
 
 impl Field {
-	pub fn new(pub_: bool, type_: Expr, name: Ident, val: Option<Expr>) -> Field {
-		Field {
-			pub_,
-			type_,
-			name,
-			val,
-		}
+	pub fn new(pub_: bool, type_: Expr, val: Option<Expr>) -> Field {
+		Field { pub_, type_, val }
 	}
 }
 
@@ -142,6 +136,8 @@ pub enum OpKind {
 	CmpAnd,
 	CmpOr,
 	Doublecolon,
+	Period,
+	Eq,
 	Illegal,
 }
 
@@ -163,6 +159,30 @@ pub enum Expr {
 	Unary(Unary),
 	Void,
 	Error,
+}
+
+#[derive(Debug, Clone, Eq)]
+pub struct Ident {
+	pub span: Range<usize>,
+	pub val: SmolStr,
+}
+
+impl Hash for Ident {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.val.hash(state);
+	}
+}
+
+impl PartialEq for Ident {
+	fn eq(&self, other: &Self) -> bool {
+		self.val == other.val
+	}
+}
+
+impl Ident {
+	pub fn new(span: Range<usize>, val: SmolStr) -> Self {
+		Self { span, val }
+	}
 }
 
 pub type PtrType = Box<Expr>;
@@ -285,7 +305,7 @@ impl PrimitiveType {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
 	FnDecl(FnDecl),
 	TypeDecl(TypeDecl),
@@ -299,7 +319,7 @@ pub enum Stmt {
 	Error,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Mod {
 	pub_: bool,
 	pub name: Ident,
@@ -311,7 +331,7 @@ impl Mod {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VarDecl {
 	pub mut_: bool,
 	pub type_: Expr,
@@ -330,7 +350,7 @@ impl VarDecl {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct If {
 	pub condition: Box<Expr>,
 	pub then: BlockStmt,
@@ -347,7 +367,7 @@ impl If {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct For {}
 
 impl For {
@@ -356,7 +376,7 @@ impl For {
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Return {
 	pub val: Option<Expr>,
 }
@@ -367,11 +387,10 @@ impl Return {
 	}
 }
 
-pub type Ident = SmolStr;
 pub type CharLit = char;
 pub type StringLit = SmolStr;
 pub type BoolLit = bool;
 pub type GenericTypes = Vec<Ident>;
 pub type BlockStmt = Vec<Stmt>;
-pub type StructType = Vec<Field>;
+pub type StructType = HashMap<Ident, Field>;
 pub type InterfaceType = Vec<Method>;

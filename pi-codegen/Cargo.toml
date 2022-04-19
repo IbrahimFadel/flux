@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 pi-ast = { path = "../pi-ast" }
+pi-error = { path = "../pi-error" }
 llvm-sys = "130.0.1"

@@ -112,6 +112,7 @@ version = "0.1.0"
 dependencies = [
  "llvm-sys",
  "pi-ast",
+ "pi-error",
 ]
 
 [[package]]

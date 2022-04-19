@@ -61,6 +61,12 @@ pub enum PIErrorCode {
 	ParseExpectedSemicolonAfterModStmt,
 
 	TypecheckUnexpectedSignednessInIntLit,
+	TypecheckExpectedPeriodOpInChainedStructFieldAccess,
+	TypecheckExpectedRHSOfPeriodToBeIdent,
+	TypecheckExpectedLHSOfPeriodToBeStruct,
+	TypecheckStructDoesNotHaveField,
+
+	CodegenUnknownIdentType,
 }
 
 impl std::fmt::Display for PIErrorCode {

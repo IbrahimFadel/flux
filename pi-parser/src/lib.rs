@@ -111,6 +111,8 @@ fn token_kind_to_op_kind(kind: &TokenKind) -> OpKind {
 		TokenKind::CmpGT => OpKind::CmpGT,
 		TokenKind::CmpGTE => OpKind::CmpGTE,
 		TokenKind::DoubleColon => OpKind::Doublecolon,
+		TokenKind::Period => OpKind::Period,
+		TokenKind::Eq => OpKind::Eq,
 		_ => OpKind::Illegal,
 	}
 }

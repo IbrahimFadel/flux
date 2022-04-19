@@ -1,13 +1,10 @@
-type Node struct {
-	i64 test;
+type Foo u8;
+
+type Dog struct {
+	Foo foo;
 };
 
-fn main(i32 test) -> i64 {
-	u64 x, y, z = 0 + 1, 10, 100;
-	f64 my_float = 1.0;
-	Node head;
-
-	u64 final = x;
-
-	return 0;
+fn main() {
+	Dog d;
+	d.foo = 10;
 }
