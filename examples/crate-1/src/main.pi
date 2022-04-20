@@ -1,10 +1,22 @@
 type Foo u8;
 
-type Dog struct {
-	Foo foo;
+type Animal interface {
+	pub fn say_hi(this, Foo x, u16 y);
+	fn bar() -> i16;
 };
 
+type Dog struct {
+	u8 foo;
+};
+
+apply Animal to Dog {
+	pub fn say_hi(this, Foo x, u16 y) {
+
+	}
+
+	fn bar() -> i16 {}
+}
+
 fn main() {
-	Dog d;
-	d.foo = 10;
+	
 }

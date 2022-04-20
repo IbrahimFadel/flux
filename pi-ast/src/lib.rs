@@ -8,15 +8,26 @@ pub struct AST {
 	pub mods: Vec<Mod>,
 	pub functions: Vec<FnDecl>,
 	pub types: Vec<TypeDecl>,
+	pub apply_blocks: Vec<ApplyBlock>,
+	pub struct_implementations: HashMap<Ident, Vec<TypeDecl>>,
 }
 
 impl AST {
-	pub fn new(name: String, mods: Vec<Mod>, functions: Vec<FnDecl>, types: Vec<TypeDecl>) -> AST {
+	pub fn new(
+		name: String,
+		mods: Vec<Mod>,
+		functions: Vec<FnDecl>,
+		types: Vec<TypeDecl>,
+		apply_blocks: Vec<ApplyBlock>,
+		struct_implementations: HashMap<Ident, Vec<TypeDecl>>,
+	) -> AST {
 		AST {
 			name,
 			mods,
 			functions,
 			types,
+			apply_blocks,
+			struct_implementations,
 		}
 	}
 }
@@ -27,30 +38,60 @@ impl fmt::Display for AST {
 	}
 }
 
+#[derive(Debug)]
+pub struct ApplyBlock {
+	pub interface_name: Option<Ident>,
+	pub struct_name: Ident,
+	pub methods: Vec<FnDecl>,
+}
+
+impl ApplyBlock {
+	pub fn new(
+		interface_name: Option<Ident>,
+		struct_name: Ident,
+		methods: Vec<FnDecl>,
+	) -> ApplyBlock {
+		ApplyBlock {
+			interface_name,
+			struct_name,
+			methods,
+		}
+	}
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct FnDecl {
+	pub pub_span: Range<usize>,
 	pub pub_: bool,
-	pub name: SmolStr,
+	pub name: Ident,
 	pub generics: GenericTypes,
+	pub params_span: Range<usize>,
 	pub params: Vec<FnParam>,
+	pub ret_ty_span: Range<usize>,
 	pub ret_ty: Expr,
 	pub block: BlockStmt,
 }
 
 impl FnDecl {
 	pub fn new(
+		pub_span: Range<usize>,
 		pub_: bool,
-		name: SmolStr,
+		name: Ident,
 		generics: GenericTypes,
+		params_span: Range<usize>,
 		params: Vec<FnParam>,
+		ret_ty_span: Range<usize>,
 		ret_ty: Expr,
 		block: BlockStmt,
 	) -> FnDecl {
 		FnDecl {
+			pub_span,
 			pub_,
 			name,
 			generics,
+			params_span,
 			params,
+			ret_ty_span,
 			ret_ty,
 			block,
 		}
@@ -65,14 +106,28 @@ impl fmt::Display for FnDecl {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FnParam {
+	pub mut_span: Range<usize>,
 	pub mut_: bool,
+	pub type_span: Range<usize>,
 	pub type_: Expr,
 	pub name: Ident,
 }
 
 impl FnParam {
-	pub fn new(mut_: bool, type_: Expr, name: Ident) -> FnParam {
-		FnParam { mut_, type_, name }
+	pub fn new(
+		mut_span: Range<usize>,
+		mut_: bool,
+		type_span: Range<usize>,
+		type_: Expr,
+		name: Ident,
+	) -> FnParam {
+		FnParam {
+			mut_span,
+			mut_,
+			type_span,
+			type_,
+			name,
+		}
 	}
 }
 
@@ -104,18 +159,32 @@ impl Field {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Method {
-	pub_: bool,
-	name: Ident,
-	params: Vec<FnParam>,
-	ret_ty: Expr,
+	pub pub_span: Range<usize>,
+	pub pub_: bool,
+	pub name: Ident,
+	pub params_span: Range<usize>,
+	pub params: Vec<FnParam>,
+	pub ret_ty_span: Range<usize>,
+	pub ret_ty: Expr,
 }
 
 impl Method {
-	pub fn new(pub_: bool, name: Ident, params: Vec<FnParam>, ret_ty: Expr) -> Method {
+	pub fn new(
+		pub_span: Range<usize>,
+		pub_: bool,
+		name: Ident,
+		params_span: Range<usize>,
+		params: Vec<FnParam>,
+		ret_ty_span: Range<usize>,
+		ret_ty: Expr,
+	) -> Method {
 		Method {
+			pub_span,
 			pub_,
 			name,
+			params_span,
 			params,
+			ret_ty_span,
 			ret_ty,
 		}
 	}
@@ -159,6 +228,16 @@ pub enum Expr {
 	Unary(Unary),
 	Void,
 	Error,
+}
+
+impl fmt::Display for Expr {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Expr::PrimitiveType(prim) => write!(f, "{:?}", prim.kind),
+			Expr::Ident(ident) => write!(f, "{}", ident.val.to_string()),
+			_ => write!(f, "{:?}", self),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -393,4 +472,4 @@ pub type BoolLit = bool;
 pub type GenericTypes = Vec<Ident>;
 pub type BlockStmt = Vec<Stmt>;
 pub type StructType = HashMap<Ident, Field>;
-pub type InterfaceType = Vec<Method>;
+pub type InterfaceType = HashMap<Ident, Method>;

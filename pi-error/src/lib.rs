@@ -59,12 +59,26 @@ pub enum PIErrorCode {
 	ParseExpectedSemicolonAfterMethodInInterfaceTypeMethodList,
 	ParseExpectedSemicolonAfterTypeDecl,
 	ParseExpectedSemicolonAfterModStmt,
+	ParseExpectedIdentAfterApply,
+	ParseExpectedIdentAfterTo,
+	ParseExpectedLBraceInApplyBlock,
+	ParseExpectedFnOrRBraceInApplyBlock,
+	ParseExpectedRBraceAfterApplyBlock,
+	ParseUnexpectedThisOutsideApply,
+	ParseExpectedFnInInterfaceMethod,
 
 	TypecheckUnexpectedSignednessInIntLit,
 	TypecheckExpectedPeriodOpInChainedStructFieldAccess,
 	TypecheckExpectedRHSOfPeriodToBeIdent,
 	TypecheckExpectedLHSOfPeriodToBeStruct,
 	TypecheckStructDoesNotHaveField,
+	TypecheckCouldNotFindType,
+	TypecheckExpectedTypeToBeInterface,
+	TypecheckCouldNotFindMethodInInterface,
+	TypecheckInterfaceMethodRetTyDontMatch,
+	TypecheckInterfaceMethodParamsDontMatch,
+	TypecheckInterfaceMethodVisibilitiesDontMatch,
+	TypecheckNotAllInterfaceMethodsImplemented,
 
 	CodegenUnknownIdentType,
 }
@@ -150,8 +164,8 @@ impl PIErrorReporting {
 		}
 	}
 
-	pub fn report(&self, errs: Vec<PIError>) {
-		for err in &errs {
+	pub fn report(&self, errs: &Vec<PIError>) {
+		for err in errs {
 			let writer = &mut self.writer.lock();
 			let _ = term::emit(writer, &self.config, &self.files, &err.to_diagnostic());
 		}

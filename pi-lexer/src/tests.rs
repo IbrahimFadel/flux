@@ -128,7 +128,7 @@ fn lexing() {
 			),
 		),
 		(
-			"pub fn return mut type interface struct nil if else",
+			"pub fn return mut type interface struct nil if else mod apply to",
 			(
 				vec![
 					Token::from(TokenKind::Pub, 0..3),
@@ -141,6 +141,9 @@ fn lexing() {
 					Token::from(TokenKind::Nil, 40..43),
 					Token::from(TokenKind::If, 44..46),
 					Token::from(TokenKind::Else, 47..51),
+					Token::from(TokenKind::Mod, 52..55),
+					Token::from(TokenKind::Apply, 56..61),
+					Token::from(TokenKind::To, 62..64),
 				],
 				vec![],
 			),

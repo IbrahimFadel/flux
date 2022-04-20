@@ -1,6 +1,6 @@
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range};
 
-use pi_ast::{FnDecl, Mod, OpKind, TypeDecl, AST};
+use pi_ast::{ApplyBlock, FnDecl, Mod, OpKind, TypeDecl, AST};
 use pi_error::{filesystem::FileId, PIError, PIErrorCode};
 use pi_lexer::token::{Token, TokenKind};
 
@@ -9,7 +9,7 @@ mod expr;
 mod stmt;
 mod tests;
 
-use decl::{fn_decl, type_decl};
+use decl::{apply_block, fn_decl, type_decl};
 use stmt::mod_stmt;
 
 pub struct ParseInput<'a> {
@@ -19,6 +19,7 @@ pub struct ParseInput<'a> {
 	offset: usize,
 	file_id: FileId,
 	typenames: Vec<String>,
+	inside_apply_or_interface: bool,
 }
 
 impl<'a> ParseInput<'a> {
@@ -117,17 +118,22 @@ fn token_kind_to_op_kind(kind: &TokenKind) -> OpKind {
 	}
 }
 
-pub fn top_level_decls(input: &mut ParseInput) -> (Vec<Mod>, Vec<FnDecl>, Vec<TypeDecl>) {
+pub fn top_level_decls(
+	input: &mut ParseInput,
+) -> (Vec<Mod>, Vec<FnDecl>, Vec<TypeDecl>, Vec<ApplyBlock>) {
 	let mut fn_decls = vec![];
 	let mut type_decls = vec![];
 	let mut mod_stmts = vec![];
+	let mut apply_blocks = vec![];
 
 	while input.tok().kind != TokenKind::EOF {
 		match input.tok().kind {
 			TokenKind::Pub => {
+				let pub_start = input.tok().span.start;
 				input.next();
+				let pub_end = input.tok().span.start;
 				match input.tok().kind {
-					TokenKind::Fn => fn_decls.push(fn_decl(input, true)),
+					TokenKind::Fn => fn_decls.push(fn_decl(input, true, pub_start..pub_end)),
 					TokenKind::Type => type_decls.push(type_decl(input, true)),
 					TokenKind::Mod => mod_stmts.push(mod_stmt(input, true)),
 					_ => {
@@ -152,9 +158,20 @@ pub fn top_level_decls(input: &mut ParseInput) -> (Vec<Mod>, Vec<FnDecl>, Vec<Ty
 					}
 				}
 			}
-			TokenKind::Fn => fn_decls.push(fn_decl(input, false)),
+			TokenKind::Fn => fn_decls.push(fn_decl(
+				input,
+				false,
+				input.tok().span.start..input.tok().span.start,
+			)),
 			TokenKind::Type => type_decls.push(type_decl(input, false)),
 			TokenKind::Mod => mod_stmts.push(mod_stmt(input, false)),
+			TokenKind::Apply => apply_blocks.push(apply_block(input)),
+			TokenKind::BlockComment => {
+				input.next();
+			}
+			TokenKind::LineComment => {
+				input.next();
+			}
 			_ => {
 				input.errs.push(input.error(
 					"expected top level declaration".to_owned(),
@@ -177,7 +194,7 @@ pub fn top_level_decls(input: &mut ParseInput) -> (Vec<Mod>, Vec<FnDecl>, Vec<Ty
 			}
 		}
 	}
-	(mod_stmts, fn_decls, type_decls)
+	(mod_stmts, fn_decls, type_decls, apply_blocks)
 }
 
 pub fn parse_tokens(
@@ -193,8 +210,11 @@ pub fn parse_tokens(
 		errs: vec![],
 		offset: 0,
 		typenames: vec![],
+		inside_apply_or_interface: false,
 	};
-	let (mods, functions, types) = top_level_decls(&mut initial_input);
-
-	return (AST::new(name, mods, functions, types), initial_input.errs);
+	let (mods, functions, types, apply_blocks) = top_level_decls(&mut initial_input);
+	return (
+		AST::new(name, mods, functions, types, apply_blocks, HashMap::new()),
+		initial_input.errs,
+	);
 }

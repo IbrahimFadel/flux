@@ -1,4 +1,8 @@
-use pi_ast::{Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, TypeDecl};
+use std::ops::Range;
+
+use pi_ast::{
+	ApplyBlock, Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, TypeDecl,
+};
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
 use smol_str::SmolStr;
@@ -9,9 +13,98 @@ use crate::{
 	tok_val, ParseInput,
 };
 
-pub fn fn_decl(input: &mut ParseInput, pub_: bool) -> FnDecl {
+pub fn apply_block(input: &mut ParseInput) -> ApplyBlock {
+	input.next();
+
+	input.expect(
+		TokenKind::Ident,
+		input.error(
+			"expected identifier following `apply`".to_owned(),
+			PIErrorCode::ParseExpectedIdentAfterApply,
+			vec![],
+		),
+	);
+	let mut interface_name = None;
+	let mut struct_name = Ident {
+		span: input.tok().span.start..input.tok().span.end,
+		val: SmolStr::from(""),
+	};
+	if input.tok().kind == TokenKind::Ident {
+		struct_name = ident(input);
+	}
+
+	if input.tok().kind == TokenKind::To {
+		input.next();
+		if input.tok().kind == TokenKind::Ident {
+			interface_name = Some(struct_name);
+			struct_name = ident(input);
+		} else {
+			input.errs.push(input.error(
+				"expected ident following `to`".to_owned(),
+				PIErrorCode::ParseExpectedIdentAfterTo,
+				vec![],
+			));
+		}
+	}
+
+	input.expect(
+		TokenKind::LBrace,
+		input.error(
+			"expected `{` at start of `apply` block".to_owned(),
+			PIErrorCode::ParseExpectedLBraceInApplyBlock,
+			vec![],
+		),
+	);
+	if input.tok().kind == TokenKind::LBrace {
+		input.next();
+	}
+
+	let mut methods = vec![];
+	input.inside_apply_or_interface = true;
+
+	if input.tok().kind != TokenKind::Pub
+		&& input.tok().kind != TokenKind::Fn
+		&& input.tok().kind != TokenKind::RBrace
+	{
+		input.errs.push(input.error(
+			"expected either function declaration or `}` in apply block".to_owned(),
+			PIErrorCode::ParseExpectedFnOrRBraceInApplyBlock,
+			vec![],
+		));
+	} else {
+		while input.tok().kind != TokenKind::RBrace {
+			let mut pub_ = false;
+			let pub_start = input.tok().span.start;
+			let mut pub_end = input.tok().span.start;
+			if input.tok().kind == TokenKind::Pub {
+				input.next();
+				pub_end = input.tok().span.start;
+				pub_ = true;
+			}
+			methods.push(fn_decl(input, pub_, pub_start..pub_end));
+		}
+
+		input.expect(
+			TokenKind::RBrace,
+			input.error(
+				"expected `}` after `apply` block".to_owned(),
+				PIErrorCode::ParseExpectedRBraceAfterApplyBlock,
+				vec![],
+			),
+		);
+		if input.tok().kind == TokenKind::RBrace {
+			input.next();
+		}
+	}
+
+	input.inside_apply_or_interface = false;
+	return ApplyBlock::new(interface_name, struct_name, methods);
+}
+
+pub fn fn_decl(input: &mut ParseInput, pub_: bool, pub_span: Range<usize>) -> FnDecl {
 	input.next();
 	let program_clone = input.program.clone();
+	let name_begin = input.tok().span.start;
 	let name = tok_val(
 		&program_clone,
 		input.expect(
@@ -36,19 +129,42 @@ pub fn fn_decl(input: &mut ParseInput, pub_: bool) -> FnDecl {
 		// if someone forgets an indentifier, then we shouldn't advance so that params / generics can be parsed
 		input.next();
 	}
+	let name_end = input.tok().span.start;
 
 	let mut generics = vec![];
 	if input.tok().kind == TokenKind::CmpLT {
 		generics = generic_types(input);
 	}
+	let params_start = input.tok().span.start;
 	let params = params(input);
+	let params_end = input.tok().span.start;
 	let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
+	let mut ret_ty_start = input.tok().span.start;
 	if input.tok().kind == TokenKind::Arrow {
-		ret_ty = return_type(input);
+		input.next();
+		ret_ty_start = input.tok().span.start;
+		let ty = type_expr(input);
+		if ty == Expr::Error {
+			if input.tok().kind != TokenKind::LBrace {
+				input.next();
+			}
+		}
+		ret_ty = ty;
 	}
+	let ret_ty_end = input.tok().span.start;
 	let block = block(input);
 
-	FnDecl::new(pub_, SmolStr::from(name), generics, params, ret_ty, block)
+	FnDecl::new(
+		pub_span,
+		pub_,
+		Ident::new(name_begin..name_end, SmolStr::from(name)),
+		generics,
+		params_start..params_end,
+		params,
+		ret_ty_start..ret_ty_end,
+		ret_ty,
+		block,
+	)
 }
 
 fn generic_types(input: &mut ParseInput) -> GenericTypes {
@@ -114,7 +230,7 @@ pub fn params(input: &mut ParseInput) -> Vec<FnParam> {
 		input.next();
 	}
 	let mut params = vec![];
-	while input.tok().kind != TokenKind::RParen {
+	while input.tok().kind != TokenKind::RParen && input.tok().kind != TokenKind::EOF {
 		let param = param(input);
 		params.push(param);
 		if input.tok().kind != TokenKind::RParen {
@@ -144,26 +260,41 @@ pub fn params(input: &mut ParseInput) -> Vec<FnParam> {
 
 fn param(input: &mut ParseInput) -> FnParam {
 	let mut mut_ = false;
+	let mut_start = input.tok().span.start;
+	let mut mut_end = input.tok().span.start;
 	if input.tok().kind == TokenKind::Mut {
 		mut_ = true;
 		input.next();
+		mut_end = input.tok().span.start;
 	}
 
-	let type_ = type_expr(input);
-	let name = ident(input);
-
-	FnParam::new(mut_, type_, name)
-}
-
-fn return_type(input: &mut ParseInput) -> Expr {
-	input.next();
-	let ty = type_expr(input);
-	if ty == Expr::Error {
-		if input.tok().kind != TokenKind::LBrace {
+	if input.tok().kind == TokenKind::Ident && tok_val(&input.program, input.tok()) == "this" {
+		if input.inside_apply_or_interface {
+			let begin = input.tok().span.start;
+			input.next();
+			return FnParam::new(
+				mut_start..mut_end,
+				mut_,
+				0..0,        // doesn't matter
+				Expr::Error, // it's not actually an error, but we don't care about this value and will never read it. An Option might work better, but it seems like overkill
+				Ident::new(begin..input.tok().span.end, SmolStr::from("this")),
+			);
+		} else {
+			input.errs.push(input.error(
+				"unexpected keyword `this` outside of allow block".to_owned(),
+				PIErrorCode::ParseUnexpectedThisOutsideApply,
+				vec![],
+			));
 			input.next();
 		}
 	}
-	return ty;
+
+	let type_begin = input.tok().span.start;
+	let type_ = type_expr(input);
+	let type_end = input.tok().span.end;
+	let name = ident(input);
+
+	FnParam::new(mut_start..mut_end, mut_, type_begin..type_end, type_, name)
 }
 
 pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {

@@ -66,6 +66,8 @@ pub enum TokenKind {
 	If,
 	Else,
 	Mod,
+	Apply,
+	To,
 
 	TypesBegin,
 
@@ -114,6 +116,8 @@ pub fn lookup_keyword(v: &str) -> TokenKind {
 		"if" => TokenKind::If,
 		"else" => TokenKind::Else,
 		"mod" => TokenKind::Mod,
+		"apply" => TokenKind::Apply,
+		"to" => TokenKind::To,
 
 		"i64" => TokenKind::I64,
 		"u64" => TokenKind::U64,

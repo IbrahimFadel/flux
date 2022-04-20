@@ -1,8 +1,8 @@
 use std::{collections::HashMap, vec};
 
 use pi_ast::{
-	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, Method, PrimitiveKind,
-	PrimitiveType, PtrType, StringLit, Unary,
+	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method,
+	PrimitiveKind, PrimitiveType, PtrType, StringLit, Unary,
 };
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
@@ -249,18 +249,16 @@ fn basic_lit(input: &mut ParseInput) -> Expr {
 
 pub fn ident(input: &mut ParseInput) -> Ident {
 	let begin = input.tok().span.start;
-	let program_clone = input.program.clone(); // dirty hack because im too dumb to use rust
-	let x = SmolStr::from(tok_val(
-		&program_clone,
-		input.expect(
-			TokenKind::Ident,
-			input.error(
-				"expected identifier".to_owned(),
-				PIErrorCode::ParseExpectedIdent,
-				vec![("".to_owned(), input.tok().span.clone())],
-			),
+	let input_program_clone = input.program.clone();
+	let res = input.expect(
+		TokenKind::Ident,
+		input.error(
+			"expected identifier".to_owned(),
+			PIErrorCode::ParseExpectedIdent,
+			vec![("".to_owned(), input.tok().span.clone())],
 		),
-	));
+	);
+	let x = SmolStr::from(tok_val(&input_program_clone, res));
 	input.next();
 	return Ident::new(begin..input.tok().span.start, x);
 }
@@ -414,12 +412,14 @@ fn interface_type_expr(input: &mut ParseInput) -> Expr {
 		input.next();
 	}
 
-	let methods = method_list(input);
+	input.inside_apply_or_interface = true;
+	let methods = method_map(input);
+	input.inside_apply_or_interface = false;
 
 	input.expect(
 		TokenKind::RBrace,
 		input.error(
-			"expected `{` in interface type expression".to_owned(),
+			"expected `}` after interface type expression".to_owned(),
 			PIErrorCode::ParseExpectedRBraceInInterfaceTypeExpr,
 			vec![],
 		),
@@ -431,29 +431,48 @@ fn interface_type_expr(input: &mut ParseInput) -> Expr {
 	return Expr::InterfaceType(methods);
 }
 
-fn method_list(input: &mut ParseInput) -> Vec<Method> {
-	let mut methods = vec![];
-	while input.tok().kind != TokenKind::RBrace {
-		let method = method(input);
-		methods.push(method);
+fn method_map(input: &mut ParseInput) -> InterfaceType {
+	let mut methods = HashMap::new();
+	while input.tok().kind != TokenKind::RBrace && input.tok().kind != TokenKind::EOF {
+		let (k, v) = method(input);
+		methods.insert(k, v);
 	}
-	methods
+	return methods;
 }
 
-fn method(input: &mut ParseInput) -> Method {
+fn method(input: &mut ParseInput) -> (Ident, Method) {
 	let mut pub_ = false;
+	let pub_start = input.tok().span.start;
+	let mut pub_end = input.tok().span.start;
 	if input.tok().kind == TokenKind::Pub {
 		pub_ = true;
+		input.next();
+		pub_end = input.tok().span.start;
+	}
+
+	input.expect(
+		TokenKind::Fn,
+		input.error(
+			"expected `fn` in interface method declaration".to_owned(),
+			PIErrorCode::ParseExpectedFnInInterfaceMethod,
+			vec![],
+		),
+	);
+	if input.tok().kind == TokenKind::Fn {
 		input.next();
 	}
 
 	let name = ident(input);
+	let params_start = input.tok().span.start;
 	let params = params(input);
+	let params_end = input.tok().span.end;
+	let ret_ty_start = input.tok().span.start;
 	let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
 	if input.tok().kind == TokenKind::Arrow {
 		input.next();
 		ret_ty = type_expr(input);
 	}
+	let ret_ty_end = input.tok().span.start;
 
 	input.expect(
 		TokenKind::Semicolon,
@@ -467,7 +486,18 @@ fn method(input: &mut ParseInput) -> Method {
 		input.next();
 	}
 
-	return Method::new(pub_, name, params, ret_ty);
+	return (
+		name.clone(),
+		Method::new(
+			pub_start..pub_end,
+			pub_,
+			name,
+			params_start..params_end,
+			params,
+			ret_ty_start..ret_ty_end,
+			ret_ty,
+		),
+	);
 }
 
 pub fn type_expr(input: &mut ParseInput) -> Expr {

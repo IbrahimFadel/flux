@@ -1,72 +1,388 @@
-use std::{borrow::BorrowMut, collections::HashMap, fmt::Result, ops::Range};
+use std::{borrow::BorrowMut, collections::HashMap, ops::Range};
 
 use pi_ast::{
-	BinOp, BlockStmt, Expr, FloatLit, FnDecl, Ident, IntLit, OpKind, PrimitiveKind, PrimitiveType,
-	Return, Stmt, StructType, TypeDecl, VarDecl, AST,
+	ApplyBlock, BinOp, BlockStmt, Expr, FloatLit, FnDecl, Ident, IntLit, InterfaceType, Method,
+	OpKind, PrimitiveKind, PrimitiveType, Return, Stmt, StructType, TypeDecl, VarDecl, AST,
 };
 use pi_error::{filesystem::FileId, *};
 
-struct TypecheckCtx<'a> {
+struct TypecheckCtx {
 	expecting_ty: Expr,
-	errors: &'a mut Vec<PIError>,
 	file_id: FileId,
 	types: HashMap<String, TypeDecl>,
 	var_types: HashMap<String, Expr>,
 	cur_block: Option<BlockStmt>,
 }
 
-impl<'a> TypecheckCtx<'a> {
+impl TypecheckCtx {
 	fn error(&self, msg: String, code: PIErrorCode, labels: Vec<(String, Range<usize>)>) -> PIError {
 		PIError::new(msg, code, labels, self.file_id)
 	}
 
-	pub fn check(&mut self, ast: &'a mut AST) {
+	pub fn check(&mut self, ast: &mut AST) -> Option<PIError> {
+		self.edit_interface_this_types(&mut ast.types);
 		for ty in &ast.types {
 			self.types.insert(ty.name.val.to_string(), ty.clone());
-			// match &ty.type_ {
-			// Expr::StructType(struct_ty) => {
-			// 	self
-			// 		.types
-			// 		.insert(ty.name.val.to_string(), struct_ty.clone());
-			// 	()
-			// }
-			// Expr::PrimitiveType(prim) => {
-			// 	self.types.insert(ty.name.val.to_string(), prim.clone());
-			// }
-			// _ => (),
-			// }
+		}
+
+		for apply_block in &mut ast.apply_blocks {
+			if let Some(err) = self.check_apply(apply_block, &mut ast.struct_implementations) {
+				return Some(err);
+			}
 		}
 
 		for f in &mut ast.functions {
-			self.check_fn(f);
+			if let Some(err) = self.check_fn(f) {
+				return Some(err);
+			}
+		}
+
+		return None;
+	}
+
+	fn edit_interface_this_types(&self, types: &mut Vec<TypeDecl>) {
+		for ty in types {
+			if let Expr::InterfaceType(interface_ty) = &mut ty.type_ {
+				for (_, method) in interface_ty {
+					if method.params.len() > 0 {
+						if method.params[0].name.val == "this" {
+							method.params[0].type_ = Expr::PtrType(Box::from(Expr::Ident(ty.name.clone())));
+						}
+					}
+				}
+			}
 		}
 	}
 
-	fn check_fn(&mut self, f: &'a mut FnDecl) {
+	fn check_apply(
+		&mut self,
+		apply_block: &mut ApplyBlock,
+		struct_implementations_map: &mut HashMap<Ident, Vec<TypeDecl>>,
+	) -> Option<PIError> {
+		for f in &mut apply_block.methods {
+			if let Some(res) = self.check_fn(f) {
+				return Some(res);
+			}
+
+			if f.params.len() > 0 {
+				if f.params[0].name.val == "this" {
+					f.params[0].type_ = Expr::PtrType(Box::from(Expr::Ident(Ident::new(
+						0..0,
+						apply_block.struct_name.val.clone(),
+					))));
+				}
+			}
+		}
+		if apply_block.interface_name.is_none() {
+			return None;
+		}
+
+		let interface_name = apply_block.interface_name.as_ref().unwrap();
+		if let Some(ty_decl) = self.types.get(&interface_name.val.to_string()) {
+			if let Expr::InterfaceType(interface_ty) = &ty_decl.type_ {
+				if let Some(err) = self.compare_interface_methods_to_apply_block_methods(
+					interface_name,
+					interface_ty,
+					&apply_block.methods,
+				) {
+					return Some(err);
+				} else {
+					struct_implementations_map
+						.entry(apply_block.struct_name.clone())
+						.or_insert(Vec::new())
+						.push(ty_decl.clone());
+				}
+			} else {
+				return Some(self.error(
+					format!(
+						"expected `{}` to be an interface",
+						interface_name.val.to_string()
+					),
+					PIErrorCode::TypecheckExpectedTypeToBeInterface,
+					vec![],
+				));
+			}
+		} else {
+			return Some(self.error(
+				format!(
+					"could not find type with name `{}`",
+					interface_name.val.to_string()
+				),
+				PIErrorCode::TypecheckCouldNotFindType,
+				vec![],
+			));
+		}
+
+		return None;
+	}
+
+	fn compare_interface_methods_to_apply_block_methods(
+		&self,
+		interface_name: &Ident, // only needed for error reporting
+		interface_ty: &InterfaceType,
+		methods: &Vec<FnDecl>,
+	) -> Option<PIError> {
+		if methods.len() != interface_ty.len() {
+			return Some(self.error(
+				format!(
+					"not all methods of `{}` were implemented in apply block",
+					interface_name.val.to_string(),
+				),
+				PIErrorCode::TypecheckNotAllInterfaceMethodsImplemented,
+				vec![],
+			));
+		}
+		for method in methods {
+			if let Some(interface_method) = interface_ty.get(&method.name) {
+				if let Some(err) =
+					self.compare_interface_method_pubs(interface_name, interface_method, method)
+				{
+					return Some(err);
+				} else if let Some(err) =
+					self.compare_interface_method_return_types(interface_name, interface_method, method)
+				{
+					return Some(err);
+				} else if let Some(err) =
+					self.compare_interface_method_param_types(interface_name, interface_method, method)
+				{
+					return Some(err);
+				}
+			} else {
+				return Some(self.error(
+					format!(
+						"method `{}` could not be found in interface `{}`",
+						method.name.val.to_string(),
+						interface_name.val.to_string(),
+					),
+					PIErrorCode::TypecheckCouldNotFindMethodInInterface,
+					vec![],
+				));
+			}
+		}
+
+		return None;
+	}
+
+	fn compare_interface_method_pubs(
+		&self,
+		interface_name: &Ident,
+		interface_method: &Method,
+		method: &FnDecl,
+	) -> Option<PIError> {
+		let visibility1 = match interface_method.pub_ {
+			true => "public",
+			false => "private",
+		};
+		let visibility2 = match method.pub_ {
+			true => "public",
+			false => "private",
+		};
+		if visibility1 != visibility2 {
+			return Some(self.error(
+				format!("interface method visibilities do not match"),
+				PIErrorCode::TypecheckInterfaceMethodVisibilitiesDontMatch,
+				vec![
+					(
+						format!(
+							"`{}` method `{}` defined as {}",
+							interface_name.val.to_string(),
+							interface_method.name.val.to_string(),
+							visibility1
+						),
+						interface_method.pub_span.clone(),
+					),
+					(
+						format!("but defined as {} in apply block", visibility2),
+						method.pub_span.clone(),
+					),
+				],
+			));
+		}
+		return None;
+	}
+
+	fn compare_interface_method_param_types(
+		&self,
+		interface_name: &Ident,
+		interface_method: &Method,
+		method: &FnDecl,
+	) -> Option<PIError> {
+		let mut labels: Vec<(String, Range<usize>)> = vec![(
+			format!("method parameters in appy block do not match the interface method definition"),
+			interface_method.params_span.clone(),
+		)];
+		let method_params_len = method.params.len();
+		let mut i = 0;
+		for interface_param in &interface_method.params {
+			if method_params_len >= i + 1 {
+				let i_suffix_str = match i + 1 {
+					1 => "st",
+					2 => "nd",
+					3 => "rd",
+					_ => "th",
+				};
+				let mutability1 = match interface_param.mut_ {
+					true => "mutable",
+					false => "immutable",
+				};
+				let mutability2 = match method.params[i].mut_ {
+					true => "mutable",
+					false => "immutable",
+				};
+				if mutability1 != mutability2 {
+					labels.push((
+						format!(
+							"expected {}{} parameter to be {}",
+							i + 1,
+							i_suffix_str,
+							mutability1
+						),
+						interface_param.mut_span.clone(),
+					));
+					labels.push((
+						format!(
+							"instead got {} {}{} parameter",
+							mutability2,
+							i + 1,
+							i_suffix_str,
+						),
+						method.params[i].mut_span.clone(),
+					));
+				}
+				if i == 0 && interface_param.name.val == "this" {
+					i += 1;
+					continue;
+				}
+				if interface_param.type_ != method.params[i].type_ {
+					labels.push((
+						format!(
+							"expected {}{} parameter to be of type `{}`",
+							i + 1,
+							i_suffix_str,
+							interface_param.type_
+						),
+						interface_param.type_span.clone(),
+					));
+					labels.push((
+						format!(
+							"instead got {}{} parameter of type `{}`",
+							i + 1,
+							i_suffix_str,
+							method.params[i].type_
+						),
+						method.params[i].type_span.clone(),
+					));
+				}
+			} else {
+				labels.push((
+					format!(
+						"`{}` method `{}` is defined with more parameters than in the apply block",
+						interface_name.val.to_string(),
+						interface_method.name.val.to_string(),
+					),
+					interface_method.params_span.clone(),
+				));
+				labels.push((
+					format!(
+						"not enough parameters to implement `{}`",
+						interface_method.name.val.to_string(),
+					),
+					method.params_span.clone(),
+				));
+			}
+			i += 1;
+		}
+
+		if method_params_len > i {
+			labels.push((
+				"too many parameters in method definition".to_string(),
+				method.params_span.clone(),
+			));
+		}
+
+		if labels.len() > 1 {
+			return Some(self.error(
+				"method parameters in appy block do not match the interface method definition".to_owned(),
+				PIErrorCode::TypecheckInterfaceMethodParamsDontMatch,
+				labels,
+			));
+		}
+		return None;
+	}
+
+	fn compare_interface_method_return_types(
+		&self,
+		interface_name: &Ident,
+		interface_method: &Method,
+		method: &FnDecl,
+	) -> Option<PIError> {
+		if interface_method.ret_ty != method.ret_ty {
+			return Some(self.error(
+				format!(
+					"expected `{}` method `{}` to return `{}`, instead got `{}`",
+					interface_name.val.to_string(),
+					interface_method.name.val.to_string(),
+					&interface_method.ret_ty,
+					&method.ret_ty
+				),
+				PIErrorCode::TypecheckInterfaceMethodRetTyDontMatch,
+				vec![
+					(
+						format!("defined with type `{}` in apply block", method.ret_ty),
+						method.ret_ty_span.clone(),
+					),
+					(
+						format!(
+							"method `{}` defined here",
+							interface_method.name.val.to_string()
+						),
+						interface_method.name.span.clone(),
+					),
+					(
+						format!(
+							"`{}` return type defined as `{}`",
+							interface_method.name.val.to_string(),
+							interface_method.ret_ty,
+						),
+						interface_method.ret_ty_span.clone(),
+					),
+				],
+			));
+		}
+		return None;
+	}
+
+	fn check_fn(&mut self, f: &mut FnDecl) -> Option<PIError> {
 		self.cur_block = Some(f.block.clone());
 		for stmt in &mut f.block {
 			self.expecting_ty = f.ret_ty.clone();
-			self.check_stmt(stmt);
+			if let Some(err) = self.check_stmt(stmt) {
+				return Some(err);
+			}
 		}
 		self.var_types.clear();
+		return None;
 	}
 
-	fn check_stmt(&mut self, stmt: &mut Stmt) {
+	fn check_stmt(&mut self, stmt: &mut Stmt) -> Option<PIError> {
 		match stmt {
 			Stmt::VarDecl(var) => self.check_var(var),
 			Stmt::Return(ret) => self.check_ret(ret),
 			Stmt::ExprStmt(expr) => self.check_expr(expr),
-			_ => (),
+			_ => None,
 		}
 	}
 
-	fn check_ret(&mut self, ret: &mut Return) {
+	fn check_ret(&mut self, ret: &mut Return) -> Option<PIError> {
 		if let Some(x) = &mut ret.val {
-			self.check_expr(x);
+			if let Some(err) = self.check_expr(x) {
+				return Some(err);
+			}
 		}
+		return None;
 	}
 
-	fn check_var(&mut self, var: &mut VarDecl) {
+	fn check_var(&mut self, var: &mut VarDecl) -> Option<PIError> {
 		self.expecting_ty = var.type_.clone();
 		for name in &var.names {
 			self
@@ -76,35 +392,47 @@ impl<'a> TypecheckCtx<'a> {
 
 		if let Some(vals) = &mut var.values {
 			for val in vals {
-				self.check_expr(val);
+				if let Some(err) = self.check_expr(val) {
+					return Some(err);
+				}
 			}
 		}
+
+		return None;
 	}
 
-	fn check_expr(&mut self, expr: &mut Expr) {
+	fn check_expr(&mut self, expr: &mut Expr) -> Option<PIError> {
 		match expr {
 			Expr::IntLit(int) => self.check_int_lit(int),
 			Expr::FloatLit(float) => self.check_float_lit(float.borrow_mut()),
 			Expr::BinOp(binop) => self.check_binop(binop),
-			_ => (),
+			_ => None,
 		}
 	}
 
-	fn check_binop(&mut self, binop: &mut BinOp) {
-		self.check_expr(&mut *binop.x);
+	fn check_binop(&mut self, binop: &mut BinOp) -> Option<PIError> {
+		if let Some(err) = self.check_expr(&mut *binop.x) {
+			return Some(err);
+		}
 		if binop.op == OpKind::Eq {
 			match &*binop.x {
 				Expr::BinOp(b) => {
-					self.expecting_ty = self.get_struct_access_type(b);
-					println!("expecting: {:?}", self.expecting_ty);
+					let (expr, err) = self.get_struct_access_type(b);
+					if let Some(err) = err {
+						return Some(err);
+					}
+					self.expecting_ty = expr;
 				}
 				_ => (),
 			}
 		}
-		self.check_expr(&mut *binop.y);
+		if let Some(err) = self.check_expr(&mut *binop.y) {
+			return Some(err);
+		}
+		return None;
 	}
 
-	fn get_struct_access_type(&mut self, binop: &BinOp) -> Expr {
+	fn get_struct_access_type(&mut self, binop: &BinOp) -> (Expr, Option<PIError>) {
 		let mut b = binop;
 		let mut field_names = vec![];
 		if let Expr::Ident(rhs) = &*b.y {
@@ -112,20 +440,26 @@ impl<'a> TypecheckCtx<'a> {
 		}
 		while let Expr::BinOp(sub_binop) = &*b.x {
 			if sub_binop.op != OpKind::Period {
-				self.errors.push(self.error(
-					"expected `.` operator in chained struct field access".to_owned(),
-					PIErrorCode::TypecheckExpectedPeriodOpInChainedStructFieldAccess,
-					vec![],
-				));
+				return (
+					Expr::Error,
+					Some(self.error(
+						"expected `.` operator in chained struct field access".to_owned(),
+						PIErrorCode::TypecheckExpectedPeriodOpInChainedStructFieldAccess,
+						vec![],
+					)),
+				);
 			}
 			if let Expr::Ident(rhs) = &*sub_binop.y {
 				field_names.push(rhs);
 			} else {
-				self.errors.push(self.error(
-					"expected rhs of `.` operator to be identifier".to_owned(),
-					PIErrorCode::TypecheckExpectedRHSOfPeriodToBeIdent,
-					vec![],
-				));
+				return (
+					Expr::Error,
+					Some(self.error(
+						"expected rhs of `.` operator to be identifier".to_owned(),
+						PIErrorCode::TypecheckExpectedRHSOfPeriodToBeIdent,
+						vec![],
+					)),
+				);
 			}
 			b = sub_binop;
 		}
@@ -139,13 +473,21 @@ impl<'a> TypecheckCtx<'a> {
 		if let Expr::Ident(name) = struct_var_type_name {
 			let struct_var_type = self.types.get(&name.val.to_string()).unwrap().type_.clone();
 			if let Expr::StructType(struct_ty) = struct_var_type {
-				return self.find_rightmost_field_type(&mut field_names, &struct_ty);
+				let (expr, err) = self.find_rightmost_field_type(&mut field_names, &struct_ty);
+				if let Some(err) = err {
+					return (Expr::Error, Some(err));
+				} else {
+					return (expr, None);
+				}
 			} else {
-				self.errors.push(self.error(
-					"expected lhs of `.` operator to be a struct".to_owned(),
-					PIErrorCode::TypecheckExpectedLHSOfPeriodToBeStruct,
-					vec![],
-				));
+				return (
+					Expr::Error,
+					Some(self.error(
+						"expected lhs of `.` operator to be a struct".to_owned(),
+						PIErrorCode::TypecheckExpectedLHSOfPeriodToBeStruct,
+						vec![],
+					)),
+				);
 			}
 		}
 		panic!("this should be fatal");
@@ -155,9 +497,9 @@ impl<'a> TypecheckCtx<'a> {
 		&self,
 		field_names: &mut Vec<&Ident>,
 		struct_ty: &StructType,
-	) -> Expr {
+	) -> (Expr, Option<PIError>) {
 		if field_names.len() == 0 {
-			return Expr::StructType(struct_ty.clone());
+			return (Expr::StructType(struct_ty.clone()), None);
 		}
 		let field_name = field_names.pop().unwrap();
 		if let Some(field_ty) = self.get_struct_field_type(struct_ty, &field_name) {
@@ -170,10 +512,10 @@ impl<'a> TypecheckCtx<'a> {
 					.clone();
 				return match &res {
 					Expr::StructType(struct_ty) => self.find_rightmost_field_type(field_names, &struct_ty),
-					_ => res,
+					_ => (res, None),
 				};
 			} else {
-				return field_ty;
+				return (field_ty, None);
 			}
 		}
 		panic!("cant thin of msg");
@@ -186,95 +528,6 @@ impl<'a> TypecheckCtx<'a> {
 		None
 	}
 
-	// fn get_struct_access_type(&mut self, binop: &BinOp) -> Expr {
-	// let mut b = binop;
-	// let mut b_afters = vec![binop];
-	// while let Expr::BinOp(sub_b) = &*b.x {
-	// 	if sub_b.op != OpKind::Period {
-	// 		self.errors.push(self.error(
-	// 			"expected `.` operator in chained struct field access".to_owned(),
-	// 			PIErrorCode::TypecheckExpectedPeriodOpInChainedStructFieldAccess,
-	// 			vec![],
-	// 		));
-	// 	}
-	// 	b_afters.push(b);
-	// 	b = sub_b;
-	// }
-	// let var_name = match &*b.x {
-	// 	Expr::Ident(name) => name,
-	// 	_ => panic!("just... ugh"),
-	// };
-
-	// let ty_name = self.get_type_of_var_in_cur_block(&var_name);
-	// let mut ty = match ty_name {
-	// 	Expr::Ident(name) => self
-	// 		.types
-	// 		.get(&name.val.to_string())
-	// 		.expect("expected struct type"),
-	// 	_ => panic!("ruh roh"),
-	// };
-
-	// let mut rhs = match &*b.y {
-	// 	Expr::Ident(name) => name.val.to_string(),
-	// 	_ => panic!(":(((("),
-	// };
-
-	// let mut final_expr = Expr::Error;
-	// while b_afters.len() > 0 {
-	// 	// loop {
-	// 	println!("{rhs}");
-	// 	let ty_expr = match &ty.type_ {
-	// 		Expr::StructType(struct_ty) => self.get_struct_field_type(struct_ty, &rhs),
-	// 		Expr::PrimitiveType(_) => ty.type_.clone(),
-	// 		_ => panic!("unexpected type"),
-	// 	};
-	// 	println!("{:?}", ty_expr);
-	// 	// if let Expr::StructType(_) = ty_expr {
-	// 	// 	if b_afters.len() == 0 {
-	// 	// 		break;
-	// 	// 	}
-	// 	// }
-	// 	match &ty_expr {
-	// 		Expr::Ident(ident) => {
-	// 			rhs = self.get_ident_val_from_expr(&*b_afters.last().unwrap().y);
-	// 			ty = self
-	// 				.types
-	// 				.get(&ident.val.to_string())
-	// 				.expect("expected struct type");
-	// 			b_afters.pop();
-	// 		}
-	// 		x => {
-	// 			final_expr = x.clone();
-	// 			break;
-	// 		}
-	// 	};
-	// }
-	// return final_expr;
-	// }
-
-	// #[inline(always)]
-	// fn get_ident_val_from_expr(&self, e: &Expr) -> String {
-	// 	match e {
-	// 		Expr::Ident(ident) => ident.val.to_string(),
-	// 		_ => panic!("expected identifier expression"),
-	// 	}
-	// }
-
-	// index map
-	// name -> FieldData
-	// Field Data { mut: bool, type: Expr }
-
-	// #[inline(always)]
-	// fn get_struct_field_type(&self, struct_ty: &StructType, field_name: &String) -> Expr {
-	// 	println!("{:?} {}", struct_ty, field_name);
-	// 	for field in struct_ty {
-	// 		if field.name.val == field_name {
-	// 			return field.type_.clone();
-	// 		}
-	// 	}
-	// 	panic!("bruh");
-	// }
-
 	fn get_type_of_var_in_cur_block(&self, name: &Ident) -> &Expr {
 		self
 			.var_types
@@ -282,16 +535,17 @@ impl<'a> TypecheckCtx<'a> {
 			.expect("expected var with name")
 	}
 
-	fn check_float_lit(&mut self, float: &mut FloatLit) {
+	fn check_float_lit(&mut self, float: &mut FloatLit) -> Option<PIError> {
 		if let Some(prim) = TypecheckCtx::type_is_primitive(&self.expecting_ty) {
 			let expected_bits = TypecheckCtx::primitive_kind_to_bits(&prim.kind);
 			if float.bits != expected_bits {
 				float.bits = expected_bits;
 			}
 		}
+		return None;
 	}
 
-	fn check_int_lit(&mut self, int: &mut IntLit) {
+	fn check_int_lit(&mut self, int: &mut IntLit) -> Option<PIError> {
 		if let Some(prim) = TypecheckCtx::type_is_primitive(&self.expecting_ty) {
 			let expected_bits = TypecheckCtx::primitive_kind_to_bits(&prim.kind);
 			let expected_signed = TypecheckCtx::primitive_kind_to_signedness(&prim.kind);
@@ -303,13 +557,14 @@ impl<'a> TypecheckCtx<'a> {
 				if expected_signed == false {
 					labels.push((format!("unexpected `-`"), int.sign_span.clone()))
 				}
-				self.errors.push(self.error(
+				return Some(self.error(
 					format!("expected unsigned integer but got signed integer",),
 					PIErrorCode::TypecheckUnexpectedSignednessInIntLit,
 					labels,
 				));
 			}
 		}
+		return None;
 	}
 
 	fn type_is_primitive(ty: &Expr) -> Option<&PrimitiveType> {
@@ -343,22 +598,18 @@ impl<'a> TypecheckCtx<'a> {
 	}
 }
 
-pub fn typecheck_ast(file_ast_map: &mut HashMap<FileId, AST>) -> Vec<PIError> {
+pub fn typecheck_ast(file_ast_map: &mut HashMap<FileId, AST>) -> Option<PIError> {
 	let entry_fileid: FileId = FileId(0);
 	let ast = file_ast_map
 		.get_mut(&entry_fileid)
 		.expect("could not get file");
-	let mut errors = vec![];
 	let mut ctx = TypecheckCtx {
 		expecting_ty: Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::I32)),
-		errors: &mut errors,
 		file_id: entry_fileid,
 		types: HashMap::new(),
 		var_types: HashMap::new(),
 		cur_block: None,
 	};
 
-	ctx.check(ast);
-
-	return errors;
+	return ctx.check(ast);
 }

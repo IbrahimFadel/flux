@@ -45,6 +45,10 @@ pub fn block(input: &mut ParseInput) -> BlockStmt {
 
 	let mut stmts = vec![];
 	while input.tok().kind != TokenKind::RBrace && input.tok().kind != TokenKind::EOF {
+		if input.tok().kind == TokenKind::BlockComment || input.tok().kind == TokenKind::LineComment {
+			input.next();
+			continue;
+		}
 		let stmt = stmt(input);
 		if stmt == Stmt::Error {
 			break;

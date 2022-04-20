@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, process};
 
 use pi_ast::AST;
 use pi_cfg::*;
@@ -21,9 +21,9 @@ fn parse_file(
 		.add_file(path, input.clone())
 		.expect("could not add file");
 	let (toks, errs) = tokenize(&input, file_id);
-	err_reporting.report(errs);
+	err_reporting.report(&errs);
 	let (ast, errs) = parse_tokens(file_name.to_owned(), input, toks, file_id);
-	err_reporting.report(errs);
+	err_reporting.report(&errs);
 
 	for mod_ in &ast.mods {
 		parse_file(
@@ -83,16 +83,20 @@ fn main() {
 	let main = file_ast_map.get(&entry_fileid).expect("could not get file");
 	let _ = fs::write("ast.txt", main.to_string());
 
-	let errors = typecheck_ast(&mut file_ast_map);
-	err_reporting.report(errors);
+	let errs = typecheck_ast(&mut file_ast_map);
 
 	let main = file_ast_map
 		.get_mut(&entry_fileid)
 		.expect("could not get file");
 	let _ = fs::write("ast_typechecked.txt", main.to_string());
 
+	if let Some(x) = errs {
+		err_reporting.report(&Vec::from([x]));
+		process::exit(1);
+	}
+
 	let errors = codegen_ast(main, &entry_fileid);
-	err_reporting.report(errors);
+	err_reporting.report(&errors);
 
 	// generate_mir(&file_ast_map, &mut err_reporting);
 }
