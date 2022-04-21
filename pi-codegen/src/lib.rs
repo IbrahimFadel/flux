@@ -6,24 +6,25 @@ use std::ptr;
 
 use llvm::core::{
 	LLVMAddFunction, LLVMAppendBasicBlock, LLVMAppendExistingBasicBlock, LLVMBuildAdd,
-	LLVMBuildAlloca, LLVMBuildBr, LLVMBuildCondBr, LLVMBuildICmp, LLVMBuildLoad2, LLVMBuildRet,
-	LLVMBuildRetVoid, LLVMBuildStore, LLVMBuildStructGEP2, LLVMConstInt, LLVMConstReal,
-	LLVMContextCreate, LLVMCreateBasicBlockInContext, LLVMCreateBuilderInContext,
-	LLVMDoubleTypeInContext, LLVMDumpModule, LLVMDumpType, LLVMFloatTypeInContext, LLVMFunctionType,
-	LLVMGetBasicBlockName, LLVMGetBasicBlockTerminator, LLVMGetElementType, LLVMGetLastBasicBlock,
-	LLVMGetOperand, LLVMGetParam, LLVMGetStructName, LLVMGetTypeKind, LLVMInt16TypeInContext,
-	LLVMInt32TypeInContext, LLVMInt64TypeInContext, LLVMInt8TypeInContext, LLVMIntType,
-	LLVMModuleCreateWithNameInContext, LLVMPointerType, LLVMPositionBuilderAtEnd,
-	LLVMPrintModuleToFile, LLVMStructCreateNamed, LLVMStructSetBody, LLVMTypeOf,
-	LLVMVoidTypeInContext,
+	LLVMBuildAlloca, LLVMBuildBr, LLVMBuildCall2, LLVMBuildCondBr, LLVMBuildICmp, LLVMBuildLoad2,
+	LLVMBuildRet, LLVMBuildRetVoid, LLVMBuildStore, LLVMBuildStructGEP2, LLVMConstInt, LLVMConstReal,
+	LLVMConstStructInContext, LLVMContextCreate, LLVMCreateBasicBlockInContext,
+	LLVMCreateBuilderInContext, LLVMDoubleTypeInContext, LLVMDumpModule, LLVMFloatTypeInContext,
+	LLVMFunctionType, LLVMGetBasicBlockName, LLVMGetBasicBlockTerminator, LLVMGetElementType,
+	LLVMGetLastBasicBlock, LLVMGetNamedFunction, LLVMGetOperand, LLVMGetParam, LLVMGetReturnType,
+	LLVMGetStructName, LLVMGetTypeKind, LLVMInt16TypeInContext, LLVMInt32TypeInContext,
+	LLVMInt64TypeInContext, LLVMInt8TypeInContext, LLVMIntType, LLVMModuleCreateWithNameInContext,
+	LLVMPointerType, LLVMPositionBuilderAtEnd, LLVMPrintModuleToFile, LLVMStructCreateNamed,
+	LLVMStructSetBody, LLVMTypeOf, LLVMVoidTypeInContext,
 };
 use llvm::prelude::{
 	LLVMBasicBlockRef, LLVMBuilderRef, LLVMContextRef, LLVMModuleRef, LLVMTypeRef, LLVMValueRef,
 };
 use llvm::LLVMTypeKind;
 use pi_ast::{
-	ApplyBlock, BinOp, BlockStmt, Expr, FloatLit, FnDecl, FnParam, Ident, If, IntLit, InterfaceType,
-	OpKind, PrimitiveKind, PtrType, Return, Stmt, TypeDecl, VarDecl, AST,
+	ApplyBlock, BinOp, BlockStmt, CallExpr, Expr, FloatLit, FnDecl, FnParam, Ident, If, IntLit,
+	InterfaceType, OpKind, PrimitiveKind, PtrType, Return, Stmt, StructExpr, TypeDecl, Unary,
+	VarDecl, AST,
 };
 use pi_error::filesystem::FileId;
 use pi_error::{PIError, PIErrorCode};
@@ -84,8 +85,9 @@ pub struct Codegen<'a> {
 	should_continue: bool,
 	symbol_tables: HashMap<String, SymTab>,
 	// values: HashMap<String, LLVMValueRef>,
-	types: HashMap<String, (Expr, LLVMTypeRef)>,
-	cur_type_decl_name: String,
+	struct_implementations_map: HashMap<String, Vec<String>>, // Struct name -> Vec<Interface Names>
+	types: HashMap<String, (TypeDecl, LLVMTypeRef)>,
+	cur_type_decl: Option<&'a TypeDecl>,
 	cur_fn_name: String,
 	cur_fn: Option<LLVMValueRef>,
 	cur_bb: Option<LLVMBasicBlockRef>,
@@ -110,8 +112,9 @@ impl<'a> Codegen<'a> {
 				should_continue: true,
 				symbol_tables: HashMap::new(),
 				// values: HashMap::new(),
+				struct_implementations_map: HashMap::new(),
 				types: HashMap::new(),
-				cur_type_decl_name: String::new(),
+				cur_type_decl: None,
 				cur_fn_name: String::new(),
 				cur_fn: None,
 				cur_bb: None,
@@ -143,7 +146,17 @@ impl<'a> Codegen<'a> {
 			.expect("function symbol table not initialized: internal error");
 	}
 
-	pub fn generate_ir(&mut self, ast: &mut AST) {
+	pub fn generate_ir(&mut self, ast: &'a mut AST) {
+		for (struct_name, interfaces) in &ast.struct_implementations {
+			let mut interface_names = vec![];
+			for interface in interfaces {
+				interface_names.push(interface.name.val.to_string());
+			}
+			self
+				.struct_implementations_map
+				.insert(struct_name.val.to_string(), interface_names);
+		}
+
 		// TODO: Don't order the typedecls, just forward decl?
 
 		// let ordered_types = self.order_type_decls(&ast.types);
@@ -359,20 +372,15 @@ impl<'a> Codegen<'a> {
 
 	fn var_decl(&mut self, var: &VarDecl) {
 		let ty = self.type_expr(&var.type_);
-		let single_val = match &var.values {
-			Some(vals) => vals.len() == 1,
-			_ => false,
-		};
+		let single_val = var.values.len() == 1;
 		unsafe {
 			for i in 0..var.names.len() {
 				let ptr = LLVMBuildAlloca(self.builder, ty, str_to_cstring(var.names[i].val.as_str()));
-				if let Some(vals) = &var.values {
-					if single_val {
-						let v = self.expr(&vals[0]);
-						LLVMBuildStore(self.builder, v, ptr);
-					} else {
-						LLVMBuildStore(self.builder, self.expr(&vals[i]), ptr);
-					}
+				if single_val {
+					let v = self.expr(&var.values[0]);
+					LLVMBuildStore(self.builder, v, ptr);
+				} else {
+					LLVMBuildStore(self.builder, self.expr(&var.values[i]), ptr);
 				}
 				let syms = self.get_cur_sym_tab_mut();
 				syms.set_value_in_cur_scope(var.names[i].val.to_string(), ptr);
@@ -386,7 +394,46 @@ impl<'a> Codegen<'a> {
 			Expr::FloatLit(float) => self.float(float),
 			Expr::BinOp(binop) => self.binop(binop),
 			Expr::Ident(ident) => self.ident(ident),
+			Expr::CallExpr(call) => self.call(call),
+			Expr::Unary(unary) => self.unary(unary),
+			Expr::StructExpr(struct_expr) => self.struct_expr(struct_expr),
 			_ => panic!("unexpected expression"),
+		}
+	}
+
+	fn struct_expr(&mut self, struct_expr: &StructExpr) -> LLVMValueRef {
+		unsafe {
+			let mut values = vec![];
+			for (_, val) in &struct_expr.fields {
+				values.push(self.expr(val.as_ref().unwrap()));
+			}
+			let struct_v =
+				LLVMConstStructInContext(self.ctx, values.as_mut_ptr(), values.len() as u32, 0);
+			return struct_v;
+		}
+	}
+
+	fn unary(&mut self, unary: &Unary) -> LLVMValueRef {
+		unsafe {
+			match unary.op {
+				OpKind::Ampersand => LLVMGetOperand(self.expr(&*unary.val), 0),
+				_ => ptr::null_mut(),
+			}
+		}
+	}
+
+	fn call(&mut self, call: &CallExpr) -> LLVMValueRef {
+		unsafe {
+			let callee = self.expr(&*call.callee);
+			let mut args: Vec<LLVMValueRef> = call.args.iter().map(|arg| self.expr(&*arg)).collect();
+			LLVMBuildCall2(
+				self.builder,
+				LLVMGetReturnType(LLVMTypeOf(callee)),
+				callee,
+				args.as_mut_ptr(),
+				args.len() as u32,
+				str_to_cstring(""),
+			)
 		}
 	}
 
@@ -446,7 +493,7 @@ impl<'a> Codegen<'a> {
 	fn binop_period(&mut self, binop: &BinOp) -> LLVMValueRef {
 		let lhs = self.expr(&binop.x);
 		let field_name = match &*binop.y {
-			Expr::Ident(name) => name.val.to_string(),
+			Expr::Ident(name) => name,
 			_ => panic!("rhs of struct access should be ident"),
 		};
 
@@ -461,32 +508,59 @@ impl<'a> Codegen<'a> {
 				.get(&struct_ty_name)
 				.expect("type decl not in types map: internal compiler error");
 
-			let ast_struct_ty = match ast_struct_ty_expr {
+			let ast_struct_ty = match &ast_struct_ty_expr.type_ {
 				Expr::StructType(struct_ty) => struct_ty,
 				_ => panic!("expected lhs to be struct type"),
 			};
 
-			let mut i = 0;
-			for (name, _) in ast_struct_ty {
-				if name.val == field_name {
-					break;
+			if let Some(_) = ast_struct_ty.get(field_name) {
+				let mut i: i32 = -1;
+				for (name, _) in ast_struct_ty {
+					if name.val == field_name.val {
+						break;
+					}
+					i += 1;
 				}
-				i += 1;
-			}
 
-			let gep = LLVMBuildStructGEP2(
-				self.builder,
-				LLVMTypeOf(lhs),
-				LLVMGetOperand(lhs, 0),
-				i,
-				str_to_cstring(""),
-			);
-			LLVMBuildLoad2(
-				self.builder,
-				LLVMGetElementType(LLVMTypeOf(gep)),
-				gep,
-				str_to_cstring(""),
-			)
+				let gep = LLVMBuildStructGEP2(
+					self.builder,
+					LLVMTypeOf(lhs),
+					LLVMGetOperand(lhs, 0),
+					(i + 1) as u32,
+					str_to_cstring(""),
+				);
+				LLVMBuildLoad2(
+					self.builder,
+					LLVMGetElementType(LLVMTypeOf(gep)),
+					gep,
+					str_to_cstring(""),
+				)
+			} else {
+				let method_name = ast_struct_ty_expr.name.val.to_string()
+					+ &String::from("_")
+					+ &field_name.val.to_string();
+				let f = LLVMGetNamedFunction(self.module, str_to_cstring(method_name.as_str()));
+				if f == ptr::null_mut() {
+					if let Some(interfaces) = self
+						.struct_implementations_map
+						.get(&ast_struct_ty_expr.name.val.to_string())
+					{
+						for interface in interfaces {
+							let method_name = interface.to_owned()
+								+ "_" + &ast_struct_ty_expr.name.val.to_string()
+								+ &String::from("_")
+								+ &field_name.val.to_string();
+							let f = LLVMGetNamedFunction(self.module, str_to_cstring(method_name.as_str()));
+							if f != ptr::null_mut() {
+								return f;
+							}
+						}
+					}
+					return ptr::null_mut();
+				} else {
+					return f;
+				}
+			}
 		}
 	}
 
@@ -536,12 +610,12 @@ impl<'a> Codegen<'a> {
 		unsafe { LLVMConstInt(LLVMIntType(int.bits as u32), int.val, int.signed as i32) }
 	}
 
-	fn type_decl(&mut self, ty: &TypeDecl) {
-		self.cur_type_decl_name = ty.name.val.to_string();
+	fn type_decl(&mut self, ty: &'a TypeDecl) {
+		self.cur_type_decl = Some(ty);
 		let ty_val = self.type_expr(&ty.type_);
 		self
 			.types
-			.insert(ty.name.val.to_string(), (ty.type_.clone(), ty_val));
+			.insert(ty.name.val.to_string(), (ty.clone(), ty_val));
 	}
 
 	fn type_expr(&mut self, e: &Expr) -> LLVMTypeRef {
@@ -570,11 +644,13 @@ impl<'a> Codegen<'a> {
 
 	fn interface_type(&mut self, interface_ty: &InterfaceType) -> LLVMTypeRef {
 		unsafe {
-			let llvm_struct_ty =
-				LLVMStructCreateNamed(self.ctx, str_to_cstring(self.cur_type_decl_name.as_str()));
+			let llvm_struct_ty = LLVMStructCreateNamed(
+				self.ctx,
+				str_to_cstring(self.cur_type_decl.unwrap().name.val.as_str()),
+			);
 			self.types.insert(
-				self.cur_type_decl_name.clone(),
-				(Expr::InterfaceType(interface_ty.clone()), llvm_struct_ty),
+				self.cur_type_decl.unwrap().name.val.to_string(),
+				(self.cur_type_decl.unwrap().clone(), llvm_struct_ty),
 			);
 
 			let mut method_types: Vec<LLVMTypeRef> = interface_ty
@@ -589,8 +665,6 @@ impl<'a> Codegen<'a> {
 				0,
 			);
 
-			LLVMDumpType(llvm_struct_ty);
-
 			return llvm_struct_ty;
 		}
 	}
@@ -602,8 +676,10 @@ impl<'a> Codegen<'a> {
 				.map(|(_, field)| self.type_expr(&field.type_))
 				.collect();
 
-			let llvm_struct_ty =
-				LLVMStructCreateNamed(self.ctx, str_to_cstring(self.cur_type_decl_name.as_str()));
+			let llvm_struct_ty = LLVMStructCreateNamed(
+				self.ctx,
+				str_to_cstring(self.cur_type_decl.unwrap().name.val.as_str()),
+			);
 			LLVMStructSetBody(
 				llvm_struct_ty,
 				field_types.as_mut_ptr(),

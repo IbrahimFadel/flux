@@ -1,4 +1,4 @@
-use pi_lexer::token::TokenKind;
+use indexmap::IndexMap;
 use smol_str::SmolStr;
 use std::{collections::HashMap, fmt, hash::Hash, ops::Range};
 
@@ -207,6 +207,7 @@ pub enum OpKind {
 	Doublecolon,
 	Period,
 	Eq,
+	Ampersand,
 	Illegal,
 }
 
@@ -226,6 +227,7 @@ pub enum Expr {
 	CallExpr(CallExpr),
 	Paren(Box<Expr>),
 	Unary(Unary),
+	StructExpr(StructExpr),
 	Void,
 	Error,
 }
@@ -236,6 +238,27 @@ impl fmt::Display for Expr {
 			Expr::PrimitiveType(prim) => write!(f, "{:?}", prim.kind),
 			Expr::Ident(ident) => write!(f, "{}", ident.val.to_string()),
 			_ => write!(f, "{:?}", self),
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct StructExpr {
+	pub name: Ident,
+	pub fields_span: Range<usize>,
+	pub fields: IndexMap<Ident, Option<Box<Expr>>>,
+}
+
+impl StructExpr {
+	pub fn new(
+		name: Ident,
+		fields_span: Range<usize>,
+		fields: IndexMap<Ident, Option<Box<Expr>>>,
+	) -> StructExpr {
+		StructExpr {
+			name,
+			fields_span,
+			fields,
 		}
 	}
 }
@@ -322,20 +345,20 @@ impl FloatLit {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Unary {
-	op: TokenKind,
-	val: Box<Expr>,
+	pub op: OpKind,
+	pub val: Box<Expr>,
 }
 
 impl Unary {
-	pub fn new(op: TokenKind, val: Box<Expr>) -> Unary {
+	pub fn new(op: OpKind, val: Box<Expr>) -> Unary {
 		Unary { op, val }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallExpr {
-	callee: Box<Expr>,
-	args: Vec<Box<Expr>>,
+	pub callee: Box<Expr>,
+	pub args: Vec<Box<Expr>>,
 }
 
 impl CallExpr {
@@ -415,11 +438,11 @@ pub struct VarDecl {
 	pub mut_: bool,
 	pub type_: Expr,
 	pub names: Vec<Ident>,
-	pub values: Option<Vec<Expr>>,
+	pub values: Vec<Expr>,
 }
 
 impl VarDecl {
-	pub fn new(mut_: bool, type_: Expr, names: Vec<Ident>, values: Option<Vec<Expr>>) -> VarDecl {
+	pub fn new(mut_: bool, type_: Expr, names: Vec<Ident>, values: Vec<Expr>) -> VarDecl {
 		VarDecl {
 			mut_,
 			type_,
@@ -471,5 +494,5 @@ pub type StringLit = SmolStr;
 pub type BoolLit = bool;
 pub type GenericTypes = Vec<Ident>;
 pub type BlockStmt = Vec<Stmt>;
-pub type StructType = HashMap<Ident, Field>;
+pub type StructType = IndexMap<Ident, Field>;
 pub type InterfaceType = HashMap<Ident, Method>;

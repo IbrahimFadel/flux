@@ -1,8 +1,10 @@
 use std::{borrow::BorrowMut, collections::HashMap, ops::Range};
 
+use indexmap::IndexMap;
 use pi_ast::{
-	ApplyBlock, BinOp, BlockStmt, Expr, FloatLit, FnDecl, Ident, IntLit, InterfaceType, Method,
-	OpKind, PrimitiveKind, PrimitiveType, Return, Stmt, StructType, TypeDecl, VarDecl, AST,
+	ApplyBlock, BinOp, BlockStmt, CallExpr, Expr, Field, FloatLit, FnDecl, Ident, IntLit,
+	InterfaceType, Method, OpKind, PrimitiveKind, PrimitiveType, Return, Stmt, StructExpr,
+	StructType, TypeDecl, Unary, VarDecl, AST,
 };
 use pi_error::{filesystem::FileId, *};
 
@@ -390,11 +392,9 @@ impl TypecheckCtx {
 				.insert(name.val.to_string(), var.type_.clone());
 		}
 
-		if let Some(vals) = &mut var.values {
-			for val in vals {
-				if let Some(err) = self.check_expr(val) {
-					return Some(err);
-				}
+		for val in &mut var.values {
+			if let Some(err) = self.check_expr(val) {
+				return Some(err);
 			}
 		}
 
@@ -406,8 +406,172 @@ impl TypecheckCtx {
 			Expr::IntLit(int) => self.check_int_lit(int),
 			Expr::FloatLit(float) => self.check_float_lit(float.borrow_mut()),
 			Expr::BinOp(binop) => self.check_binop(binop),
+			Expr::CallExpr(call) => self.check_call(call),
+			Expr::StructExpr(struct_expr) => self.check_struct_expr(struct_expr),
 			_ => None,
 		}
+	}
+
+	fn check_struct_expr(&self, struct_expr: &mut StructExpr) -> Option<PIError> {
+		for (name, val) in &mut struct_expr.fields {
+			if val.is_none() {
+				*val = Some(Box::from(Expr::Ident(name.clone())));
+			}
+		}
+
+		if let Some(struct_ty_decl) = self.types.get(&struct_expr.name.val.to_string()) {
+			if let Expr::StructType(struct_ty) = &struct_ty_decl.type_ {
+				if let Some(err) = self.compare_struct_expr_fields_to_struct_ty(
+					struct_expr,
+					struct_ty,
+					&struct_ty_decl.name.val.to_string(),
+				) {
+					return Some(err);
+				}
+			}
+		}
+
+		return None;
+	}
+
+	fn compare_struct_expr_fields_to_struct_ty(
+		&self,
+		struct_expr: &mut StructExpr,
+		struct_ty: &IndexMap<Ident, Field>,
+		struct_ty_name: &String,
+	) -> Option<PIError> {
+		if struct_expr.fields.len() != struct_ty.len() {
+			return Some(self.error(
+				"struct expression does not have the same number of fields as the type it is constructing".to_owned(),
+				PIErrorCode::TypecheckStructExprDiffNumberFieldsAsStructTy,
+				vec![
+					("incorrect number of fields in struct expression".to_owned(), struct_expr.fields_span.clone())
+				],
+			));
+		}
+
+		for (name, field) in struct_ty {
+			if let Some(struct_expr_val_opt) = struct_expr.fields.get_mut(name) {
+				let struct_expr_val = struct_expr_val_opt
+					.as_mut()
+					.expect("internal compiler error");
+				let res = match &mut **struct_expr_val {
+					Expr::IntLit(int) => match &field.type_ {
+						Expr::PrimitiveType(prim) => match prim.kind {
+							PrimitiveKind::I64 | PrimitiveKind::U64 => {
+								int.bits = 64;
+								None
+							}
+							PrimitiveKind::I32 | PrimitiveKind::U32 => {
+								int.bits = 32;
+								None
+							}
+							PrimitiveKind::I16 | PrimitiveKind::U16 => {
+								int.bits = 16;
+								None
+							}
+							PrimitiveKind::I8 | PrimitiveKind::U8 => {
+								int.bits = 8;
+								None
+							}
+							_ => Some(self.error(
+								format!(
+									"expected struct expression's field value to be of type `{:?}`",
+									prim.kind
+								),
+								PIErrorCode::CodegenUnknownIdentType,
+								vec![],
+							)),
+						},
+						_ => Some(self.error(
+							format!(
+								"expected struct expression's field value to be of type `{}`",
+								field.type_
+							),
+							PIErrorCode::CodegenUnknownIdentType,
+							vec![],
+						)),
+					},
+					Expr::FloatLit(float) => match &field.type_ {
+						Expr::PrimitiveType(prim) => match prim.kind {
+							PrimitiveKind::F64 => {
+								float.bits = 64;
+								None
+							}
+							PrimitiveKind::F32 => {
+								float.bits = 32;
+								None
+							}
+							_ => Some(self.error(
+								format!(
+									"expected struct expression's field value to be of type `{:?}`",
+									prim.kind
+								),
+								PIErrorCode::CodegenUnknownIdentType,
+								vec![],
+							)),
+						},
+						_ => Some(self.error(
+							format!(
+								"expected struct expression's field value to be of type `{}`",
+								field.type_
+							),
+							PIErrorCode::CodegenUnknownIdentType,
+							vec![],
+						)),
+					},
+					Expr::StructExpr(sub_struct_expr) => self.check_struct_expr(sub_struct_expr),
+					_ => None,
+				};
+				if let Some(err) = res {
+					return Some(err);
+				}
+			} else {
+				return Some(self.error(
+					format!(
+						"could not find field `{}` in struct expression",
+						name.val.to_string()
+					),
+					PIErrorCode::TypecheckCouldNotFindFieldInStructExpr,
+					vec![
+						(
+							format!(
+								"expected field `{}` in `{}` struct expression",
+								name.val.to_string(),
+								struct_ty_name,
+							),
+							name.span.clone(),
+						),
+						(
+							"instead got these fields".to_owned(),
+							struct_expr.fields_span.clone(),
+						),
+					],
+				));
+			}
+		}
+
+		return None;
+	}
+
+	fn check_call(&self, call: &mut CallExpr) -> Option<PIError> {
+		// prepend pointer to `this` if it's a method call
+		if let Expr::BinOp(binop) = &*call.callee {
+			match &*binop.x {
+				Expr::Ident(_) => {
+					call.args.splice(
+						..0,
+						[Box::from(Expr::Unary(Unary::new(
+							OpKind::Ampersand,
+							binop.x.clone(),
+						)))],
+					);
+				}
+				_ => (),
+			}
+		}
+
+		return None;
 	}
 
 	fn check_binop(&mut self, binop: &mut BinOp) -> Option<PIError> {
@@ -536,7 +700,7 @@ impl TypecheckCtx {
 	}
 
 	fn check_float_lit(&mut self, float: &mut FloatLit) -> Option<PIError> {
-		if let Some(prim) = TypecheckCtx::type_is_primitive(&self.expecting_ty) {
+		if let Expr::PrimitiveType(prim) = &self.expecting_ty {
 			let expected_bits = TypecheckCtx::primitive_kind_to_bits(&prim.kind);
 			if float.bits != expected_bits {
 				float.bits = expected_bits;
@@ -546,32 +710,38 @@ impl TypecheckCtx {
 	}
 
 	fn check_int_lit(&mut self, int: &mut IntLit) -> Option<PIError> {
-		if let Some(prim) = TypecheckCtx::type_is_primitive(&self.expecting_ty) {
-			let expected_bits = TypecheckCtx::primitive_kind_to_bits(&prim.kind);
-			let expected_signed = TypecheckCtx::primitive_kind_to_signedness(&prim.kind);
-			if int.bits != expected_bits {
-				int.bits = expected_bits;
-			}
-			if expected_signed == false && int.signed == true {
-				let mut labels = vec![("expected unsigned integer".to_owned(), int.val_span.clone())];
-				if expected_signed == false {
-					labels.push((format!("unexpected `-`"), int.sign_span.clone()))
-				}
-				return Some(self.error(
-					format!("expected unsigned integer but got signed integer",),
-					PIErrorCode::TypecheckUnexpectedSignednessInIntLit,
-					labels,
-				));
+		if let Expr::PrimitiveType(prim) = &self.expecting_ty {
+			self.reassign_int_lit_bits(int, prim);
+		} else if let Expr::Ident(ident) = &self.expecting_ty {
+			let ty = self
+				.types
+				.get(&ident.val.to_string())
+				.expect("expected type");
+			if let Expr::PrimitiveType(prim) = &ty.type_ {
+				self.reassign_int_lit_bits(int, prim);
 			}
 		}
 		return None;
 	}
 
-	fn type_is_primitive(ty: &Expr) -> Option<&PrimitiveType> {
-		match ty {
-			Expr::PrimitiveType(prim) => Some(prim),
-			_ => None,
+	fn reassign_int_lit_bits(&self, int: &mut IntLit, prim: &PrimitiveType) -> Option<PIError> {
+		let expected_bits = TypecheckCtx::primitive_kind_to_bits(&prim.kind);
+		let expected_signed = TypecheckCtx::primitive_kind_to_signedness(&prim.kind);
+		if int.bits != expected_bits {
+			int.bits = expected_bits;
 		}
+		if expected_signed == false && int.signed == true {
+			let mut labels = vec![("expected unsigned integer".to_owned(), int.val_span.clone())];
+			if expected_signed == false {
+				labels.push((format!("unexpected `-`"), int.sign_span.clone()))
+			}
+			return Some(self.error(
+				format!("expected unsigned integer but got signed integer",),
+				PIErrorCode::TypecheckUnexpectedSignednessInIntLit,
+				labels,
+			));
+		}
+		return None;
 	}
 
 	fn primitive_kind_to_bits(prim: &PrimitiveKind) -> u8 {

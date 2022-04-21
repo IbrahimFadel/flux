@@ -192,18 +192,14 @@ fn var_decl_stmt(input: &mut ParseInput) -> Stmt {
 		}
 	}
 
-	if input.tok().kind == TokenKind::Semicolon {
-		input.next();
-		return Stmt::VarDecl(VarDecl::new(false, ty, names, None));
-	}
 	input.expect(
 		TokenKind::Eq,
 		input.error(
-			"expected either `;` or `=` after variable declaration identifier list".to_owned(),
-			PIErrorCode::ParseExpectedSemicolonEqVarDeclIdentList,
+			"expected `=` after variable declaration identifier list".to_owned(),
+			PIErrorCode::ParseExpectedEqVarDeclIdentList,
 			vec![(
 				format!(
-					"expected either `;` or `=` after variable declaration identifier list, instead got `{}`",
+					"expected `=` after variable declaration identifier list, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
 				input.tok().span.clone(),
@@ -271,5 +267,5 @@ fn var_decl_stmt(input: &mut ParseInput) -> Stmt {
 		}
 	}
 
-	return Stmt::VarDecl(VarDecl::new(false, ty, names, Some(values)));
+	return Stmt::VarDecl(VarDecl::new(false, ty, names, values));
 }

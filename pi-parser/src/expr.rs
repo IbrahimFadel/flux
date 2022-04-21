@@ -1,8 +1,9 @@
 use std::{collections::HashMap, vec};
 
+use indexmap::IndexMap;
 use pi_ast::{
-	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method,
-	PrimitiveKind, PrimitiveType, PtrType, StringLit, Unary,
+	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method, OpKind,
+	PrimitiveKind, PrimitiveType, PtrType, StringLit, StructExpr, Unary,
 };
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
@@ -96,20 +97,74 @@ fn call(input: &mut ParseInput, x: Expr) -> Expr {
 fn unary_expr(input: &mut ParseInput) -> Expr {
 	let kind = input.tok().kind.clone();
 	match kind {
-		TokenKind::Ampersand => Expr::Unary(Unary::new(kind, Box::from(expr(input)))),
+		TokenKind::Ampersand => Expr::Unary(Unary::new(OpKind::Ampersand, Box::from(expr(input)))),
 		_ => primary_expr(input),
 	}
 }
 
 fn primary_expr(input: &mut ParseInput) -> Expr {
 	let x = operand(input);
+	if let Expr::Ident(ident) = &x {
+		if input.tok().kind == TokenKind::LBrace {
+			return struct_expr(input, ident);
+		}
+	}
 	return x;
-	// loop {
-	// match input.tok().kind {
-	// TokenKind::Period =>
+}
 
-	// }
-	// }
+fn struct_expr(input: &mut ParseInput, name: &Ident) -> Expr {
+	let fields_start = input.tok().span.start;
+	input.next();
+	let mut fields = IndexMap::new();
+	while input.tok().kind != TokenKind::RBrace && input.tok().kind != TokenKind::EOF {
+		let ident = ident(input);
+		if input.tok().kind == TokenKind::Colon {
+			input.next();
+			let val = expr(input);
+			fields.insert(ident, Some(Box::from(val)));
+
+			if input.tok().kind != TokenKind::Comma {
+				input.expect(
+					TokenKind::RBrace,
+					input.error(
+						"expected either `,` or `}` in struct expression".to_owned(),
+						PIErrorCode::ParseExpectedCommaOrRBraceStructExpr,
+						vec![],
+					),
+				);
+				if input.tok().kind != TokenKind::RBrace {
+					break;
+				}
+			} else {
+				input.next();
+			}
+		} else if input.tok().kind == TokenKind::Comma {
+			input.next();
+			fields.insert(ident, None);
+			continue;
+		} else {
+			input.errs.push(input.error(
+				format!(
+					"unexpected token `{}` in struct expression",
+					tok_val(&input.program, input.tok())
+				),
+				PIErrorCode::ParseUnexpectedTokenStructExpr,
+				vec![],
+			));
+			break;
+		}
+	}
+
+	if input.tok().kind == TokenKind::RBrace {
+		input.next();
+	}
+	let fields_end = input.tok().span.start;
+
+	Expr::StructExpr(StructExpr::new(
+		name.clone(),
+		fields_start..fields_end,
+		fields,
+	))
 }
 
 fn operand(input: &mut ParseInput) -> Expr {
@@ -305,8 +360,8 @@ fn struct_type_expr(input: &mut ParseInput) -> Expr {
 	return Expr::StructType(fields);
 }
 
-fn field_map(input: &mut ParseInput) -> HashMap<Ident, Field> {
-	let mut fields = HashMap::new();
+fn field_map(input: &mut ParseInput) -> IndexMap<Ident, Field> {
+	let mut fields = IndexMap::new();
 	while input.tok().kind != TokenKind::RBrace {
 		let (k, v) = field(input);
 		fields.insert(k, v);

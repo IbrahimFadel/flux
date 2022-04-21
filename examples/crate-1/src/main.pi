@@ -5,18 +5,35 @@ type Animal interface {
 	fn bar() -> i16;
 };
 
+type Test struct {
+	i16 x;
+};
+
 type Dog struct {
-	u8 foo;
+	Test foo;
+	f32 x;
 };
 
 apply Animal to Dog {
-	pub fn say_hi(this, Foo x, u16 y) {
+	pub fn say_hi(this, Foo x, u16 y) {}
+
+	fn bar() -> i16 {
+		return 0;
+	}
+}
+
+apply Dog {
+	fn test() {
 
 	}
-
-	fn bar() -> i16 {}
 }
 
 fn main() {
-	
+	Foo foo = 0;
+	Dog d = Dog {
+		foo: Test {
+			x: 0,
+		},
+		x: 1.0,
+	};
 }

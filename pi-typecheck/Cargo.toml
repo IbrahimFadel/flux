@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 pi-ast = { path = "../pi-ast" }
 pi-error = { path = "../pi-error" }
+indexmap = "1.8.1"

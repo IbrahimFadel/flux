@@ -109,6 +109,8 @@ impl<'a> Lexer<'a> {
 					tok.span = span;
 				}
 				':' => {
+					tok.kind = TokenKind::Colon;
+					tok.span = span;
 					if self.ch() == ':' {
 						self.next();
 						tok.kind = TokenKind::DoubleColon;
@@ -195,15 +197,16 @@ impl<'a> Lexer<'a> {
 						tok.span = self.offset - 2..self.offset;
 					}
 				}
-				_ => self.errors.push(PIError::new(
-					"unknown character".to_owned(),
-					PIErrorCode::LexUnknownChar,
-					vec![(
-						format!("unknown character `{}`", ch),
-						self.offset - 1..self.offset - 1,
-					)],
-					self.file_id,
-				)),
+				_ => (),
+				// _ => self.errors.push(PIError::new(
+				// 	"unknown character".to_owned(),
+				// 	PIErrorCode::LexUnknownChar,
+				// 	vec![(
+				// 		format!("unknown character `{}`", ch),
+				// 		self.offset - 1..self.offset - 1,
+				// 	)],
+				// 	self.file_id,
+				// )),
 			}
 		}
 

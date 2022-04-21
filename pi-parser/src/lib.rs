@@ -173,23 +173,23 @@ pub fn top_level_decls(
 				input.next();
 			}
 			_ => {
-				input.errs.push(input.error(
-					"expected top level declaration".to_owned(),
-					PIErrorCode::ParseExpectedTopLevelDecl,
-					vec![
-						(
-							format!(
-								"expected top level declaration, instead got `{}`",
-								tok_val(&input.program, input.tok())
-							),
-							input.tok().span.clone(),
-						),
-						(
-							"(hint) declare a function, type or global variable".to_owned(),
-							input.tok().span.clone(),
-						),
-					],
-				));
+				// input.errs.push(input.error(
+				// 	"expected top level declaration".to_owned(),
+				// 	PIErrorCode::ParseExpectedTopLevelDecl,
+				// 	vec![
+				// 		(
+				// 			format!(
+				// 				"expected top level declaration, instead got `{}`",
+				// 				tok_val(&input.program, input.tok())
+				// 			),
+				// 			input.tok().span.clone(),
+				// 		),
+				// 		(
+				// 			"(hint) declare a function, type or global variable".to_owned(),
+				// 			input.tok().span.clone(),
+				// 		),
+				// 	],
+				// ));
 				input.next();
 			}
 		}

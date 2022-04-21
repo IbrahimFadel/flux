@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 pi-lexer = { path = "../pi-lexer" }
 smol_str = "0.1.21"
+indexmap = "1.8.1"
