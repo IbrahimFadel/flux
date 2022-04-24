@@ -10,6 +10,7 @@ pi-lexer = { path = "../pi-lexer" }
 pi-ast = { path = "../pi-ast" }
 pi-parser = { path = "../pi-parser" }
 pi-typecheck = { path = "../pi-typecheck" }
+pi-mir = { path = "../pi-mir" }
 pi-codegen = { path = "../pi-codegen" }
 pi-error = { path = "../pi-error" }
 pi-cfg = { path = "../pi-cfg" }

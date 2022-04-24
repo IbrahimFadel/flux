@@ -271,27 +271,37 @@ pub type PtrType = Box<Spanned<Expr>>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct IntLit {
-	pub signed: Spanned<bool>,
+	pub negative: Spanned<bool>,
+	pub signed: bool,
 	pub bits: u8,
 	pub val: Spanned<u64>,
 }
 
 impl IntLit {
-	pub fn new(signed: Spanned<bool>, bits: u8, val: Spanned<u64>) -> IntLit {
-		IntLit { signed, bits, val }
+	pub fn new(negative: Spanned<bool>, signed: bool, bits: u8, val: Spanned<u64>) -> IntLit {
+		IntLit {
+			negative,
+			signed,
+			bits,
+			val,
+		}
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FloatLit {
-	pub signed: Spanned<bool>,
+	pub negative: Spanned<bool>,
 	pub bits: u8,
 	pub val: Spanned<f64>,
 }
 
 impl FloatLit {
-	pub fn new(signed: Spanned<bool>, bits: u8, val: Spanned<f64>) -> FloatLit {
-		FloatLit { signed, bits, val }
+	pub fn new(negative: Spanned<bool>, bits: u8, val: Spanned<f64>) -> FloatLit {
+		FloatLit {
+			negative,
+			bits,
+			val,
+		}
 	}
 }
 

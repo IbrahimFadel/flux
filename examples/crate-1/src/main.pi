@@ -1,31 +1,12 @@
-mod other;
-
-type Bar struct {
-	i32 x;
-};
-
-type Foo struct {
-	Bar bar;
-	i64 x;
-};
-
-fn test(Foo *foo) {
-	foo.x = 2.0;
-}
-
-apply Foo {
-	fn some_fn(this) -> i32 {
-		return 0;
-	}
-}
-
 fn main() {
-	Foo foo = Foo {
-		bar: Bar {
-			x: 1,
-		},
-		x: 1.0,
-	};
-	test(&foo);
-	other::some_other_fn();
+	i32 x, y, z = -0.1 + 1;
+
+	if 1 == 1 {
+		i32 x = 1;
+	} else {
+		i32 x = 1;
+		if 2 == 2 {
+			i32 x = 1;
+		}
+	}
 }

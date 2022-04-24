@@ -412,10 +412,10 @@ impl<'ctx> FnCtx<'ctx> {
 		if int.bits != expected_bits {
 			int.bits = expected_bits;
 		}
-		if expected_signed == false && *int.signed == true {
+		if expected_signed == false && *int.negative == true {
 			let mut labels = vec![("expected unsigned integer".to_owned(), int.val.span.clone())];
 			if expected_signed == false {
-				labels.push((format!("unexpected `-`"), int.signed.span.clone()))
+				labels.push((format!("unexpected `-`"), int.negative.span.clone()))
 			}
 			return Err(self.error(
 				format!("expected unsigned integer but got signed integer",),

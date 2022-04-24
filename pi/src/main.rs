@@ -5,7 +5,7 @@ use pi_ast::AST;
 // use pi_cfg::*;
 use pi_error::{filesystem::FileId, *};
 use pi_lexer::*;
-// use pi_mir::*;
+use pi_mir::*;
 // use pi_codegen::*;
 use pi_parser::*;
 use pi_typecheck::*;
@@ -95,6 +95,10 @@ fn main() {
 	if let Some(err) = typecheck_result.err() {
 		err_reporting.report(&Vec::from([err]));
 		process::exit(1);
+	}
+
+	for (_, ast) in file_ast_map.iter() {
+		lower_ast(ast);
 	}
 
 	// let (codegen_ctx, err) = codegen_ast(&mut file_ast_map, &cfg.compilation);

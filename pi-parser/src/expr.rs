@@ -274,6 +274,7 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 				Ok(val) => Spanned::new(
 					Expr::IntLit(IntLit::new(
 						Spanned::new(signed, sign_span),
+						true,
 						32,
 						Spanned::new(val, begin_pos..input.tok().span.start),
 					)),

@@ -125,6 +125,7 @@ dependencies = [
  "pi-codegen",
  "pi-error",
  "pi-lexer",
+ "pi-mir",
  "pi-parser",
  "pi-typecheck",
 ]
@@ -175,6 +176,15 @@ version = "0.1.0"
 dependencies = [
  "codespan",
  "pi-error",
+]
+
+[[package]]
+name = "pi-mir"
+version = "0.1.0"
+dependencies = [
+ "pi-ast",
+ "pi-error",
+ "smol_str",
 ]
 
 [[package]]

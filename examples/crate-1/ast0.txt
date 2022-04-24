@@ -1,140 +1,24 @@
 AST {
     name: "main",
-    mods: [
-        Spanned {
-            node: Mod {
-                pub_: Spanned {
-                    node: false,
-                    span: 0..0,
-                },
-                name: Spanned {
-                    node: "other",
-                    span: 4..9,
-                },
-            },
-            span: 0..12,
-        },
-    ],
+    mods: [],
     functions: [
         Spanned {
             node: FnDecl {
                 pub_: Spanned {
                     node: false,
-                    span: 82..82,
-                },
-                name: Spanned {
-                    node: "test",
-                    span: 85..89,
-                },
-                generics: Spanned {
-                    node: [],
-                    span: 89..89,
-                },
-                params: Spanned {
-                    node: [
-                        Spanned {
-                            node: FnParam {
-                                mut_: Spanned {
-                                    node: false,
-                                    span: 90..90,
-                                },
-                                type_: Spanned {
-                                    node: PtrType(
-                                        Spanned {
-                                            node: Ident(
-                                                "Foo",
-                                            ),
-                                            span: 90..94,
-                                        },
-                                    ),
-                                    span: 94..94,
-                                },
-                                name: Spanned {
-                                    node: "foo",
-                                    span: 95..98,
-                                },
-                            },
-                            span: 90..98,
-                        },
-                    ],
-                    span: 89..100,
-                },
-                ret_ty: Spanned {
-                    node: PrimitiveType(
-                        PrimitiveType {
-                            kind: Void,
-                        },
-                    ),
-                    span: 100..100,
-                },
-                block: [
-                    Spanned {
-                        node: ExprStmt(
-                            BinOp(
-                                BinOp {
-                                    x: Spanned {
-                                        node: BinOp(
-                                            BinOp {
-                                                x: Spanned {
-                                                    node: Ident(
-                                                        "foo",
-                                                    ),
-                                                    span: 103..106,
-                                                },
-                                                op: Period,
-                                                y: Spanned {
-                                                    node: Ident(
-                                                        "x",
-                                                    ),
-                                                    span: 107..109,
-                                                },
-                                            },
-                                        ),
-                                        span: 103..107,
-                                    },
-                                    op: Eq,
-                                    y: Spanned {
-                                        node: FloatLit(
-                                            FloatLit {
-                                                signed: Spanned {
-                                                    node: false,
-                                                    span: 111..112,
-                                                },
-                                                bits: 32,
-                                                val: Spanned {
-                                                    node: 2.0,
-                                                    span: 111..114,
-                                                },
-                                            },
-                                        ),
-                                        span: 111..114,
-                                    },
-                                },
-                            ),
-                        ),
-                        span: 103..111,
-                    },
-                ],
-            },
-            span: 82..119,
-        },
-        Spanned {
-            node: FnDecl {
-                pub_: Spanned {
-                    node: false,
-                    span: 176..176,
+                    span: 0..0,
                 },
                 name: Spanned {
                     node: "main",
-                    span: 179..183,
+                    span: 3..7,
                 },
                 generics: Spanned {
                     node: [],
-                    span: 183..183,
+                    span: 7..7,
                 },
                 params: Spanned {
                     node: [],
-                    span: 183..186,
+                    span: 7..10,
                 },
                 ret_ty: Spanned {
                     node: PrimitiveType(
@@ -142,7 +26,7 @@ AST {
                             kind: Void,
                         },
                     ),
-                    span: 186..186,
+                    span: 10..10,
                 },
                 block: [
                     Spanned {
@@ -153,351 +37,318 @@ AST {
                                     span: 0..0,
                                 },
                                 type_: Spanned {
-                                    node: Ident(
-                                        "Foo",
+                                    node: PrimitiveType(
+                                        PrimitiveType {
+                                            kind: I32,
+                                        },
                                     ),
-                                    span: 189..193,
+                                    span: 13..17,
                                 },
                                 names: [
                                     Spanned {
-                                        node: "foo",
-                                        span: 193..197,
+                                        node: "x",
+                                        span: 17..18,
+                                    },
+                                    Spanned {
+                                        node: "y",
+                                        span: 20..21,
+                                    },
+                                    Spanned {
+                                        node: "z",
+                                        span: 23..25,
                                     },
                                 ],
                                 values: [
                                     Spanned {
-                                        node: StructExpr(
-                                            StructExpr {
-                                                name: "Foo",
-                                                fields: Spanned {
-                                                    node: {
-                                                        Spanned {
-                                                            node: "bar",
-                                                            span: 207..210,
-                                                        }: Some(
-                                                            Spanned {
-                                                                node: StructExpr(
-                                                                    StructExpr {
-                                                                        name: "Bar",
-                                                                        fields: Spanned {
-                                                                            node: {
-                                                                                Spanned {
-                                                                                    node: "x",
-                                                                                    span: 221..222,
-                                                                                }: Some(
-                                                                                    Spanned {
-                                                                                        node: IntLit(
-                                                                                            IntLit {
-                                                                                                signed: Spanned {
-                                                                                                    node: false,
-                                                                                                    span: 224..225,
-                                                                                                },
-                                                                                                bits: 32,
-                                                                                                val: Spanned {
-                                                                                                    node: 1,
-                                                                                                    span: 224..225,
-                                                                                                },
-                                                                                            },
-                                                                                        ),
-                                                                                        span: 224..225,
-                                                                                    },
-                                                                                ),
-                                                                            },
-                                                                            span: 216..230,
-                                                                        },
-                                                                    },
-                                                                ),
-                                                                span: 216..230,
-                                                            },
-                                                        ),
-                                                        Spanned {
-                                                            node: "x",
-                                                            span: 234..235,
-                                                        }: Some(
-                                                            Spanned {
-                                                                node: FloatLit(
-                                                                    FloatLit {
-                                                                        signed: Spanned {
-                                                                            node: false,
-                                                                            span: 237..238,
-                                                                        },
-                                                                        bits: 32,
-                                                                        val: Spanned {
-                                                                            node: 1.0,
-                                                                            span: 237..240,
-                                                                        },
-                                                                    },
-                                                                ),
-                                                                span: 237..240,
-                                                            },
-                                                        ),
-                                                    },
-                                                    span: 203..244,
-                                                },
-                                            },
-                                        ),
-                                        span: 203..244,
-                                    },
-                                ],
-                            },
-                        ),
-                        span: 189..247,
-                    },
-                    Spanned {
-                        node: ExprStmt(
-                            CallExpr(
-                                CallExpr {
-                                    callee: Spanned {
-                                        node: Ident(
-                                            "test",
-                                        ),
-                                        span: 247..251,
-                                    },
-                                    args: [
-                                        Spanned {
-                                            node: Unary(
-                                                Unary {
-                                                    op: Ampersand,
-                                                    val: Spanned {
-                                                        node: Ident(
-                                                            "foo",
-                                                        ),
-                                                        span: 253..256,
-                                                    },
-                                                },
-                                            ),
-                                            span: 252..256,
-                                        },
-                                    ],
-                                },
-                            ),
-                        ),
-                        span: 251..257,
-                    },
-                    Spanned {
-                        node: ExprStmt(
-                            CallExpr(
-                                CallExpr {
-                                    callee: Spanned {
                                         node: BinOp(
                                             BinOp {
                                                 x: Spanned {
-                                                    node: Ident(
-                                                        "other",
-                                                    ),
-                                                    span: 260..265,
-                                                },
-                                                op: Doublecolon,
-                                                y: Spanned {
-                                                    node: Ident(
-                                                        "some_other_fn",
-                                                    ),
-                                                    span: 267..280,
-                                                },
-                                            },
-                                        ),
-                                        span: 260..267,
-                                    },
-                                    args: [],
-                                },
-                            ),
-                        ),
-                        span: 280..282,
-                    },
-                ],
-            },
-            span: 176..0,
-        },
-    ],
-    types: [
-        Spanned {
-            node: TypeDecl {
-                pub_: Spanned {
-                    node: false,
-                    span: 12..12,
-                },
-                name: Spanned {
-                    node: "Bar",
-                    span: 17..21,
-                },
-                type_: Spanned {
-                    node: StructType(
-                        {
-                            Spanned {
-                                node: "x",
-                                span: 35..36,
-                            }: Spanned {
-                                node: Field {
-                                    pub_: Spanned {
-                                        node: false,
-                                        span: 31..31,
-                                    },
-                                    type_: Spanned {
-                                        node: PrimitiveType(
-                                            PrimitiveType {
-                                                kind: I32,
-                                            },
-                                        ),
-                                        span: 31..35,
-                                    },
-                                    val: None,
-                                },
-                                span: 31..38,
-                            },
-                        },
-                    ),
-                    span: 21..39,
-                },
-            },
-            span: 12..42,
-        },
-        Spanned {
-            node: TypeDecl {
-                pub_: Spanned {
-                    node: false,
-                    span: 42..42,
-                },
-                name: Spanned {
-                    node: "Foo",
-                    span: 47..51,
-                },
-                type_: Spanned {
-                    node: StructType(
-                        {
-                            Spanned {
-                                node: "bar",
-                                span: 65..68,
-                            }: Spanned {
-                                node: Field {
-                                    pub_: Spanned {
-                                        node: false,
-                                        span: 61..61,
-                                    },
-                                    type_: Spanned {
-                                        node: Ident(
-                                            "Bar",
-                                        ),
-                                        span: 61..65,
-                                    },
-                                    val: None,
-                                },
-                                span: 61..71,
-                            },
-                            Spanned {
-                                node: "x",
-                                span: 75..76,
-                            }: Spanned {
-                                node: Field {
-                                    pub_: Spanned {
-                                        node: false,
-                                        span: 71..71,
-                                    },
-                                    type_: Spanned {
-                                        node: PrimitiveType(
-                                            PrimitiveType {
-                                                kind: I64,
-                                            },
-                                        ),
-                                        span: 71..75,
-                                    },
-                                    val: None,
-                                },
-                                span: 71..78,
-                            },
-                        },
-                    ),
-                    span: 51..79,
-                },
-            },
-            span: 42..82,
-        },
-    ],
-    apply_blocks: [
-        Spanned {
-            node: ApplyBlock {
-                interface_name: None,
-                struct_name: Spanned {
-                    node: "Foo",
-                    span: 125..129,
-                },
-                methods: [
-                    Spanned {
-                        node: FnDecl {
-                            pub_: Spanned {
-                                node: false,
-                                span: 132..132,
-                            },
-                            name: Spanned {
-                                node: "some_fn",
-                                span: 135..142,
-                            },
-                            generics: Spanned {
-                                node: [],
-                                span: 142..142,
-                            },
-                            params: Spanned {
-                                node: [
-                                    Spanned {
-                                        node: FnParam {
-                                            mut_: Spanned {
-                                                node: false,
-                                                span: 143..143,
-                                            },
-                                            type_: Spanned {
-                                                node: Error,
-                                                span: 0..0,
-                                            },
-                                            name: Spanned {
-                                                node: "this",
-                                                span: 143..148,
-                                            },
-                                        },
-                                        span: 143..148,
-                                    },
-                                ],
-                                span: 142..149,
-                            },
-                            ret_ty: Spanned {
-                                node: PrimitiveType(
-                                    PrimitiveType {
-                                        kind: I32,
-                                    },
-                                ),
-                                span: 152..156,
-                            },
-                            block: [
-                                Spanned {
-                                    node: Return(
-                                        Return {
-                                            val: Some(
-                                                Spanned {
-                                                    node: IntLit(
-                                                        IntLit {
-                                                            signed: Spanned {
-                                                                node: false,
-                                                                span: 167..168,
+                                                    node: FloatLit(
+                                                        FloatLit {
+                                                            negative: Spanned {
+                                                                node: true,
+                                                                span: 27..28,
                                                             },
                                                             bits: 32,
                                                             val: Spanned {
-                                                                node: 0,
-                                                                span: 167..168,
+                                                                node: 0.1,
+                                                                span: 28..32,
                                                             },
                                                         },
                                                     ),
-                                                    span: 167..168,
+                                                    span: 28..32,
                                                 },
-                                            ),
+                                                op: Plus,
+                                                y: Spanned {
+                                                    node: IntLit(
+                                                        IntLit {
+                                                            negative: Spanned {
+                                                                node: false,
+                                                                span: 34..35,
+                                                            },
+                                                            signed: true,
+                                                            bits: 32,
+                                                            val: Spanned {
+                                                                node: 1,
+                                                                span: 34..35,
+                                                            },
+                                                        },
+                                                    ),
+                                                    span: 34..35,
+                                                },
+                                            },
+                                        ),
+                                        span: 28..34,
+                                    },
+                                ],
+                            },
+                        ),
+                        span: 13..39,
+                    },
+                    Spanned {
+                        node: If(
+                            If {
+                                condition: Spanned {
+                                    node: BinOp(
+                                        BinOp {
+                                            x: Spanned {
+                                                node: IntLit(
+                                                    IntLit {
+                                                        negative: Spanned {
+                                                            node: false,
+                                                            span: 42..43,
+                                                        },
+                                                        signed: true,
+                                                        bits: 32,
+                                                        val: Spanned {
+                                                            node: 1,
+                                                            span: 42..44,
+                                                        },
+                                                    },
+                                                ),
+                                                span: 42..44,
+                                            },
+                                            op: CmpEQ,
+                                            y: Spanned {
+                                                node: IntLit(
+                                                    IntLit {
+                                                        negative: Spanned {
+                                                            node: false,
+                                                            span: 47..48,
+                                                        },
+                                                        signed: true,
+                                                        bits: 32,
+                                                        val: Spanned {
+                                                            node: 1,
+                                                            span: 47..49,
+                                                        },
+                                                    },
+                                                ),
+                                                span: 47..49,
+                                            },
                                         },
                                     ),
-                                    span: 160..171,
+                                    span: 42..47,
                                 },
-                            ],
-                        },
-                        span: 132..173,
+                                then: [
+                                    Spanned {
+                                        node: VarDecl(
+                                            VarDecl {
+                                                mut_: Spanned {
+                                                    node: false,
+                                                    span: 0..0,
+                                                },
+                                                type_: Spanned {
+                                                    node: PrimitiveType(
+                                                        PrimitiveType {
+                                                            kind: I32,
+                                                        },
+                                                    ),
+                                                    span: 53..57,
+                                                },
+                                                names: [
+                                                    Spanned {
+                                                        node: "x",
+                                                        span: 57..59,
+                                                    },
+                                                ],
+                                                values: [
+                                                    Spanned {
+                                                        node: IntLit(
+                                                            IntLit {
+                                                                negative: Spanned {
+                                                                    node: false,
+                                                                    span: 61..62,
+                                                                },
+                                                                signed: true,
+                                                                bits: 32,
+                                                                val: Spanned {
+                                                                    node: 1,
+                                                                    span: 61..62,
+                                                                },
+                                                            },
+                                                        ),
+                                                        span: 61..62,
+                                                    },
+                                                ],
+                                            },
+                                        ),
+                                        span: 53..65,
+                                    },
+                                ],
+                                else_: Some(
+                                    [
+                                        Spanned {
+                                            node: VarDecl(
+                                                VarDecl {
+                                                    mut_: Spanned {
+                                                        node: false,
+                                                        span: 0..0,
+                                                    },
+                                                    type_: Spanned {
+                                                        node: PrimitiveType(
+                                                            PrimitiveType {
+                                                                kind: I32,
+                                                            },
+                                                        ),
+                                                        span: 76..80,
+                                                    },
+                                                    names: [
+                                                        Spanned {
+                                                            node: "x",
+                                                            span: 80..82,
+                                                        },
+                                                    ],
+                                                    values: [
+                                                        Spanned {
+                                                            node: IntLit(
+                                                                IntLit {
+                                                                    negative: Spanned {
+                                                                        node: false,
+                                                                        span: 84..85,
+                                                                    },
+                                                                    signed: true,
+                                                                    bits: 32,
+                                                                    val: Spanned {
+                                                                        node: 1,
+                                                                        span: 84..85,
+                                                                    },
+                                                                },
+                                                            ),
+                                                            span: 84..85,
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                            span: 76..89,
+                                        },
+                                        Spanned {
+                                            node: If(
+                                                If {
+                                                    condition: Spanned {
+                                                        node: BinOp(
+                                                            BinOp {
+                                                                x: Spanned {
+                                                                    node: IntLit(
+                                                                        IntLit {
+                                                                            negative: Spanned {
+                                                                                node: false,
+                                                                                span: 92..93,
+                                                                            },
+                                                                            signed: true,
+                                                                            bits: 32,
+                                                                            val: Spanned {
+                                                                                node: 2,
+                                                                                span: 92..94,
+                                                                            },
+                                                                        },
+                                                                    ),
+                                                                    span: 92..94,
+                                                                },
+                                                                op: CmpEQ,
+                                                                y: Spanned {
+                                                                    node: IntLit(
+                                                                        IntLit {
+                                                                            negative: Spanned {
+                                                                                node: false,
+                                                                                span: 97..98,
+                                                                            },
+                                                                            signed: true,
+                                                                            bits: 32,
+                                                                            val: Spanned {
+                                                                                node: 2,
+                                                                                span: 97..99,
+                                                                            },
+                                                                        },
+                                                                    ),
+                                                                    span: 97..99,
+                                                                },
+                                                            },
+                                                        ),
+                                                        span: 92..97,
+                                                    },
+                                                    then: [
+                                                        Spanned {
+                                                            node: VarDecl(
+                                                                VarDecl {
+                                                                    mut_: Spanned {
+                                                                        node: false,
+                                                                        span: 0..0,
+                                                                    },
+                                                                    type_: Spanned {
+                                                                        node: PrimitiveType(
+                                                                            PrimitiveType {
+                                                                                kind: I32,
+                                                                            },
+                                                                        ),
+                                                                        span: 104..108,
+                                                                    },
+                                                                    names: [
+                                                                        Spanned {
+                                                                            node: "x",
+                                                                            span: 108..110,
+                                                                        },
+                                                                    ],
+                                                                    values: [
+                                                                        Spanned {
+                                                                            node: IntLit(
+                                                                                IntLit {
+                                                                                    negative: Spanned {
+                                                                                        node: false,
+                                                                                        span: 112..113,
+                                                                                    },
+                                                                                    signed: true,
+                                                                                    bits: 32,
+                                                                                    val: Spanned {
+                                                                                        node: 1,
+                                                                                        span: 112..113,
+                                                                                    },
+                                                                                },
+                                                                            ),
+                                                                            span: 112..113,
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            ),
+                                                            span: 104..117,
+                                                        },
+                                                    ],
+                                                    else_: None,
+                                                },
+                                            ),
+                                            span: 89..120,
+                                        },
+                                    ],
+                                ),
+                            },
+                        ),
+                        span: 39..122,
                     },
                 ],
             },
-            span: 119..178,
+            span: 0..0,
         },
     ],
+    types: [],
+    apply_blocks: [],
 }
