@@ -6,27 +6,50 @@ AST {
             node: FnDecl {
                 pub_: Spanned {
                     node: false,
-                    span: 0..0,
+                    span: Span {
+                        range: 0..0,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
                 },
                 name: Spanned {
                     node: "main",
-                    span: 3..7,
+                    span: Span {
+                        range: 3..7,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
                 },
                 generics: Spanned {
                     node: [],
-                    span: 7..7,
+                    span: Span {
+                        range: 7..7,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
                 },
                 params: Spanned {
                     node: [],
-                    span: 7..10,
+                    span: Span {
+                        range: 7..10,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
                 },
                 ret_ty: Spanned {
                     node: PrimitiveType(
-                        PrimitiveType {
-                            kind: Void,
-                        },
+                        Void,
                     ),
-                    span: 10..10,
+                    span: Span {
+                        range: 10..10,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
                 },
                 block: [
                     Spanned {
@@ -34,28 +57,51 @@ AST {
                             VarDecl {
                                 mut_: Spanned {
                                     node: false,
-                                    span: 0..0,
+                                    span: Span {
+                                        range: 0..0,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
                                 },
                                 type_: Spanned {
                                     node: PrimitiveType(
-                                        PrimitiveType {
-                                            kind: I32,
-                                        },
+                                        I32,
                                     ),
-                                    span: 13..17,
+                                    span: Span {
+                                        range: 13..17,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
                                 },
                                 names: [
                                     Spanned {
                                         node: "x",
-                                        span: 17..18,
+                                        span: Span {
+                                            range: 17..18,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
                                     },
                                     Spanned {
                                         node: "y",
-                                        span: 20..21,
+                                        span: Span {
+                                            range: 20..21,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
                                     },
                                     Spanned {
                                         node: "z",
-                                        span: 23..25,
+                                        span: Span {
+                                            range: 23..25,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
                                     },
                                 ],
                                 values: [
@@ -63,20 +109,36 @@ AST {
                                         node: BinOp(
                                             BinOp {
                                                 x: Spanned {
-                                                    node: FloatLit(
-                                                        FloatLit {
+                                                    node: IntLit(
+                                                        IntLit {
                                                             negative: Spanned {
-                                                                node: true,
-                                                                span: 27..28,
+                                                                node: false,
+                                                                span: Span {
+                                                                    range: 27..28,
+                                                                    file_id: FileId(
+                                                                        0,
+                                                                    ),
+                                                                },
                                                             },
+                                                            signed: true,
                                                             bits: 32,
                                                             val: Spanned {
-                                                                node: 0.1,
-                                                                span: 28..32,
+                                                                node: 2,
+                                                                span: Span {
+                                                                    range: 27..29,
+                                                                    file_id: FileId(
+                                                                        0,
+                                                                    ),
+                                                                },
                                                             },
                                                         },
                                                     ),
-                                                    span: 28..32,
+                                                    span: Span {
+                                                        range: 27..29,
+                                                        file_id: FileId(
+                                                            0,
+                                                        ),
+                                                    },
                                                 },
                                                 op: Plus,
                                                 y: Spanned {
@@ -84,26 +146,51 @@ AST {
                                                         IntLit {
                                                             negative: Spanned {
                                                                 node: false,
-                                                                span: 34..35,
+                                                                span: Span {
+                                                                    range: 31..32,
+                                                                    file_id: FileId(
+                                                                        0,
+                                                                    ),
+                                                                },
                                                             },
                                                             signed: true,
                                                             bits: 32,
                                                             val: Spanned {
                                                                 node: 1,
-                                                                span: 34..35,
+                                                                span: Span {
+                                                                    range: 31..32,
+                                                                    file_id: FileId(
+                                                                        0,
+                                                                    ),
+                                                                },
                                                             },
                                                         },
                                                     ),
-                                                    span: 34..35,
+                                                    span: Span {
+                                                        range: 31..32,
+                                                        file_id: FileId(
+                                                            0,
+                                                        ),
+                                                    },
                                                 },
                                             },
                                         ),
-                                        span: 28..34,
+                                        span: Span {
+                                            range: 27..31,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
                                     },
                                 ],
                             },
                         ),
-                        span: 13..39,
+                        span: Span {
+                            range: 13..36,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
                     },
                     Spanned {
                         node: If(
@@ -112,21 +199,15 @@ AST {
                                     node: BinOp(
                                         BinOp {
                                             x: Spanned {
-                                                node: IntLit(
-                                                    IntLit {
-                                                        negative: Spanned {
-                                                            node: false,
-                                                            span: 42..43,
-                                                        },
-                                                        signed: true,
-                                                        bits: 32,
-                                                        val: Spanned {
-                                                            node: 1,
-                                                            span: 42..44,
-                                                        },
-                                                    },
+                                                node: Ident(
+                                                    "x",
                                                 ),
-                                                span: 42..44,
+                                                span: Span {
+                                                    range: 39..41,
+                                                    file_id: FileId(
+                                                        0,
+                                                    ),
+                                                },
                                             },
                                             op: CmpEQ,
                                             y: Spanned {
@@ -134,21 +215,41 @@ AST {
                                                     IntLit {
                                                         negative: Spanned {
                                                             node: false,
-                                                            span: 47..48,
+                                                            span: Span {
+                                                                range: 44..45,
+                                                                file_id: FileId(
+                                                                    0,
+                                                                ),
+                                                            },
                                                         },
                                                         signed: true,
                                                         bits: 32,
                                                         val: Spanned {
                                                             node: 1,
-                                                            span: 47..49,
+                                                            span: Span {
+                                                                range: 44..46,
+                                                                file_id: FileId(
+                                                                    0,
+                                                                ),
+                                                            },
                                                         },
                                                     },
                                                 ),
-                                                span: 47..49,
+                                                span: Span {
+                                                    range: 44..46,
+                                                    file_id: FileId(
+                                                        0,
+                                                    ),
+                                                },
                                             },
                                         },
                                     ),
-                                    span: 42..47,
+                                    span: Span {
+                                        range: 39..44,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
                                 },
                                 then: [
                                     Spanned {
@@ -156,20 +257,33 @@ AST {
                                             VarDecl {
                                                 mut_: Spanned {
                                                     node: false,
-                                                    span: 0..0,
+                                                    span: Span {
+                                                        range: 0..0,
+                                                        file_id: FileId(
+                                                            0,
+                                                        ),
+                                                    },
                                                 },
                                                 type_: Spanned {
                                                     node: PrimitiveType(
-                                                        PrimitiveType {
-                                                            kind: I32,
-                                                        },
+                                                        I32,
                                                     ),
-                                                    span: 53..57,
+                                                    span: Span {
+                                                        range: 50..54,
+                                                        file_id: FileId(
+                                                            0,
+                                                        ),
+                                                    },
                                                 },
                                                 names: [
                                                     Spanned {
                                                         node: "x",
-                                                        span: 57..59,
+                                                        span: Span {
+                                                            range: 54..56,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
                                                     },
                                                 ],
                                                 values: [
@@ -178,22 +292,42 @@ AST {
                                                             IntLit {
                                                                 negative: Spanned {
                                                                     node: false,
-                                                                    span: 61..62,
+                                                                    span: Span {
+                                                                        range: 58..59,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
                                                                 },
                                                                 signed: true,
                                                                 bits: 32,
                                                                 val: Spanned {
                                                                     node: 1,
-                                                                    span: 61..62,
+                                                                    span: Span {
+                                                                        range: 58..59,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
                                                                 },
                                                             },
                                                         ),
-                                                        span: 61..62,
+                                                        span: Span {
+                                                            range: 58..59,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
                                                     },
                                                 ],
                                             },
                                         ),
-                                        span: 53..65,
+                                        span: Span {
+                                            range: 50..62,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
                                     },
                                 ],
                                 else_: Some(
@@ -203,20 +337,33 @@ AST {
                                                 VarDecl {
                                                     mut_: Spanned {
                                                         node: false,
-                                                        span: 0..0,
+                                                        span: Span {
+                                                            range: 0..0,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
                                                     },
                                                     type_: Spanned {
                                                         node: PrimitiveType(
-                                                            PrimitiveType {
-                                                                kind: I32,
-                                                            },
+                                                            I32,
                                                         ),
-                                                        span: 76..80,
+                                                        span: Span {
+                                                            range: 73..77,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
                                                     },
                                                     names: [
                                                         Spanned {
                                                             node: "x",
-                                                            span: 80..82,
+                                                            span: Span {
+                                                                range: 77..79,
+                                                                file_id: FileId(
+                                                                    0,
+                                                                ),
+                                                            },
                                                         },
                                                     ],
                                                     values: [
@@ -225,22 +372,42 @@ AST {
                                                                 IntLit {
                                                                     negative: Spanned {
                                                                         node: false,
-                                                                        span: 84..85,
+                                                                        span: Span {
+                                                                            range: 81..82,
+                                                                            file_id: FileId(
+                                                                                0,
+                                                                            ),
+                                                                        },
                                                                     },
                                                                     signed: true,
                                                                     bits: 32,
                                                                     val: Spanned {
                                                                         node: 1,
-                                                                        span: 84..85,
+                                                                        span: Span {
+                                                                            range: 81..82,
+                                                                            file_id: FileId(
+                                                                                0,
+                                                                            ),
+                                                                        },
                                                                     },
                                                                 },
                                                             ),
-                                                            span: 84..85,
+                                                            span: Span {
+                                                                range: 81..82,
+                                                                file_id: FileId(
+                                                                    0,
+                                                                ),
+                                                            },
                                                         },
                                                     ],
                                                 },
                                             ),
-                                            span: 76..89,
+                                            span: Span {
+                                                range: 73..86,
+                                                file_id: FileId(
+                                                    0,
+                                                ),
+                                            },
                                         },
                                         Spanned {
                                             node: If(
@@ -253,17 +420,32 @@ AST {
                                                                         IntLit {
                                                                             negative: Spanned {
                                                                                 node: false,
-                                                                                span: 92..93,
+                                                                                span: Span {
+                                                                                    range: 89..90,
+                                                                                    file_id: FileId(
+                                                                                        0,
+                                                                                    ),
+                                                                                },
                                                                             },
                                                                             signed: true,
                                                                             bits: 32,
                                                                             val: Spanned {
                                                                                 node: 2,
-                                                                                span: 92..94,
+                                                                                span: Span {
+                                                                                    range: 89..91,
+                                                                                    file_id: FileId(
+                                                                                        0,
+                                                                                    ),
+                                                                                },
                                                                             },
                                                                         },
                                                                     ),
-                                                                    span: 92..94,
+                                                                    span: Span {
+                                                                        range: 89..91,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
                                                                 },
                                                                 op: CmpEQ,
                                                                 y: Spanned {
@@ -271,21 +453,41 @@ AST {
                                                                         IntLit {
                                                                             negative: Spanned {
                                                                                 node: false,
-                                                                                span: 97..98,
+                                                                                span: Span {
+                                                                                    range: 94..95,
+                                                                                    file_id: FileId(
+                                                                                        0,
+                                                                                    ),
+                                                                                },
                                                                             },
                                                                             signed: true,
                                                                             bits: 32,
                                                                             val: Spanned {
                                                                                 node: 2,
-                                                                                span: 97..99,
+                                                                                span: Span {
+                                                                                    range: 94..96,
+                                                                                    file_id: FileId(
+                                                                                        0,
+                                                                                    ),
+                                                                                },
                                                                             },
                                                                         },
                                                                     ),
-                                                                    span: 97..99,
+                                                                    span: Span {
+                                                                        range: 94..96,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
                                                                 },
                                                             },
                                                         ),
-                                                        span: 92..97,
+                                                        span: Span {
+                                                            range: 89..94,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
                                                     },
                                                     then: [
                                                         Spanned {
@@ -293,60 +495,87 @@ AST {
                                                                 VarDecl {
                                                                     mut_: Spanned {
                                                                         node: false,
-                                                                        span: 0..0,
+                                                                        span: Span {
+                                                                            range: 0..0,
+                                                                            file_id: FileId(
+                                                                                0,
+                                                                            ),
+                                                                        },
                                                                     },
                                                                     type_: Spanned {
                                                                         node: PrimitiveType(
-                                                                            PrimitiveType {
-                                                                                kind: I32,
-                                                                            },
+                                                                            I32,
                                                                         ),
-                                                                        span: 104..108,
+                                                                        span: Span {
+                                                                            range: 101..105,
+                                                                            file_id: FileId(
+                                                                                0,
+                                                                            ),
+                                                                        },
                                                                     },
                                                                     names: [
                                                                         Spanned {
                                                                             node: "x",
-                                                                            span: 108..110,
+                                                                            span: Span {
+                                                                                range: 105..107,
+                                                                                file_id: FileId(
+                                                                                    0,
+                                                                                ),
+                                                                            },
                                                                         },
                                                                     ],
                                                                     values: [
                                                                         Spanned {
-                                                                            node: IntLit(
-                                                                                IntLit {
-                                                                                    negative: Spanned {
-                                                                                        node: false,
-                                                                                        span: 112..113,
-                                                                                    },
-                                                                                    signed: true,
-                                                                                    bits: 32,
-                                                                                    val: Spanned {
-                                                                                        node: 1,
-                                                                                        span: 112..113,
-                                                                                    },
-                                                                                },
+                                                                            node: Ident(
+                                                                                "y",
                                                                             ),
-                                                                            span: 112..113,
+                                                                            span: Span {
+                                                                                range: 109..110,
+                                                                                file_id: FileId(
+                                                                                    0,
+                                                                                ),
+                                                                            },
                                                                         },
                                                                     ],
                                                                 },
                                                             ),
-                                                            span: 104..117,
+                                                            span: Span {
+                                                                range: 101..114,
+                                                                file_id: FileId(
+                                                                    0,
+                                                                ),
+                                                            },
                                                         },
                                                     ],
                                                     else_: None,
                                                 },
                                             ),
-                                            span: 89..120,
+                                            span: Span {
+                                                range: 86..117,
+                                                file_id: FileId(
+                                                    0,
+                                                ),
+                                            },
                                         },
                                     ],
                                 ),
                             },
                         ),
-                        span: 39..122,
+                        span: Span {
+                            range: 36..119,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
                     },
                 ],
             },
-            span: 0..0,
+            span: Span {
+                range: 0..0,
+                file_id: FileId(
+                    0,
+                ),
+            },
         },
     ],
     types: [],

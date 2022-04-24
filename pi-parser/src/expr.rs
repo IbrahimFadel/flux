@@ -3,9 +3,9 @@ use std::{collections::HashMap, vec};
 use indexmap::IndexMap;
 use pi_ast::{
 	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method, OpKind,
-	PrimitiveKind, PrimitiveType, PtrType, Spanned, StringLit, StructExpr, Unary,
+	PrimitiveType, PtrType, Spanned, StringLit, StructExpr, Unary,
 };
-use pi_error::PIErrorCode;
+use pi_error::{PIErrorCode, Span};
 use pi_lexer::token::TokenKind;
 
 use crate::{decl::params, get_tokprec, tok_val, token_kind_to_op_kind, ParseInput};
@@ -34,14 +34,17 @@ fn binop_expr(input: &mut ParseInput, prec1: i8) -> Spanned<Expr> {
 
 		let y = binop_expr(input, oprec + 1);
 
-		let binop_start = x.span.start.clone();
-		let binop_end = y.span.start.clone();
+		let binop_start = x.span.range.start.clone();
+		let binop_end = y.span.range.start.clone();
 		let binop = Expr::BinOp(BinOp::new(
 			Box::from(x.clone()),
 			token_kind_to_op_kind(&op),
 			Box::from(y),
 		));
-		let post = postfix(input, Spanned::new(binop, binop_start..binop_end));
+		let post = postfix(
+			input,
+			Spanned::new(binop, Span::new(binop_start..binop_end, input.file_id)),
+		);
 		x = post;
 	}
 }
@@ -103,7 +106,7 @@ fn call(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
 	let end = input.tok().span.start;
 	return Spanned::new(
 		Expr::CallExpr(CallExpr::new(Box::from(x), args)),
-		start..end,
+		Span::new(start..end, input.file_id),
 	);
 }
 
@@ -117,7 +120,7 @@ fn unary_expr(input: &mut ParseInput) -> Spanned<Expr> {
 			let end = input.tok().span.start;
 			Spanned::new(
 				Expr::Unary(Unary::new(OpKind::Ampersand, Box::from(e))),
-				start..end,
+				Span::new(start..end, input.file_id),
 			)
 		}
 		_ => primary_expr(input),
@@ -184,9 +187,9 @@ fn struct_expr(input: &mut ParseInput, name: &Ident) -> Spanned<Expr> {
 	Spanned::new(
 		Expr::StructExpr(StructExpr::new(
 			name.clone(),
-			Spanned::new(fields, fields_start..fields_end),
+			Spanned::new(fields, Span::new(fields_start..fields_end, input.file_id)),
 		)),
-		fields_start..fields_end,
+		Span::new(fields_start..fields_end, input.file_id),
 	)
 }
 
@@ -194,7 +197,10 @@ fn operand(input: &mut ParseInput) -> Spanned<Expr> {
 	match input.tok().kind {
 		TokenKind::Ident => {
 			let e = ident(input);
-			Spanned::new(Expr::Ident(e.node), e.span.start..e.span.end)
+			Spanned::new(
+				Expr::Ident(e.node),
+				Span::new(e.span.range.start..e.span.range.end, input.file_id),
+			)
 		}
 		TokenKind::Minus
 		| TokenKind::Int
@@ -211,10 +217,10 @@ fn operand(input: &mut ParseInput) -> Spanned<Expr> {
 						"unexpected expression operand `{}`",
 						tok_val(&input.program, input.tok())
 					),
-					input.tok().span.clone(),
+					Span::new(input.tok().span.clone(), input.file_id),
 				)],
 			));
-			Spanned::new(Expr::Error, 0..0)
+			Spanned::new(Expr::Error, Span::new(0..0, input.file_id))
 		}
 	}
 }
@@ -240,7 +246,7 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 					"expected a basic literal expression, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -273,26 +279,32 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 			match x {
 				Ok(val) => Spanned::new(
 					Expr::IntLit(IntLit::new(
-						Spanned::new(signed, sign_span),
+						Spanned::new(signed, Span::new(sign_span, input.file_id)),
 						true,
 						32,
-						Spanned::new(val, begin_pos..input.tok().span.start),
+						Spanned::new(
+							val,
+							Span::new(begin_pos..input.tok().span.start, input.file_id),
+						),
 					)),
-					begin_pos..input.tok().span.start,
+					Span::new(begin_pos..input.tok().span.start, input.file_id),
 				),
 				Err(e) => {
 					input.errs.push(input.error(
 						format!("could not parse integer: {}", e.to_string()),
 						PIErrorCode::ParseCouldNotParseInt,
 						vec![
-							("invalid integer".to_owned(), input.tok().span.clone()),
+							(
+								"invalid integer".to_owned(),
+								Span::new(input.tok().span.clone(), input.file_id),
+							),
 							(
 								format!("(hint) this is a base {} integer", base).to_owned(),
-								input.tok().span.clone(),
+								Span::new(input.tok().span.clone(), input.file_id),
 							),
 						],
 					));
-					Spanned::new(Expr::Error, 0..0)
+					Spanned::new(Expr::Error, Span::new(0..0, input.file_id))
 				}
 			}
 		}
@@ -302,13 +314,16 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 			match x {
 				Ok(val) => Spanned::new(
 					Expr::FloatLit(FloatLit::new(
-						Spanned::new(signed, sign_span),
+						Spanned::new(signed, Span::new(sign_span, input.file_id)),
 						32,
-						Spanned::new(val, begin_pos..input.tok().span.start),
+						Spanned::new(
+							val,
+							Span::new(begin_pos..input.tok().span.start, input.file_id),
+						),
 					)),
-					begin_pos..input.tok().span.start,
+					Span::new(begin_pos..input.tok().span.start, input.file_id),
 				),
-				_ => Spanned::new(Expr::Error, 0..0),
+				_ => Spanned::new(Expr::Error, Span::new(0..0, input.file_id)),
 			}
 		}
 		TokenKind::CharLit => {
@@ -318,9 +333,9 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 			match x.chars().nth(0) {
 				Some(val) => Spanned::new(
 					Expr::CharLit(CharLit::from(val)),
-					start..input.tok().span.start,
+					Span::new(start..input.tok().span.start, input.file_id),
 				),
-				_ => Spanned::new(Expr::Error, 0..0),
+				_ => Spanned::new(Expr::Error, Span::new(0..0, input.file_id)),
 			}
 		}
 		TokenKind::StringLit => {
@@ -329,12 +344,12 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 			input.next();
 			Spanned::new(
 				Expr::StringLit(StringLit::from(x)),
-				start..input.tok().span.start,
+				Span::new(start..input.tok().span.start, input.file_id),
 			)
 		}
 		_ => {
 			input.next();
-			Spanned::new(Expr::Error, 0..0)
+			Spanned::new(Expr::Error, Span::new(0..0, input.file_id))
 		}
 	}
 }
@@ -347,12 +362,15 @@ pub fn ident(input: &mut ParseInput) -> Spanned<Ident> {
 		input.error(
 			"expected identifier".to_owned(),
 			PIErrorCode::ParseExpectedIdent,
-			vec![("".to_owned(), input.tok().span.clone())],
+			vec![(
+				"".to_owned(),
+				Span::new(input.tok().span.clone(), input.file_id),
+			)],
 		),
 	);
 	let x = Ident::from(tok_val(&input_program_clone, res));
 	input.next();
-	return Spanned::new(x, start..input.tok().span.start);
+	return Spanned::new(x, Span::new(start..input.tok().span.start, input.file_id));
 }
 
 fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
@@ -396,7 +414,10 @@ fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	}
 
 	let end = input.tok().span.start;
-	return Spanned::new(Expr::StructType(fields), start..end);
+	return Spanned::new(
+		Expr::StructType(fields),
+		Span::new(start..end, input.file_id),
+	);
 }
 
 fn field_map(input: &mut ParseInput) -> IndexMap<Spanned<Ident>, Spanned<Field>> {
@@ -426,7 +447,7 @@ fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
 			PIErrorCode::ParseExpectedIdentInField,
 			vec![(
 				"(hint) give your field a name".to_owned(),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -442,10 +463,17 @@ fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
 		return (
-			Spanned::new(Ident::from(name), ident_begin..ident_end),
 			Spanned::new(
-				Field::new(Spanned::new(pub_, start..pub_end), type_, None),
-				start..input.tok().span.start,
+				Ident::from(name),
+				Span::new(ident_begin..ident_end, input.file_id),
+			),
+			Spanned::new(
+				Field::new(
+					Spanned::new(pub_, Span::new(start..pub_end, input.file_id)),
+					type_,
+					None,
+				),
+				Span::new(start..input.tok().span.start, input.file_id),
 			),
 		);
 	}
@@ -457,7 +485,7 @@ fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
 			PIErrorCode::ParseExpectedEqInField,
 			vec![(
 				"(hint) either terminate your field with a `;` or give it a default value".to_owned(),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -474,7 +502,7 @@ fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
 			PIErrorCode::ParseExpectedSemicolonInField,
 			vec![(
 				"(hint) insert a `;` here".to_owned(),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -482,10 +510,17 @@ fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
 		input.next();
 	}
 	return (
-		Spanned::new(Ident::from(name), ident_begin..ident_end),
 		Spanned::new(
-			Field::new(Spanned::new(pub_, start..pub_end), type_, Some(val)),
-			start..input.tok().span.start,
+			Ident::from(name),
+			Span::new(ident_begin..ident_end, input.file_id),
+		),
+		Spanned::new(
+			Field::new(
+				Spanned::new(pub_, Span::new(start..pub_end, input.file_id)),
+				type_,
+				Some(val),
+			),
+			Span::new(start..input.tok().span.start, input.file_id),
 		),
 	);
 }
@@ -533,7 +568,10 @@ fn interface_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	}
 
 	let end = input.tok().span.start;
-	return Spanned::new(Expr::InterfaceType(methods), start..end);
+	return Spanned::new(
+		Expr::InterfaceType(methods),
+		Span::new(start..end, input.file_id),
+	);
 }
 
 fn method_map(input: &mut ParseInput) -> InterfaceType {
@@ -573,8 +611,8 @@ fn method(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Method>) {
 	let params_end = input.tok().span.end;
 	let ret_ty_start = input.tok().span.start;
 	let mut ret_ty = Spanned::new(
-		Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void)),
-		ret_ty_start..ret_ty_start,
+		Expr::PrimitiveType(PrimitiveType::Void),
+		Span::new(ret_ty_start..ret_ty_start, input.file_id),
 	);
 	if input.tok().kind == TokenKind::Arrow {
 		input.next();
@@ -598,12 +636,12 @@ fn method(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Method>) {
 		name.clone(),
 		Spanned::new(
 			Method::new(
-				Spanned::new(pub_, pub_start..pub_end),
+				Spanned::new(pub_, Span::new(pub_start..pub_end, input.file_id)),
 				name,
-				Spanned::new(params, params_start..params_end),
+				Spanned::new(params, Span::new(params_start..params_end, input.file_id)),
 				ret_ty,
 			),
-			pub_start..end,
+			Span::new(pub_start..end, input.file_id),
 		),
 	);
 }
@@ -625,13 +663,16 @@ pub fn type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 			let y = token_kind_to_primitive_kind(input, input.tok().kind.clone());
 			input.next();
 			let end = input.tok().span.start;
-			Spanned::new(Expr::PrimitiveType(PrimitiveType::new(y)), start..end)
+			Spanned::new(Expr::PrimitiveType(y), Span::new(start..end, input.file_id))
 		}
 		TokenKind::Struct => struct_type_expr(input),
 		TokenKind::Interface => interface_type_expr(input),
 		TokenKind::Ident => {
 			let e = ident(input);
-			Spanned::new(Expr::Ident(e.node), e.span.start..e.span.end)
+			Spanned::new(
+				Expr::Ident(e.node),
+				Span::new(e.span.range.start..e.span.range.end, input.file_id),
+			)
 		}
 		_ => {
 			input.errs.push(input.error(
@@ -642,43 +683,46 @@ pub fn type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 						"expected type expression, instead got `{}`",
 						tok_val(&input.program, input.tok())
 					),
-					input.tok().span.clone(),
+					Span::new(input.tok().span.clone(), input.file_id),
 				)],
 			));
-			Spanned::new(Expr::Error, 0..0)
+			Spanned::new(Expr::Error, Span::new(0..0, input.file_id))
 		}
 	};
 	while input.tok().kind == TokenKind::Asterisk {
 		let start = input.tok().span.start;
-		ty = Spanned::new(Expr::PtrType(PtrType::from(ty.clone())), start..ty.span.end);
+		ty = Spanned::new(
+			Expr::PtrType(PtrType::from(ty.clone())),
+			Span::new(start..ty.span.range.end, input.file_id),
+		);
 		input.next();
 	}
 	return ty;
 }
 
-fn token_kind_to_primitive_kind(input: &mut ParseInput, tok_kind: TokenKind) -> PrimitiveKind {
+fn token_kind_to_primitive_kind(input: &mut ParseInput, tok_kind: TokenKind) -> PrimitiveType {
 	match tok_kind {
-		TokenKind::I64 => PrimitiveKind::I64,
-		TokenKind::U64 => PrimitiveKind::U64,
-		TokenKind::I32 => PrimitiveKind::I32,
-		TokenKind::U32 => PrimitiveKind::U32,
-		TokenKind::I16 => PrimitiveKind::I16,
-		TokenKind::U16 => PrimitiveKind::U16,
-		TokenKind::I8 => PrimitiveKind::I8,
-		TokenKind::U8 => PrimitiveKind::U8,
-		TokenKind::F64 => PrimitiveKind::F64,
-		TokenKind::F32 => PrimitiveKind::F32,
-		TokenKind::Bool => PrimitiveKind::Bool,
+		TokenKind::I64 => PrimitiveType::I64,
+		TokenKind::U64 => PrimitiveType::U64,
+		TokenKind::I32 => PrimitiveType::I32,
+		TokenKind::U32 => PrimitiveType::U32,
+		TokenKind::I16 => PrimitiveType::I16,
+		TokenKind::U16 => PrimitiveType::U16,
+		TokenKind::I8 => PrimitiveType::I8,
+		TokenKind::U8 => PrimitiveType::U8,
+		TokenKind::F64 => PrimitiveType::F64,
+		TokenKind::F32 => PrimitiveType::F32,
+		TokenKind::Bool => PrimitiveType::Bool,
 		_ => {
 			input.fatal_error(
 				format!(
 					"internal compiler error: could not convert token kind `{}` to a primitive type kind",
 					tok_kind
 				),
-				PIErrorCode::ParseCouldNotConvertTokKindToPrimitiveKind,
+				PIErrorCode::ParseCouldNotConvertTokKindToPrimitiveType,
 				vec![],
 			);
-			return PrimitiveKind::Void;
+			return PrimitiveType::Void;
 		}
 	}
 }

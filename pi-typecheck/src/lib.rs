@@ -1,8 +1,8 @@
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use pi_ast::{Expr, FnDecl, Ident, Return, Spanned, Stmt, TypeDecl, VarDecl, AST};
-use pi_error::{filesystem::FileId, PIError, PIErrorCode, PIErrorReporting};
+use pi_error::{filesystem::FileId, PIError, PIErrorCode, PIErrorReporting, Span};
 
 mod expr;
 
@@ -17,13 +17,8 @@ struct FnCtx<'ctx> {
 }
 
 impl<'ctx> FnCtx<'ctx> {
-	pub fn error(
-		&self,
-		msg: String,
-		code: PIErrorCode,
-		labels: Vec<(String, Range<usize>)>,
-	) -> PIError {
-		PIError::new(msg, code, labels, self.file_id)
+	pub fn error(&self, msg: String, code: PIErrorCode, labels: Vec<(String, Span)>) -> PIError {
+		PIError::new(msg, code, labels)
 	}
 
 	fn get_type_of_var_in_cur_block(&self, name: &Spanned<Ident>) -> Result<&'ctx Expr, PIError> {

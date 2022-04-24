@@ -1,7 +1,5 @@
-use std::ops::Range;
-
 use pi_ast::{ApplyBlock, FnDecl, Mod, OpKind, Spanned, TypeDecl, AST};
-use pi_error::{filesystem::FileId, PIError, PIErrorCode};
+use pi_error::{filesystem::FileId, PIError, PIErrorCode, Span};
 use pi_lexer::token::{Token, TokenKind};
 
 mod decl;
@@ -39,21 +37,11 @@ impl<'a> ParseInput<'a> {
 		self.tok()
 	}
 
-	pub fn error(
-		&self,
-		msg: String,
-		code: PIErrorCode,
-		labels: Vec<(String, Range<usize>)>,
-	) -> PIError {
-		PIError::new(msg, code, labels, self.file_id)
+	pub fn error(&self, msg: String, code: PIErrorCode, labels: Vec<(String, Span)>) -> PIError {
+		PIError::new(msg, code, labels)
 	}
 
-	pub fn fatal_error(
-		&mut self,
-		msg: String,
-		code: PIErrorCode,
-		labels: Vec<(String, Range<usize>)>,
-	) {
+	pub fn fatal_error(&mut self, msg: String, code: PIErrorCode, labels: Vec<(String, Span)>) {
 		self.errs.push(self.error(msg, code, labels));
 		self.offset = self.toks.len() - 1;
 	}
@@ -138,11 +126,18 @@ pub fn top_level_decls(
 				input.next();
 				let pub_end = input.tok().span.start;
 				match input.tok().kind {
-					TokenKind::Fn => fn_decls.push(fn_decl(input, Spanned::new(true, pub_start..pub_end))),
-					TokenKind::Type => {
-						type_decls.push(type_decl(input, Spanned::new(true, pub_start..pub_end)))
-					}
-					TokenKind::Mod => mod_stmts.push(mod_stmt(input, Spanned::new(true, pub_start..pub_end))),
+					TokenKind::Fn => fn_decls.push(fn_decl(
+						input,
+						Spanned::new(true, Span::new(pub_start..pub_end, input.file_id)),
+					)),
+					TokenKind::Type => type_decls.push(type_decl(
+						input,
+						Spanned::new(true, Span::new(pub_start..pub_end, input.file_id)),
+					)),
+					TokenKind::Mod => mod_stmts.push(mod_stmt(
+						input,
+						Spanned::new(true, Span::new(pub_start..pub_end, input.file_id)),
+					)),
 					_ => {
 						input.errs.push(input.error(
 							"expected declaration following `pub`".to_owned(),
@@ -153,11 +148,11 @@ pub fn top_level_decls(
 										"expected declaration following `pub`, instead got `{}`",
 										tok_val(&input.program, input.tok())
 									),
-									input.tok().span.clone(),
+									Span::new(input.tok().span.clone(), input.file_id),
 								),
 								(
 									"(hint) declare a function, type or global variable".to_owned(),
-									input.tok().span.clone(),
+									Span::new(input.tok().span.clone(), input.file_id),
 								),
 							],
 						));
@@ -167,15 +162,33 @@ pub fn top_level_decls(
 			}
 			TokenKind::Fn => fn_decls.push(fn_decl(
 				input,
-				Spanned::new(false, input.tok().span.start..input.tok().span.start),
+				Spanned::new(
+					false,
+					Span::new(
+						input.tok().span.start..input.tok().span.start,
+						input.file_id,
+					),
+				),
 			)),
 			TokenKind::Type => type_decls.push(type_decl(
 				input,
-				Spanned::new(false, input.tok().span.start..input.tok().span.start),
+				Spanned::new(
+					false,
+					Span::new(
+						input.tok().span.start..input.tok().span.start,
+						input.file_id,
+					),
+				),
 			)),
 			TokenKind::Mod => mod_stmts.push(mod_stmt(
 				input,
-				Spanned::new(false, input.tok().span.start..input.tok().span.start),
+				Spanned::new(
+					false,
+					Span::new(
+						input.tok().span.start..input.tok().span.start,
+						input.file_id,
+					),
+				),
 			)),
 			TokenKind::Apply => apply_blocks.push(apply_block(input)),
 			TokenKind::BlockComment => {

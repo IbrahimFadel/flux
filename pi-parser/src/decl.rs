@@ -1,8 +1,7 @@
 use pi_ast::{
-	ApplyBlock, Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, Spanned,
-	TypeDecl,
+	ApplyBlock, Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveType, Spanned, TypeDecl,
 };
-use pi_error::PIErrorCode;
+use pi_error::{PIErrorCode, Span};
 use pi_lexer::token::TokenKind;
 
 use crate::{
@@ -26,7 +25,7 @@ pub fn apply_block(input: &mut ParseInput) -> Spanned<ApplyBlock> {
 	let mut interface_name = None;
 	let mut struct_name = Spanned::new(
 		Ident::from(""),
-		input.tok().span.start..input.tok().span.end,
+		Span::new(input.tok().span.start..input.tok().span.end, input.file_id),
 	);
 	if input.tok().kind == TokenKind::Ident {
 		struct_name = ident(input);
@@ -80,7 +79,10 @@ pub fn apply_block(input: &mut ParseInput) -> Spanned<ApplyBlock> {
 				pub_end = input.tok().span.start;
 				pub_ = true;
 			}
-			methods.push(fn_decl(input, Spanned::new(pub_, pub_start..pub_end)));
+			methods.push(fn_decl(
+				input,
+				Spanned::new(pub_, Span::new(pub_start..pub_end, input.file_id)),
+			));
 		}
 
 		input.expect(
@@ -101,7 +103,7 @@ pub fn apply_block(input: &mut ParseInput) -> Spanned<ApplyBlock> {
 
 	return Spanned::new(
 		ApplyBlock::new(interface_name, struct_name, methods),
-		start..end,
+		Span::new(start..end, input.file_id),
 	);
 }
 
@@ -120,11 +122,11 @@ pub fn fn_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<FnDecl> {
 				vec![
 					(
 						"expected identifier following `fn` keyword".to_owned(),
-						input.tok().span.clone(),
+						Span::new(input.tok().span.clone(), input.file_id),
 					),
 					(
 						"(hint) name the function".to_owned(),
-						input.tok().span.clone(),
+						Span::new(input.tok().span.clone(), input.file_id),
 					),
 				],
 			),
@@ -136,8 +138,13 @@ pub fn fn_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<FnDecl> {
 	}
 	let name_end = input.tok().span.start;
 
-	let mut generics: Spanned<GenericTypes> =
-		Spanned::new(vec![], input.tok().span.start..input.tok().span.start);
+	let mut generics: Spanned<GenericTypes> = Spanned::new(
+		vec![],
+		Span::new(
+			input.tok().span.start..input.tok().span.start,
+			input.file_id,
+		),
+	);
 	if input.tok().kind == TokenKind::CmpLT {
 		generics = generic_types(input);
 	}
@@ -145,8 +152,11 @@ pub fn fn_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<FnDecl> {
 	let params = params(input);
 	let params_end = input.tok().span.start;
 	let mut ret_ty = Spanned::new(
-		Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void)),
-		input.tok().span.start..input.tok().span.start,
+		Expr::PrimitiveType(PrimitiveType::Void),
+		Span::new(
+			input.tok().span.start..input.tok().span.start,
+			input.file_id,
+		),
 	);
 	if input.tok().kind == TokenKind::Arrow {
 		input.next();
@@ -164,13 +174,16 @@ pub fn fn_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<FnDecl> {
 	Spanned::new(
 		FnDecl::new(
 			pub_,
-			Spanned::new(Ident::from(name), name_begin..name_end),
+			Spanned::new(
+				Ident::from(name),
+				Span::new(name_begin..name_end, input.file_id),
+			),
 			generics,
-			Spanned::new(params, params_start..params_end),
+			Spanned::new(params, Span::new(params_start..params_end, input.file_id)),
 			ret_ty,
 			block,
 		),
-		start..end,
+		Span::new(start..end, input.file_id),
 	)
 }
 
@@ -187,7 +200,7 @@ fn generic_types(input: &mut ParseInput) -> Spanned<GenericTypes> {
 					"expected identifier, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		))
 	}
@@ -216,7 +229,7 @@ fn generic_types(input: &mut ParseInput) -> Spanned<GenericTypes> {
 	);
 	input.next();
 	let end = input.tok().span.start;
-	return Spanned::new(names, start..end);
+	return Spanned::new(names, Span::new(start..end, input.file_id));
 }
 
 pub fn params(input: &mut ParseInput) -> Vec<Spanned<FnParam>> {
@@ -230,7 +243,7 @@ pub fn params(input: &mut ParseInput) -> Vec<Spanned<FnParam>> {
 					"expected `(` before function parameter list, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -282,11 +295,14 @@ fn param(input: &mut ParseInput) -> Spanned<FnParam> {
 			input.next();
 			return Spanned::new(
 				FnParam::new(
-					Spanned::new(mut_, mut_start..mut_end),
-					Spanned::new(Expr::Error, 0..0), // it's not actually an error, but we don't care about this value and will never read it. An Option might work better, but it seems like overkill
-					Spanned::new(Ident::from("this"), begin..input.tok().span.end),
+					Spanned::new(mut_, Span::new(mut_start..mut_end, input.file_id)),
+					Spanned::new(Expr::Error, Span::new(0..0, input.file_id)), // it's not actually an error, but we don't care about this value and will never read it. An Option might work better, but it seems like overkill
+					Spanned::new(
+						Ident::from("this"),
+						Span::new(begin..input.tok().span.end, input.file_id),
+					),
 				),
-				mut_start..input.tok().span.end,
+				Span::new(mut_start..input.tok().span.end, input.file_id),
 			);
 		} else {
 			input.errs.push(input.error(
@@ -303,8 +319,12 @@ fn param(input: &mut ParseInput) -> Spanned<FnParam> {
 	let end = input.tok().span.start;
 
 	Spanned::new(
-		FnParam::new(Spanned::new(mut_, mut_start..mut_end), type_, name),
-		mut_start..end,
+		FnParam::new(
+			Spanned::new(mut_, Span::new(mut_start..mut_end, input.file_id)),
+			type_,
+			name,
+		),
+		Span::new(mut_start..end, input.file_id),
 	)
 }
 
@@ -329,7 +349,7 @@ pub fn type_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<TypeDec
 			PIErrorCode::ParseExpectedTypeInTypeDecl,
 			vec![(
 				"(hint) give your type a name".to_owned(),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -351,7 +371,7 @@ pub fn type_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<TypeDec
 			PIErrorCode::ParseExpectedSemicolonAfterTypeDecl,
 			vec![(
 				"(hint) insert `;` here".to_owned(),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -364,9 +384,12 @@ pub fn type_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<TypeDec
 	Spanned::new(
 		TypeDecl::new(
 			pub_,
-			Spanned::new(Ident::from(name), name_begin..name_end),
+			Spanned::new(
+				Ident::from(name),
+				Span::new(name_begin..name_end, input.file_id),
+			),
 			type_,
 		),
-		start..end,
+		Span::new(start..end, input.file_id),
 	)
 }

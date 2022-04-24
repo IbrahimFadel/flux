@@ -1,5 +1,5 @@
 use pi_ast::{BlockStmt, Expr, If, Mod, Return, Spanned, Stmt, VarDecl};
-use pi_error::PIErrorCode;
+use pi_error::{PIErrorCode, Span};
 use pi_lexer::token::TokenKind;
 
 use crate::{
@@ -23,7 +23,7 @@ pub fn mod_stmt(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<Mod> {
 		input.next();
 	}
 	let end = input.tok().span.start;
-	Spanned::new(Mod::new(pub_, name), start..end)
+	Spanned::new(Mod::new(pub_, name), Span::new(start..end, input.file_id))
 }
 
 pub fn block(input: &mut ParseInput) -> BlockStmt {
@@ -37,7 +37,7 @@ pub fn block(input: &mut ParseInput) -> BlockStmt {
 					"expected `{{` at beginning of block, instead got {}",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -68,7 +68,7 @@ pub fn block(input: &mut ParseInput) -> BlockStmt {
 					"expected `}}` at end of block, instead got {}",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -104,10 +104,13 @@ fn stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 		if input.tok().kind == TokenKind::Semicolon {
 			input.next();
 		}
-		if expr == Spanned::new(Expr::Error, 0..0) {
-			return Spanned::new(Stmt::Error, 0..0);
+		if expr == Spanned::new(Expr::Error, Span::new(0..0, input.file_id)) {
+			return Spanned::new(Stmt::Error, Span::new(0..0, input.file_id));
 		}
-		return Spanned::new(Stmt::ExprStmt(expr.node), expr.span.start..expr.span.end);
+		return Spanned::new(
+			Stmt::ExprStmt(expr.node),
+			Span::new(expr.span.range.start..expr.span.range.end, input.file_id),
+		);
 	}
 }
 
@@ -129,7 +132,7 @@ fn if_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 	let end = input.tok().span.start;
 	Spanned::new(
 		Stmt::If(If::new(Box::from(condition), then, else_)),
-		start..end,
+		Span::new(start..end, input.file_id),
 	)
 }
 
@@ -140,7 +143,7 @@ fn return_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 		input.next();
 		return Spanned::new(
 			Stmt::Return(Return::new(None)),
-			start..input.tok().span.start,
+			Span::new(start..input.tok().span.start, input.file_id),
 		);
 	}
 	let expr = expr(input);
@@ -156,7 +159,10 @@ fn return_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 		input.next();
 	}
 	let end = input.tok().span.start;
-	Spanned::new(Stmt::Return(Return::new(Some(expr))), start..end)
+	Spanned::new(
+		Stmt::Return(Return::new(Some(expr))),
+		Span::new(start..end, input.file_id),
+	)
 }
 
 fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
@@ -175,7 +181,7 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 					"expected identifier in variable declaration, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		));
 	}
@@ -198,7 +204,7 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 							"expected `,` in variable declaration identifier list, instead got `{}`",
 							tok_val(&input.program, input.tok())
 						),
-						input.tok().span.clone(),
+						Span::new(input.tok().span.clone(), input.file_id),
 					)],
 				),
 			);
@@ -218,7 +224,7 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 					"expected `=` after variable declaration identifier list, instead got `{}`",
 					tok_val(&input.program, input.tok())
 				),
-				input.tok().span.clone(),
+				Span::new(input.tok().span.clone(), input.file_id),
 			)],
 		),
 	);
@@ -242,7 +248,7 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 								"expected expression after comma in variable declaration value list, instead got `{}`",
 								tok_val(&input.program, input.tok())
 							),
-						input.tok().span.clone(),
+						Span::new(input.tok().span.clone(), input.file_id),
 					)],
 				));
 				break;
@@ -256,7 +262,7 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 						"expected `;` after variable declaration, instead got `{}`",
 						tok_val(&input.program, input.tok())
 					),
-					input.tok().span.clone(),
+					Span::new(input.tok().span.clone(), input.file_id),
 				)],
 			));
 			break;
@@ -269,16 +275,16 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 	if names.len() > 1 && values.len() > 1 && values.len() != names.len() {
 		if names.len() > values.len() {
 			input.errs.push(input.error("more variables than values in variable declaration".to_owned(), PIErrorCode::ParseMoreIdentsThanValsVarDecl, vec![
-				(format!("more variables than values in variable declaration: {} values assigned to {} variables", values.len(), names.len()), names_start..input.tok().span.end),
-				(format!("{} variables declared", names.len()), names_start..names_end),
-				(format!("{} values assigned", values.len()), values_start..values_end),
-				("(hint) you can assign one value to multiple variables".to_owned(), names_start..input.tok().span.end),
+				(format!("more variables than values in variable declaration: {} values assigned to {} variables", values.len(), names.len()), Span::new(names_start..input.tok().span.end, input.file_id)),
+				(format!("{} variables declared", names.len()), Span::new(names_start..names_end, input.file_id)),
+				(format!("{} values assigned", values.len()), Span::new(values_start..values_end, input.file_id)),
+				("(hint) you can assign one value to multiple variables".to_owned(), Span::new(names_start..input.tok().span.end, input.file_id)),
 			]));
 		} else {
 			input.errs.push(input.error("more values than variables in variable declaration".to_owned(), PIErrorCode::ParseMoreValsThanIdentsVarDecl, vec![
-				(format!("more values than variables in variable declaration: {} values assigned to {} variables", values.len(), names.len()), names_start..input.tok().span.end),
-				(format!("{} variables declared", names.len()), names_start..names_end),
-				(format!("{} values assigned", values.len()), values_start..values_end),
+				(format!("more values than variables in variable declaration: {} values assigned to {} variables", values.len(), names.len()), Span::new(names_start..input.tok().span.end, input.file_id)),
+				(format!("{} variables declared", names.len()), Span::new(names_start..names_end, input.file_id)),
+				(format!("{} values assigned", values.len()), Span::new(values_start..values_end, input.file_id)),
 			]));
 		}
 	}
@@ -286,11 +292,11 @@ fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 	let end = input.tok().span.start;
 	return Spanned::new(
 		Stmt::VarDecl(VarDecl::new(
-			Spanned::new(false, mut_start..mut_end),
+			Spanned::new(false, Span::new(mut_start..mut_end, input.file_id)),
 			ty,
 			names,
 			values,
 		)),
-		start..end,
+		Span::new(start..end, input.file_id),
 	);
 }

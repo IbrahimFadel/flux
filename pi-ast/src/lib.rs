@@ -1,20 +1,21 @@
 use indexmap::IndexMap;
+use pi_error::Span;
 use smol_str::SmolStr;
 use std::{
 	collections::HashMap,
 	fmt,
 	hash::Hash,
-	ops::{Deref, DerefMut, Range},
+	ops::{Deref, DerefMut},
 };
 
 #[derive(Debug, Clone, Eq)]
 pub struct Spanned<T> {
 	pub node: T,
-	pub span: Range<usize>,
+	pub span: Span,
 }
 
 impl<T> Spanned<T> {
-	pub fn new(node: T, span: Range<usize>) -> Self {
+	pub fn new(node: T, span: Span) -> Self {
 		Self { node, span }
 	}
 }
@@ -219,6 +220,19 @@ pub enum OpKind {
 	Illegal,
 }
 
+impl fmt::Display for OpKind {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			OpKind::Asterisk => write!(f, "*"),
+			OpKind::Slash => write!(f, "/"),
+			OpKind::Plus => write!(f, "+"),
+			OpKind::Minus => write!(f, "-"),
+			OpKind::CmpEQ => write!(f, "=="),
+			_ => write!(f, "{:?}", self),
+		}
+	}
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
 	Ident(Ident),
@@ -243,7 +257,7 @@ pub enum Expr {
 impl fmt::Display for Expr {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Expr::PrimitiveType(prim) => write!(f, "{:?}", prim.kind),
+			Expr::PrimitiveType(prim) => write!(f, "{:?}", prim),
 			Expr::Ident(ident) => write!(f, "{}", ident.to_string()),
 			_ => write!(f, "{:?}", self),
 		}
@@ -343,7 +357,7 @@ impl BinOp {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum PrimitiveKind {
+pub enum PrimitiveType {
 	I64,
 	U64,
 	I32,
@@ -356,17 +370,6 @@ pub enum PrimitiveKind {
 	F32,
 	Bool,
 	Void,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct PrimitiveType {
-	pub kind: PrimitiveKind,
-}
-
-impl PrimitiveType {
-	pub fn new(kind: PrimitiveKind) -> PrimitiveType {
-		PrimitiveType { kind }
-	}
 }
 
 #[derive(Debug, PartialEq, Clone)]

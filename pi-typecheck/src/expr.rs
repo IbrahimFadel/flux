@@ -1,8 +1,8 @@
 use pi_ast::{
-	BinOp, CallExpr, Field, FloatLit, Ident, IntLit, OpKind, PrimitiveKind, PrimitiveType,
-	StructExpr, StructType, Unary,
+	BinOp, CallExpr, Field, FloatLit, Ident, IntLit, OpKind, PrimitiveType, StructExpr, StructType,
+	Unary,
 };
-use pi_error::PIErrorCode;
+use pi_error::{PIErrorCode, Span};
 
 use super::*;
 
@@ -21,7 +21,10 @@ impl<'ctx> FnCtx<'ctx> {
 	fn check_struct_expr(&self, struct_expr: &mut StructExpr) -> PIResult {
 		for (name, val) in &mut struct_expr.fields.iter_mut() {
 			if val.is_none() {
-				*val = Some(Box::from(Spanned::new(Expr::Ident((**name).clone()), 0..0)));
+				*val = Some(Box::from(Spanned::new(
+					Expr::Ident((**name).clone()),
+					Span::new(0..0, self.file_id),
+				)));
 			}
 		}
 
@@ -61,16 +64,16 @@ impl<'ctx> FnCtx<'ctx> {
 					.expect("internal compiler error");
 				let res = match &mut ***struct_expr_val {
 					Expr::IntLit(int) => match &*field.type_ {
-						Expr::PrimitiveType(prim) => match prim.kind {
-							PrimitiveKind::I64
-							| PrimitiveKind::I32
-							| PrimitiveKind::I16
-							| PrimitiveKind::I8
-							| PrimitiveKind::U64
-							| PrimitiveKind::U32
-							| PrimitiveKind::U16
-							| PrimitiveKind::U8 => {
-								int.bits = primitive_kind_to_bits(&prim.kind);
+						Expr::PrimitiveType(prim) => match prim {
+							PrimitiveType::I64
+							| PrimitiveType::I32
+							| PrimitiveType::I16
+							| PrimitiveType::I8
+							| PrimitiveType::U64
+							| PrimitiveType::U32
+							| PrimitiveType::U16
+							| PrimitiveType::U8 => {
+								int.bits = primitive_kind_to_bits(&prim);
 								Ok(())
 							}
 							_ => Err(self.error(
@@ -110,9 +113,9 @@ impl<'ctx> FnCtx<'ctx> {
 						)),
 					},
 					Expr::FloatLit(float) => match &*field.type_ {
-						Expr::PrimitiveType(prim) => match prim.kind {
-							PrimitiveKind::F64 | PrimitiveKind::F32 => {
-								float.bits = primitive_kind_to_bits(&prim.kind);
+						Expr::PrimitiveType(prim) => match prim {
+							PrimitiveType::F64 | PrimitiveType::F32 => {
+								float.bits = primitive_kind_to_bits(&prim);
 								Ok(())
 							}
 							_ => {
@@ -244,7 +247,7 @@ impl<'ctx> FnCtx<'ctx> {
 					if *method.params[0].name == "this" {
 						return Ok(Some(Box::from(Spanned::new(
 							Expr::Unary(Unary::new(OpKind::Ampersand, binop.x.clone())),
-							0..0,
+							Span::new(0..0, self.file_id),
 						))));
 					}
 				}
@@ -383,12 +386,33 @@ impl<'ctx> FnCtx<'ctx> {
 
 	fn check_float_lit(&mut self, float: &mut FloatLit) -> PIResult {
 		if let Some(Expr::PrimitiveType(prim)) = &self.expecting_ty {
-			let expected_bits = primitive_kind_to_bits(&prim.kind);
-			if float.bits != expected_bits {
-				float.bits = expected_bits;
+			match prim {
+				PrimitiveType::I64
+				| PrimitiveType::I32
+				| PrimitiveType::I16
+				| PrimitiveType::I8
+				| PrimitiveType::U64
+				| PrimitiveType::U32
+				| PrimitiveType::U16
+				| PrimitiveType::U8 => Err(self.error(
+					format!("expected int but got float instead"),
+					PIErrorCode::TypecheckExpectedIntGotFloat,
+					vec![(
+						"expected int but got float".to_owned(),
+						float.val.span.clone(),
+					)],
+				)),
+				_ => {
+					let expected_bits = primitive_kind_to_bits(&prim);
+					if float.bits != expected_bits {
+						float.bits = expected_bits;
+					}
+					Ok(())
+				}
 			}
+		} else {
+			Ok(())
 		}
-		Ok(())
 	}
 
 	fn check_int_lit(&mut self, int: &mut IntLit) -> PIResult {
@@ -407,8 +431,8 @@ impl<'ctx> FnCtx<'ctx> {
 	}
 
 	fn reassign_int_lit_bits(&self, int: &mut IntLit, prim: &PrimitiveType) -> PIResult {
-		let expected_bits = primitive_kind_to_bits(&prim.kind);
-		let expected_signed = primitive_kind_to_signedness(&prim.kind);
+		let expected_bits = primitive_kind_to_bits(&prim);
+		let expected_signed = primitive_kind_to_signedness(&prim);
 		if int.bits != expected_bits {
 			int.bits = expected_bits;
 		}
@@ -427,19 +451,19 @@ impl<'ctx> FnCtx<'ctx> {
 	}
 }
 
-fn primitive_kind_to_bits(prim: &PrimitiveKind) -> u8 {
+fn primitive_kind_to_bits(prim: &PrimitiveType) -> u8 {
 	match prim {
-		PrimitiveKind::U64 | PrimitiveKind::I64 | PrimitiveKind::F64 => 64,
-		PrimitiveKind::U32 | PrimitiveKind::I32 | PrimitiveKind::F32 => 32,
-		PrimitiveKind::U16 | PrimitiveKind::I16 => 16,
-		PrimitiveKind::U8 | PrimitiveKind::I8 => 8,
+		PrimitiveType::U64 | PrimitiveType::I64 | PrimitiveType::F64 => 64,
+		PrimitiveType::U32 | PrimitiveType::I32 | PrimitiveType::F32 => 32,
+		PrimitiveType::U16 | PrimitiveType::I16 => 16,
+		PrimitiveType::U8 | PrimitiveType::I8 => 8,
 		_ => 32,
 	}
 }
 
-fn primitive_kind_to_signedness(prim: &PrimitiveKind) -> bool {
+fn primitive_kind_to_signedness(prim: &PrimitiveType) -> bool {
 	match prim {
-		PrimitiveKind::U64 | PrimitiveKind::U32 | PrimitiveKind::U16 | PrimitiveKind::U8 => false,
+		PrimitiveType::U64 | PrimitiveType::U32 | PrimitiveType::U16 | PrimitiveType::U8 => false,
 		_ => true,
 	}
 }

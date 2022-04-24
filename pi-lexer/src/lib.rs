@@ -1,4 +1,4 @@
-use pi_error::{filesystem, PIError, PIErrorCode};
+use pi_error::{filesystem, PIError, PIErrorCode, Span};
 use std::ops::Range;
 use token::{lookup_keyword, Token, TokenKind};
 
@@ -223,11 +223,13 @@ impl<'a> Lexer<'a> {
 					vec![
 						(
 							"missing end of block comment".to_owned(),
-							initial_offset..self.offset,
+							Span::new(initial_offset..self.offset, self.file_id),
 						),
-						("(hint) insert `*/`".to_owned(), initial_offset..self.offset),
+						(
+							"(hint) insert `*/`".to_owned(),
+							Span::new(initial_offset..self.offset, self.file_id),
+						),
 					],
-					self.file_id,
 				));
 				break;
 			}
@@ -259,13 +261,15 @@ impl<'a> Lexer<'a> {
 						"char literal not terminated".to_owned(),
 						PIErrorCode::LexCharLitUnterminated,
 						vec![
-							("".to_owned(), initial_offset..self.offset),
+							(
+								"".to_owned(),
+								Span::new(initial_offset..self.offset, self.file_id),
+							),
 							(
 								"(hint) insert missing `\'`".to_owned(),
-								initial_offset..self.offset,
+								Span::new(initial_offset..self.offset, self.file_id),
 							),
 						],
-						self.file_id,
 					));
 					break;
 				}
@@ -297,14 +301,13 @@ impl<'a> Lexer<'a> {
 							"invalid char literal `{}`",
 							&self.program[initial_offset..self.offset]
 						),
-						initial_offset..self.offset,
+						Span::new(initial_offset..self.offset, self.file_id),
 					),
 					(
 						"char literals can only be one character long".to_owned(),
-						initial_offset..self.offset,
+						Span::new(initial_offset..self.offset, self.file_id),
 					),
 				],
-				self.file_id,
 			));
 		}
 
@@ -321,9 +324,8 @@ impl<'a> Lexer<'a> {
 					PIErrorCode::LexStringLitUnterminated,
 					vec![(
 						"(hint) insert missing '\"'".to_owned(),
-						initial_offset..self.offset,
+						Span::new(initial_offset..self.offset, self.file_id),
 					)],
-					self.file_id,
 				));
 				break;
 			}
@@ -367,8 +369,10 @@ impl<'a> Lexer<'a> {
 						&self.program[initial_offset..self.offset + 1]
 					),
 					PIErrorCode::LexUnknownEscapeSequence,
-					vec![(recognized_escapes_str, initial_offset..self.offset + 1)],
-					self.file_id,
+					vec![(
+						recognized_escapes_str,
+						Span::new(initial_offset..self.offset + 1, self.file_id),
+					)],
 				));
 				return self.ch();
 			}
@@ -444,9 +448,8 @@ impl<'a> Lexer<'a> {
 							"expected base {} digit(s) following {}, instead got `{}`",
 							base, prefix, got_str
 						),
-						initial_offset..self.offset,
+						Span::new(initial_offset..self.offset, self.file_id),
 					)],
-					self.file_id,
 				))
 			}
 		}
@@ -459,9 +462,8 @@ impl<'a> Lexer<'a> {
 					PIErrorCode::LexFloatInWrongBase,
 					vec![(
 						format!("base {} literal", base),
-						initial_offset..self.offset,
+						Span::new(initial_offset..self.offset, self.file_id),
 					)],
-					self.file_id,
 				))
 			}
 			self.next();

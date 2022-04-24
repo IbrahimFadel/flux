@@ -23,7 +23,7 @@ pub enum PIErrorCode {
 	ParseExpectedCommaInGenericTypeList,
 	ParseExpectedGTAfterGenericTypeList,
 	ParseExpectedCommaInParamList,
-	ParseCouldNotConvertTokKindToPrimitiveKind,
+	ParseCouldNotConvertTokKindToPrimitiveType,
 	ParseExpectedLBraceInBlock,
 	ParseExpectedRBraceInBlock,
 	ParseExpectedRParenAfterParamList,
@@ -84,6 +84,7 @@ pub enum PIErrorCode {
 	TypecheckStructExprDiffNumberFieldsAsStructTy,
 	TypecheckCouldNotFindFieldInStructExpr,
 	TypecheckCouldNotGetTypeOfVar,
+	TypecheckExpectedIntGotFloat,
 
 	CodegenUnknownIdentType,
 	CodegenUnknownVarReferenced,
@@ -100,27 +101,28 @@ impl std::fmt::Display for PIErrorCode {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+	pub range: Range<usize>,
+	pub file_id: FileId,
+}
+
+impl Span {
+	pub fn new(range: Range<usize>, file_id: FileId) -> Span {
+		Span { range, file_id }
+	}
+}
+
 #[derive(Debug, PartialEq)]
 pub struct PIError {
 	msg: String,
 	pub code: PIErrorCode,
-	labels: Vec<(String, Range<usize>)>,
-	file_id: filesystem::FileId,
+	labels: Vec<(String, Span)>,
 }
 
 impl PIError {
-	pub fn new(
-		msg: String,
-		code: PIErrorCode,
-		labels: Vec<(String, Range<usize>)>,
-		file_id: filesystem::FileId,
-	) -> PIError {
-		PIError {
-			msg,
-			code,
-			labels,
-			file_id,
-		}
+	pub fn new(msg: String, code: PIErrorCode, labels: Vec<(String, Span)>) -> PIError {
+		PIError { msg, code, labels }
 	}
 
 	pub fn to_diagnostic(&self) -> Diagnostic<filesystem::FileId> {
@@ -128,12 +130,12 @@ impl PIError {
 		for i in 0..self.labels.len() {
 			if i == 0 {
 				labels.push(
-					Label::primary(self.file_id, self.labels[i].1.clone())
+					Label::primary(self.labels[i].1.file_id, self.labels[i].1.range.clone())
 						.with_message(self.labels[i].0.clone()),
 				);
 			} else {
 				labels.push(
-					Label::secondary(self.file_id, self.labels[i].1.clone())
+					Label::secondary(self.labels[i].1.file_id, self.labels[i].1.range.clone())
 						.with_message(self.labels[i].0.clone()),
 				);
 			}

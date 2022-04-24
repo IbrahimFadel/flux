@@ -135,6 +135,7 @@ name = "pi-ast"
 version = "0.1.0"
 dependencies = [
  "indexmap",
+ "pi-error",
  "pi-lexer",
  "smol_str",
 ]
