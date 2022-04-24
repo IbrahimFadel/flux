@@ -1,4 +1,4 @@
-use pi_ast::{BlockStmt, Expr, If, Mod, Return, Stmt, VarDecl};
+use pi_ast::{BlockStmt, Expr, If, Mod, Return, Spanned, Stmt, VarDecl};
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
 
@@ -7,7 +7,8 @@ use crate::{
 	tok_val, ParseInput,
 };
 
-pub fn mod_stmt(input: &mut ParseInput, pub_: bool) -> Mod {
+pub fn mod_stmt(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<Mod> {
+	let start = input.tok().span.start;
 	input.next();
 	let name = ident(input);
 	input.expect(
@@ -21,7 +22,8 @@ pub fn mod_stmt(input: &mut ParseInput, pub_: bool) -> Mod {
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
 	}
-	Mod::new(pub_, name)
+	let end = input.tok().span.start;
+	Spanned::new(Mod::new(pub_, name), start..end)
 }
 
 pub fn block(input: &mut ParseInput) -> BlockStmt {
@@ -50,7 +52,7 @@ pub fn block(input: &mut ParseInput) -> BlockStmt {
 			continue;
 		}
 		let stmt = stmt(input);
-		if stmt == Stmt::Error {
+		if stmt.node == Stmt::Error {
 			break;
 		}
 		stmts.push(stmt);
@@ -77,7 +79,7 @@ pub fn block(input: &mut ParseInput) -> BlockStmt {
 	return stmts;
 }
 
-fn stmt(input: &mut ParseInput) -> Stmt {
+fn stmt(input: &mut ParseInput) -> Spanned<Stmt> {
 	if input.tok().kind > TokenKind::TypesBegin && input.tok().kind < TokenKind::TypesEnd {
 		return var_decl_stmt(input);
 	} else if input
@@ -102,14 +104,15 @@ fn stmt(input: &mut ParseInput) -> Stmt {
 		if input.tok().kind == TokenKind::Semicolon {
 			input.next();
 		}
-		if expr == Expr::Error {
-			return Stmt::Error;
+		if expr == Spanned::new(Expr::Error, 0..0) {
+			return Spanned::new(Stmt::Error, 0..0);
 		}
-		return Stmt::ExprStmt(expr);
+		return Spanned::new(Stmt::ExprStmt(expr.node), expr.span.start..expr.span.end);
 	}
 }
 
-fn if_stmt(input: &mut ParseInput) -> Stmt {
+fn if_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
+	let start = input.tok().span.start;
 	input.next();
 	let condition = expr(input);
 	let then = block(input);
@@ -123,14 +126,22 @@ fn if_stmt(input: &mut ParseInput) -> Stmt {
 			else_ = Some(block(input));
 		}
 	}
-	Stmt::If(If::new(Box::from(condition), then, else_))
+	let end = input.tok().span.start;
+	Spanned::new(
+		Stmt::If(If::new(Box::from(condition), then, else_)),
+		start..end,
+	)
 }
 
-fn return_stmt(input: &mut ParseInput) -> Stmt {
+fn return_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
+	let start = input.tok().span.start;
 	input.next();
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
-		return Stmt::Return(Return::new(None));
+		return Spanned::new(
+			Stmt::Return(Return::new(None)),
+			start..input.tok().span.start,
+		);
 	}
 	let expr = expr(input);
 	input.expect(
@@ -144,11 +155,16 @@ fn return_stmt(input: &mut ParseInput) -> Stmt {
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
 	}
-	Stmt::Return(Return::new(Some(expr)))
+	let end = input.tok().span.start;
+	Spanned::new(Stmt::Return(Return::new(Some(expr))), start..end)
 }
 
-fn var_decl_stmt(input: &mut ParseInput) -> Stmt {
+fn var_decl_stmt(input: &mut ParseInput) -> Spanned<Stmt> {
+	let start = input.tok().span.start;
 	let ty = type_expr(input);
+
+	let mut_start = 0;
+	let mut_end = 0;
 
 	if input.tok().kind != TokenKind::Ident {
 		input.errs.push(input.error(
@@ -267,5 +283,14 @@ fn var_decl_stmt(input: &mut ParseInput) -> Stmt {
 		}
 	}
 
-	return Stmt::VarDecl(VarDecl::new(false, ty, names, values));
+	let end = input.tok().span.start;
+	return Spanned::new(
+		Stmt::VarDecl(VarDecl::new(
+			Spanned::new(false, mut_start..mut_end),
+			ty,
+			names,
+			values,
+		)),
+		start..end,
+	);
 }

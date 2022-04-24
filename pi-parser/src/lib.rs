@@ -1,6 +1,6 @@
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
-use pi_ast::{ApplyBlock, FnDecl, Mod, OpKind, TypeDecl, AST};
+use pi_ast::{ApplyBlock, FnDecl, Mod, OpKind, Spanned, TypeDecl, AST};
 use pi_error::{filesystem::FileId, PIError, PIErrorCode};
 use pi_lexer::token::{Token, TokenKind};
 
@@ -120,7 +120,12 @@ fn token_kind_to_op_kind(kind: &TokenKind) -> OpKind {
 
 pub fn top_level_decls(
 	input: &mut ParseInput,
-) -> (Vec<Mod>, Vec<FnDecl>, Vec<TypeDecl>, Vec<ApplyBlock>) {
+) -> (
+	Vec<Spanned<Mod>>,
+	Vec<Spanned<FnDecl>>,
+	Vec<Spanned<TypeDecl>>,
+	Vec<Spanned<ApplyBlock>>,
+) {
 	let mut fn_decls = vec![];
 	let mut type_decls = vec![];
 	let mut mod_stmts = vec![];
@@ -133,9 +138,11 @@ pub fn top_level_decls(
 				input.next();
 				let pub_end = input.tok().span.start;
 				match input.tok().kind {
-					TokenKind::Fn => fn_decls.push(fn_decl(input, true, pub_start..pub_end)),
-					TokenKind::Type => type_decls.push(type_decl(input, true)),
-					TokenKind::Mod => mod_stmts.push(mod_stmt(input, true)),
+					TokenKind::Fn => fn_decls.push(fn_decl(input, Spanned::new(true, pub_start..pub_end))),
+					TokenKind::Type => {
+						type_decls.push(type_decl(input, Spanned::new(true, pub_start..pub_end)))
+					}
+					TokenKind::Mod => mod_stmts.push(mod_stmt(input, Spanned::new(true, pub_start..pub_end))),
 					_ => {
 						input.errs.push(input.error(
 							"expected declaration following `pub`".to_owned(),
@@ -160,11 +167,16 @@ pub fn top_level_decls(
 			}
 			TokenKind::Fn => fn_decls.push(fn_decl(
 				input,
-				false,
-				input.tok().span.start..input.tok().span.start,
+				Spanned::new(false, input.tok().span.start..input.tok().span.start),
 			)),
-			TokenKind::Type => type_decls.push(type_decl(input, false)),
-			TokenKind::Mod => mod_stmts.push(mod_stmt(input, false)),
+			TokenKind::Type => type_decls.push(type_decl(
+				input,
+				Spanned::new(false, input.tok().span.start..input.tok().span.start),
+			)),
+			TokenKind::Mod => mod_stmts.push(mod_stmt(
+				input,
+				Spanned::new(false, input.tok().span.start..input.tok().span.start),
+			)),
 			TokenKind::Apply => apply_blocks.push(apply_block(input)),
 			TokenKind::BlockComment => {
 				input.next();
@@ -214,7 +226,7 @@ pub fn parse_tokens(
 	};
 	let (mods, functions, types, apply_blocks) = top_level_decls(&mut initial_input);
 	return (
-		AST::new(name, mods, functions, types, apply_blocks, HashMap::new()),
+		AST::new(name, mods, functions, types, apply_blocks),
 		initial_input.errs,
 	);
 }

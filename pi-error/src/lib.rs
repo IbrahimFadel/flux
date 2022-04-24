@@ -83,8 +83,15 @@ pub enum PIErrorCode {
 	TypecheckNotAllInterfaceMethodsImplemented,
 	TypecheckStructExprDiffNumberFieldsAsStructTy,
 	TypecheckCouldNotFindFieldInStructExpr,
+	TypecheckCouldNotGetTypeOfVar,
 
 	CodegenUnknownIdentType,
+	CodegenUnknownVarReferenced,
+	CodegenCouldNotCodegenStmt,
+	CodegenCouldNotFindMethod,
+	CodegenCouldNotCmpValsOfType,
+	CodegenCouldNotCodegenTypeExpr,
+	CodegenUnknownFnReferenced,
 }
 
 impl std::fmt::Display for PIErrorCode {
@@ -166,6 +173,15 @@ impl PIErrorReporting {
 			Ok(x) => x.name.clone(),
 			_ => "illegal".to_owned(),
 		}
+	}
+
+	pub fn get_file_id(&self, filename: &String) -> FileId {
+		for (i, file) in self.files.files.iter().enumerate() {
+			if file.name == *filename {
+				return FileId(i as u32);
+			}
+		}
+		return FileId(0);
 	}
 
 	pub fn report(&self, errs: &Vec<PIError>) {

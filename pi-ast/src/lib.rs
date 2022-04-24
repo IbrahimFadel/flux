@@ -1,25 +1,66 @@
 use indexmap::IndexMap;
 use smol_str::SmolStr;
-use std::{collections::HashMap, fmt, hash::Hash, ops::Range};
+use std::{
+	collections::HashMap,
+	fmt,
+	hash::Hash,
+	ops::{Deref, DerefMut, Range},
+};
+
+#[derive(Debug, Clone, Eq)]
+pub struct Spanned<T> {
+	pub node: T,
+	pub span: Range<usize>,
+}
+
+impl<T> Spanned<T> {
+	pub fn new(node: T, span: Range<usize>) -> Self {
+		Self { node, span }
+	}
+}
+
+impl<T> Deref for Spanned<T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.node
+	}
+}
+
+impl<T> DerefMut for Spanned<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.node
+	}
+}
+
+impl<T: Hash> Hash for Spanned<T> {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.node.hash(state);
+	}
+}
+
+impl<T: std::cmp::PartialEq> PartialEq for Spanned<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.node == other.node
+	}
+}
 
 #[derive(Debug)]
 pub struct AST {
 	pub name: String,
-	pub mods: Vec<Mod>,
-	pub functions: Vec<FnDecl>,
-	pub types: Vec<TypeDecl>,
-	pub apply_blocks: Vec<ApplyBlock>,
-	pub struct_implementations: HashMap<Ident, Vec<TypeDecl>>,
+	pub mods: Vec<Spanned<Mod>>,
+	pub functions: Vec<Spanned<FnDecl>>,
+	pub types: Vec<Spanned<TypeDecl>>,
+	pub apply_blocks: Vec<Spanned<ApplyBlock>>,
 }
 
 impl AST {
 	pub fn new(
 		name: String,
-		mods: Vec<Mod>,
-		functions: Vec<FnDecl>,
-		types: Vec<TypeDecl>,
-		apply_blocks: Vec<ApplyBlock>,
-		struct_implementations: HashMap<Ident, Vec<TypeDecl>>,
+		mods: Vec<Spanned<Mod>>,
+		functions: Vec<Spanned<FnDecl>>,
+		types: Vec<Spanned<TypeDecl>>,
+		apply_blocks: Vec<Spanned<ApplyBlock>>,
 	) -> AST {
 		AST {
 			name,
@@ -27,7 +68,6 @@ impl AST {
 			functions,
 			types,
 			apply_blocks,
-			struct_implementations,
 		}
 	}
 }
@@ -38,18 +78,18 @@ impl fmt::Display for AST {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApplyBlock {
-	pub interface_name: Option<Ident>,
-	pub struct_name: Ident,
-	pub methods: Vec<FnDecl>,
+	pub interface_name: Option<Spanned<Ident>>,
+	pub struct_name: Spanned<Ident>,
+	pub methods: Vec<Spanned<FnDecl>>,
 }
 
 impl ApplyBlock {
 	pub fn new(
-		interface_name: Option<Ident>,
-		struct_name: Ident,
-		methods: Vec<FnDecl>,
+		interface_name: Option<Spanned<Ident>>,
+		struct_name: Spanned<Ident>,
+		methods: Vec<Spanned<FnDecl>>,
 	) -> ApplyBlock {
 		ApplyBlock {
 			interface_name,
@@ -61,37 +101,28 @@ impl ApplyBlock {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FnDecl {
-	pub pub_span: Range<usize>,
-	pub pub_: bool,
-	pub name: Ident,
-	pub generics: GenericTypes,
-	pub params_span: Range<usize>,
-	pub params: Vec<FnParam>,
-	pub ret_ty_span: Range<usize>,
-	pub ret_ty: Expr,
+	pub pub_: Spanned<bool>,
+	pub name: Spanned<Ident>,
+	pub generics: Spanned<GenericTypes>,
+	pub params: Spanned<Vec<Spanned<FnParam>>>,
+	pub ret_ty: Spanned<Expr>,
 	pub block: BlockStmt,
 }
 
 impl FnDecl {
 	pub fn new(
-		pub_span: Range<usize>,
-		pub_: bool,
-		name: Ident,
-		generics: GenericTypes,
-		params_span: Range<usize>,
-		params: Vec<FnParam>,
-		ret_ty_span: Range<usize>,
-		ret_ty: Expr,
+		pub_: Spanned<bool>,
+		name: Spanned<Ident>,
+		generics: Spanned<GenericTypes>,
+		params: Spanned<Vec<Spanned<FnParam>>>,
+		ret_ty: Spanned<Expr>,
 		block: BlockStmt,
 	) -> FnDecl {
 		FnDecl {
-			pub_span,
 			pub_,
 			name,
 			generics,
-			params_span,
 			params,
-			ret_ty_span,
 			ret_ty,
 			block,
 		}
@@ -106,85 +137,62 @@ impl fmt::Display for FnDecl {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FnParam {
-	pub mut_span: Range<usize>,
-	pub mut_: bool,
-	pub type_span: Range<usize>,
-	pub type_: Expr,
-	pub name: Ident,
+	pub mut_: Spanned<bool>,
+	pub type_: Spanned<Expr>,
+	pub name: Spanned<Ident>,
 }
 
 impl FnParam {
-	pub fn new(
-		mut_span: Range<usize>,
-		mut_: bool,
-		type_span: Range<usize>,
-		type_: Expr,
-		name: Ident,
-	) -> FnParam {
-		FnParam {
-			mut_span,
-			mut_,
-			type_span,
-			type_,
-			name,
-		}
+	pub fn new(mut_: Spanned<bool>, type_: Spanned<Expr>, name: Spanned<Ident>) -> FnParam {
+		FnParam { mut_, type_, name }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TypeDecl {
-	pub_: bool,
-	pub name: Ident,
-	pub type_: Expr,
+	pub_: Spanned<bool>,
+	pub name: Spanned<Ident>,
+	pub type_: Spanned<Expr>,
 }
 
 impl TypeDecl {
-	pub fn new(pub_: bool, name: Ident, type_: Expr) -> TypeDecl {
+	pub fn new(pub_: Spanned<bool>, name: Spanned<Ident>, type_: Spanned<Expr>) -> TypeDecl {
 		TypeDecl { pub_, name, type_ }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
-	pub_: bool,
-	pub type_: Expr,
-	val: Option<Expr>,
+	pub_: Spanned<bool>,
+	pub type_: Spanned<Expr>,
+	pub val: Option<Spanned<Expr>>,
 }
 
 impl Field {
-	pub fn new(pub_: bool, type_: Expr, val: Option<Expr>) -> Field {
+	pub fn new(pub_: Spanned<bool>, type_: Spanned<Expr>, val: Option<Spanned<Expr>>) -> Field {
 		Field { pub_, type_, val }
 	}
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Method {
-	pub pub_span: Range<usize>,
-	pub pub_: bool,
-	pub name: Ident,
-	pub params_span: Range<usize>,
-	pub params: Vec<FnParam>,
-	pub ret_ty_span: Range<usize>,
-	pub ret_ty: Expr,
+	pub pub_: Spanned<bool>,
+	pub name: Spanned<Ident>,
+	pub params: Spanned<Vec<Spanned<FnParam>>>,
+	pub ret_ty: Spanned<Expr>,
 }
 
 impl Method {
 	pub fn new(
-		pub_span: Range<usize>,
-		pub_: bool,
-		name: Ident,
-		params_span: Range<usize>,
-		params: Vec<FnParam>,
-		ret_ty_span: Range<usize>,
-		ret_ty: Expr,
+		pub_: Spanned<bool>,
+		name: Spanned<Ident>,
+		params: Spanned<Vec<Spanned<FnParam>>>,
+		ret_ty: Spanned<Expr>,
 	) -> Method {
 		Method {
-			pub_span,
 			pub_,
 			name,
-			params_span,
 			params,
-			ret_ty_span,
 			ret_ty,
 		}
 	}
@@ -236,7 +244,7 @@ impl fmt::Display for Expr {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Expr::PrimitiveType(prim) => write!(f, "{:?}", prim.kind),
-			Expr::Ident(ident) => write!(f, "{}", ident.val.to_string()),
+			Expr::Ident(ident) => write!(f, "{}", ident.to_string()),
 			_ => write!(f, "{:?}", self),
 		}
 	}
@@ -245,137 +253,81 @@ impl fmt::Display for Expr {
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructExpr {
 	pub name: Ident,
-	pub fields_span: Range<usize>,
-	pub fields: IndexMap<Ident, Option<Box<Expr>>>,
+	pub fields: Spanned<IndexMap<Spanned<Ident>, Option<Box<Spanned<Expr>>>>>,
 }
 
 impl StructExpr {
 	pub fn new(
 		name: Ident,
-		fields_span: Range<usize>,
-		fields: IndexMap<Ident, Option<Box<Expr>>>,
+		fields: Spanned<IndexMap<Spanned<Ident>, Option<Box<Spanned<Expr>>>>>,
 	) -> StructExpr {
-		StructExpr {
-			name,
-			fields_span,
-			fields,
-		}
+		StructExpr { name, fields }
 	}
 }
 
-#[derive(Debug, Clone, Eq)]
-pub struct Ident {
-	pub span: Range<usize>,
-	pub val: SmolStr,
-}
+pub type Ident = SmolStr;
 
-impl Hash for Ident {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.val.hash(state);
-	}
-}
-
-impl PartialEq for Ident {
-	fn eq(&self, other: &Self) -> bool {
-		self.val == other.val
-	}
-}
-
-impl Ident {
-	pub fn new(span: Range<usize>, val: SmolStr) -> Self {
-		Self { span, val }
-	}
-}
-
-pub type PtrType = Box<Expr>;
+pub type PtrType = Box<Spanned<Expr>>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct IntLit {
-	pub sign_span: Range<usize>,
-	pub val_span: Range<usize>,
-	pub signed: bool,
+	pub signed: Spanned<bool>,
 	pub bits: u8,
-	pub val: u64,
+	pub val: Spanned<u64>,
 }
 
 impl IntLit {
-	pub fn new(
-		sign_span: Range<usize>,
-		val_span: Range<usize>,
-		signed: bool,
-		bits: u8,
-		val: u64,
-	) -> IntLit {
-		IntLit {
-			sign_span,
-			val_span,
-			signed,
-			bits,
-			val,
-		}
+	pub fn new(signed: Spanned<bool>, bits: u8, val: Spanned<u64>) -> IntLit {
+		IntLit { signed, bits, val }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FloatLit {
-	pub sign_span: Range<usize>,
-	pub val_span: Range<usize>,
-	pub signed: bool,
+	pub signed: Spanned<bool>,
 	pub bits: u8,
-	pub val: f64,
+	pub val: Spanned<f64>,
 }
 
 impl FloatLit {
-	pub fn new(
-		sign_span: Range<usize>,
-		val_span: Range<usize>,
-		signed: bool,
-		bits: u8,
-		val: f64,
-	) -> FloatLit {
-		FloatLit {
-			sign_span,
-			val_span,
-			signed,
-			bits,
-			val,
-		}
+	pub fn new(signed: Spanned<bool>, bits: u8, val: Spanned<f64>) -> FloatLit {
+		FloatLit { signed, bits, val }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Unary {
 	pub op: OpKind,
-	pub val: Box<Expr>,
+	pub val: Box<Spanned<Expr>>,
 }
 
 impl Unary {
-	pub fn new(op: OpKind, val: Box<Expr>) -> Unary {
+	pub fn new(op: OpKind, val: Box<Spanned<Expr>>) -> Unary {
 		Unary { op, val }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallExpr {
-	pub callee: Box<Expr>,
-	pub args: Vec<Box<Expr>>,
+	pub callee: Box<Spanned<Expr>>,
+	pub args: Vec<Box<Spanned<Expr>>>,
 }
 
 impl CallExpr {
-	pub fn new(callee: Box<Expr>, args: Vec<Box<Expr>>) -> CallExpr {
+	pub fn new(callee: Box<Spanned<Expr>>, args: Vec<Box<Spanned<Expr>>>) -> CallExpr {
 		CallExpr { callee, args }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinOp {
-	pub x: Box<Expr>,
+	pub x: Box<Spanned<Expr>>,
 	pub op: OpKind,
-	pub y: Box<Expr>,
+	pub y: Box<Spanned<Expr>>,
 }
 
 impl BinOp {
-	pub fn new(x: Box<Expr>, op: OpKind, y: Box<Expr>) -> BinOp {
+	pub fn new(x: Box<Spanned<Expr>>, op: OpKind, y: Box<Spanned<Expr>>) -> BinOp {
 		BinOp { x, op, y }
 	}
 }
@@ -423,26 +375,31 @@ pub enum Stmt {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Mod {
-	pub_: bool,
-	pub name: Ident,
+	pub_: Spanned<bool>,
+	pub name: Spanned<Ident>,
 }
 
 impl Mod {
-	pub fn new(pub_: bool, name: Ident) -> Mod {
+	pub fn new(pub_: Spanned<bool>, name: Spanned<Ident>) -> Mod {
 		Mod { pub_, name }
 	}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VarDecl {
-	pub mut_: bool,
-	pub type_: Expr,
-	pub names: Vec<Ident>,
-	pub values: Vec<Expr>,
+	pub mut_: Spanned<bool>,
+	pub type_: Spanned<Expr>,
+	pub names: Vec<Spanned<Ident>>,
+	pub values: Vec<Spanned<Expr>>,
 }
 
 impl VarDecl {
-	pub fn new(mut_: bool, type_: Expr, names: Vec<Ident>, values: Vec<Expr>) -> VarDecl {
+	pub fn new(
+		mut_: Spanned<bool>,
+		type_: Spanned<Expr>,
+		names: Vec<Spanned<Ident>>,
+		values: Vec<Spanned<Expr>>,
+	) -> VarDecl {
 		VarDecl {
 			mut_,
 			type_,
@@ -454,13 +411,13 @@ impl VarDecl {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct If {
-	pub condition: Box<Expr>,
+	pub condition: Box<Spanned<Expr>>,
 	pub then: BlockStmt,
 	pub else_: Option<BlockStmt>,
 }
 
 impl If {
-	pub fn new(condition: Box<Expr>, then: BlockStmt, else_: Option<BlockStmt>) -> If {
+	pub fn new(condition: Box<Spanned<Expr>>, then: BlockStmt, else_: Option<BlockStmt>) -> If {
 		If {
 			condition,
 			then,
@@ -480,11 +437,11 @@ impl For {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Return {
-	pub val: Option<Expr>,
+	pub val: Option<Spanned<Expr>>,
 }
 
 impl Return {
-	pub fn new(val: Option<Expr>) -> Return {
+	pub fn new(val: Option<Spanned<Expr>>) -> Return {
 		Return { val }
 	}
 }
@@ -492,7 +449,7 @@ impl Return {
 pub type CharLit = char;
 pub type StringLit = SmolStr;
 pub type BoolLit = bool;
-pub type GenericTypes = Vec<Ident>;
-pub type BlockStmt = Vec<Stmt>;
-pub type StructType = IndexMap<Ident, Field>;
-pub type InterfaceType = HashMap<Ident, Method>;
+pub type GenericTypes = Vec<Spanned<Ident>>;
+pub type BlockStmt = Vec<Spanned<Stmt>>;
+pub type StructType = IndexMap<Spanned<Ident>, Spanned<Field>>;
+pub type InterfaceType = HashMap<Spanned<Ident>, Spanned<Method>>;

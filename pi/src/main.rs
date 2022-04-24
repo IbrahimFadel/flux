@@ -1,18 +1,19 @@
-use std::{collections::HashMap, fs, process};
+use std::{fs, process};
 
+use indexmap::IndexMap;
 use pi_ast::AST;
-use pi_cfg::*;
+// use pi_cfg::*;
 use pi_error::{filesystem::FileId, *};
 use pi_lexer::*;
 // use pi_mir::*;
-use pi_codegen::*;
+// use pi_codegen::*;
 use pi_parser::*;
 use pi_typecheck::*;
 
 fn parse_file(
 	project_dir: String,
 	file_name: String,
-	file_ast_map: &mut HashMap<FileId, AST>,
+	file_ast_map: &mut IndexMap<FileId, AST>,
 	err_reporting: &mut PIErrorReporting,
 ) {
 	let path = project_dir.clone() + "src/" + file_name.as_str() + ".pi";
@@ -28,7 +29,7 @@ fn parse_file(
 	for mod_ in &ast.mods {
 		parse_file(
 			project_dir.clone(),
-			mod_.name.val.to_string(),
+			mod_.name.to_string(),
 			file_ast_map,
 			err_reporting,
 		)
@@ -38,7 +39,7 @@ fn parse_file(
 
 fn main() {
 	let project_dir = String::from("examples/crate-1/");
-	let _cfg = parse_cfg(project_dir.as_str());
+	// let cfg = parse_cfg(project_dir.as_str());
 
 	// let dependency_file_paths: Vec<String> = cfg
 	// 	.dependencies
@@ -69,34 +70,38 @@ fn main() {
 	// 	err_reporting.report(errs);
 	// }
 
-	let mut file_ast_map: HashMap<FileId, AST> = HashMap::new();
+	let mut file_ast_map: IndexMap<FileId, AST> = IndexMap::new();
 	let mut err_reporting = PIErrorReporting::new();
 
 	parse_file(
-		project_dir,
+		project_dir.clone(),
 		"main".to_owned(),
 		&mut file_ast_map,
 		&mut err_reporting,
 	);
 
-	let entry_fileid: FileId = FileId(0);
-	let main = file_ast_map.get(&entry_fileid).expect("could not get file");
-	let _ = fs::write("ast.txt", main.to_string());
+	for (id, ast) in file_ast_map.iter() {
+		let path = project_dir.clone() + "ast" + &id.0.to_string() + ".txt";
+		let _ = fs::write(path, ast.to_string());
+	}
 
-	let errs = typecheck_ast(&mut file_ast_map);
+	let typecheck_result = typecheck_ast(&mut file_ast_map, &err_reporting);
 
-	let main = file_ast_map
-		.get_mut(&entry_fileid)
-		.expect("could not get file");
-	let _ = fs::write("ast_typechecked.txt", main.to_string());
+	for (id, ast) in file_ast_map.iter() {
+		let path = project_dir.clone() + "ast_typechecked" + &id.0.to_string() + ".txt";
+		let _ = fs::write(path, ast.to_string());
+	}
 
-	if let Some(x) = errs {
-		err_reporting.report(&Vec::from([x]));
+	if let Some(err) = typecheck_result.err() {
+		err_reporting.report(&Vec::from([err]));
 		process::exit(1);
 	}
 
-	let errors = codegen_ast(main, &entry_fileid);
-	err_reporting.report(&errors);
-
-	// generate_mir(&file_ast_map, &mut err_reporting);
+	// let (codegen_ctx, err) = codegen_ast(&mut file_ast_map, &cfg.compilation);
+	// if let Some(err) = err {
+	// 	err_reporting.report(&Vec::from([err]));
+	// }
+	// let path = project_dir + "module.ll";
+	// codegen_ctx.write_to_file(&path);
+	// codegen_ctx.dispose();
 }

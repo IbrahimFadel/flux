@@ -8,5 +8,8 @@ edition = "2021"
 [dependencies]
 pi-ast = { path = "../pi-ast" }
 pi-error = { path = "../pi-error" }
+pi-cfg = { path = "../pi-cfg" }
 llvm-sys = "130.0.1"
 smol_str = "0.1.21"
+uuid = { version = "1.0.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
+indexmap = "1.8.1"

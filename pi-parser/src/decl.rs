@@ -1,11 +1,9 @@
-use std::ops::Range;
-
 use pi_ast::{
-	ApplyBlock, Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, TypeDecl,
+	ApplyBlock, Expr, FnDecl, FnParam, GenericTypes, Ident, PrimitiveKind, PrimitiveType, Spanned,
+	TypeDecl,
 };
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
-use smol_str::SmolStr;
 
 use crate::{
 	expr::{ident, type_expr},
@@ -13,7 +11,8 @@ use crate::{
 	tok_val, ParseInput,
 };
 
-pub fn apply_block(input: &mut ParseInput) -> ApplyBlock {
+pub fn apply_block(input: &mut ParseInput) -> Spanned<ApplyBlock> {
+	let start = input.tok().span.start;
 	input.next();
 
 	input.expect(
@@ -25,10 +24,10 @@ pub fn apply_block(input: &mut ParseInput) -> ApplyBlock {
 		),
 	);
 	let mut interface_name = None;
-	let mut struct_name = Ident {
-		span: input.tok().span.start..input.tok().span.end,
-		val: SmolStr::from(""),
-	};
+	let mut struct_name = Spanned::new(
+		Ident::from(""),
+		input.tok().span.start..input.tok().span.end,
+	);
 	if input.tok().kind == TokenKind::Ident {
 		struct_name = ident(input);
 	}
@@ -81,7 +80,7 @@ pub fn apply_block(input: &mut ParseInput) -> ApplyBlock {
 				pub_end = input.tok().span.start;
 				pub_ = true;
 			}
-			methods.push(fn_decl(input, pub_, pub_start..pub_end));
+			methods.push(fn_decl(input, Spanned::new(pub_, pub_start..pub_end)));
 		}
 
 		input.expect(
@@ -98,10 +97,16 @@ pub fn apply_block(input: &mut ParseInput) -> ApplyBlock {
 	}
 
 	input.inside_apply_or_interface = false;
-	return ApplyBlock::new(interface_name, struct_name, methods);
+	let end = input.tok().span.end;
+
+	return Spanned::new(
+		ApplyBlock::new(interface_name, struct_name, methods),
+		start..end,
+	);
 }
 
-pub fn fn_decl(input: &mut ParseInput, pub_: bool, pub_span: Range<usize>) -> FnDecl {
+pub fn fn_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<FnDecl> {
+	let start = input.tok().span.start;
 	input.next();
 	let program_clone = input.program.clone();
 	let name_begin = input.tok().span.start;
@@ -131,43 +136,46 @@ pub fn fn_decl(input: &mut ParseInput, pub_: bool, pub_span: Range<usize>) -> Fn
 	}
 	let name_end = input.tok().span.start;
 
-	let mut generics = vec![];
+	let mut generics: Spanned<GenericTypes> =
+		Spanned::new(vec![], input.tok().span.start..input.tok().span.start);
 	if input.tok().kind == TokenKind::CmpLT {
 		generics = generic_types(input);
 	}
 	let params_start = input.tok().span.start;
 	let params = params(input);
 	let params_end = input.tok().span.start;
-	let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
-	let mut ret_ty_start = input.tok().span.start;
+	let mut ret_ty = Spanned::new(
+		Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void)),
+		input.tok().span.start..input.tok().span.start,
+	);
 	if input.tok().kind == TokenKind::Arrow {
 		input.next();
-		ret_ty_start = input.tok().span.start;
 		let ty = type_expr(input);
-		if ty == Expr::Error {
+		if ty.node == Expr::Error {
 			if input.tok().kind != TokenKind::LBrace {
 				input.next();
 			}
 		}
 		ret_ty = ty;
 	}
-	let ret_ty_end = input.tok().span.start;
 	let block = block(input);
 
-	FnDecl::new(
-		pub_span,
-		pub_,
-		Ident::new(name_begin..name_end, SmolStr::from(name)),
-		generics,
-		params_start..params_end,
-		params,
-		ret_ty_start..ret_ty_end,
-		ret_ty,
-		block,
+	let end = input.tok().span.start;
+	Spanned::new(
+		FnDecl::new(
+			pub_,
+			Spanned::new(Ident::from(name), name_begin..name_end),
+			generics,
+			Spanned::new(params, params_start..params_end),
+			ret_ty,
+			block,
+		),
+		start..end,
 	)
 }
 
-fn generic_types(input: &mut ParseInput) -> GenericTypes {
+fn generic_types(input: &mut ParseInput) -> Spanned<GenericTypes> {
+	let start = input.tok().span.start;
 	input.next();
 	let mut names = vec![];
 	if input.tok().kind == TokenKind::CmpGT {
@@ -207,11 +215,11 @@ fn generic_types(input: &mut ParseInput) -> GenericTypes {
 		),
 	);
 	input.next();
-
-	return names;
+	let end = input.tok().span.start;
+	return Spanned::new(names, start..end);
 }
 
-pub fn params(input: &mut ParseInput) -> Vec<FnParam> {
+pub fn params(input: &mut ParseInput) -> Vec<Spanned<FnParam>> {
 	input.expect(
 		TokenKind::LParen,
 		input.error(
@@ -258,7 +266,7 @@ pub fn params(input: &mut ParseInput) -> Vec<FnParam> {
 	return params;
 }
 
-fn param(input: &mut ParseInput) -> FnParam {
+fn param(input: &mut ParseInput) -> Spanned<FnParam> {
 	let mut mut_ = false;
 	let mut_start = input.tok().span.start;
 	let mut mut_end = input.tok().span.start;
@@ -272,12 +280,13 @@ fn param(input: &mut ParseInput) -> FnParam {
 		if input.inside_apply_or_interface {
 			let begin = input.tok().span.start;
 			input.next();
-			return FnParam::new(
-				mut_start..mut_end,
-				mut_,
-				0..0,        // doesn't matter
-				Expr::Error, // it's not actually an error, but we don't care about this value and will never read it. An Option might work better, but it seems like overkill
-				Ident::new(begin..input.tok().span.end, SmolStr::from("this")),
+			return Spanned::new(
+				FnParam::new(
+					Spanned::new(mut_, mut_start..mut_end),
+					Spanned::new(Expr::Error, 0..0), // it's not actually an error, but we don't care about this value and will never read it. An Option might work better, but it seems like overkill
+					Spanned::new(Ident::from("this"), begin..input.tok().span.end),
+				),
+				mut_start..input.tok().span.end,
 			);
 		} else {
 			input.errs.push(input.error(
@@ -289,15 +298,18 @@ fn param(input: &mut ParseInput) -> FnParam {
 		}
 	}
 
-	let type_begin = input.tok().span.start;
 	let type_ = type_expr(input);
-	let type_end = input.tok().span.end;
 	let name = ident(input);
+	let end = input.tok().span.start;
 
-	FnParam::new(mut_start..mut_end, mut_, type_begin..type_end, type_, name)
+	Spanned::new(
+		FnParam::new(Spanned::new(mut_, mut_start..mut_end), type_, name),
+		mut_start..end,
+	)
 }
 
-pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {
+pub fn type_decl(input: &mut ParseInput, pub_: Spanned<bool>) -> Spanned<TypeDecl> {
+	let start = input.tok().span.start;
 	input.expect(
 		TokenKind::Type,
 		input.error(
@@ -348,9 +360,13 @@ pub fn type_decl(input: &mut ParseInput, pub_: bool) -> TypeDecl {
 	}
 
 	input.typenames.push(name.clone());
-	TypeDecl::new(
-		pub_,
-		Ident::new(name_begin..name_end, SmolStr::from(name)),
-		type_,
+	let end = input.tok().span.start;
+	Spanned::new(
+		TypeDecl::new(
+			pub_,
+			Spanned::new(Ident::from(name), name_begin..name_end),
+			type_,
+		),
+		start..end,
 	)
 }

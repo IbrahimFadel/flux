@@ -3,49 +3,58 @@ use std::{collections::HashMap, vec};
 use indexmap::IndexMap;
 use pi_ast::{
 	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method, OpKind,
-	PrimitiveKind, PrimitiveType, PtrType, StringLit, StructExpr, Unary,
+	PrimitiveKind, PrimitiveType, PtrType, Spanned, StringLit, StructExpr, Unary,
 };
 use pi_error::PIErrorCode;
 use pi_lexer::token::TokenKind;
-use smol_str::SmolStr;
 
 use crate::{decl::params, get_tokprec, tok_val, token_kind_to_op_kind, ParseInput};
 
-pub fn expr(input: &mut ParseInput) -> Expr {
+pub fn expr(input: &mut ParseInput) -> Spanned<Expr> {
 	binop_expr(input, 1)
 }
 
-fn binop_expr(input: &mut ParseInput, prec1: i8) -> Expr {
+fn binop_expr(input: &mut ParseInput, prec1: i8) -> Spanned<Expr> {
 	let mut x = unary_expr(input);
 	loop {
 		let oprec = get_tokprec(&input.tok().kind);
 		let op = input.tok().kind.clone();
 		if oprec < prec1 {
-			return x;
+			// this is kind of a dirty hack, but i think it works
+			// basically, when you encounter `foo()`, we should return `postfix()`
+			// but if we have, say, `foo.bar()`, we wait til afterwards to return `postfix()`
+			if prec1 == 1 {
+				return postfix(input, x);
+			} else {
+				return x;
+			}
 		}
 
 		input.next();
 
 		let y = binop_expr(input, oprec + 1);
 
+		let binop_start = x.span.start.clone();
+		let binop_end = y.span.start.clone();
 		let binop = Expr::BinOp(BinOp::new(
 			Box::from(x.clone()),
 			token_kind_to_op_kind(&op),
 			Box::from(y),
 		));
-		let post = postfix(input, binop);
+		let post = postfix(input, Spanned::new(binop, binop_start..binop_end));
 		x = post;
 	}
 }
 
-fn postfix(input: &mut ParseInput, x: Expr) -> Expr {
+fn postfix(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
 	match input.tok().kind {
 		TokenKind::LParen => call(input, x),
 		_ => x,
 	}
 }
 
-fn call(input: &mut ParseInput, x: Expr) -> Expr {
+fn call(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
+	let start = input.tok().span.start;
 	input.expect(
 		TokenKind::LParen,
 		input.error(
@@ -59,7 +68,7 @@ fn call(input: &mut ParseInput, x: Expr) -> Expr {
 	}
 
 	let mut args = vec![];
-	while input.tok().kind != TokenKind::RParen {
+	while input.tok().kind != TokenKind::RParen && input.tok().kind != TokenKind::EOF {
 		let arg = expr(input);
 		args.push(Box::from(arg));
 
@@ -91,20 +100,33 @@ fn call(input: &mut ParseInput, x: Expr) -> Expr {
 	if input.tok().kind == TokenKind::RParen {
 		input.next();
 	}
-	return Expr::CallExpr(CallExpr::new(Box::from(x), args));
+	let end = input.tok().span.start;
+	return Spanned::new(
+		Expr::CallExpr(CallExpr::new(Box::from(x), args)),
+		start..end,
+	);
 }
 
-fn unary_expr(input: &mut ParseInput) -> Expr {
+fn unary_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	let kind = input.tok().kind.clone();
 	match kind {
-		TokenKind::Ampersand => Expr::Unary(Unary::new(OpKind::Ampersand, Box::from(expr(input)))),
+		TokenKind::Ampersand => {
+			let start = input.tok().span.start;
+			input.next();
+			let e = expr(input);
+			let end = input.tok().span.start;
+			Spanned::new(
+				Expr::Unary(Unary::new(OpKind::Ampersand, Box::from(e))),
+				start..end,
+			)
+		}
 		_ => primary_expr(input),
 	}
 }
 
-fn primary_expr(input: &mut ParseInput) -> Expr {
+fn primary_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	let x = operand(input);
-	if let Expr::Ident(ident) = &x {
+	if let Expr::Ident(ident) = &x.node {
 		if input.tok().kind == TokenKind::LBrace {
 			return struct_expr(input, ident);
 		}
@@ -112,7 +134,7 @@ fn primary_expr(input: &mut ParseInput) -> Expr {
 	return x;
 }
 
-fn struct_expr(input: &mut ParseInput, name: &Ident) -> Expr {
+fn struct_expr(input: &mut ParseInput, name: &Ident) -> Spanned<Expr> {
 	let fields_start = input.tok().span.start;
 	input.next();
 	let mut fields = IndexMap::new();
@@ -159,17 +181,21 @@ fn struct_expr(input: &mut ParseInput, name: &Ident) -> Expr {
 		input.next();
 	}
 	let fields_end = input.tok().span.start;
-
-	Expr::StructExpr(StructExpr::new(
-		name.clone(),
+	Spanned::new(
+		Expr::StructExpr(StructExpr::new(
+			name.clone(),
+			Spanned::new(fields, fields_start..fields_end),
+		)),
 		fields_start..fields_end,
-		fields,
-	))
+	)
 }
 
-fn operand(input: &mut ParseInput) -> Expr {
+fn operand(input: &mut ParseInput) -> Spanned<Expr> {
 	match input.tok().kind {
-		TokenKind::Ident => Expr::Ident(ident(input)),
+		TokenKind::Ident => {
+			let e = ident(input);
+			Spanned::new(Expr::Ident(e.node), e.span.start..e.span.end)
+		}
 		TokenKind::Minus
 		| TokenKind::Int
 		| TokenKind::Float
@@ -188,12 +214,12 @@ fn operand(input: &mut ParseInput) -> Expr {
 					input.tok().span.clone(),
 				)],
 			));
-			Expr::Error
+			Spanned::new(Expr::Error, 0..0)
 		}
 	}
 }
 
-fn basic_lit(input: &mut ParseInput) -> Expr {
+fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 	let mut begin_pos = input.tok().span.start;
 	let sign_span = begin_pos..begin_pos + 1;
 	let mut signed = false;
@@ -245,13 +271,14 @@ fn basic_lit(input: &mut ParseInput) -> Expr {
 			let x = u64::from_str_radix(str_val.as_str(), base);
 			input.next();
 			match x {
-				Ok(val) => Expr::IntLit(IntLit::new(
-					sign_span,
+				Ok(val) => Spanned::new(
+					Expr::IntLit(IntLit::new(
+						Spanned::new(signed, sign_span),
+						32,
+						Spanned::new(val, begin_pos..input.tok().span.start),
+					)),
 					begin_pos..input.tok().span.start,
-					signed,
-					32,
-					val,
-				)),
+				),
 				Err(e) => {
 					input.errs.push(input.error(
 						format!("could not parse integer: {}", e.to_string()),
@@ -264,7 +291,7 @@ fn basic_lit(input: &mut ParseInput) -> Expr {
 							),
 						],
 					));
-					Expr::Error
+					Spanned::new(Expr::Error, 0..0)
 				}
 			}
 		}
@@ -272,38 +299,47 @@ fn basic_lit(input: &mut ParseInput) -> Expr {
 			let x = tok_val(&input.program, &input.tok()).parse::<f64>();
 			input.next();
 			match x {
-				Ok(val) => Expr::FloatLit(FloatLit::new(
-					sign_span,
+				Ok(val) => Spanned::new(
+					Expr::FloatLit(FloatLit::new(
+						Spanned::new(signed, sign_span),
+						32,
+						Spanned::new(val, begin_pos..input.tok().span.start),
+					)),
 					begin_pos..input.tok().span.start,
-					signed,
-					32,
-					val,
-				)),
-				_ => Expr::Error,
+				),
+				_ => Spanned::new(Expr::Error, 0..0),
 			}
 		}
 		TokenKind::CharLit => {
+			let start = input.tok().span.start;
 			let x = tok_val(&input.program, &input.tok());
 			input.next();
 			match x.chars().nth(0) {
-				Some(val) => Expr::CharLit(CharLit::from(val)),
-				_ => Expr::Error,
+				Some(val) => Spanned::new(
+					Expr::CharLit(CharLit::from(val)),
+					start..input.tok().span.start,
+				),
+				_ => Spanned::new(Expr::Error, 0..0),
 			}
 		}
 		TokenKind::StringLit => {
+			let start = input.tok().span.start;
 			let x = tok_val(&input.program, &input.tok());
 			input.next();
-			Expr::StringLit(StringLit::from(x))
+			Spanned::new(
+				Expr::StringLit(StringLit::from(x)),
+				start..input.tok().span.start,
+			)
 		}
 		_ => {
 			input.next();
-			Expr::Error
+			Spanned::new(Expr::Error, 0..0)
 		}
 	}
 }
 
-pub fn ident(input: &mut ParseInput) -> Ident {
-	let begin = input.tok().span.start;
+pub fn ident(input: &mut ParseInput) -> Spanned<Ident> {
+	let start = input.tok().span.start;
 	let input_program_clone = input.program.clone();
 	let res = input.expect(
 		TokenKind::Ident,
@@ -313,12 +349,13 @@ pub fn ident(input: &mut ParseInput) -> Ident {
 			vec![("".to_owned(), input.tok().span.clone())],
 		),
 	);
-	let x = SmolStr::from(tok_val(&input_program_clone, res));
+	let x = Ident::from(tok_val(&input_program_clone, res));
 	input.next();
-	return Ident::new(begin..input.tok().span.start, x);
+	return Spanned::new(x, start..input.tok().span.start);
 }
 
-fn struct_type_expr(input: &mut ParseInput) -> Expr {
+fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
+	let start = input.tok().span.start;
 	input.expect(
 		TokenKind::Struct,
 		input.error(
@@ -357,10 +394,11 @@ fn struct_type_expr(input: &mut ParseInput) -> Expr {
 		input.next();
 	}
 
-	return Expr::StructType(fields);
+	let end = input.tok().span.start;
+	return Spanned::new(Expr::StructType(fields), start..end);
 }
 
-fn field_map(input: &mut ParseInput) -> IndexMap<Ident, Field> {
+fn field_map(input: &mut ParseInput) -> IndexMap<Spanned<Ident>, Spanned<Field>> {
 	let mut fields = IndexMap::new();
 	while input.tok().kind != TokenKind::RBrace {
 		let (k, v) = field(input);
@@ -369,11 +407,14 @@ fn field_map(input: &mut ParseInput) -> IndexMap<Ident, Field> {
 	fields
 }
 
-fn field(input: &mut ParseInput) -> (Ident, Field) {
+fn field(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Field>) {
+	let start = input.tok().span.start;
 	let mut pub_ = false;
+	let mut pub_end = input.tok().span.start;
 	if input.tok().kind == TokenKind::Pub {
 		pub_ = true;
 		input.next();
+		pub_end = input.tok().span.start;
 	}
 	let type_ = type_expr(input);
 
@@ -400,8 +441,11 @@ fn field(input: &mut ParseInput) -> (Ident, Field) {
 	if input.tok().kind == TokenKind::Semicolon {
 		input.next();
 		return (
-			Ident::new(ident_begin..ident_end, SmolStr::from(name)),
-			Field::new(pub_, type_, None),
+			Spanned::new(Ident::from(name), ident_begin..ident_end),
+			Spanned::new(
+				Field::new(Spanned::new(pub_, start..pub_end), type_, None),
+				start..input.tok().span.start,
+			),
 		);
 	}
 
@@ -437,12 +481,16 @@ fn field(input: &mut ParseInput) -> (Ident, Field) {
 		input.next();
 	}
 	return (
-		Ident::new(ident_begin..ident_end, SmolStr::from(name)),
-		Field::new(pub_, type_, Some(val)),
+		Spanned::new(Ident::from(name), ident_begin..ident_end),
+		Spanned::new(
+			Field::new(Spanned::new(pub_, start..pub_end), type_, Some(val)),
+			start..input.tok().span.start,
+		),
 	);
 }
 
-fn interface_type_expr(input: &mut ParseInput) -> Expr {
+fn interface_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
+	let start = input.tok().span.start;
 	input.expect(
 		TokenKind::Interface,
 		input.error(
@@ -483,7 +531,8 @@ fn interface_type_expr(input: &mut ParseInput) -> Expr {
 		input.next();
 	}
 
-	return Expr::InterfaceType(methods);
+	let end = input.tok().span.start;
+	return Spanned::new(Expr::InterfaceType(methods), start..end);
 }
 
 fn method_map(input: &mut ParseInput) -> InterfaceType {
@@ -495,7 +544,7 @@ fn method_map(input: &mut ParseInput) -> InterfaceType {
 	return methods;
 }
 
-fn method(input: &mut ParseInput) -> (Ident, Method) {
+fn method(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Method>) {
 	let mut pub_ = false;
 	let pub_start = input.tok().span.start;
 	let mut pub_end = input.tok().span.start;
@@ -522,12 +571,14 @@ fn method(input: &mut ParseInput) -> (Ident, Method) {
 	let params = params(input);
 	let params_end = input.tok().span.end;
 	let ret_ty_start = input.tok().span.start;
-	let mut ret_ty = Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void));
+	let mut ret_ty = Spanned::new(
+		Expr::PrimitiveType(PrimitiveType::new(PrimitiveKind::Void)),
+		ret_ty_start..ret_ty_start,
+	);
 	if input.tok().kind == TokenKind::Arrow {
 		input.next();
 		ret_ty = type_expr(input);
 	}
-	let ret_ty_end = input.tok().span.start;
 
 	input.expect(
 		TokenKind::Semicolon,
@@ -541,21 +592,22 @@ fn method(input: &mut ParseInput) -> (Ident, Method) {
 		input.next();
 	}
 
+	let end = input.tok().span.end;
 	return (
 		name.clone(),
-		Method::new(
-			pub_start..pub_end,
-			pub_,
-			name,
-			params_start..params_end,
-			params,
-			ret_ty_start..ret_ty_end,
-			ret_ty,
+		Spanned::new(
+			Method::new(
+				Spanned::new(pub_, pub_start..pub_end),
+				name,
+				Spanned::new(params, params_start..params_end),
+				ret_ty,
+			),
+			pub_start..end,
 		),
 	);
 }
 
-pub fn type_expr(input: &mut ParseInput) -> Expr {
+pub fn type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	let mut ty = match input.tok().kind {
 		TokenKind::I64
 		| TokenKind::U64
@@ -568,14 +620,18 @@ pub fn type_expr(input: &mut ParseInput) -> Expr {
 		| TokenKind::F64
 		| TokenKind::F32
 		| TokenKind::Bool => {
+			let start = input.tok().span.start;
 			let y = token_kind_to_primitive_kind(input, input.tok().kind.clone());
 			input.next();
-			let x = Expr::PrimitiveType(PrimitiveType::new(y));
-			return x;
+			let end = input.tok().span.start;
+			Spanned::new(Expr::PrimitiveType(PrimitiveType::new(y)), start..end)
 		}
 		TokenKind::Struct => struct_type_expr(input),
 		TokenKind::Interface => interface_type_expr(input),
-		TokenKind::Ident => Expr::Ident(ident(input)),
+		TokenKind::Ident => {
+			let e = ident(input);
+			Spanned::new(Expr::Ident(e.node), e.span.start..e.span.end)
+		}
 		_ => {
 			input.errs.push(input.error(
 				"expected type expression".to_owned(),
@@ -588,11 +644,12 @@ pub fn type_expr(input: &mut ParseInput) -> Expr {
 					input.tok().span.clone(),
 				)],
 			));
-			Expr::Error
+			Spanned::new(Expr::Error, 0..0)
 		}
 	};
 	while input.tok().kind == TokenKind::Asterisk {
-		ty = Expr::PtrType(PtrType::from(ty.clone()));
+		let start = input.tok().span.start;
+		ty = Spanned::new(Expr::PtrType(PtrType::from(ty.clone())), start..ty.span.end);
 		input.next();
 	}
 	return ty;

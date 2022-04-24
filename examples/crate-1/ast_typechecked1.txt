@@ -1,0 +1,64 @@
+AST {
+    name: "other",
+    mods: [],
+    functions: [
+        Spanned {
+            node: FnDecl {
+                pub_: Spanned {
+                    node: false,
+                    span: 0..0,
+                },
+                name: Spanned {
+                    node: "some_other_fn",
+                    span: 3..16,
+                },
+                generics: Spanned {
+                    node: [],
+                    span: 16..16,
+                },
+                params: Spanned {
+                    node: [],
+                    span: 16..19,
+                },
+                ret_ty: Spanned {
+                    node: PrimitiveType(
+                        PrimitiveType {
+                            kind: I32,
+                        },
+                    ),
+                    span: 22..26,
+                },
+                block: [
+                    Spanned {
+                        node: Return(
+                            Return {
+                                val: Some(
+                                    Spanned {
+                                        node: IntLit(
+                                            IntLit {
+                                                signed: Spanned {
+                                                    node: false,
+                                                    span: 36..37,
+                                                },
+                                                bits: 32,
+                                                val: Spanned {
+                                                    node: 0,
+                                                    span: 36..37,
+                                                },
+                                            },
+                                        ),
+                                        span: 36..37,
+                                    },
+                                ),
+                            },
+                        ),
+                        span: 29..39,
+                    },
+                ],
+            },
+            span: 0..0,
+        },
+    ],
+    types: [],
+    apply_blocks: [],
+}

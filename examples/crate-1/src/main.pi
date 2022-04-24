@@ -1,39 +1,31 @@
-type Foo u8;
+mod other;
 
-type Animal interface {
-	pub fn say_hi(this, Foo x, u16 y);
-	fn bar() -> i16;
+type Bar struct {
+	i32 x;
 };
 
-type Test struct {
-	i16 x;
+type Foo struct {
+	Bar bar;
+	i64 x;
 };
 
-type Dog struct {
-	Test foo;
-	f32 x;
-};
+fn test(Foo *foo) {
+	foo.x = 2.0;
+}
 
-apply Animal to Dog {
-	pub fn say_hi(this, Foo x, u16 y) {}
-
-	fn bar() -> i16 {
+apply Foo {
+	fn some_fn(this) -> i32 {
 		return 0;
 	}
 }
 
-apply Dog {
-	fn test() {
-
-	}
-}
-
 fn main() {
-	Foo foo = 0;
-	Dog d = Dog {
-		foo: Test {
-			x: 0,
+	Foo foo = Foo {
+		bar: Bar {
+			x: 1,
 		},
 		x: 1.0,
 	};
+	test(&foo);
+	other::some_other_fn();
 }

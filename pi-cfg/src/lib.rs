@@ -1,10 +1,25 @@
 use serde_derive::Deserialize;
+use serde_repr::Deserialize_repr;
 use std::{collections::HashMap, fs};
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
 	pub package: Package,
 	pub dependencies: Dependencies,
+	pub compilation: CompilationSettings,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CompilationSettings {
+	pub optimization: OptimizationLevel,
+}
+
+#[derive(Deserialize_repr, Debug, PartialEq)]
+#[repr(u8)]
+pub enum OptimizationLevel {
+	None,
+	Some,
+	Highest,
 }
 
 pub type Dependencies = HashMap<String, Dependency>;
@@ -32,6 +47,6 @@ pub struct Package {
 
 pub fn parse_cfg(dir: &str) -> Config {
 	let cfg_content =
-		fs::read_to_string(dir.to_owned() + "Tau.toml").expect("could not open config file");
+		fs::read_to_string(dir.to_owned() + "pi.toml").expect("could not open config file");
 	return toml::from_str(cfg_content.as_str()).expect("could not parse config file");
 }

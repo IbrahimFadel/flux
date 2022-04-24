@@ -13,3 +13,4 @@ pi-typecheck = { path = "../pi-typecheck" }
 pi-codegen = { path = "../pi-codegen" }
 pi-error = { path = "../pi-error" }
 pi-cfg = { path = "../pi-cfg" }
+indexmap = "1.8.1"
