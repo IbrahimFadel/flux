@@ -156,9 +156,8 @@ version = "0.1.0"
 dependencies = [
  "indexmap",
  "llvm-sys",
- "pi-ast",
  "pi-cfg",
- "pi-error",
+ "pi-mir",
  "smol_str",
  "uuid",
 ]

@@ -49,12 +49,12 @@ impl fmt::Display for Type {
 
 #[derive(Debug, Clone)]
 pub struct VectorTy {
-	pub count: usize,
+	pub count: u32,
 	pub ty: Box<Type>,
 }
 
 impl VectorTy {
-	pub fn new(count: usize, ty: Box<Type>) -> Self {
+	pub fn new(count: u32, ty: Box<Type>) -> Self {
 		Self { count, ty }
 	}
 }
@@ -79,6 +79,8 @@ pub type StructType = Vec<Type>;
 #[derive(Debug)]
 pub struct FnDecl {
 	pub name: String,
+	pub ret_ty: Type,
+	pub params: Vec<FnParam>,
 	pub blocks: Vec<Block>,
 	pub block_count: usize,
 	pub instr_count: usize,
@@ -88,9 +90,11 @@ pub struct FnDecl {
 }
 
 impl FnDecl {
-	pub fn new(name: String) -> Self {
+	pub fn new(name: String, ret_ty: Type, params: Vec<FnParam>) -> Self {
 		Self {
 			name: name,
+			ret_ty,
+			params,
 			blocks: vec![],
 			block_count: 0,
 			instr_count: 0,
@@ -98,6 +102,19 @@ impl FnDecl {
 			locals: HashMap::new(),
 			local_types: HashMap::new(),
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct FnParam {
+	pub mut_: bool,
+	pub name: String,
+	pub ty: Type,
+}
+
+impl FnParam {
+	pub fn new(mut_: bool, name: String, ty: Type) -> Self {
+		Self { mut_, name, ty }
 	}
 }
 
@@ -138,13 +155,14 @@ impl PtrCast {
 #[derive(Debug, Clone)]
 pub struct IndexAccess {
 	pub id: MirID,
+	pub ty: Type,
 	pub ptr: MirID,
 	pub idx: u32,
 }
 
 impl IndexAccess {
-	pub fn new(id: MirID, ptr: MirID, idx: u32) -> Self {
-		Self { id, ptr, idx }
+	pub fn new(id: MirID, ty: Type, ptr: MirID, idx: u32) -> Self {
+		Self { id, ty, ptr, idx }
 	}
 }
 
@@ -191,13 +209,12 @@ impl Add {
 #[derive(Debug, Clone)]
 pub struct Ret {
 	pub id: MirID,
-	pub ty: Type,
 	pub val: Option<RValue>,
 }
 
 impl Ret {
-	pub fn new(id: MirID, ty: Type, val: Option<RValue>) -> Self {
-		Self { id, ty, val }
+	pub fn new(id: MirID, val: Option<RValue>) -> Self {
+		Self { id, val }
 	}
 }
 

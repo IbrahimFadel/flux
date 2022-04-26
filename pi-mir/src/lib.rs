@@ -5,20 +5,24 @@ use pi_ast::{
 };
 
 mod cfg;
-mod mir;
+pub mod mir;
 use mir::*;
 
 pub struct MIRModule {
-	functions: HashMap<String, FnDecl>,
-	struct_tys: HashMap<String, StructType>,
+	pub name: String,
+
+	pub functions: HashMap<String, FnDecl>,
+	pub struct_tys: HashMap<String, StructType>,
 	enum_tags: HashMap<String, Vec<String>>,
 
 	cur_fn: String,
 }
 
 impl MIRModule {
-	pub fn new() -> Self {
+	pub fn new(name: String) -> Self {
 		Self {
+			name,
+
 			functions: HashMap::new(),
 			struct_tys: HashMap::new(),
 			enum_tags: HashMap::new(),
@@ -85,7 +89,7 @@ impl MIRModule {
 		};
 
 		ty_vec.push(Type::Vector(VectorTy::new(
-			min_bytes_for_enum as usize,
+			min_bytes_for_enum,
 			Box::new(Type::U8),
 		)));
 		self.struct_tys.insert(name.clone(), ty_vec);
@@ -116,7 +120,13 @@ impl MIRModule {
 	}
 
 	fn lower_fn(&mut self, fn_decl: &pi_ast::FnDecl) {
-		let f = FnDecl::new(fn_decl.name.to_string());
+		let ret_ty = self.expr_ty_to_mir_ty(&fn_decl.ret_ty);
+		let mut params = vec![];
+		for p in &*fn_decl.params {
+			let ty = self.expr_ty_to_mir_ty(&p.type_);
+			params.push(FnParam::new(*p.mut_, p.name.to_string(), ty));
+		}
+		let f = FnDecl::new(fn_decl.name.to_string(), ret_ty, params);
 		self.functions.insert(fn_decl.name.to_string(), f);
 		self.cur_fn = fn_decl.name.to_string();
 		self.get_cur_fn().cur_block_id = self.get_cur_fn().append_new_block();
@@ -137,10 +147,9 @@ impl MIRModule {
 	fn lower_ret(&mut self, ret: &pi_ast::Return) {
 		if let Some(val) = &ret.val {
 			let v = self.expr_to_rval(val);
-			let ty = self.type_of_rval(&v);
-			self.build_ret(ty, Some(v));
+			self.build_ret(Some(v));
 		} else {
-			self.build_ret(Type::Void, None);
+			self.build_ret(None);
 		}
 	}
 
@@ -156,13 +165,17 @@ impl MIRModule {
 		self.build_brcond(cond, then, else_.id.clone());
 
 		self.get_cur_fn().cur_block_id = then;
+		let mut then_block_has_terminator = false;
 		for stmt in &if_stmt.then {
 			self.lower_stmt(stmt);
+			if let Stmt::Return(_) = **stmt {
+				then_block_has_terminator = true;
+			}
 		}
 
 		if if_stmt.else_.is_some() {
 			self.build_br(merge.id);
-		} else {
+		} else if !then_block_has_terminator {
 			self.build_br(else_.id);
 		}
 
@@ -319,8 +332,9 @@ impl MIRModule {
 	}
 
 	fn expr_enum_to_rval(&mut self, enum_expr: &EnumExpr) -> RValue {
-		let base_alloca = self.build_alloca(Type::Ident(enum_expr.enum_name.to_string()));
-		let idx_access = self.build_idx_access(base_alloca, 0);
+		let base_ty = Type::Ident(enum_expr.enum_name.to_string());
+		let base_alloca = self.build_alloca(base_ty.clone());
+		let idx_access = self.build_idx_access(base_ty.clone(), base_alloca, 0);
 		let tags = self
 			.enum_tags
 			.get(&enum_expr.enum_name.to_string())
@@ -334,10 +348,13 @@ impl MIRModule {
 		let ty = tagged_enum[1].clone();
 		self.build_store(Type::U8, RValue::U8(tag_idx as u8), idx_access);
 
-		let tagged_enum_ptr = self.build_ptr_cast(base_alloca, Type::Ident(tagged_enum_name));
-		let idx_access = self.build_idx_access(tagged_enum_ptr, 1);
+		let tagged_enum_ptr = self.build_ptr_cast(
+			base_alloca,
+			Type::Ptr(Box::new(Type::Ident(tagged_enum_name.clone()))),
+		);
+		let idx_access = self.build_idx_access(Type::Ident(tagged_enum_name), tagged_enum_ptr, 1);
 		let val = self.expr_to_rval(&*enum_expr.val);
-		self.build_store(ty, val, idx_access);
+		self.build_store(base_ty, val, idx_access);
 		let loaded = self.build_load(
 			Type::Ptr(Box::new(Type::Ident(enum_expr.enum_name.to_string()))),
 			base_alloca,
@@ -434,10 +451,10 @@ impl MIRModule {
 		return id;
 	}
 
-	fn build_ret(&mut self, ty: Type, val: Option<RValue>) -> MirID {
+	fn build_ret(&mut self, val: Option<RValue>) -> MirID {
 		let id = self.get_cur_fn().instr_count;
 		self.get_cur_fn().instr_count += 1;
-		let ret = Ret::new(id, ty, val);
+		let ret = Ret::new(id, val);
 		self
 			.get_cur_fn()
 			.get_cur_block()
@@ -482,10 +499,10 @@ impl MIRModule {
 		return id;
 	}
 
-	fn build_idx_access(&mut self, ptr: MirID, idx: u32) -> MirID {
+	fn build_idx_access(&mut self, ty: Type, ptr: MirID, idx: u32) -> MirID {
 		let id = self.get_cur_fn().instr_count;
 		self.get_cur_fn().instr_count += 1;
-		let idx_access = IndexAccess::new(id, ptr, idx);
+		let idx_access = IndexAccess::new(id, ty, ptr, idx);
 		self
 			.get_cur_fn()
 			.get_cur_block()
@@ -508,7 +525,7 @@ impl MIRModule {
 }
 
 pub fn lower_ast(ast: &AST) -> MIRModule {
-	let mut module = MIRModule::new();
+	let mut module = MIRModule::new(ast.name.clone());
 
 	module.lower_type_decls(&ast.types);
 	module.lower_function_decls(&ast.functions);

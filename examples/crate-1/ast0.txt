@@ -322,12 +322,59 @@ AST {
                                         ),
                                     },
                                 },
-                                then: [],
+                                then: [
+                                    Spanned {
+                                        node: Return(
+                                            Return {
+                                                val: Some(
+                                                    Spanned {
+                                                        node: IntLit(
+                                                            IntLit {
+                                                                negative: Spanned {
+                                                                    node: false,
+                                                                    span: Span {
+                                                                        range: 118..119,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
+                                                                },
+                                                                signed: true,
+                                                                bits: 32,
+                                                                val: Spanned {
+                                                                    node: 1,
+                                                                    span: Span {
+                                                                        range: 118..119,
+                                                                        file_id: FileId(
+                                                                            0,
+                                                                        ),
+                                                                    },
+                                                                },
+                                                            },
+                                                        ),
+                                                        span: Span {
+                                                            range: 118..119,
+                                                            file_id: FileId(
+                                                                0,
+                                                            ),
+                                                        },
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        span: Span {
+                                            range: 111..122,
+                                            file_id: FileId(
+                                                0,
+                                            ),
+                                        },
+                                    },
+                                ],
                                 else_: None,
                             },
                         ),
                         span: Span {
-                            range: 97..115,
+                            range: 97..126,
                             file_id: FileId(
                                 0,
                             ),
@@ -343,7 +390,7 @@ AST {
                                                 negative: Spanned {
                                                     node: false,
                                                     span: Span {
-                                                        range: 122..123,
+                                                        range: 133..134,
                                                         file_id: FileId(
                                                             0,
                                                         ),
@@ -354,7 +401,7 @@ AST {
                                                 val: Spanned {
                                                     node: 0,
                                                     span: Span {
-                                                        range: 122..123,
+                                                        range: 133..134,
                                                         file_id: FileId(
                                                             0,
                                                         ),
@@ -363,7 +410,7 @@ AST {
                                             },
                                         ),
                                         span: Span {
-                                            range: 122..123,
+                                            range: 133..134,
                                             file_id: FileId(
                                                 0,
                                             ),
@@ -373,7 +420,7 @@ AST {
                             },
                         ),
                         span: Span {
-                            range: 115..125,
+                            range: 126..136,
                             file_id: FileId(
                                 0,
                             ),

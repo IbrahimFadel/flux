@@ -2,7 +2,8 @@ use std::{fs, process};
 
 use indexmap::IndexMap;
 use pi_ast::AST;
-// use pi_cfg::*;
+use pi_cfg::*;
+use pi_codegen::lower_mir_module;
 use pi_error::{filesystem::FileId, *};
 use pi_lexer::*;
 use pi_mir::*;
@@ -39,7 +40,7 @@ fn parse_file(
 
 fn main() {
 	let project_dir = String::from("examples/crate-1/");
-	// let cfg = parse_cfg(project_dir.as_str());
+	let cfg = parse_cfg(project_dir.as_str());
 
 	// let dependency_file_paths: Vec<String> = cfg
 	// 	.dependencies
@@ -99,6 +100,7 @@ fn main() {
 
 	for (_, ast) in file_ast_map.iter() {
 		let mir_module = lower_ast(ast);
+		lower_mir_module(mir_module, &cfg.compilation);
 	}
 
 	// let (codegen_ctx, err) = codegen_ast(&mut file_ast_map, &cfg.compilation);

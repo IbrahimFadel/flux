@@ -6,9 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pi-ast = { path = "../pi-ast" }
-pi-error = { path = "../pi-error" }
 pi-cfg = { path = "../pi-cfg" }
+pi-mir = { path = "../pi-mir" }
 llvm-sys = "130.0.1"
 smol_str = "0.1.21"
 uuid = { version = "1.0.0", features = ["v4", "fast-rng", "macro-diagnostics"] }

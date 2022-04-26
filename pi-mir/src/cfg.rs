@@ -55,9 +55,9 @@ fn block_to_str(block: &Block, conns: &mut Vec<MirID>) -> String {
 			}
 			Instruction::Ret(ret) => {
 				if let Some(val) = &ret.val {
-					dot_str += &format!("ret {} {}", ret.ty, print_rval(val));
+					dot_str += &format!("ret {}", print_rval(val));
 				} else {
-					dot_str += &format!("ret {}", ret.ty);
+					dot_str += &format!("ret void");
 				}
 			}
 			Instruction::Add(add) => {

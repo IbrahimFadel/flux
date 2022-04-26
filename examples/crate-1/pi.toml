@@ -3,9 +3,8 @@ name = "testing"
 version = "0.1.0"
 
 [compilation]
-optimization = 2 # [0, 1, 2]
+optimization = 0 # [0, 1, 2]
 warns = "error"  # [normal, error]
 build = "debug"  # [debug, release]
 
 [dependencies]
-crate-2 = { path = "../crate-2" }
