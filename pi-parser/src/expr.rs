@@ -2,8 +2,8 @@ use std::{collections::HashMap, vec};
 
 use indexmap::IndexMap;
 use pi_ast::{
-	BinOp, CallExpr, CharLit, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method, OpKind,
-	PrimitiveType, PtrType, Spanned, StringLit, StructExpr, Unary,
+	BinOp, CallExpr, CharLit, EnumType, Expr, Field, FloatLit, Ident, IntLit, InterfaceType, Method,
+	OpKind, PrimitiveType, PtrType, Spanned, StringLit, StructExpr, Unary,
 };
 use pi_error::{PIErrorCode, Span};
 use pi_lexer::token::TokenKind;
@@ -70,6 +70,7 @@ fn call(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
 		input.next();
 	}
 
+	let args_start = input.tok().span.start;
 	let mut args = vec![];
 	while input.tok().kind != TokenKind::RParen && input.tok().kind != TokenKind::EOF {
 		let arg = expr(input);
@@ -91,6 +92,7 @@ fn call(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
 			}
 		}
 	}
+	let args_end = input.tok().span.start;
 
 	input.expect(
 		TokenKind::RParen,
@@ -105,7 +107,10 @@ fn call(input: &mut ParseInput, x: Spanned<Expr>) -> Spanned<Expr> {
 	}
 	let end = input.tok().span.start;
 	return Spanned::new(
-		Expr::CallExpr(CallExpr::new(Box::from(x), args)),
+		Expr::CallExpr(CallExpr::new(
+			Box::from(x),
+			Spanned::new(args, Span::new(args_start..args_end, input.file_id)),
+		)),
 		Span::new(start..end, input.file_id),
 	);
 }
@@ -373,6 +378,68 @@ pub fn ident(input: &mut ParseInput) -> Spanned<Ident> {
 	return Spanned::new(x, Span::new(start..input.tok().span.start, input.file_id));
 }
 
+fn enum_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
+	let start = input.tok().span.start;
+	input.next();
+
+	input.expect(
+		TokenKind::LBrace,
+		input.error(
+			"expected `{` in enum type expression".to_owned(),
+			PIErrorCode::ParseExpectedLBraceInEnumTypeExpr,
+			vec![],
+		),
+	);
+	if input.tok().kind == TokenKind::LBrace {
+		input.next();
+	}
+
+	let types = enum_types(input);
+
+	input.expect(
+		TokenKind::RBrace,
+		input.error(
+			"expected `}` in enum type expression".to_owned(),
+			PIErrorCode::ParseExpectedRBraceInEnumTypeExpr,
+			vec![],
+		),
+	);
+	if input.tok().kind == TokenKind::RBrace {
+		input.next();
+	}
+
+	let end = input.tok().span.start;
+	return Spanned::new(Expr::EnumType(types), Span::new(start..end, input.file_id));
+}
+
+fn enum_types(input: &mut ParseInput) -> EnumType {
+	let mut types = EnumType::new();
+	while input.tok().kind != TokenKind::RBrace && input.tok().kind != TokenKind::EOF {
+		let (k, v) = enum_type(input);
+		types.insert(k, v);
+	}
+	types
+}
+
+fn enum_type(input: &mut ParseInput) -> (Spanned<Ident>, Spanned<Expr>) {
+	let name = ident(input);
+
+	let mut ty = Spanned::new(
+		Expr::PrimitiveType(PrimitiveType::U8),
+		Span::new(input.tok().span.clone(), input.file_id),
+	);
+	if input.tok().kind == TokenKind::Arrow {
+		input.next();
+		ty = type_expr(input);
+	}
+
+	if input.tok().kind == TokenKind::Comma {
+		input.next();
+	}
+
+	(name, ty)
+}
+
 fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	let start = input.tok().span.start;
 	input.expect(
@@ -404,7 +471,7 @@ fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	input.expect(
 		TokenKind::RBrace,
 		input.error(
-			"expected `{` in struct type expression".to_owned(),
+			"expected `}` in struct type expression".to_owned(),
 			PIErrorCode::ParseExpectedRBraceInStructTypeExpr,
 			vec![],
 		),
@@ -422,7 +489,7 @@ fn struct_type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 
 fn field_map(input: &mut ParseInput) -> IndexMap<Spanned<Ident>, Spanned<Field>> {
 	let mut fields = IndexMap::new();
-	while input.tok().kind != TokenKind::RBrace {
+	while input.tok().kind != TokenKind::RBrace && input.tok().kind != TokenKind::EOF {
 		let (k, v) = field(input);
 		fields.insert(k, v);
 	}
@@ -667,6 +734,7 @@ pub fn type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 		}
 		TokenKind::Struct => struct_type_expr(input),
 		TokenKind::Interface => interface_type_expr(input),
+		TokenKind::Enum => enum_type_expr(input),
 		TokenKind::Ident => {
 			let e = ident(input);
 			Spanned::new(

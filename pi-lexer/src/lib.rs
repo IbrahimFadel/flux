@@ -137,6 +137,11 @@ impl<'a> Lexer<'a> {
 				'.' => {
 					tok.kind = TokenKind::Period;
 					tok.span = span;
+					if self.ch() == '.' {
+						self.next();
+						tok.kind = TokenKind::DoublePeriod;
+						tok.span = self.offset - 2..self.offset;
+					}
 				}
 				'!' => {
 					if self.ch() == '=' {

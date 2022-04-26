@@ -98,7 +98,7 @@ fn main() {
 	}
 
 	for (_, ast) in file_ast_map.iter() {
-		lower_ast(ast);
+		let mir_module = lower_ast(ast);
 	}
 
 	// let (codegen_ctx, err) = codegen_ast(&mut file_ast_map, &cfg.compilation);

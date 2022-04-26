@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
-use pi_ast::OpKind;
+use std::{collections::HashMap, fmt};
 
 pub type MirID = usize;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Type {
 	I64,
 	U64,
@@ -18,13 +16,52 @@ pub enum Type {
 	F32,
 	Bool,
 	Void,
+	Vector(VectorTy),
+	StructTy(StructType),
+	Ident(Ident),
+	Ptr(Ptr),
+}
+
+pub type Ident = String;
+pub type Ptr = Box<Type>;
+
+impl fmt::Display for Type {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Type::Ptr(ptr) => write!(f, "{}*", *ptr),
+			Type::Ident(ident) => write!(f, "{ident}"),
+			Type::StructTy(struct_ty) => {
+				write!(f, "\\{{ ")?;
+				for (i, ty) in struct_ty.iter().enumerate() {
+					write!(f, "{}", ty)?;
+					if i != struct_ty.len() - 1 {
+						write!(f, ", ")?;
+					}
+				}
+				write!(f, " \\}}")?;
+				Ok(())
+			}
+			Type::Vector(vec) => write!(f, "[ {} x {} ]", vec.count, *vec.ty),
+			_ => write!(f, "{:?}", self),
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct VectorTy {
+	pub count: usize,
+	pub ty: Box<Type>,
+}
+
+impl VectorTy {
+	pub fn new(count: usize, ty: Box<Type>) -> Self {
+		Self { count, ty }
+	}
 }
 
 #[derive(Debug, Clone)]
 pub enum RValue {
 	Local(MirID),
-	BinOp(Binop),
-	// UnaryOp,
 	I64(i64),
 	I32(i32),
 	I16(i16),
@@ -36,6 +73,8 @@ pub enum RValue {
 	F64(f64),
 	F32(f32),
 }
+
+pub type StructType = Vec<Type>;
 
 #[derive(Debug)]
 pub struct FnDecl {
@@ -63,19 +102,6 @@ impl FnDecl {
 }
 
 #[derive(Debug, Clone)]
-pub struct Binop {
-	pub lhs: Box<RValue>,
-	pub op: OpKind,
-	pub rhs: Box<RValue>,
-}
-
-impl Binop {
-	pub fn new(lhs: Box<RValue>, op: OpKind, rhs: Box<RValue>) -> Self {
-		Self { lhs, op, rhs }
-	}
-}
-
-#[derive(Debug, Clone)]
 pub struct Block {
 	pub id: MirID,
 	pub instrs: Vec<Instruction>,
@@ -86,8 +112,93 @@ pub enum Instruction {
 	Alloca(Alloca),
 	Store(Store),
 	Load(Load),
+	Call(Call),
 	Br(Br),
 	BrCond(BrCond),
+	Ret(Ret),
+	Add(Add),
+	CmpEq(CmpEq),
+	IndexAccess(IndexAccess),
+	PtrCast(PtrCast),
+}
+
+#[derive(Debug, Clone)]
+pub struct PtrCast {
+	pub id: MirID,
+	pub ptr: MirID,
+	pub to_ty: Type,
+}
+
+impl PtrCast {
+	pub fn new(id: MirID, ptr: MirID, to_ty: Type) -> Self {
+		Self { id, ptr, to_ty }
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexAccess {
+	pub id: MirID,
+	pub ptr: MirID,
+	pub idx: u32,
+}
+
+impl IndexAccess {
+	pub fn new(id: MirID, ptr: MirID, idx: u32) -> Self {
+		Self { id, ptr, idx }
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct Call {
+	pub id: MirID,
+	pub callee: RValue,
+	pub args: Vec<RValue>,
+}
+
+impl Call {
+	pub fn new(id: MirID, callee: RValue, args: Vec<RValue>) -> Self {
+		Self { id, callee, args }
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct CmpEq {
+	pub id: MirID,
+	pub ty: Type,
+	pub lhs: RValue,
+	pub rhs: RValue,
+}
+
+impl CmpEq {
+	pub fn new(id: MirID, ty: Type, lhs: RValue, rhs: RValue) -> Self {
+		Self { id, ty, lhs, rhs }
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct Add {
+	pub id: MirID,
+	pub lhs: RValue,
+	pub rhs: RValue,
+}
+
+impl Add {
+	pub fn new(id: MirID, lhs: RValue, rhs: RValue) -> Self {
+		Self { id, lhs, rhs }
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct Ret {
+	pub id: MirID,
+	pub ty: Type,
+	pub val: Option<RValue>,
+}
+
+impl Ret {
+	pub fn new(id: MirID, ty: Type, val: Option<RValue>) -> Self {
+		Self { id, ty, val }
+	}
 }
 
 #[derive(Debug, Clone)]

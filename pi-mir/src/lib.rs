@@ -1,14 +1,32 @@
-use std::fs;
+use std::{collections::HashMap, fs};
 
-use pi_ast::{Expr, Ident, PrimitiveType, Stmt, AST};
+use pi_ast::{
+	CallExpr, EnumExpr, Expr, Ident, OpKind, PrimitiveType, Spanned, Stmt, TypeDecl, AST,
+};
 
 mod cfg;
 mod mir;
 use mir::*;
 
-// struct MIRModule {
-// 	functions: Vec<FnDecl>,
-// }
+pub struct MIRModule {
+	functions: HashMap<String, FnDecl>,
+	struct_tys: HashMap<String, StructType>,
+	enum_tags: HashMap<String, Vec<String>>,
+
+	cur_fn: String,
+}
+
+impl MIRModule {
+	pub fn new() -> Self {
+		Self {
+			functions: HashMap::new(),
+			struct_tys: HashMap::new(),
+			enum_tags: HashMap::new(),
+
+			cur_fn: String::new(),
+		}
+	}
+}
 
 impl FnDecl {
 	fn new_block(&mut self) -> Block {
@@ -36,75 +54,108 @@ impl FnDecl {
 		}
 		panic!()
 	}
+}
 
-	fn build_alloca(&mut self, ty: Type) -> MirID {
-		let id = self.instr_count;
-		self.instr_count += 1;
-		let alloca = Alloca::new(id, ty);
-		self.local_types.insert(id, ty);
-		self
-			.get_cur_block()
-			.instrs
-			.push(Instruction::Alloca(alloca));
-		return id;
+impl MIRModule {
+	pub fn lower_type_decls(&mut self, types: &Vec<Spanned<TypeDecl>>) {
+		for ty_decl in types {
+			match &*ty_decl.type_ {
+				Expr::EnumType(enum_) => self.lower_enum_type(enum_, ty_decl.name.to_string()),
+				_ => (),
+			};
+		}
 	}
 
-	fn build_store(&mut self, ty: Type, val: RValue, ptr: MirID) -> MirID {
-		let id = self.instr_count;
-		self.instr_count += 1;
-		let store = Store::new(id, ty, val, ptr);
-		self.get_cur_block().instrs.push(Instruction::Store(store));
-		return id;
+	fn lower_enum_type(&mut self, enum_ty: &pi_ast::EnumType, name: String) {
+		let mut ty_vec = StructType::new();
+		ty_vec.push(Type::U8);
+		let mut max_ty_size = 1;
+		for (_, expr) in enum_ty {
+			let ty = self.expr_ty_to_mir_ty(&expr);
+			let size = self.sizeof_type(&ty);
+			if size > max_ty_size {
+				max_ty_size = size;
+			}
+		}
+
+		let min_bytes_for_enum = if max_ty_size % 8 == 0 {
+			max_ty_size / 8
+		} else {
+			max_ty_size / 8 + 1
+		};
+
+		ty_vec.push(Type::Vector(VectorTy::new(
+			min_bytes_for_enum as usize,
+			Box::new(Type::U8),
+		)));
+		self.struct_tys.insert(name.clone(), ty_vec);
+		for (tag, ty) in enum_ty {
+			let mut ty_vec = StructType::new();
+			ty_vec.push(Type::U8); // for tag
+			ty_vec.push(self.expr_ty_to_mir_ty(ty)); // for assigned type
+			self
+				.struct_tys
+				.insert(name.clone() + "." + tag.as_str(), ty_vec);
+		}
+
+		let tags: Vec<String> = enum_ty.keys().map(|tag| tag.to_string()).collect();
+		self.enum_tags.insert(name, tags);
 	}
 
-	fn build_load(&mut self, ty: Type, ptr: MirID) -> MirID {
-		let id = self.instr_count;
-		self.instr_count += 1;
-		let load = Load::new(id, ty, ptr);
-		self.local_types.insert(id, ty);
-		self.get_cur_block().instrs.push(Instruction::Load(load));
-		return id;
+	pub fn lower_function_decls(&mut self, functions: &Vec<Spanned<pi_ast::FnDecl>>) {
+		for fn_decl in functions {
+			self.lower_fn(&fn_decl);
+			let cfg = cfg::print_fn(self.functions.get(&fn_decl.name.to_string()).unwrap());
+
+			let _ = fs::write("examples/crate-1/cfg.dot", cfg);
+		}
 	}
 
-	fn build_brcond(&mut self, cond: RValue, then: MirID, else_: MirID) -> MirID {
-		let id = self.instr_count;
-		self.instr_count += 1;
-		let brcond = BrCond::new(id, cond, then, else_);
-		self
-			.get_cur_block()
-			.instrs
-			.push(Instruction::BrCond(brcond));
-		return id;
+	fn get_cur_fn(&mut self) -> &mut FnDecl {
+		self.functions.get_mut(&self.cur_fn).unwrap()
 	}
 
-	fn build_br(&mut self, to: MirID) -> MirID {
-		let id = self.instr_count;
-		self.instr_count += 1;
-		let br = Br::new(id, to);
-		self.get_cur_block().instrs.push(Instruction::Br(br));
-		return id;
+	fn lower_fn(&mut self, fn_decl: &pi_ast::FnDecl) {
+		let f = FnDecl::new(fn_decl.name.to_string());
+		self.functions.insert(fn_decl.name.to_string(), f);
+		self.cur_fn = fn_decl.name.to_string();
+		self.get_cur_fn().cur_block_id = self.get_cur_fn().append_new_block();
+		for stmt in &fn_decl.block {
+			self.lower_stmt(stmt);
+		}
 	}
 
 	fn lower_stmt(&mut self, stmt: &pi_ast::Stmt) {
 		match stmt {
 			Stmt::VarDecl(var) => self.lower_var(var),
 			Stmt::If(if_stmt) => self.lower_if(if_stmt),
+			Stmt::Return(ret) => self.lower_ret(ret),
 			_ => (),
+		}
+	}
+
+	fn lower_ret(&mut self, ret: &pi_ast::Return) {
+		if let Some(val) = &ret.val {
+			let v = self.expr_to_rval(val);
+			let ty = self.type_of_rval(&v);
+			self.build_ret(ty, Some(v));
+		} else {
+			self.build_ret(Type::Void, None);
 		}
 	}
 
 	fn lower_if(&mut self, if_stmt: &pi_ast::If) {
 		let cond = self.expr_to_rval(&*if_stmt.condition);
-		let then = self.append_new_block();
-		let else_ = self.new_block();
+		let then = self.get_cur_fn().append_new_block();
+		let else_ = self.get_cur_fn().new_block();
 		let merge = match if_stmt.else_.is_some() {
-			true => self.new_block(),
+			true => self.get_cur_fn().new_block(),
 			false => else_.clone(),
 		};
 
 		self.build_brcond(cond, then, else_.id.clone());
 
-		self.cur_block_id = then;
+		self.get_cur_fn().cur_block_id = then;
 		for stmt in &if_stmt.then {
 			self.lower_stmt(stmt);
 		}
@@ -115,21 +166,18 @@ impl FnDecl {
 			self.build_br(else_.id);
 		}
 
-		self.cur_block_id = else_.id;
+		self.get_cur_fn().cur_block_id = else_.id;
 		if let Some(if_else_block) = &if_stmt.else_ {
-			// append else
-			self.append_existing_block(else_);
+			self.get_cur_fn().append_existing_block(else_);
 			for stmt in if_else_block {
 				self.lower_stmt(stmt);
 			}
 			self.build_br(merge.id);
-			// append merge
-			self.cur_block_id = merge.id;
-			self.append_existing_block(merge);
+			self.get_cur_fn().cur_block_id = merge.id;
+			self.get_cur_fn().append_existing_block(merge);
 		} else {
-			// append else
-			self.cur_block_id = else_.id;
-			self.append_existing_block(else_);
+			self.get_cur_fn().cur_block_id = else_.id;
+			self.get_cur_fn().append_existing_block(else_);
 		}
 	}
 
@@ -138,20 +186,91 @@ impl FnDecl {
 
 		let mut single_val_loaded = None;
 		if var.values.len() == 1 && var.names.len() > 1 {
-			let alloca = self.build_alloca(ty);
+			let alloca = self.build_alloca(ty.clone());
 			let v = self.expr_to_rval(&var.values[0]);
-			self.build_store(ty, v, alloca);
-			single_val_loaded = Some(self.build_load(ty, alloca));
+			self.build_store(ty.clone(), v, alloca);
+			single_val_loaded = Some(self.build_load(ty.clone(), alloca));
 		}
 		for (i, _) in var.names.iter().enumerate() {
-			let alloca = self.build_alloca(ty);
-			self.locals.insert(var.names[i].to_string(), alloca);
+			let alloca = self.build_alloca(ty.clone());
+			self
+				.get_cur_fn()
+				.locals
+				.insert(var.names[i].to_string(), alloca);
 			if let Some(single_val_loaded) = &single_val_loaded {
-				self.build_store(ty, RValue::Local(*single_val_loaded), alloca);
+				self.build_store(ty.clone(), RValue::Local(*single_val_loaded), alloca);
 			} else {
 				let v = self.expr_to_rval(&var.values[i]);
-				self.build_store(ty, v, alloca);
+				self.build_store(ty.clone(), v, alloca);
 			}
+		}
+	}
+
+	fn sizeof_type(&self, ty: &Type) -> u32 {
+		match ty {
+			Type::I64 | Type::U64 | Type::F64 => 64,
+			Type::I32 | Type::U32 | Type::F32 => 32,
+			Type::I16 | Type::U16 => 16,
+			Type::I8 | Type::U8 => 8,
+			Type::Bool => 1,
+			Type::StructTy(struct_ty) => {
+				let mut size = 0;
+				for ty in struct_ty {
+					size += self.sizeof_type(ty);
+				}
+				size
+			}
+			Type::Vector(vec_ty) => self.sizeof_type(&vec_ty.ty) * vec_ty.count as u32,
+			Type::Ident(ident) => {
+				let struct_ty = self.struct_tys.get(&ident.to_string()).unwrap();
+				let mut size = 0;
+				for ty in struct_ty {
+					size += self.sizeof_type(ty);
+				}
+				size
+			}
+			Type::Ptr(_) => 64, // hmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm ummmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm aaaaaahhhh???
+			Type::Void => panic!(),
+		}
+	}
+
+	fn type_of_rval(&mut self, rval: &RValue) -> Type {
+		match rval {
+			RValue::I64(_) => Type::I64,
+			RValue::I32(_) => Type::I32,
+			RValue::I16(_) => Type::I16,
+			RValue::I8(_) => Type::I8,
+			RValue::U64(_) => Type::U64,
+			RValue::U32(_) => Type::U32,
+			RValue::U16(_) => Type::U16,
+			RValue::U8(_) => Type::U8,
+			RValue::Local(loc) => (*self.get_cur_fn().local_types.get(loc).unwrap()).clone(),
+			_ => panic!(),
+		}
+	}
+
+	fn expr_ty_to_mir_ty(&self, e: &Expr) -> Type {
+		match e {
+			Expr::PrimitiveType(prim) => match prim {
+				PrimitiveType::I64 => Type::I64,
+				PrimitiveType::I32 => Type::I32,
+				PrimitiveType::I16 => Type::I16,
+				PrimitiveType::I8 => Type::I8,
+				PrimitiveType::U64 => Type::U64,
+				PrimitiveType::U32 => Type::U32,
+				PrimitiveType::U16 => Type::U16,
+				PrimitiveType::U8 => Type::U8,
+				PrimitiveType::F64 => Type::F64,
+				PrimitiveType::F32 => Type::F32,
+				PrimitiveType::Bool => Type::Bool,
+				PrimitiveType::Void => Type::Void,
+			},
+			Expr::Ident(ident) => {
+				// let x = (*self.struct_tys.get(&ident.to_string()).as_ref().unwrap()).clone();
+				// Type::StructTy(x)
+				Type::Ident(ident.to_string())
+			}
+			_ => panic!(),
 		}
 	}
 
@@ -193,58 +312,206 @@ impl FnDecl {
 			}
 			Expr::BinOp(binop) => self.expr_binop_to_rval(binop),
 			Expr::Ident(ident) => self.expr_ident_to_rval(ident),
+			Expr::CallExpr(call) => self.expr_call_to_rval(call),
+			Expr::EnumExpr(enum_expr) => self.expr_enum_to_rval(enum_expr),
 			_ => panic!(),
 		}
 	}
 
+	fn expr_enum_to_rval(&mut self, enum_expr: &EnumExpr) -> RValue {
+		let base_alloca = self.build_alloca(Type::Ident(enum_expr.enum_name.to_string()));
+		let idx_access = self.build_idx_access(base_alloca, 0);
+		let tags = self
+			.enum_tags
+			.get(&enum_expr.enum_name.to_string())
+			.unwrap();
+		let tag_idx = tags
+			.iter()
+			.position(|t| *t == enum_expr.tag_name.to_string())
+			.unwrap();
+		let tagged_enum_name = enum_expr.enum_name.to_string() + "." + enum_expr.tag_name.as_str();
+		let tagged_enum = self.struct_tys.get(&tagged_enum_name).unwrap();
+		let ty = tagged_enum[1].clone();
+		self.build_store(Type::U8, RValue::U8(tag_idx as u8), idx_access);
+
+		let tagged_enum_ptr = self.build_ptr_cast(base_alloca, Type::Ident(tagged_enum_name));
+		let idx_access = self.build_idx_access(tagged_enum_ptr, 1);
+		let val = self.expr_to_rval(&*enum_expr.val);
+		self.build_store(ty, val, idx_access);
+		let loaded = self.build_load(
+			Type::Ptr(Box::new(Type::Ident(enum_expr.enum_name.to_string()))),
+			base_alloca,
+		);
+		return RValue::Local(loaded);
+	}
+
+	fn expr_call_to_rval(&mut self, call: &CallExpr) -> RValue {
+		RValue::Local(0)
+	}
+
 	fn expr_ident_to_rval(&mut self, ident: &Ident) -> RValue {
-		let id = *self.locals.get(&ident.to_string()).expect("");
-		let ty = self.local_types.get(&id).expect("").clone();
-		RValue::Local(self.build_load(ty, id))
+		let id = *self.get_cur_fn().locals.get(&ident.to_string()).expect("");
+		let ty = self.get_cur_fn().local_types.get(&id).expect("").clone();
+		RValue::Local(self.build_load(Type::Ptr(Box::new(ty)), id))
 	}
 
 	fn expr_binop_to_rval(&mut self, binop: &pi_ast::BinOp) -> RValue {
 		let x = self.expr_to_rval(&*binop.x);
 		let y = self.expr_to_rval(&*binop.y);
-		RValue::BinOp(Binop::new(Box::from(x), binop.op, Box::from(y)))
-	}
+		let ty = self.type_of_rval(&x);
 
-	fn expr_ty_to_mir_ty(&self, e: &Expr) -> Type {
-		match e {
-			Expr::PrimitiveType(prim) => match prim {
-				PrimitiveType::I64 => Type::I64,
-				PrimitiveType::I32 => Type::I32,
-				PrimitiveType::I16 => Type::I16,
-				PrimitiveType::I8 => Type::I8,
-				PrimitiveType::U64 => Type::U64,
-				PrimitiveType::U32 => Type::U32,
-				PrimitiveType::U16 => Type::U16,
-				PrimitiveType::U8 => Type::U8,
-				PrimitiveType::F64 => Type::F64,
-				PrimitiveType::F32 => Type::F32,
-				PrimitiveType::Bool => Type::Bool,
-				PrimitiveType::Void => Type::Void,
-			},
-			_ => Type::I32,
+		match binop.op {
+			OpKind::Plus => RValue::Local(self.build_add(x, y)),
+			OpKind::CmpEQ => RValue::Local(self.build_cmp_eq(ty, x, y)),
+			_ => panic!(),
 		}
+		// RValue::BinOp(Binop::new(Box::from(x), binop.op, Box::from(y)))
+	}
+
+	fn build_alloca(&mut self, ty: Type) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let alloca = Alloca::new(id, ty.clone());
+		self.get_cur_fn().local_types.insert(id, ty.clone());
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Alloca(alloca));
+		return id;
+	}
+
+	fn build_store(&mut self, ty: Type, val: RValue, ptr: MirID) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let store = Store::new(id, ty, val, ptr);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Store(store));
+		return id;
+	}
+
+	fn build_load(&mut self, ty: Type, ptr: MirID) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let load = Load::new(id, ty.clone(), ptr);
+		let ty = match ty {
+			Type::Ptr(ptr) => *ptr,
+			_ => panic!(),
+		};
+		self.get_cur_fn().local_types.insert(id, ty.clone());
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Load(load));
+		return id;
+	}
+
+	fn build_brcond(&mut self, cond: RValue, then: MirID, else_: MirID) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let brcond = BrCond::new(id, cond, then, else_);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::BrCond(brcond));
+		return id;
+	}
+
+	fn build_br(&mut self, to: MirID) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let br = Br::new(id, to);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Br(br));
+		return id;
+	}
+
+	fn build_ret(&mut self, ty: Type, val: Option<RValue>) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let ret = Ret::new(id, ty, val);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Ret(ret));
+		return id;
+	}
+
+	fn build_add(&mut self, lhs: RValue, rhs: RValue) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let add = Add::new(id, lhs, rhs);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Add(add));
+		return id;
+	}
+
+	fn build_cmp_eq(&mut self, ty: Type, lhs: RValue, rhs: RValue) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let cmp_eq = CmpEq::new(id, ty, lhs, rhs);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::CmpEq(cmp_eq));
+		return id;
+	}
+
+	fn build_call(&mut self, callee: RValue, args: Vec<RValue>) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let call = Call::new(id, callee, args);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::Call(call));
+		return id;
+	}
+
+	fn build_idx_access(&mut self, ptr: MirID, idx: u32) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let idx_access = IndexAccess::new(id, ptr, idx);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::IndexAccess(idx_access));
+		return id;
+	}
+
+	fn build_ptr_cast(&mut self, ptr: MirID, to_ty: Type) -> MirID {
+		let id = self.get_cur_fn().instr_count;
+		self.get_cur_fn().instr_count += 1;
+		let ptr_cast = PtrCast::new(id, ptr, to_ty);
+		self
+			.get_cur_fn()
+			.get_cur_block()
+			.instrs
+			.push(Instruction::PtrCast(ptr_cast));
+		return id;
 	}
 }
 
-fn lower_fn(fn_decl: &pi_ast::FnDecl) -> FnDecl {
-	let mut f = FnDecl::new(fn_decl.name.to_string());
-	f.cur_block_id = f.append_new_block();
-	for stmt in &fn_decl.block {
-		f.lower_stmt(stmt);
-	}
+pub fn lower_ast(ast: &AST) -> MIRModule {
+	let mut module = MIRModule::new();
 
-	return f;
-}
+	module.lower_type_decls(&ast.types);
+	module.lower_function_decls(&ast.functions);
 
-pub fn lower_ast(ast: &AST) {
-	for fn_decl in &ast.functions {
-		let f = lower_fn(&fn_decl);
-		let cfg = cfg::print_fn(&f);
-
-		let _ = fs::write("examples/crate-1/cfg.dot", cfg);
-	}
+	return module;
 }

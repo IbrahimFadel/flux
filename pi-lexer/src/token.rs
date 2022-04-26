@@ -46,6 +46,7 @@ pub enum TokenKind {
 	Period,
 	Eq,
 	Arrow,
+	DoublePeriod,
 
 	CmpNE,
 	CmpEQ,
@@ -69,6 +70,7 @@ pub enum TokenKind {
 	Mod,
 	Apply,
 	To,
+	Enum,
 
 	TypesBegin,
 
@@ -119,6 +121,7 @@ pub fn lookup_keyword(v: &str) -> TokenKind {
 		"mod" => TokenKind::Mod,
 		"apply" => TokenKind::Apply,
 		"to" => TokenKind::To,
+		"enum" => TokenKind::Enum,
 
 		"i64" => TokenKind::I64,
 		"u64" => TokenKind::U64,

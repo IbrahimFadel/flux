@@ -87,7 +87,7 @@ fn lexing() {
 			(vec![Token::from(TokenKind::BlockComment, 0..9)], vec![]),
 		),
 		(
-			";(){}[]+-*&/,.=->:::",
+			";(){}[]+-*&/,.=->:::..",
 			(
 				vec![
 					Token::from(TokenKind::Semicolon, 0..1),
@@ -108,6 +108,7 @@ fn lexing() {
 					Token::from(TokenKind::Arrow, 15..17),
 					Token::from(TokenKind::DoubleColon, 17..19),
 					Token::from(TokenKind::Colon, 19..20),
+					Token::from(TokenKind::DoublePeriod, 20..22),
 				],
 				vec![],
 			),
@@ -129,7 +130,7 @@ fn lexing() {
 			),
 		),
 		(
-			"pub fn return mut type interface struct nil if else mod apply to",
+			"pub fn return mut type interface struct nil if else mod apply to enum",
 			(
 				vec![
 					Token::from(TokenKind::Pub, 0..3),
@@ -145,6 +146,7 @@ fn lexing() {
 					Token::from(TokenKind::Mod, 52..55),
 					Token::from(TokenKind::Apply, 56..61),
 					Token::from(TokenKind::To, 62..64),
+					Token::from(TokenKind::Enum, 65..69),
 				],
 				vec![],
 			),

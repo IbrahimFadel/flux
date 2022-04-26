@@ -9,3 +9,4 @@ edition = "2021"
 pi-ast = { path = "../pi-ast" }
 pi-error = { path = "../pi-error" }
 smol_str = "0.1.21"
+indexmap = "1.8.1"

@@ -1,19 +1,12 @@
 digraph main {
 	subgraph cluster {
 		label = "Fn: main";
-		"block0" [shape = "record", label = "%block0|%0 = alloca I32\l%1 = store I32 (2+1) %0\l%2 = load I32 %0\l%3 = alloca I32\l%4 = store I32 %2 %3\l%5 = alloca I32\l%6 = store I32 %2 %5\l%7 = alloca I32\l%8 = store I32 %2 %7\l%9 = load I32 %3\l%10 = brcond (%9==1) %block1 %block2\l"]
-		"block1" [shape = "record", label = "%block1|%11 = alloca I32\l%12 = store I32 1 %11\l%13 = br %block3\l"]
-		"block2" [shape = "record", label = "%block2|%14 = alloca I32\l%15 = store I32 1 %14\l%16 = brcond (2==2) %block4 %block5\l"]
-		"block4" [shape = "record", label = "%block4|%17 = alloca I32\l%18 = load I32 %5\l%19 = store I32 %18 %17\l%20 = br %block5\l"]
-		"block5" [shape = "record", label = "%block5|%21 = br %block3\l"]
-		"block3" [shape = "record", label = "%block3|"]
+		"block0" [shape = "record", label = "%block0|%0 = alloca Foo\l%1 = alloca Foo\l%2 = idx %1 0\l%3 = store U8 0 %2\l%4 = ptrcast %1 to Foo.A\l%5 = idx %4 1\l%6 = store I64 3 %5\l%7 = load Foo* %1\l%8 = store Foo %7 %0\l%9 = alloca I32\l%10 = store I32 0 %9\l%11 = load I32* %9\l%12 = cmp I32 %11 1\lbrcond %12 %block1 %block2\l"]
+		"block1" [shape = "record", label = "%block1|br %block2\l"]
+		"block2" [shape = "record", label = "%block2|ret I32 0\l"]
 
 		"block0" -> "block1"
 		"block0" -> "block2"
-		"block1" -> "block3"
-		"block2" -> "block4"
-		"block2" -> "block5"
-		"block4" -> "block5"
-		"block5" -> "block3"
+		"block1" -> "block2"
 	}
 }

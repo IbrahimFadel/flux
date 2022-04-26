@@ -246,13 +246,64 @@ pub enum Expr {
 	PtrType(PtrType),
 	StructType(StructType),
 	InterfaceType(InterfaceType),
+	EnumType(EnumType),
 	CallExpr(CallExpr),
 	Paren(Box<Expr>),
 	Unary(Unary),
 	StructExpr(StructExpr),
+	EnumExpr(EnumExpr),
 	Void,
 	Error,
 }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct EnumExpr {
+	pub enum_name: Spanned<Ident>,
+	pub tag_name: Spanned<Ident>,
+	pub val: Box<Spanned<Expr>>,
+}
+
+impl EnumExpr {
+	pub fn new(
+		enum_name: Spanned<Ident>,
+		tag_name: Spanned<Ident>,
+		val: Box<Spanned<Expr>>,
+	) -> EnumExpr {
+		EnumExpr {
+			enum_name,
+			tag_name,
+			val,
+		}
+	}
+}
+
+// impl Into<Option<BinOp>> for Expr {
+// 	fn into(self) -> Option<BinOp> {
+// 		match self {
+// 			Expr::BinOp(b) => Some(b),
+// 			_ => None,
+// 		}
+// 	}
+// }
+
+// impl Into<Option<Ident>> for Expr {
+// 	fn into(self) -> Option<Ident> {
+// 		match self {
+// 			Expr::Ident(x) => Some(x),
+// 			_ => None,
+// 		}
+// 	}
+// }
+
+// impl Expr {
+// 	pub fn binop(&self) -> &BinOp {
+// 		if let Expr::BinOp(b) = self {
+// 			b
+// 		} else {
+// 			panic!("expected binop")
+// 		}
+// 	}
+// }
 
 impl fmt::Display for Expr {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -263,6 +314,8 @@ impl fmt::Display for Expr {
 		}
 	}
 }
+
+pub type EnumType = IndexMap<Spanned<Ident>, Spanned<Expr>>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct StructExpr {
@@ -334,11 +387,11 @@ impl Unary {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CallExpr {
 	pub callee: Box<Spanned<Expr>>,
-	pub args: Vec<Box<Spanned<Expr>>>,
+	pub args: Spanned<Vec<Box<Spanned<Expr>>>>,
 }
 
 impl CallExpr {
-	pub fn new(callee: Box<Spanned<Expr>>, args: Vec<Box<Spanned<Expr>>>) -> CallExpr {
+	pub fn new(callee: Box<Spanned<Expr>>, args: Spanned<Vec<Box<Spanned<Expr>>>>) -> CallExpr {
 		CallExpr { callee, args }
 	}
 }

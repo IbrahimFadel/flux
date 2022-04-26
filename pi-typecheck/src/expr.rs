@@ -1,6 +1,6 @@
 use pi_ast::{
-	BinOp, CallExpr, Field, FloatLit, Ident, IntLit, OpKind, PrimitiveType, StructExpr, StructType,
-	Unary,
+	BinOp, CallExpr, EnumExpr, EnumType, Field, FloatLit, Ident, IntLit, OpKind, PrimitiveType,
+	StructExpr, StructType, Unary,
 };
 use pi_error::{PIErrorCode, Span};
 
@@ -12,7 +12,13 @@ impl<'ctx> FnCtx<'ctx> {
 			Expr::IntLit(int) => self.check_int_lit(int),
 			Expr::FloatLit(float) => self.check_float_lit(float),
 			Expr::BinOp(binop) => self.check_binop(binop),
-			Expr::CallExpr(call) => self.check_call(call),
+			Expr::CallExpr(call) => {
+				let res = self.check_call(call)?;
+				if let Some(enum_expr) = res {
+					*expr = enum_expr;
+				}
+				Ok(())
+			}
 			Expr::StructExpr(struct_expr) => self.check_struct_expr(struct_expr),
 			_ => Ok(()),
 		}
@@ -191,30 +197,91 @@ impl<'ctx> FnCtx<'ctx> {
 		return Ok(());
 	}
 
-	fn check_call(&self, call: &mut CallExpr) -> PIResult {
+	/// Returns Some(Expr) if a call is really just an enum expression.
+	/// Some(Expr) is the enum expression that the call expression should be replaced with
+	fn check_call(&self, call: &mut CallExpr) -> Result<Option<Expr>, PIError> {
 		match &**call.callee {
 			Expr::BinOp(binop) => {
+				if let Some(ty_name) = self.lhs_of_binop_is_type_name(binop) {
+					if let Expr::Ident(rhs) = &**binop.y {
+						if call.args.len() == 0 {
+							return Err(self.error(
+								format!("missing initializer in enum expression"),
+								PIErrorCode::TypecheckMissingInitializerInEnumExpr,
+								vec![(
+									format!("missing initialzer in enum expression"),
+									call.args.span.clone(),
+								)],
+							));
+						} else if call.args.len() > 1 {
+							let mut labels = vec![(
+								format!("too many initialzers in enum expression"),
+								call.args.span.clone(),
+							)];
+							for (i, arg) in call.args.iter().enumerate() {
+								if i == 0 {
+									continue;
+								}
+								labels.push((format!("unexpected initialzer"), arg.span.clone()));
+							}
+							return Err(self.error(
+								format!("too many initializers in enum expression"),
+								PIErrorCode::TypecheckTooManyInitializersInEnumExpr,
+								labels,
+							));
+						}
+
+						let spanned_rhs = Spanned::new(rhs.clone(), binop.y.span.clone());
+						let enum_expr = EnumExpr::new(ty_name.clone(), spanned_rhs, call.args[0].clone());
+						return Ok(Some(Expr::EnumExpr(enum_expr)));
+					} else {
+						return Err(self.error(
+							format!("expected rhs of enum expression to be an identifier"),
+							PIErrorCode::TypecheckExpectedRHSOfEnumExprToBeIdent,
+							vec![],
+						));
+					}
+				}
+
 				let expr =
 					self.check_binop_call(&Spanned::new((*binop).clone(), call.callee.span.clone()))?;
 				if let Some(expr) = expr {
 					call.args.splice(..0, [expr]);
 				}
-				Ok(())
+				Ok(None)
 			}
-			_ => Ok(()),
+			_ => Ok(None),
 		}
 	}
 
+	fn lhs_of_binop_is_type_name(&self, binop: &BinOp) -> Option<Spanned<Ident>> {
+		if binop.op != OpKind::Period {
+			return None;
+		}
+		if let Expr::Ident(lhs) = &**binop.x {
+			if let Some(ty_name) = self.type_decls.get(&lhs.to_string()) {
+				return Some(ty_name.name.clone());
+			}
+		}
+		return None;
+	}
+
+	/// If it's a method call, it will return an expr for a pointer to the struct to prepend to the call args
 	fn check_binop_call(
 		&self,
 		binop: &Spanned<BinOp>,
 	) -> Result<Option<Box<Spanned<Expr>>>, PIError> {
 		match &**binop.x {
 			Expr::Ident(var_name) => match binop.op {
-				OpKind::Period => self.check_binop_struct_access_call(
-					binop,
-					&Spanned::new((*var_name).clone(), binop.x.span.clone()),
-				),
+				OpKind::Period => {
+					if let Some(ty_name) = self.type_decls.get(&var_name.to_string()) {
+						return Ok(None);
+					}
+					self.check_binop_struct_access_call(
+						binop,
+						&Spanned::new((*var_name).clone(), binop.x.span.clone()),
+					)
+				}
 				OpKind::Doublecolon => {
 					self.check_binop_double_colon_call(binop)?;
 					Ok(None)
@@ -267,6 +334,29 @@ impl<'ctx> FnCtx<'ctx> {
 			}
 		}
 	}
+
+	fn check_binop_period(&self, binop: &'ctx mut BinOp) -> PIResult {
+		// let rhs = match &**binop.y {
+		// 	Expr::Ident(name) => name,
+		// 	_ => panic!(),
+		// };
+		// if let Expr::Ident(name) = &**binop.x {
+		// 	if let Some(ty) = self.type_decls.get(&name.to_string()) {
+		// 		if let Expr::EnumType(enum_ty) = &*ty.type_ {
+		// 			return self.get_enum_access_type(enum_ty, rhs);
+		// 		}
+		// 	}
+		// }
+		Ok(())
+	}
+
+	// fn get_enum_access_type(&self, enum_ty: &EnumType, ty_name: &Spanned<Ident>) -> PIResult {
+	// 	if let Some(x) = enum_ty.get(ty_name) {
+	// 		return Ok(x);
+	// 	} else {
+	// 		Err(())
+	// 	}
+	// }
 
 	fn check_binop_double_colon(&self, _: &'ctx BinOp) -> PIResult {
 		Ok(())

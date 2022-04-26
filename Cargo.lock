@@ -183,6 +183,7 @@ dependencies = [
 name = "pi-mir"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
  "pi-ast",
  "pi-error",
  "smol_str",

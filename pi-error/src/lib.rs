@@ -68,6 +68,8 @@ pub enum PIErrorCode {
 	ParseExpectedFnInInterfaceMethod,
 	ParseExpectedCommaOrRBraceStructExpr,
 	ParseUnexpectedTokenStructExpr,
+	ParseExpectedLBraceInEnumTypeExpr,
+	ParseExpectedRBraceInEnumTypeExpr,
 
 	TypecheckUnexpectedSignednessInIntLit,
 	TypecheckExpectedPeriodOpInChainedStructFieldAccess,
@@ -85,6 +87,9 @@ pub enum PIErrorCode {
 	TypecheckCouldNotFindFieldInStructExpr,
 	TypecheckCouldNotGetTypeOfVar,
 	TypecheckExpectedIntGotFloat,
+	TypecheckExpectedRHSOfEnumExprToBeIdent,
+	TypecheckMissingInitializerInEnumExpr,
+	TypecheckTooManyInitializersInEnumExpr,
 
 	CodegenUnknownIdentType,
 	CodegenUnknownVarReferenced,

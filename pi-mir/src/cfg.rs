@@ -4,13 +4,6 @@ fn print_rval(rval: &RValue) -> String {
 	let mut dot_str = String::new();
 
 	match rval {
-		RValue::BinOp(binop) => {
-			dot_str += "(";
-			dot_str += &print_rval(&*binop.lhs);
-			dot_str += &binop.op.to_string();
-			dot_str += &print_rval(&*binop.rhs);
-			dot_str += ")";
-		}
 		RValue::I64(int) => dot_str += &int.to_string(),
 		RValue::I32(int) => dot_str += &int.to_string(),
 		RValue::I16(int) => dot_str += &int.to_string(),
@@ -22,7 +15,6 @@ fn print_rval(rval: &RValue) -> String {
 		RValue::F64(float) => dot_str += &float.to_string(),
 		RValue::F32(float) => dot_str += &float.to_string(),
 		RValue::Local(local) => dot_str += &format!("%{}", local),
-		_ => (),
 	}
 
 	return dot_str;
@@ -33,11 +25,11 @@ fn block_to_str(block: &Block, conns: &mut Vec<MirID>) -> String {
 	for instr in &block.instrs {
 		match instr {
 			Instruction::Alloca(alloca) => {
-				dot_str += &format!("%{} = alloca {:?}\\l", alloca.id, alloca.ty);
+				dot_str += &format!("%{} = alloca {}", alloca.id, alloca.ty);
 			}
 			Instruction::Store(store) => {
 				dot_str += &format!(
-					"%{} = store {:?} {} %{}\\l",
+					"%{} = store {} {} %{}",
 					store.id,
 					store.ty,
 					print_rval(&store.val),
@@ -45,16 +37,15 @@ fn block_to_str(block: &Block, conns: &mut Vec<MirID>) -> String {
 				);
 			}
 			Instruction::Load(load) => {
-				dot_str += &format!("%{} = load {:?} %{}\\l", load.id, load.ty, load.ptr);
+				dot_str += &format!("%{} = load {} %{}", load.id, load.ty, load.ptr);
 			}
 			Instruction::Br(br) => {
-				dot_str += &format!("%{} = br %block{}\\l", br.id, br.to);
+				dot_str += &format!("br %block{}", br.to);
 				conns.push(br.to);
 			}
 			Instruction::BrCond(brcond) => {
 				dot_str += &format!(
-					"%{} = brcond {} %block{} %block{}\\l",
-					brcond.id,
+					"brcond {} %block{} %block{}",
 					print_rval(&brcond.cond),
 					brcond.then,
 					brcond.else_
@@ -62,7 +53,47 @@ fn block_to_str(block: &Block, conns: &mut Vec<MirID>) -> String {
 				conns.push(brcond.then);
 				conns.push(brcond.else_);
 			}
+			Instruction::Ret(ret) => {
+				if let Some(val) = &ret.val {
+					dot_str += &format!("ret {} {}", ret.ty, print_rval(val));
+				} else {
+					dot_str += &format!("ret {}", ret.ty);
+				}
+			}
+			Instruction::Add(add) => {
+				dot_str += &format!(
+					"%{} = add {} {}",
+					add.id,
+					print_rval(&add.lhs),
+					print_rval(&add.rhs)
+				);
+			}
+			Instruction::CmpEq(cmpeq) => {
+				dot_str += &format!(
+					"%{} = cmp {} {} {}",
+					cmpeq.id,
+					cmpeq.ty,
+					print_rval(&cmpeq.lhs),
+					print_rval(&cmpeq.rhs)
+				);
+			}
+			Instruction::Call(call) => {
+				dot_str += &format!("%{} = call", call.id);
+			}
+			Instruction::IndexAccess(idx_access) => {
+				dot_str += &format!(
+					"%{} = idx %{} {}",
+					idx_access.id, idx_access.ptr, idx_access.idx
+				);
+			}
+			Instruction::PtrCast(ptr_cast) => {
+				dot_str += &format!(
+					"%{} = ptrcast %{} to {}",
+					ptr_cast.id, ptr_cast.ptr, ptr_cast.to_ty
+				);
+			}
 		};
+		dot_str += "\\l";
 	}
 	return dot_str;
 }
