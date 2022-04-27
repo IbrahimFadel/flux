@@ -1,0 +1,245 @@
+---
+source: pi-parser/src/tests.rs
+expression: "&expr"
+---
+node:
+  InterfaceType:
+    ? node: bazz
+      span:
+        range:
+          start: 64
+          end: 68
+        file_id: 0
+    : node:
+        pub_:
+          node: false
+          span:
+            range:
+              start: 61
+              end: 61
+            file_id: 0
+        name:
+          node: bazz
+          span:
+            range:
+              start: 64
+              end: 68
+            file_id: 0
+        params:
+          node:
+            - node:
+                mut_:
+                  node: false
+                  span:
+                    range:
+                      start: 69
+                      end: 69
+                    file_id: 0
+                type_:
+                  node:
+                    PrimitiveType: I32
+                  span:
+                    range:
+                      start: 69
+                      end: 73
+                    file_id: 0
+                name:
+                  node: x
+                  span:
+                    range:
+                      start: 73
+                      end: 74
+                    file_id: 0
+              span:
+                range:
+                  start: 69
+                  end: 74
+                file_id: 0
+            - node:
+                mut_:
+                  node: true
+                  span:
+                    range:
+                      start: 76
+                      end: 80
+                    file_id: 0
+                type_:
+                  node:
+                    PrimitiveType: U8
+                  span:
+                    range:
+                      start: 80
+                      end: 83
+                    file_id: 0
+                name:
+                  node: y
+                  span:
+                    range:
+                      start: 83
+                      end: 84
+                    file_id: 0
+              span:
+                range:
+                  start: 76
+                  end: 84
+                file_id: 0
+          span:
+            range:
+              start: 68
+              end: 88
+            file_id: 0
+        ret_ty:
+          node:
+            Ident: void
+          span:
+            range:
+              start: 89
+              end: 93
+            file_id: 0
+      span:
+        range:
+          start: 61
+          end: 96
+        file_id: 0
+    ? node: foo
+      span:
+        range:
+          start: 21
+          end: 24
+        file_id: 0
+    : node:
+        pub_:
+          node: true
+          span:
+            range:
+              start: 14
+              end: 18
+            file_id: 0
+        name:
+          node: foo
+          span:
+            range:
+              start: 21
+              end: 24
+            file_id: 0
+        params:
+          node:
+            - node:
+                mut_:
+                  node: false
+                  span:
+                    range:
+                      start: 25
+                      end: 25
+                    file_id: 0
+                type_:
+                  node: Error
+                  span:
+                    range:
+                      start: 0
+                      end: 0
+                    file_id: 0
+                name:
+                  node: this
+                  span:
+                    range:
+                      start: 25
+                      end: 30
+                    file_id: 0
+              span:
+                range:
+                  start: 25
+                  end: 30
+                file_id: 0
+          span:
+            range:
+              start: 24
+              end: 31
+            file_id: 0
+        ret_ty:
+          node:
+            PrimitiveType: Void
+          span:
+            range:
+              start: 30
+              end: 30
+            file_id: 0
+      span:
+        range:
+          start: 14
+          end: 36
+        file_id: 0
+    ? node: bar
+      span:
+        range:
+          start: 37
+          end: 40
+        file_id: 0
+    : node:
+        pub_:
+          node: false
+          span:
+            range:
+              start: 34
+              end: 34
+            file_id: 0
+        name:
+          node: bar
+          span:
+            range:
+              start: 37
+              end: 40
+            file_id: 0
+        params:
+          node:
+            - node:
+                mut_:
+                  node: true
+                  span:
+                    range:
+                      start: 41
+                      end: 45
+                    file_id: 0
+                type_:
+                  node: Error
+                  span:
+                    range:
+                      start: 0
+                      end: 0
+                    file_id: 0
+                name:
+                  node: this
+                  span:
+                    range:
+                      start: 45
+                      end: 50
+                    file_id: 0
+              span:
+                range:
+                  start: 41
+                  end: 50
+                file_id: 0
+          span:
+            range:
+              start: 40
+              end: 53
+            file_id: 0
+        ret_ty:
+          node:
+            PrimitiveType: I32
+          span:
+            range:
+              start: 54
+              end: 57
+            file_id: 0
+      span:
+        range:
+          start: 34
+          end: 63
+        file_id: 0
+span:
+  range:
+    start: 0
+    end: 96
+  file_id: 0
+

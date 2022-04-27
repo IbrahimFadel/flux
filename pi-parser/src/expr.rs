@@ -35,7 +35,7 @@ fn binop_expr(input: &mut ParseInput, prec1: i8) -> Spanned<Expr> {
 		let y = binop_expr(input, oprec + 1);
 
 		let binop_start = x.span.range.start.clone();
-		let binop_end = y.span.range.start.clone();
+		let binop_end = y.span.range.end.clone();
 		let binop = Expr::BinOp(BinOp::new(
 			Box::from(x.clone()),
 			token_kind_to_op_kind(&op),
@@ -134,11 +134,11 @@ fn unary_expr(input: &mut ParseInput) -> Spanned<Expr> {
 
 fn primary_expr(input: &mut ParseInput) -> Spanned<Expr> {
 	let x = operand(input);
-	if let Expr::Ident(ident) = &x.node {
-		if input.tok().kind == TokenKind::LBrace {
-			return struct_expr(input, ident);
-		}
-	}
+	// if let Expr::Ident(ident) = &x.node {
+	// 	if input.tok().kind == TokenKind::LBrace {
+	// 		return struct_expr(input, ident);
+	// 	}
+	// }
 	return x;
 }
 
@@ -231,13 +231,14 @@ fn operand(input: &mut ParseInput) -> Spanned<Expr> {
 }
 
 fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
-	let mut begin_pos = input.tok().span.start;
+	let begin_pos = input.tok().span.start;
+	let mut val_start = input.tok().span.start;
 	let sign_span = begin_pos..begin_pos + 1;
 	let mut signed = false;
 	if input.tok().kind == TokenKind::Minus {
 		signed = true;
 		input.next();
-		begin_pos += 1;
+		val_start += 1;
 	}
 
 	input.expect_range(
@@ -279,7 +280,9 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 				10
 			};
 
-			let x = u64::from_str_radix(str_val.as_str(), base);
+			let int_witout_separators = str_val.replace("_", "");
+			let x = u64::from_str_radix(int_witout_separators.as_str(), base);
+			let end_pos = input.tok().span.end;
 			input.next();
 			match x {
 				Ok(val) => Spanned::new(
@@ -287,12 +290,9 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 						Spanned::new(signed, Span::new(sign_span, input.file_id)),
 						true,
 						32,
-						Spanned::new(
-							val,
-							Span::new(begin_pos..input.tok().span.start, input.file_id),
-						),
+						Spanned::new(val, Span::new(val_start..end_pos, input.file_id)),
 					)),
-					Span::new(begin_pos..input.tok().span.start, input.file_id),
+					Span::new(begin_pos..end_pos, input.file_id),
 				),
 				Err(e) => {
 					input.errs.push(input.error(
@@ -314,19 +314,19 @@ fn basic_lit(input: &mut ParseInput) -> Spanned<Expr> {
 			}
 		}
 		TokenKind::Float => {
-			let x = tok_val(&input.program, &input.tok()).parse::<f64>();
+			let str_val = tok_val(&input.program, &input.tok());
+			let float_witout_separators = str_val.replace("_", "");
+			let x = float_witout_separators.parse::<f64>();
+			let end_pos = input.tok().span.end;
 			input.next();
 			match x {
 				Ok(val) => Spanned::new(
 					Expr::FloatLit(FloatLit::new(
 						Spanned::new(signed, Span::new(sign_span, input.file_id)),
 						32,
-						Spanned::new(
-							val,
-							Span::new(begin_pos..input.tok().span.start, input.file_id),
-						),
+						Spanned::new(val, Span::new(val_start..end_pos, input.file_id)),
 					)),
-					Span::new(begin_pos..input.tok().span.start, input.file_id),
+					Span::new(begin_pos..end_pos, input.file_id),
 				),
 				_ => Spanned::new(Expr::Error, Span::new(0..0, input.file_id)),
 			}
@@ -758,10 +758,9 @@ pub fn type_expr(input: &mut ParseInput) -> Spanned<Expr> {
 		}
 	};
 	while input.tok().kind == TokenKind::Asterisk {
-		let start = input.tok().span.start;
 		ty = Spanned::new(
 			Expr::PtrType(PtrType::from(ty.clone())),
-			Span::new(start..ty.span.range.end, input.file_id),
+			Span::new(ty.span.range.start..input.tok().span.end, input.file_id),
 		);
 		input.next();
 	}

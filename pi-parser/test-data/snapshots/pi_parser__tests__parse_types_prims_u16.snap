@@ -1,0 +1,12 @@
+---
+source: pi-parser/src/tests.rs
+expression: "&expr"
+---
+node:
+  PrimitiveType: U16
+span:
+  range:
+    start: 0
+    end: 3
+  file_id: 0
+

@@ -1,0 +1,61 @@
+---
+source: pi-parser/src/tests.rs
+expression: "&expr"
+---
+node:
+  BinOp:
+    x:
+      node:
+        IntLit:
+          negative:
+            node: false
+            span:
+              range:
+                start: 0
+                end: 1
+              file_id: 0
+          signed: true
+          bits: 32
+          val:
+            node: 1
+            span:
+              range:
+                start: 0
+                end: 1
+              file_id: 0
+      span:
+        range:
+          start: 0
+          end: 1
+        file_id: 0
+    op: CmpOr
+    y:
+      node:
+        IntLit:
+          negative:
+            node: false
+            span:
+              range:
+                start: 3
+                end: 4
+              file_id: 0
+          signed: true
+          bits: 32
+          val:
+            node: 1
+            span:
+              range:
+                start: 3
+                end: 4
+              file_id: 0
+      span:
+        range:
+          start: 3
+          end: 4
+        file_id: 0
+span:
+  range:
+    start: 0
+    end: 4
+  file_id: 0
+

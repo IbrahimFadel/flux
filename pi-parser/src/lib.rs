@@ -3,9 +3,8 @@ use pi_error::{filesystem::FileId, PIError, PIErrorCode, Span};
 use pi_lexer::token::{Token, TokenKind};
 
 mod decl;
-mod expr;
+pub mod expr;
 mod stmt;
-mod tests;
 
 use decl::{apply_block, fn_decl, type_decl};
 use stmt::mod_stmt;
@@ -13,7 +12,7 @@ use stmt::mod_stmt;
 pub struct ParseInput<'a> {
 	program: String,
 	toks: &'a [Token],
-	errs: Vec<PIError>,
+	pub errs: Vec<PIError>,
 	offset: usize,
 	file_id: FileId,
 	typenames: Vec<String>,
@@ -21,6 +20,18 @@ pub struct ParseInput<'a> {
 }
 
 impl<'a> ParseInput<'a> {
+	pub fn new(program: String, toks: &'a [Token], file_id: FileId) -> Self {
+		Self {
+			program,
+			toks,
+			errs: vec![],
+			offset: 0,
+			file_id,
+			typenames: vec![],
+			inside_apply_or_interface: false,
+		}
+	}
+
 	pub fn tok(&self) -> &Token {
 		&self.toks[self.offset]
 	}
@@ -102,6 +113,8 @@ fn token_kind_to_op_kind(kind: &TokenKind) -> OpKind {
 		TokenKind::DoubleColon => OpKind::Doublecolon,
 		TokenKind::Period => OpKind::Period,
 		TokenKind::Eq => OpKind::Eq,
+		TokenKind::CmpAnd => OpKind::CmpAnd,
+		TokenKind::CmpOr => OpKind::CmpOr,
 		_ => OpKind::Illegal,
 	}
 }

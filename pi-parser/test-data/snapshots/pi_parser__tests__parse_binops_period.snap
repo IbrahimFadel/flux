@@ -1,0 +1,29 @@
+---
+source: pi-parser/src/tests.rs
+expression: "&expr"
+---
+node:
+  BinOp:
+    x:
+      node:
+        Ident: foo
+      span:
+        range:
+          start: 0
+          end: 3
+        file_id: 0
+    op: Period
+    y:
+      node:
+        Ident: bar
+      span:
+        range:
+          start: 4
+          end: 7
+        file_id: 0
+span:
+  range:
+    start: 0
+    end: 7
+  file_id: 0
+

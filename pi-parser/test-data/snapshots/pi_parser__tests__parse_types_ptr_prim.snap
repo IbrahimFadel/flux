@@ -1,0 +1,19 @@
+---
+source: pi-parser/src/tests.rs
+expression: "&expr"
+---
+node:
+  PtrType:
+    node:
+      PrimitiveType: I32
+    span:
+      range:
+        start: 0
+        end: 3
+      file_id: 0
+span:
+  range:
+    start: 0
+    end: 4
+  file_id: 0
+
