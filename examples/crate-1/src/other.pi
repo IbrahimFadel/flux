@@ -1,3 +1,0 @@
-fn some_other_fn() -> i32 {
-	return 0;
-}

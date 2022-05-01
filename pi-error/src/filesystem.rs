@@ -32,7 +32,6 @@ impl File {
 	}
 }
 
-/// An opaque file identifier.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct FileId(pub u32);
 
@@ -41,14 +40,13 @@ pub struct Files {
 	pub files: Vec<File>,
 }
 
-impl Files {
-	/// Create a new files database.
-	pub fn new() -> Files {
-		Files { files: Vec::new() }
+impl Default for Files {
+	fn default() -> Self {
+		Self { files: vec![] }
 	}
+}
 
-	/// Add a file to the database, returning the handle that can be used to
-	/// refer to it again.
+impl Files {
 	pub fn add(&mut self, name: impl Into<String>, source: impl Into<String>) -> Option<FileId> {
 		let file_id = FileId(u32::try_from(self.files.len()).ok()?);
 		let name = name.into();
@@ -64,7 +62,6 @@ impl Files {
 		Some(file_id)
 	}
 
-	/// Get the file corresponding to the given id.
 	pub fn get(&self, file_id: FileId) -> Result<&File, files::Error> {
 		self
 			.files

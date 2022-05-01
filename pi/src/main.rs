@@ -1,46 +1,65 @@
-use std::{fs, process};
+use std::fs;
 
-use indexmap::IndexMap;
-use pi_ast::AST;
-use pi_cfg::*;
-use pi_codegen::lower_mir_module;
+// use indexmap::IndexMap;
+use pi_syntax::{ast, ast::AstNode};
+// use pi_cfg::*;
+// use pi_codegen::lower_mir_module;
 use pi_error::{filesystem::FileId, *};
-use pi_lexer::*;
-use pi_mir::*;
+// use pi_lexer::*;
+// use pi_mir::*;
 // use pi_codegen::*;
+use pi_hir::*;
 use pi_parser::*;
-use pi_typecheck::*;
+// use pi_typecheck::*;
 
-fn parse_file(
-	project_dir: String,
-	file_name: String,
-	file_ast_map: &mut IndexMap<FileId, AST>,
-	err_reporting: &mut PIErrorReporting,
-) {
-	let path = project_dir.clone() + "src/" + file_name.as_str() + ".pi";
-	let input = fs::read_to_string(path.clone()).expect(&format!("could not read file: {}", &path));
-	let file_id = err_reporting
-		.add_file(path, input.clone())
-		.expect("could not add file");
-	let (toks, errs) = tokenize(&input, file_id);
-	err_reporting.report(&errs);
-	let (ast, errs) = parse_tokens(file_name.to_owned(), input, toks, file_id);
-	err_reporting.report(&errs);
+// fn parse_file(
+// 	project_dir: String,
+// 	file_name: String,
+// 	file_ast_map: &mut IndexMap<FileId, AST>,
+// 	err_reporting: &mut PIErrorReporting,
+// ) {
+// 	let path = project_dir.clone() + "src/" + file_name.as_str() + ".pi";
+// 	let input = fs::read_to_string(path.clone()).expect(&format!("could not read file: {}", &path));
+// 	let file_id = err_reporting
+// 		.add_file(path, input.clone())
+// 		.expect("could not add file");
+// 	let (toks, errs) = tokenize(&input, file_id);
+// 	err_reporting.report(&errs);
+// 	let (ast, errs) = parse_tokens(file_name.to_owned(), input, toks, file_id);
+// 	err_reporting.report(&errs);
 
-	for mod_ in &ast.mods {
-		parse_file(
-			project_dir.clone(),
-			mod_.name.to_string(),
-			file_ast_map,
-			err_reporting,
-		)
-	}
-	file_ast_map.insert(file_id, ast);
-}
+// 	for mod_ in &ast.mods {
+// 		parse_file(
+// 			project_dir.clone(),
+// 			mod_.name.to_string(),
+// 			file_ast_map,
+// 			err_reporting,
+// 		)
+// 	}
+// 	file_ast_map.insert(file_id, ast);
+// }
 
 fn main() {
-	let project_dir = String::from("examples/crate-1/");
-	let cfg = parse_cfg(project_dir.as_str());
+	let src = fs::read_to_string("examples/main.pi").unwrap();
+	let cst = parse(src.as_str(), FileId(0));
+
+	let root = ast::Root::cast(cst.syntax()).unwrap();
+	println!("{}", cst.debug_tree());
+
+	let (db, functions) = pi_hir::lower(root);
+	println!("{:#?}", db);
+	println!("{:#?}", functions);
+
+	// let g = ungrammar::Grammar;
+	// let s = fs::read_to_string("pi.ungram").unwrap();
+	// let grammar: ungrammar::Grammar = s.parse().unwrap();
+	// println!("{:#?}", grammar);
+
+	// let res = parse("hi");
+	// println!("{:#?}", res);
+
+	// let project_dir = String::from("examples/crate-1/");
+	// let cfg = parse_cfg(project_dir.as_str());
 
 	// let dependency_file_paths: Vec<String> = cfg
 	// 	.dependencies
@@ -71,37 +90,37 @@ fn main() {
 	// 	err_reporting.report(errs);
 	// }
 
-	let mut file_ast_map: IndexMap<FileId, AST> = IndexMap::new();
-	let mut err_reporting = PIErrorReporting::new();
+	// let mut file_ast_map: IndexMap<FileId, AST> = IndexMap::new();
+	// let mut err_reporting = PIErrorReporting::new();
 
-	parse_file(
-		project_dir.clone(),
-		"main".to_owned(),
-		&mut file_ast_map,
-		&mut err_reporting,
-	);
+	// parse_file(
+	// 	project_dir.clone(),
+	// 	"main".to_owned(),
+	// 	&mut file_ast_map,
+	// 	&mut err_reporting,
+	// );
 
-	for (id, ast) in file_ast_map.iter() {
-		let path = project_dir.clone() + "ast" + &id.0.to_string() + ".txt";
-		let _ = fs::write(path, ast.to_string());
-	}
+	// for (id, ast) in file_ast_map.iter() {
+	// 	let path = project_dir.clone() + "ast" + &id.0.to_string() + ".txt";
+	// 	let _ = fs::write(path, ast.to_string());
+	// }
 
-	let typecheck_result = typecheck_ast(&mut file_ast_map, &err_reporting);
+	// let typecheck_result = typecheck_ast(&mut file_ast_map, &err_reporting);
 
-	for (id, ast) in file_ast_map.iter() {
-		let path = project_dir.clone() + "ast_typechecked" + &id.0.to_string() + ".txt";
-		let _ = fs::write(path, ast.to_string());
-	}
+	// for (id, ast) in file_ast_map.iter() {
+	// 	let path = project_dir.clone() + "ast_typechecked" + &id.0.to_string() + ".txt";
+	// 	let _ = fs::write(path, ast.to_string());
+	// }
 
-	if let Some(err) = typecheck_result.err() {
-		err_reporting.report(&Vec::from([err]));
-		process::exit(1);
-	}
+	// if let Some(err) = typecheck_result.err() {
+	// 	err_reporting.report(&Vec::from([err]));
+	// 	process::exit(1);
+	// }
 
-	for (_, ast) in file_ast_map.iter() {
-		let mir_module = lower_ast(ast);
-		lower_mir_module(mir_module, &cfg.compilation);
-	}
+	// for (_, ast) in file_ast_map.iter() {
+	// 	let mir_module = lower_ast(ast);
+	// 	lower_mir_module(mir_module, &cfg.compilation);
+	// }
 
 	// let (codegen_ctx, err) = codegen_ast(&mut file_ast_map, &cfg.compilation);
 	// if let Some(err) = err {

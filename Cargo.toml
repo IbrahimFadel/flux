@@ -1,8 +1,3 @@
 [workspace]
 
-members = [
-	"pi",
-	"pi-lexer",
-	"pi-ast",
-	"pi-error",
-]
+members = ["pi", "pi-lexer", "pi-error", "pi-hir"]

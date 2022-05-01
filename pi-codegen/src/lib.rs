@@ -11,10 +11,11 @@ use llvm_sys::{
 		LLVMBuildRetVoid, LLVMBuildStore, LLVMBuildStructGEP2, LLVMConstInt, LLVMConstReal,
 		LLVMContextCreate, LLVMCreateBuilderInContext, LLVMCreateFunctionPassManagerForModule,
 		LLVMDoubleTypeInContext, LLVMDumpModule, LLVMDumpType, LLVMDumpValue, LLVMFloatTypeInContext,
-		LLVMFunctionType, LLVMInitializeFunctionPassManager, LLVMInt16TypeInContext,
+		LLVMFunctionType, LLVMGetTypeKind, LLVMInitializeFunctionPassManager, LLVMInt16TypeInContext,
 		LLVMInt32TypeInContext, LLVMInt64TypeInContext, LLVMInt8TypeInContext,
 		LLVMModuleCreateWithNameInContext, LLVMPointerType, LLVMPositionBuilderAtEnd,
-		LLVMRunFunctionPassManager, LLVMStructCreateNamed, LLVMStructSetBody, LLVMVectorType,
+		LLVMRunFunctionPassManager, LLVMStructCreateNamed, LLVMStructSetBody, LLVMTypeOf,
+		LLVMVectorType,
 	},
 	prelude::{
 		LLVMBasicBlockRef, LLVMBuilderRef, LLVMContextRef, LLVMModuleRef, LLVMPassManagerRef,
@@ -25,10 +26,13 @@ use llvm_sys::{
 		scalar::{LLVMAddCFGSimplificationPass, LLVMAddGVNPass, LLVMAddReassociatePass},
 		util::LLVMAddPromoteMemoryToRegisterPass,
 	},
+	LLVMTypeKind,
 };
 use pi_cfg::{CompilationSettings, OptimizationLevel};
 use pi_mir::mir;
 use pi_mir::MIRModule;
+
+// type CmpEqImplementation = fn();
 
 #[derive(Debug)]
 pub struct Codegen<'a> {
@@ -39,6 +43,7 @@ pub struct Codegen<'a> {
 	blocks: HashMap<mir::MirID, LLVMBasicBlockRef>,
 	cur_function: Option<LLVMValueRef>,
 
+	// cmp_eq_implementations: HashMap<String, CmpEqImplementation>,
 	ctx: LLVMContextRef,
 	module: LLVMModuleRef,
 	builder: LLVMBuilderRef,
@@ -219,7 +224,7 @@ impl<'a> Codegen<'a> {
 		let lhs = self.mir_rval_to_llvm_val(&cmp_eq.lhs);
 		let rhs = self.mir_rval_to_llvm_val(&cmp_eq.rhs);
 		unsafe {
-			match cmp_eq.ty {
+			match &cmp_eq.ty {
 				Type::I64
 				| Type::U64
 				| Type::I32
@@ -236,6 +241,12 @@ impl<'a> Codegen<'a> {
 						str_to_cstring(""),
 					);
 					self.locals.insert(cmp_eq.id, v);
+				}
+				Type::Ident(ident) => {
+					let ty = self.struct_types.get(ident).unwrap();
+					println!("{:?}", LLVMGetTypeKind(*ty));
+					if LLVMGetTypeKind(*ty) == LLVMTypeKind::LLVMStructTypeKind {}
+					println!("{}", ident);
 				}
 				_ => (),
 			}

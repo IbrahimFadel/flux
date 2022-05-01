@@ -1,0 +1,24 @@
+Expr =
+  IdentExpr
+  BinExpr
+  PrefixExpr
+  IntExpr
+  ParenExpr
+
+IdentExpr =
+  'ident'
+
+BinExpr =
+  lhs:Expr op:OpKind rhs:Expr
+
+PrefixExpr =
+  op:('-') Expr
+
+OpKind =
+  '+' | '-' | '*' | '/' | '=='
+
+IntExpr =
+  'int_number'
+
+ParenExpr =
+  '(' Expr ')'

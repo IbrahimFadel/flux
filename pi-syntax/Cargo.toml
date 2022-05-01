@@ -1,13 +1,12 @@
 [package]
-name = "pi-lexer"
+name = "pi-syntax"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pi-error = { path = "../pi-error" }
-logos = "0.12.0"
+pi-lexer = { path = "../pi-lexer" }
 num-derive = "0.3.3"
 num-traits = "0.2.14"
-text-size = "1.0.0"
+rowan = "0.15.4"
