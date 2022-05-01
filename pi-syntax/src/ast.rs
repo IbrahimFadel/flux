@@ -1,5 +1,3 @@
-// use pi_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
-
 pub trait AstNode {
 	fn cast(syntax: SyntaxNode) -> Option<Self>
 	where
@@ -24,10 +22,6 @@ impl AstNode for Root {
 }
 
 impl Root {
-	// pub fn stmts(&self) -> impl Iterator<Item = Stmt> {
-	// 	self.0.children().filter_map(Stmt::cast)
-	// }
-
 	pub fn functions(&self) -> impl Iterator<Item = FnDecl> {
 		self.0.children().filter_map(FnDecl::cast)
 	}
@@ -147,6 +141,10 @@ impl AstNode for VarDecl {
 }
 
 impl VarDecl {
+	pub fn ty(&self) -> Option<Type> {
+		self.0.children().find_map(Type::cast)
+	}
+
 	pub fn name(&self) -> Option<SyntaxToken> {
 		self
 			.0
@@ -166,7 +164,7 @@ pub struct BlockStmt(SyntaxNode);
 impl AstNode for BlockStmt {
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		match syntax.kind() {
-			SyntaxKind::Block => Some(Self(syntax)),
+			SyntaxKind::BlockStmt => Some(Self(syntax)),
 			_ => None,
 		}
 	}
@@ -224,7 +222,7 @@ pub enum Type {
 impl AstNode for Type {
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		match syntax.kind() {
-			SyntaxKind::INKw => Some(Self::PrimitiveType(PrimitiveType(syntax))),
+			SyntaxKind::PrimitiveType => Some(Self::PrimitiveType(PrimitiveType(syntax))),
 			_ => None,
 		}
 	}
@@ -249,6 +247,16 @@ impl AstNode for PrimitiveType {
 
 	fn syntax(&self) -> &SyntaxNode {
 		&self.0
+	}
+}
+
+impl PrimitiveType {
+	pub fn ty(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::INKw)
 	}
 }
 

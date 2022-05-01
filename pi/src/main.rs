@@ -1,14 +1,13 @@
 use std::fs;
 
 // use indexmap::IndexMap;
-use pi_syntax::{ast, ast::AstNode};
+use pi_syntax::generate::ast;
 // use pi_cfg::*;
 // use pi_codegen::lower_mir_module;
-use pi_error::{filesystem::FileId, *};
+use pi_error::filesystem::FileId;
 // use pi_lexer::*;
 // use pi_mir::*;
 // use pi_codegen::*;
-use pi_hir::*;
 use pi_parser::*;
 // use pi_typecheck::*;
 
@@ -40,20 +39,18 @@ use pi_parser::*;
 // }
 
 fn main() {
-	let src = fs::read_to_string("examples/main.pi").unwrap();
-	let cst = parse(src.as_str(), FileId(0));
+	pi_syntax::generate::generate_ast();
 
-	let root = ast::Root::cast(cst.syntax()).unwrap();
-	println!("{}", cst.debug_tree());
+	// let src = fs::read_to_string("examples/main.pi").unwrap();
+	// let cst = parse(src.as_str(), FileId(0));
 
-	let (db, functions) = pi_hir::lower(root);
-	println!("{:#?}", db);
-	println!("{:#?}", functions);
+	// let root = ast::Root::cast(cst.syntax()).unwrap();
+	// println!("{}", cst.debug_tree());
 
-	// let g = ungrammar::Grammar;
-	// let s = fs::read_to_string("pi.ungram").unwrap();
-	// let grammar: ungrammar::Grammar = s.parse().unwrap();
-	// println!("{:#?}", grammar);
+	// let (_, functions) = pi_hir::lower(root);
+
+	// println!("{:#?}", db);
+	// println!("{:#?}", functions);
 
 	// let res = parse("hi");
 	// println!("{:#?}", res);

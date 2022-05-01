@@ -3,7 +3,7 @@ use smol_str::SmolStr;
 mod database;
 pub use database::Database;
 use la_arena::Idx;
-use pi_syntax::ast;
+use pi_syntax::generate::ast;
 
 pub fn lower(ast: ast::Root) -> (Database, Vec<FnDecl>) {
 	let mut db = Database::default();
@@ -14,11 +14,16 @@ pub fn lower(ast: ast::Root) -> (Database, Vec<FnDecl>) {
 #[derive(Debug)]
 pub struct FnDecl {
 	block: Vec<Option<Stmt>>,
+	return_type: Type,
 }
 
 #[derive(Debug)]
 pub enum Stmt {
-	VarDecl { name: SmolStr, value: Expr },
+	VarDecl {
+		ty: Type,
+		name: SmolStr,
+		value: Expr,
+	},
 	Expr(Expr),
 }
 
@@ -63,4 +68,15 @@ pub enum InfixOp {
 #[derive(Debug)]
 pub enum PrefixOp {
 	Neg,
+}
+
+#[derive(Debug)]
+pub enum Type {
+	INType(INType),
+	Missing,
+}
+
+#[derive(Debug)]
+pub struct INType {
+	bits: u32,
 }

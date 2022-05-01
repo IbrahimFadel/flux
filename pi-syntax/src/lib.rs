@@ -1,2 +1,2 @@
-pub mod ast;
+pub mod generate;
 pub mod syntax_kind;

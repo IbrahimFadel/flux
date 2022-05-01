@@ -199,18 +199,9 @@ checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
 name = "pi"
 version = "0.1.0"
 dependencies = [
- "pi-ast",
  "pi-error",
  "pi-hir",
  "pi-parser",
- "pi-syntax",
- "ungrammar",
-]
-
-[[package]]
-name = "pi-ast"
-version = "0.1.0"
-dependencies = [
  "pi-syntax",
 ]
 
@@ -254,7 +245,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "paste",
- "pi-ast",
  "pi-error",
  "pi-lexer",
  "pi-syntax",
@@ -271,6 +261,8 @@ dependencies = [
  "num-traits",
  "pi-lexer",
  "rowan",
+ "smol_str",
+ "ungrammar",
 ]
 
 [[package]]

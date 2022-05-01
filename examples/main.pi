@@ -1,4 +1,4 @@
-fn main() -> i32 {
-	i32 x = 0 + 2;
+fn main() -> i19 {
+	i17 x = -0 + 2;
 	i32 y = hi;
 }

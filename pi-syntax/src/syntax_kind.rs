@@ -13,9 +13,13 @@ pub enum SyntaxKind {
 	GenericList,
 	FnParams,
 	FnParam,
+	ThisParam,
 	TypeExpr,
-	Block,
+	PrimitiveType,
+	BlockStmt,
 	ExprStmt,
+	IdentExpr,
+	IntExpr,
 
 	Whitespace,
 	Comment,
@@ -80,6 +84,16 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::Error => SyntaxKind::Error,
 		}
 	}
+}
+
+#[macro_export]
+macro_rules! S {
+	[+] => { SyntaxKind::Plus };
+	[-] => { SyntaxKind::Minus };
+	[*] => { SyntaxKind::Star };
+	[/] => { SyntaxKind::Slash };
+	[int_number] => { SyntaxKind::INKw };
+	[ident] => { SyntaxKind::Ident };
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]

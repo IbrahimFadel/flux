@@ -38,14 +38,23 @@ impl PrefixOp {
 // ];
 
 pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
-	let m = p.start();
-	if p.at(T![iN]) {
-		p.bump();
-		Some(m.complete(p, SyntaxKind::INKw))
+	let result = if p.at(T![iN]) {
+		// let m = p.start();
+		primitive_type_expr(p)
+	// m.complete(p, SyntaxKind::TypeExpr)
 	} else {
 		p.error(format!("could not parse type expression"));
-		None
-	}
+		return None;
+	};
+
+	Some(result)
+}
+
+fn primitive_type_expr(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T![iN]));
+	let m = p.start();
+	p.bump();
+	m.complete(p, SyntaxKind::PrimitiveType)
 }
 
 pub(crate) fn expr(p: &mut Parser) -> Option<CompletedMarker> {

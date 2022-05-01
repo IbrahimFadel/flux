@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 pi-error = { path = "../pi-error" }
 pi-lexer = { path = "../pi-lexer" }
-pi-ast = { path = "../pi-ast" }
 pi-syntax = { path = "../pi-syntax" }
 smol_str = "0.1.21"
 indexmap = "1.8.1"

@@ -9,7 +9,7 @@ pub(crate) fn block(p: &mut Parser) -> CompletedMarker {
 		stmt(p);
 	}
 	p.expect(T![rbrace], format!("expected `}}` at end of block"));
-	m.complete(p, SyntaxKind::Block)
+	m.complete(p, SyntaxKind::BlockStmt)
 }
 
 pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {

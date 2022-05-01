@@ -1,24 +1,63 @@
+// GenericList =
+//   '<' (GenericParam (',' GenericParam)* ','?)? '>'
+
+// GenericParam =
+//   IdentExpr
+
+FnParams =
+  '('(
+    ThisParam
+  | (ThisParam ',')? (FnParam (',' FnParam)* ','?)?
+  )')'
+
+ThisParam =
+  'mut'? 'this'
+
+FnParam =
+  'mut'? ty:Type name:IdentExpr
+
+Type =
+  PrimitiveType
+| ident:IdentExpr
+
+PrimitiveType =
+  'i' ty:'int_number'
+
+BlockStmt =
+  '{' stmts:Stmt* '}'
+
+FnDecl =
+  'fn' name:IdentExpr params:FnParams return_type:('->' Type)? body:BlockStmt
+  // 'fn' IdentExpr GenericList? ParamList RetType? body:BlockStmt
+
 Expr =
   IdentExpr
-  BinExpr
-  PrefixExpr
-  IntExpr
-  ParenExpr
+| BinExpr
+| PrefixExpr
+| IntExpr
+| ParenExpr
 
 IdentExpr =
-  'ident'
+  text:'ident'
 
 BinExpr =
-  lhs:Expr op:OpKind rhs:Expr
+  lhs:Expr op:('+' | '-' | '*' | '/' ) rhs:Expr
 
 PrefixExpr =
-  op:('-') Expr
-
-OpKind =
-  '+' | '-' | '*' | '/' | '=='
+  op:('-') expr:Expr
 
 IntExpr =
   'int_number'
 
 ParenExpr =
-  '(' Expr ')'
+  '(' expr:Expr ')'
+
+Stmt =
+  ExprStmt
+| VarDecl
+
+ExprStmt =
+  expr:Expr ';'
+
+VarDecl =
+  'mut'? ty:Type name:IdentExpr '=' value:Expr ';'

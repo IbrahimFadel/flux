@@ -6,15 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# pi-lexer = { path = "../pi-lexer" }
-pi-ast = { path = "../pi-ast" }
 pi-parser = { path = "../pi-parser" }
 pi-syntax = { path = "../pi-syntax" }
 pi-hir = { path = "../pi-hir" }
-# pi-typecheck = { path = "../pi-typecheck" }
-# pi-mir = { path = "../pi-mir" }
-# pi-codegen = { path = "../pi-codegen" }
 pi-error = { path = "../pi-error" }
-# pi-cfg = { path = "../pi-cfg" }
-# indexmap = "1.8.1"
-ungrammar = "1.16.1"

@@ -1,6 +1,6 @@
-use crate::{Expr, FnDecl, InfixOp, PrefixOp, Stmt};
+use crate::{Expr, FnDecl, INType, InfixOp, PrefixOp, Stmt, Type};
 use la_arena::Arena;
-use pi_syntax::{ast, syntax_kind::SyntaxKind};
+use pi_syntax::{generate::ast, syntax_kind::SyntaxKind};
 
 #[derive(Debug, Default)]
 pub struct Database {
@@ -10,26 +10,44 @@ pub struct Database {
 impl Database {
 	pub(crate) fn lower_fn(&mut self, ast: ast::FnDecl) -> Option<FnDecl> {
 		let mut fn_block = vec![];
-		let block = ast.block();
+		let block = ast.body();
 		if let Some(block) = block {
 			let stmts = block.stmts();
 			for stmt in stmts {
 				fn_block.push(self.lower_stmt(stmt));
 			}
 		}
-		Some(FnDecl { block: fn_block })
+		let return_type = self.lower_type(ast.return_type());
+		Some(FnDecl {
+			block: fn_block,
+			return_type,
+		})
+	}
+
+	fn lower_type(&mut self, ast: Option<ast::Type>) -> Type {
+		if let Some(ast) = ast {
+			match ast {
+				ast::Type::PrimitiveType(ast) => self.lower_primitive_type(ast),
+				_ => Type::Missing,
+			}
+		} else {
+			Type::Missing
+		}
 	}
 
 	pub(crate) fn lower_stmt(&mut self, ast: ast::Stmt) -> Option<Stmt> {
-		let result = match ast {
-			ast::Stmt::VarDecl(ast) => Stmt::VarDecl {
-				name: ast.name()?.text().into(),
-				value: self.lower_expr(ast.value()),
-			},
-			_ => return None, // ast::Stmt::ExprStmt(ast) => Stmt::Expr(self.lower_expr(Some(ast))),
-		};
+		match ast {
+			ast::Stmt::VarDecl(ast) => self.lower_var_decl(ast),
+			_ => None,
+		}
+	}
 
-		Some(result)
+	fn lower_var_decl(&mut self, ast: ast::VarDecl) -> Option<Stmt> {
+		Some(Stmt::VarDecl {
+			ty: self.lower_type(ast.ty()),
+			name: ast.name()?.text()?.text().into(),
+			value: self.lower_expr(ast.value()),
+		})
 	}
 
 	pub(crate) fn lower_expr(&mut self, ast: Option<ast::Expr>) -> Expr {
@@ -40,7 +58,7 @@ impl Database {
 				ast::Expr::ParenExpr(ast) => self.lower_expr(ast.expr()),
 				ast::Expr::PrefixExpr(ast) => self.lower_unary(ast),
 				ast::Expr::IdentExpr(ast) => Expr::Ident {
-					val: ast.name().unwrap().text().into(),
+					val: ast.text().unwrap().text().into(),
 				},
 				_ => Expr::Missing,
 			}
@@ -49,9 +67,14 @@ impl Database {
 		}
 	}
 
-	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Expr {
-		// match ast
-		Expr::Missing
+	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Type {
+		if let Some(ty) = ast.ty() {
+			let int_str = &ty.text()[1..];
+			let bits: u32 = int_str.parse().unwrap();
+			Type::INType(INType { bits })
+		} else {
+			Type::Missing
+		}
 	}
 
 	fn lower_binary(&mut self, ast: ast::BinExpr) -> Expr {
