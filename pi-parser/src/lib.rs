@@ -12,7 +12,7 @@ mod sink;
 mod source;
 
 pub fn parse(src: &str, file_id: FileId) -> Parse {
-	let tokens: Vec<_> = Lexer::new(src, file_id).collect();
+	let tokens: Vec<_> = Lexer::new(src).collect();
 	let source = Source::new(&tokens, file_id);
 	let parser = Parser::new(source);
 	let events = parser.parse();

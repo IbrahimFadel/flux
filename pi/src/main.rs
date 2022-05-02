@@ -1,7 +1,7 @@
 use std::fs;
 
 // use indexmap::IndexMap;
-use pi_syntax::generate::ast;
+use pi_syntax::generated::{ast, ast::AstNode};
 // use pi_cfg::*;
 // use pi_codegen::lower_mir_module;
 use pi_error::filesystem::FileId;
@@ -39,7 +39,7 @@ use pi_parser::*;
 // }
 
 fn main() {
-	pi_syntax::generate::generate_ast();
+	pi_syntax::generated::generate_ast();
 
 	// let src = fs::read_to_string("examples/main.pi").unwrap();
 	// let cst = parse(src.as_str(), FileId(0));

@@ -33,7 +33,7 @@ macro_rules! test_stmt_str {
 				#[test]
 				fn [<test_parse_ $name>]() {
 					let file_id = pi_error::filesystem::FileId(0);
-					let tokens: Vec<_> = pi_lexer::Lexer::new($src, file_id).collect();
+					let tokens: Vec<_> = pi_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
 					crate::grammar::stmt::stmt(&mut parser);

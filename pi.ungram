@@ -47,7 +47,7 @@ PrefixExpr =
   op:('-') expr:Expr
 
 IntExpr =
-  'int_number'
+  int:'int_number'
 
 ParenExpr =
   '(' expr:Expr ')'

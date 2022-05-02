@@ -122,7 +122,7 @@ fn int_lit(p: &mut Parser) -> CompletedMarker {
 fn ident(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(TokenKind::Ident, format!("expected identifier"));
-	m.complete(p, SyntaxKind::Ident)
+	m.complete(p, SyntaxKind::IdentExpr)
 }
 
 fn prefix_neg(p: &mut Parser) -> CompletedMarker {

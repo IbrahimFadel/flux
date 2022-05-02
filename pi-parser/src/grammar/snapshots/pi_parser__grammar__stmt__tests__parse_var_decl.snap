@@ -3,9 +3,10 @@ source: pi-parser/src/grammar/stmt.rs
 expression: "&parse.debug_tree()"
 ---
 VarDecl@0..10
-  I32Kw@0..3 "i32"
-  Whitespace@3..4 " "
-  Ident@4..5 "x"
+  PrimitiveType@0..4
+    INKw@0..3 "i32"
+    Whitespace@3..4 " "
+  IdentExpr@4..5 "x"
   Whitespace@5..6 " "
   Eq@6..7 "="
   Whitespace@7..8 " "

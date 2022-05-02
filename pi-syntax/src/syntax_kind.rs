@@ -23,7 +23,6 @@ pub enum SyntaxKind {
 
 	Whitespace,
 	Comment,
-	Ident,
 	IntLit,
 	PubKw,
 	FnKw,
@@ -57,7 +56,7 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::Root => SyntaxKind::Root,
 			TokenKind::Whitespace => SyntaxKind::Whitespace,
 			TokenKind::Comment => SyntaxKind::Comment,
-			TokenKind::Ident => SyntaxKind::Ident,
+			TokenKind::Ident => SyntaxKind::IdentExpr,
 			TokenKind::IntLit => SyntaxKind::IntLit,
 			TokenKind::PubKw => SyntaxKind::PubKw,
 			TokenKind::FnKw => SyntaxKind::FnKw,
@@ -88,12 +87,12 @@ impl From<TokenKind> for SyntaxKind {
 
 #[macro_export]
 macro_rules! S {
-	[+] => { SyntaxKind::Plus };
-	[-] => { SyntaxKind::Minus };
-	[*] => { SyntaxKind::Star };
-	[/] => { SyntaxKind::Slash };
-	[int_number] => { SyntaxKind::INKw };
-	[ident] => { SyntaxKind::Ident };
+	["+"] => { SyntaxKind::Plus };
+	["-"] => { SyntaxKind::Minus };
+	["*"] => { SyntaxKind::Star };
+	["/"] => { SyntaxKind::Slash };
+	["int_number"] => { SyntaxKind::INKw };
+	["ident"] => { SyntaxKind::IdentExpr };
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]

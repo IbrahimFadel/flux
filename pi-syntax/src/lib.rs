@@ -1,2 +1,3 @@
-pub mod generate;
+pub mod builder;
+pub mod generated;
 pub mod syntax_kind;

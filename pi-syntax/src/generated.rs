@@ -1,12 +1,11 @@
 use std::fs;
 
-mod builder;
-pub mod generated_ast;
-use builder::Builder;
-pub use generated_ast as ast;
-use smol_str::SmolStr;
+pub mod nodes;
+pub mod tokens;
+use crate::builder::Builder;
 
-use self::generated_ast::{AstNode, IntExpr};
+use self::tokens::IntExpr;
+pub use nodes as ast;
 
 pub fn generate_ast() {
 	let s = fs::read_to_string("pi.ungram").unwrap();
@@ -19,6 +18,6 @@ pub fn generate_ast() {
 // Some things are easier to write by hand
 impl IntExpr {
 	pub fn parse(&self) -> u64 {
-		self.syntax().first_token().unwrap().text().parse().unwrap()
+		self.syntax.first_token().unwrap().text().parse().unwrap()
 	}
 }

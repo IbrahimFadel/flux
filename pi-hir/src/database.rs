@@ -1,6 +1,6 @@
 use crate::{Expr, FnDecl, INType, InfixOp, PrefixOp, Stmt, Type};
 use la_arena::Arena;
-use pi_syntax::{generate::ast, syntax_kind::SyntaxKind};
+use pi_syntax::{generated::ast, syntax_kind::SyntaxKind};
 
 #[derive(Debug, Default)]
 pub struct Database {

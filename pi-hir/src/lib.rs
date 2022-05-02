@@ -3,7 +3,7 @@ use smol_str::SmolStr;
 mod database;
 pub use database::Database;
 use la_arena::Idx;
-use pi_syntax::generate::ast;
+use pi_syntax::generated::ast;
 
 pub fn lower(ast: ast::Root) -> (Database, Vec<FnDecl>) {
 	let mut db = Database::default();

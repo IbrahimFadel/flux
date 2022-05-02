@@ -1,6 +1,5 @@
 use pi_error::filesystem::FileId;
 use pi_lexer::{Token, TokenKind};
-use pi_syntax::syntax_kind::SyntaxKind;
 use text_size::TextRange;
 
 pub(super) struct Source<'t, 'src> {

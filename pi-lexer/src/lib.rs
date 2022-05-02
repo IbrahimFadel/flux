@@ -1,5 +1,4 @@
 use logos::Logos;
-use pi_error::{filesystem::FileId, Span};
 use std::ops::Range as StdRange;
 
 mod token_kind;
@@ -8,14 +7,12 @@ pub use token_kind::TokenKind;
 
 pub struct Lexer<'a> {
 	inner: logos::Lexer<'a, TokenKind>,
-	file_id: FileId,
 }
 
 impl<'a> Lexer<'a> {
-	pub fn new(input: &'a str, file_id: FileId) -> Self {
+	pub fn new(input: &'a str) -> Self {
 		Self {
 			inner: TokenKind::lexer(input),
-			file_id,
 		}
 	}
 }

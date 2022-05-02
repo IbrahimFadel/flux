@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -230,7 +236,6 @@ dependencies = [
  "logos",
  "num-derive",
  "num-traits",
- "pi-error",
  "text-size",
 ]
 
@@ -257,9 +262,11 @@ dependencies = [
 name = "pi-syntax"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "num-derive",
  "num-traits",
  "pi-lexer",
+ "quote",
  "rowan",
  "smol_str",
  "ungrammar",
