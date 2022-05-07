@@ -7,13 +7,15 @@ enum InfixOp {
 	Sub,
 	Mul,
 	Div,
+	CmpEq,
 }
 
 impl InfixOp {
 	fn binding_power(&self) -> (u8, u8) {
 		match self {
-			Self::Add | Self::Sub => (1, 2),
-			Self::Mul | Self::Div => (3, 4),
+			Self::CmpEq => (1, 2),
+			Self::Add | Self::Sub => (3, 4),
+			Self::Mul | Self::Div => (4, 5),
 		}
 	}
 }
@@ -30,18 +32,9 @@ impl PrefixOp {
 	}
 }
 
-// const PRIMITIVE_TYPE_SET: [TokenKind; 11] = [
-// 	T!(u8),
-// 	T!(f64),
-// 	T!(f32),
-// 	T!(bool),
-// ];
-
 pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 	let result = if p.at(T![iN]) {
-		// let m = p.start();
 		primitive_type_expr(p)
-	// m.complete(p, SyntaxKind::TypeExpr)
 	} else {
 		p.error(format!("could not parse type expression"));
 		return None;
@@ -73,6 +66,8 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 			InfixOp::Mul
 		} else if p.at(TokenKind::Slash) {
 			InfixOp::Div
+		} else if p.at(TokenKind::CmpEq) {
+			InfixOp::CmpEq
 		} else {
 			break;
 		};
@@ -100,7 +95,7 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 	let cm = if p.at(TokenKind::IntLit) {
 		int_lit(p)
 	} else if p.at(TokenKind::Ident) {
-		ident(p)
+		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
 		prefix_neg(p)
 	} else if p.at(TokenKind::LParen) {
@@ -116,10 +111,10 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 fn int_lit(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(TokenKind::IntLit, format!("expected int literal"));
-	m.complete(p, SyntaxKind::IntLit)
+	m.complete(p, SyntaxKind::IntExpr)
 }
 
-fn ident(p: &mut Parser) -> CompletedMarker {
+pub(crate) fn ident_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(TokenKind::Ident, format!("expected identifier"));
 	m.complete(p, SyntaxKind::IdentExpr)

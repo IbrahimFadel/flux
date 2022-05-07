@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 pi-syntax = { path = "../pi-syntax" }
+pi-error = { path = "../pi-error" }
 smol_str = "0.1.21"
 la-arena = "0.2.0"

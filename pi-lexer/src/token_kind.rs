@@ -19,7 +19,10 @@ pub enum TokenKind {
 	// BlockComment,
 	#[regex("[A-Za-z][A-Za-z0-9_]*")]
 	Ident,
-	#[regex("[0-9]")]
+	#[regex("0x[0-9a-fA-F]+(_[0-9a-fA-F]+)*")]
+	// #[regex("08[0-9]+(_[0-9]+)*")]
+	#[regex("0b[0-9]+(_[0-9]+)*")]
+	#[regex("[0-9]+(_[0-9]+)*")]
 	IntLit,
 
 	#[token("pub")]
@@ -28,6 +31,10 @@ pub enum TokenKind {
 	FnKw,
 	#[token("mut")]
 	MutKw,
+	#[token("if")]
+	IfKw,
+	#[token("else")]
+	ElseKw,
 	#[regex(r"i[1-9]+")]
 	INKw,
 	#[regex(r"u[1-9]+")]
@@ -65,6 +72,8 @@ pub enum TokenKind {
 	RBrace,
 	#[token("=")]
 	Eq,
+	#[token("==")]
+	CmpEq,
 	#[token(";")]
 	SemiColon,
 
@@ -87,6 +96,8 @@ macro_rules! T {
 	[pub] => { $crate::TokenKind::PubKw };
 	[fn] => { $crate::TokenKind::FnKw };
 	[mut] => { $crate::TokenKind::MutKw };
+	[if] => { $crate::TokenKind::IfKw };
+	[else] => { $crate::TokenKind::ElseKw };
 	[iN] => { $crate::TokenKind::INKw };
 	[uN] => { $crate::TokenKind::UNKw };
 	[f64] => { $crate::TokenKind::F64Kw };
@@ -105,6 +116,7 @@ macro_rules! T {
 	[lbrace] => { $crate::TokenKind::LBrace };
 	[rbrace] => { $crate::TokenKind::RBrace };
 	[eq] => {$crate::TokenKind::Eq };
+	[cmpeq] => {$crate::TokenKind::CmpEq };
 	[semicolon] => {$crate::TokenKind::SemiColon };
 	[comment] => {$crate::TokenKind::Comment };
 	[error] => { $crate::TokenKind::Error };
@@ -123,6 +135,8 @@ impl Display for TokenKind {
 				T![pub] => "Pub",
 				T![fn] => "Fn",
 				T![mut] => "Mut",
+				T![if] => "If",
+				T![else] => "Else",
 				T![iN] => "iN",
 				T![uN] => "uN",
 				T![f64] => "F64",
@@ -141,6 +155,7 @@ impl Display for TokenKind {
 				T![lbrace] => "{",
 				T![rbrace] => "}",
 				T![eq] => "=",
+				T![cmpeq] => "==",
 				T![semicolon] => ";",
 				T![comment] => "Comment",
 				T![error] => "Error",

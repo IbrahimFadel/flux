@@ -1,0 +1,10 @@
+fn main() -> i19 {
+	i17 x = -0 + 0xff;
+	i32 y = hi;
+
+	if x == y {
+	} else if 1 == 0 {
+	} else if 0 == 1 {
+	} else {
+	}
+}

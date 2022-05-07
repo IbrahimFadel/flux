@@ -4,7 +4,7 @@ use super::{expr::type_expr, *};
 
 pub(crate) fn block(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T![lbrace], format!("expected `{{` at end of block"));
+	p.expect(T![lbrace], format!("expected `{{` at start of block"));
 	while !p.at(T![rbrace]) && !p.at_end() {
 		stmt(p);
 	}
@@ -13,11 +13,37 @@ pub(crate) fn block(p: &mut Parser) -> CompletedMarker {
 }
 
 pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
-	if p.at(TokenKind::INKw) {
+	if p.at(T!(iN)) {
 		Some(var_decl(p))
+	} else if p.at(T!(if)) {
+		Some(if_stmt(p))
 	} else {
 		expr::expr(p)
 	}
+}
+
+fn if_stmt(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(T!(if), format!("expected `if` in if statement"));
+	expr::expr(p);
+	block(p);
+	while p.at(T!(else)) {
+		p.bump();
+		if p.at(T!(lbrace)) {
+			block(p);
+		} else {
+			else_if_stmt(p);
+		}
+	}
+	m.complete(p, SyntaxKind::IfStmt)
+}
+
+fn else_if_stmt(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(T!(if), format!("expected `if` in else if statement"));
+	expr::expr(p);
+	block(p);
+	m.complete(p, SyntaxKind::IfStmt)
 }
 
 fn var_decl(p: &mut Parser) -> CompletedMarker {

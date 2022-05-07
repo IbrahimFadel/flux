@@ -3,7 +3,7 @@ use smol_str::SmolStr;
 mod database;
 pub use database::Database;
 use la_arena::Idx;
-use pi_syntax::generated::ast;
+use pi_syntax::ast;
 
 pub fn lower(ast: ast::Root) -> (Database, Vec<FnDecl>) {
 	let mut db = Database::default();
@@ -25,6 +25,31 @@ pub enum Stmt {
 		value: Expr,
 	},
 	Expr(Expr),
+	If(If),
+}
+
+#[derive(Debug)]
+pub struct If {
+	condition: Expr,
+	then: Vec<Option<Stmt>>,
+	else_ifs: Vec<Option<Stmt>>,
+	else_: Vec<Option<Stmt>>,
+}
+
+impl If {
+	pub fn new(
+		condition: Expr,
+		then: Vec<Option<Stmt>>,
+		else_ifs: Vec<Option<Stmt>>,
+		else_: Vec<Option<Stmt>>,
+	) -> Self {
+		Self {
+			condition,
+			then,
+			else_ifs,
+			else_,
+		}
+	}
 }
 
 type ExprIdx = Idx<Expr>;
@@ -32,7 +57,7 @@ type ExprIdx = Idx<Expr>;
 #[derive(Debug)]
 pub enum Expr {
 	Binary {
-		op: InfixOp,
+		op: BinaryOp,
 		lhs: ExprIdx,
 		rhs: ExprIdx,
 	},
@@ -58,11 +83,12 @@ pub enum PrimitiveKind {
 }
 
 #[derive(Debug)]
-pub enum InfixOp {
+pub enum BinaryOp {
 	Add,
 	Sub,
 	Mul,
 	Div,
+	CmpEq,
 }
 
 #[derive(Debug)]

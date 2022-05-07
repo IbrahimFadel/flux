@@ -1,7 +1,7 @@
 use std::fs;
 
 // use indexmap::IndexMap;
-use pi_syntax::generated::{ast, ast::AstNode};
+use pi_syntax::{ast, ast::AstNode};
 // use pi_cfg::*;
 // use pi_codegen::lower_mir_module;
 use pi_error::filesystem::FileId;
@@ -39,18 +39,18 @@ use pi_parser::*;
 // }
 
 fn main() {
-	pi_syntax::generated::generate_ast();
+	// pi_syntax::generated::generate_ast();
 
-	// let src = fs::read_to_string("examples/main.pi").unwrap();
-	// let cst = parse(src.as_str(), FileId(0));
+	let src = fs::read_to_string("examples/main.flx").unwrap();
+	let cst = parse(src.as_str(), FileId(0));
 
-	// let root = ast::Root::cast(cst.syntax()).unwrap();
-	// println!("{}", cst.debug_tree());
+	let root = ast::Root::cast(cst.syntax()).unwrap();
+	println!("{}", cst.debug_tree());
 
-	// let (_, functions) = pi_hir::lower(root);
+	let (db, functions) = pi_hir::lower(root);
 
-	// println!("{:#?}", db);
-	// println!("{:#?}", functions);
+	println!("{:#?}", db);
+	println!("{:#?}", functions);
 
 	// let res = parse("hi");
 	// println!("{:#?}", res);

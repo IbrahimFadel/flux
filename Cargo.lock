@@ -225,6 +225,7 @@ name = "pi-hir"
 version = "0.1.0"
 dependencies = [
  "la-arena",
+ "pi-error",
  "pi-syntax",
  "smol_str",
 ]

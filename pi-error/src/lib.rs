@@ -11,6 +11,8 @@ pub enum PIErrorCode {
 	NoCode,
 	UnexpectedEOF,
 	UnexpectedToken,
+
+	HirParseIntString,
 	// LexUnknownChar,
 	// LexFloatInWrongBase,
 	// LexStringLitUnterminated,

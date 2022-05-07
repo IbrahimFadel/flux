@@ -4,9 +4,11 @@ use std::{
 };
 
 use anyhow::Result;
-use quote::{format_ident, quote};
+use quote::{__private::TokenStream, format_ident, quote};
 use std::io::Write;
-use ungrammar::{Grammar, Node, Rule};
+use ungrammar::{Grammar, Node, Rule, Token};
+
+use crate::S;
 
 pub(crate) struct Builder<'a> {
 	grammar: &'a Grammar,
@@ -30,8 +32,10 @@ impl<'a> Builder<'a> {
 
 		for node in self.grammar.iter() {
 			match self.grammar[node].rule {
-				Rule::Alt(_) => self.build_enum(node),
-				Rule::Token(_) | Rule::Labeled { .. } => self.build_token(node),
+				// Rule::Alt(_) => self.build_enum(node),
+				Rule::Alt(_) => (),
+				// Rule::Token(_) | Rule::Labeled { .. } => self.build_token(node),
+				Rule::Token(_) | Rule::Labeled { .. } => (),
 				_ => self.build_struct(node),
 			}
 		}
@@ -39,9 +43,9 @@ impl<'a> Builder<'a> {
 
 	pub fn write_ast_to_file(&self) -> io::Result<()> {
 		let nodes_program = self.format(&self.nodes_program).unwrap();
-		fs::write("./pi-syntax/src/generate/nodes.rs", nodes_program)?;
+		fs::write("./pi-syntax/src/generated/nodes1.rs", nodes_program)?;
 		let tokens_program = self.format(&self.tokens_program).unwrap();
-		fs::write("./pi-syntax/src/generate/tokens.rs", tokens_program)
+		fs::write("./pi-syntax/src/generated/tokens1.rs", tokens_program)
 	}
 
 	fn format(&self, s: impl std::fmt::Display) -> Result<String> {
@@ -60,12 +64,11 @@ impl<'a> Builder<'a> {
 
 	fn build_imports(&mut self) {
 		let nodes_imports = quote! {
+			use super::tokens::{Ident, IdentExpr, IntExpr};
 			use crate::{
 				syntax_kind::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken},
 				S,
 			};
-
-			use super::tokens::{IdentExpr, IntExpr};
 		};
 		let tokens_imports = quote! {
 			use crate::{
@@ -250,139 +253,187 @@ impl<'a> Builder<'a> {
 		self.nodes_program += &enum_full.to_string();
 	}
 
+	// maybe getter_name as param
+	fn tok_getter(&self, tok: &Token, label: &str) -> TokenStream {
+		let tok = &self.grammar[*tok];
+		let getter_name_str = format!("{}", tok.name);
+		let getter_name = format_ident!("get_{}", label);
+		quote! {
+			pub fn #getter_name(&self) -> Option<SyntaxToken> {
+				self
+					.syntax
+					.children_with_tokens()
+					.filter_map(SyntaxElement::into_token)
+					.find(|token| token.kind() == S!(#getter_name_str))
+			}
+		}
+	}
+
+	fn labeled(&self, rule: &Rule, label: &str) -> TokenStream {
+		match rule {
+			Rule::Token(tok) => self.tok_getter(tok, label),
+			_ => quote! {},
+		}
+	}
+
+	// if it's not labled just dont do anything
+	fn get_seq(&self, seq: &Vec<Rule>) -> Vec<TokenStream> {
+		let mut getters = vec![];
+		for rule in seq {
+			let getter = match rule {
+				Rule::Labeled { label, rule } => self.labeled(rule, &**label),
+				// Rule::Token(tok) => self.tok_getter(tok),
+				_ => quote! {},
+			};
+			getters.push(getter);
+		}
+		getters
+	}
+
 	fn build_struct(&mut self, node: Node) {
 		let node = &self.grammar[node];
 
-		let struct_name = format_ident!("{}", node.name);
-
-		let struct_decl = quote! {
-			#[derive(Debug)]
-			pub struct #struct_name {
-				syntax: SyntaxNode,
-			}
+		let getters = match &node.rule {
+			Rule::Seq(seq) => self.get_seq(seq),
+			_ => vec![],
 		};
 
-		let ast_node_impl = quote! {
-			impl AstNode for #struct_name {
-				fn cast(syntax: SyntaxNode) -> Option<Self> {
-					match syntax.kind() {
-						SyntaxKind::#struct_name => Some(Self { syntax }),
-						_ => None,
-					}
-				}
-
-				fn syntax(&self) -> &SyntaxNode {
-					&self.syntax
-				}
-			}
+		let struct_all = quote! {
+			#(#getters)*
 		};
 
-		let mut getters = vec![];
-		match &node.rule {
-			Rule::Seq(seq) => {
-				for node in seq {
-					if let Rule::Labeled { label, rule } = node {
-						let name = label;
-						let getter_name = format_ident!("{}", name);
-						match &**rule {
-							Rule::Node(node) => {
-								let node = &self.grammar[*node];
-								let ret_ty = format_ident!("{}", node.name);
-								let getter = quote! {
-									pub fn #getter_name(&self) -> Option<#ret_ty> {
-										self.syntax.children().find_map(#ret_ty::cast)
-									}
-								};
-								getters.push(getter);
-							}
-							Rule::Token(tok) => {
-								let tok = &self.grammar[*tok];
-								let token_name = tok.name.to_string();
-								let getter = quote! {
-									pub fn #getter_name(&self) -> Option<SyntaxToken> {
-										self
-											.syntax
-											.children_with_tokens()
-											.filter_map(SyntaxElement::into_token)
-											.find(|token| token.kind() == S!(#token_name))
-									}
-								};
-								getters.push(getter);
-							}
-							Rule::Alt(alt) => {
-								let mut toks = vec![];
-								for tok in alt {
-									if let Rule::Token(tok) = tok {
-										let ident = self.grammar[*tok].name.to_string();
-										toks.push(quote! {
-											S!(#ident)
-										});
-									}
-								}
-								let getter = quote! {
-									pub fn #getter_name(&self) -> Option<SyntaxToken> {
-										self
-											.syntax
-											.children_with_tokens()
-											.filter_map(SyntaxElement::into_token)
-											.find(|token| {
-												matches!(
-													token.kind(),
-													#(#toks)|*,
-												)
-											})
-									}
-								};
-								getters.push(getter);
-							}
-							Rule::Opt(opt) => {
-								if let Rule::Seq(seq) = &**opt {
-									for rule in seq {
-										if let Rule::Node(node) = rule {
-											let node = &self.grammar[*node];
-											let ret_ty = format_ident!("{}", node.name);
-											let getter = quote! {
-												pub fn #getter_name(&self) -> Option<#ret_ty> {{
-													self.syntax.children().find_map(#ret_ty::cast)
-												}}
-											};
-											getters.push(getter);
-										}
-									}
-								}
-							}
-							Rule::Rep(rep) => {
-								if let Rule::Node(node) = &**rep {
-									let node = &self.grammar[*node];
-									let ret_ty = format_ident!("{}", node.name);
-									let getter = quote! {
-										pub fn #getter_name(&self) -> Vec<#ret_ty> {{
-											self.syntax.children().filter_map(#ret_ty::cast).collect()
-										}}
-									};
-									getters.push(getter);
-								}
-							}
-							_ => {}
-						};
-					} else if let Rule::Node(_) = node {
-						panic!("oops")
-					}
-				}
-			}
-			_ => panic!(),
-		};
+		self.nodes_program += &struct_all.to_string();
 
-		let node_impl = quote! {
-			#struct_decl
+		// let struct_name = format_ident!("{}", node.name);
 
-			#ast_node_impl
+		// let struct_decl = quote! {
+		// 	#[derive(Debug)]
+		// 	pub struct #struct_name {
+		// 		syntax: SyntaxNode,
+		// 	}
+		// };
 
-			impl #struct_name {
-				#(#getters)*
-			}
-		};
+		// let ast_node_impl = quote! {
+		// 	impl AstNode for #struct_name {
+		// 		fn cast(syntax: SyntaxNode) -> Option<Self> {
+		// 			match syntax.kind() {
+		// 				SyntaxKind::#struct_name => Some(Self { syntax }),
+		// 				_ => None,
+		// 			}
+		// 		}
 
-		self.nodes_program += &node_impl.to_string();
+		// 		fn syntax(&self) -> &SyntaxNode {
+		// 			&self.syntax
+		// 		}
+		// 	}
+		// };
+
+		// let mut getters = vec![];
+		// match &node.rule {
+		// 	Rule::Seq(seq) => {
+		// 		for node in seq {
+		// 			if let Rule::Labeled { label, rule } = node {
+		// 				let name = label;
+		// 				let getter_name = format_ident!("{}", name);
+		// 				match &**rule {
+		// 					Rule::Node(node) => {
+		// 						let node = &self.grammar[*node];
+		// 						let ret_ty = format_ident!("{}", node.name);
+		// 						let getter = quote! {
+		// 							pub fn #getter_name(&self) -> Option<#ret_ty> {
+		// 								self.syntax.children().find_map(#ret_ty::cast)
+		// 							}
+		// 						};
+		// 						getters.push(getter);
+		// 					}
+		// 					Rule::Token(tok) => {
+		// 						let tok = &self.grammar[*tok];
+		// 						let token_name = tok.name.to_string();
+		// 						let getter = quote! {
+		// 							pub fn #getter_name(&self) -> Option<SyntaxToken> {
+		// 								self
+		// 									.syntax
+		// 									.children_with_tokens()
+		// 									.filter_map(SyntaxElement::into_token)
+		// 									.find(|token| token.kind() == S!(#token_name))
+		// 							}
+		// 						};
+		// 						getters.push(getter);
+		// 					}
+		// 					Rule::Alt(alt) => {
+		// 						let mut toks = vec![];
+		// 						for tok in alt {
+		// 							if let Rule::Token(tok) = tok {
+		// 								let ident = self.grammar[*tok].name.to_string();
+		// 								toks.push(quote! {
+		// 									S!(#ident)
+		// 								});
+		// 							}
+		// 						}
+		// 						let getter = quote! {
+		// 							pub fn #getter_name(&self) -> Option<SyntaxToken> {
+		// 								self
+		// 									.syntax
+		// 									.children_with_tokens()
+		// 									.filter_map(SyntaxElement::into_token)
+		// 									.find(|token| {
+		// 										matches!(
+		// 											token.kind(),
+		// 											#(#toks)|*,
+		// 										)
+		// 									})
+		// 							}
+		// 						};
+		// 						getters.push(getter);
+		// 					}
+		// 					Rule::Opt(opt) => {
+		// 						if let Rule::Seq(seq) = &**opt {
+		// 							for rule in seq {
+		// 								if let Rule::Node(node) = rule {
+		// 									let node = &self.grammar[*node];
+		// 									let ret_ty = format_ident!("{}", node.name);
+		// 									let getter = quote! {
+		// 										pub fn #getter_name(&self) -> Option<#ret_ty> {{
+		// 											self.syntax.children().find_map(#ret_ty::cast)
+		// 										}}
+		// 									};
+		// 									getters.push(getter);
+		// 								}
+		// 							}
+		// 						}
+		// 					}
+		// 					Rule::Rep(rep) => {
+		// 						if let Rule::Node(node) = &**rep {
+		// 							let node = &self.grammar[*node];
+		// 							let ret_ty = format_ident!("{}", node.name);
+		// 							let getter = quote! {
+		// 								pub fn #getter_name(&self) -> Vec<#ret_ty> {{
+		// 									self.syntax.children().filter_map(#ret_ty::cast).collect()
+		// 								}}
+		// 							};
+		// 							getters.push(getter);
+		// 						}
+		// 					}
+		// 					_ => {}
+		// 				};
+		// 			} else if let Rule::Node(_) = node {
+		// 				panic!("oops")
+		// 			}
+		// 		}
+		// 	}
+		// 	_ => panic!(),
+		// };
+
+		// let node_impl = quote! {
+		// 	#struct_decl
+
+		// 	#ast_node_impl
+
+		// 	impl #struct_name {
+		// 		#(#getters)*
+		// 	}
+		// };
+
+		// self.nodes_program += &node_impl.to_string();
 	}
 }

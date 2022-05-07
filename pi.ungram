@@ -1,11 +1,11 @@
-// GenericList =
-//   '<' (GenericParam (',' GenericParam)* ','?)? '>'
-
-// GenericParam =
-//   IdentExpr
+// Note that this is different from IdentExpr for... reasons (i forgot already)
+// wait actually it makes sense cus like not every ident is an expr... ident exprs are usually var refs or functin refs and stuff like that
+// but yeah i did this to avoid some hard work, but anyways it's better like this regardless
+Ident =
+  text:'ident'
 
 FnParams =
-  '('(
+  lparen:'('(
     ThisParam
   | (ThisParam ',')? (FnParam (',' FnParam)* ','?)?
   )')'
@@ -14,11 +14,11 @@ ThisParam =
   'mut'? 'this'
 
 FnParam =
-  'mut'? ty:Type name:IdentExpr
+  'mut'? ty:Type name:Ident
 
 Type =
   PrimitiveType
-| ident:IdentExpr
+| ident:Ident
 
 PrimitiveType =
   'i' ty:'int_number'
@@ -27,8 +27,7 @@ BlockStmt =
   '{' stmts:Stmt* '}'
 
 FnDecl =
-  'fn' name:IdentExpr params:FnParams return_type:('->' Type)? body:BlockStmt
-  // 'fn' IdentExpr GenericList? ParamList RetType? body:BlockStmt
+  'fn' name:Ident params:FnParams return_type:('->' Type)? body:BlockStmt
 
 Expr =
   IdentExpr
@@ -60,4 +59,4 @@ ExprStmt =
   expr:Expr ';'
 
 VarDecl =
-  'mut'? ty:Type name:IdentExpr '=' value:Expr ';'
+  'mut'? ty:Type name:Ident '=' value:Expr ';'

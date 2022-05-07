@@ -20,13 +20,17 @@ pub enum SyntaxKind {
 	ExprStmt,
 	IdentExpr,
 	IntExpr,
+	IfStmt,
+	ElseIfStmt,
 
 	Whitespace,
 	Comment,
-	IntLit,
+	Ident,
 	PubKw,
 	FnKw,
 	MutKw,
+	IfKw,
+	ElseKw,
 	INKw,
 	UNKw,
 	F64Kw,
@@ -46,6 +50,7 @@ pub enum SyntaxKind {
 	LBrace,
 	RBrace,
 	Eq,
+	CmpEq,
 	SemiColon,
 	Error,
 }
@@ -56,11 +61,13 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::Root => SyntaxKind::Root,
 			TokenKind::Whitespace => SyntaxKind::Whitespace,
 			TokenKind::Comment => SyntaxKind::Comment,
-			TokenKind::Ident => SyntaxKind::IdentExpr,
-			TokenKind::IntLit => SyntaxKind::IntLit,
+			TokenKind::Ident => SyntaxKind::Ident,
+			TokenKind::IntLit => SyntaxKind::IntExpr,
 			TokenKind::PubKw => SyntaxKind::PubKw,
 			TokenKind::FnKw => SyntaxKind::FnKw,
 			TokenKind::MutKw => SyntaxKind::MutKw,
+			TokenKind::IfKw => SyntaxKind::IfKw,
+			TokenKind::ElseKw => SyntaxKind::ElseKw,
 			TokenKind::INKw => SyntaxKind::INKw,
 			TokenKind::UNKw => SyntaxKind::UNKw,
 			TokenKind::F64Kw => SyntaxKind::F64Kw,
@@ -79,6 +86,7 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::LBrace => SyntaxKind::RBrace,
 			TokenKind::RBrace => SyntaxKind::RBrace,
 			TokenKind::Eq => SyntaxKind::Eq,
+			TokenKind::CmpEq => SyntaxKind::CmpEq,
 			TokenKind::SemiColon => SyntaxKind::SemiColon,
 			TokenKind::Error => SyntaxKind::Error,
 		}
@@ -92,7 +100,7 @@ macro_rules! S {
 	["*"] => { SyntaxKind::Star };
 	["/"] => { SyntaxKind::Slash };
 	["int_number"] => { SyntaxKind::INKw };
-	["ident"] => { SyntaxKind::IdentExpr };
+	["ident"] => { SyntaxKind::Ident };
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
