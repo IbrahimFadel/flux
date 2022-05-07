@@ -71,6 +71,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
+name = "flux"
+version = "0.1.0"
+dependencies = [
+ "flux-error",
+ "flux-hir",
+ "flux-parser",
+ "flux-syntax",
+]
+
+[[package]]
+name = "flux-error"
+version = "0.1.0"
+dependencies = [
+ "codespan",
+ "codespan-reporting",
+ "text-size",
+]
+
+[[package]]
+name = "flux-hir"
+version = "0.1.0"
+dependencies = [
+ "flux-error",
+ "flux-syntax",
+ "la-arena",
+ "smol_str",
+]
+
+[[package]]
+name = "flux-lexer"
+version = "0.1.0"
+dependencies = [
+ "logos",
+ "num-derive",
+ "num-traits",
+ "text-size",
+]
+
+[[package]]
+name = "flux-parser"
+version = "0.1.0"
+dependencies = [
+ "drop_bomb",
+ "flux-error",
+ "flux-lexer",
+ "flux-syntax",
+ "indexmap",
+ "insta",
+ "logos",
+ "num-derive",
+ "num-traits",
+ "paste",
+ "rowan",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
+name = "flux-syntax"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flux-lexer",
+ "num-derive",
+ "num-traits",
+ "quote",
+ "rowan",
+ "smol_str",
+ "ungrammar",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -200,78 +272,6 @@ name = "paste"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
-
-[[package]]
-name = "pi"
-version = "0.1.0"
-dependencies = [
- "pi-error",
- "pi-hir",
- "pi-parser",
- "pi-syntax",
-]
-
-[[package]]
-name = "pi-error"
-version = "0.1.0"
-dependencies = [
- "codespan",
- "codespan-reporting",
- "text-size",
-]
-
-[[package]]
-name = "pi-hir"
-version = "0.1.0"
-dependencies = [
- "la-arena",
- "pi-error",
- "pi-syntax",
- "smol_str",
-]
-
-[[package]]
-name = "pi-lexer"
-version = "0.1.0"
-dependencies = [
- "logos",
- "num-derive",
- "num-traits",
- "text-size",
-]
-
-[[package]]
-name = "pi-parser"
-version = "0.1.0"
-dependencies = [
- "drop_bomb",
- "indexmap",
- "insta",
- "logos",
- "num-derive",
- "num-traits",
- "paste",
- "pi-error",
- "pi-lexer",
- "pi-syntax",
- "rowan",
- "smol_str",
- "text-size",
-]
-
-[[package]]
-name = "pi-syntax"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "num-derive",
- "num-traits",
- "pi-lexer",
- "quote",
- "rowan",
- "smol_str",
- "ungrammar",
-]
 
 [[package]]
 name = "proc-macro2"
