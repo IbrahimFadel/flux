@@ -33,8 +33,12 @@ impl PrefixOp {
 }
 
 pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
-	let result = if p.at(T![iN]) {
-		primitive_type_expr(p)
+	let result = if p.at(T![iN]) || p.at(T!(uN)) {
+		primitive_type(p)
+	} else if p.at(T!(struct)) {
+		struct_type(p)
+	} else if p.at(T!(interface)) {
+		interface_type(p)
 	} else {
 		p.error(format!("could not parse type expression"));
 		return None;
@@ -43,8 +47,106 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 	Some(result)
 }
 
-fn primitive_type_expr(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![iN]));
+fn interface_type(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(interface)));
+	let m = p.start();
+	p.bump();
+	p.expect(T!(lbrace), format!("expected `{{` in interface type"));
+	while !p.at(T!(rbrace)) && !p.at_end() {
+		interface_type_method(p);
+	}
+	p.expect(
+		T!(rbrace),
+		format!("expected `}}` at end of interface type"),
+	);
+	m.complete(p, SyntaxKind::InterfaceType)
+}
+
+fn interface_type_method(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	if p.at(T!(pub)) {
+		p.bump();
+	}
+	p.expect(T!(fn), format!("expected `fn` in interface type method"));
+	p.expect(
+		T!(ident),
+		format!("expected identifier for interface type method name"),
+	);
+	p.expect(
+		T!(lparen),
+		format!("expected `(` at beginning of interface type method parameter list"),
+	);
+	while !p.at(T!(rparen)) && !p.at_end() {
+		interface_type_method_param(p);
+		if !p.at(T!(rparen)) {
+			p.expect(
+				T!(comma),
+				format!("expected either `}}` or `,` in interface type method parameter list"),
+			);
+		}
+	}
+	p.expect(
+		T!(rparen),
+		format!("expected `)` at end of interface type method parameter list"),
+	);
+	if p.at(T!(->)) {
+		p.bump();
+		type_expr(p);
+	}
+	p.expect(
+		TokenKind::SemiColon,
+		format!("expected `;` at end of interface type method"),
+	);
+	m.complete(p, SyntaxKind::InterfaceTypeMethod)
+}
+
+fn interface_type_method_param(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	if p.at(T![mut]) {
+		p.bump();
+	}
+	type_expr(p);
+	p.expect(
+		T![ident],
+		format!("expected identifier in interface type method parameter"),
+	);
+	m.complete(p, SyntaxKind::InterfaceTypeMethodParam)
+}
+
+fn struct_type(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(struct)));
+	let m = p.start();
+	p.bump();
+	p.expect(T!(lbrace), format!("expected `{{` in struct type"));
+	while !p.at(T!(rbrace)) && !p.at_end() {
+		struct_type_field(p);
+	}
+	p.expect(T!(rbrace), format!("expected `}}` at end of struct type"));
+	m.complete(p, SyntaxKind::StructType)
+}
+
+fn struct_type_field(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	if p.at(T!(pub)) {
+		p.bump();
+	}
+	if p.at(T!(mut)) {
+		p.bump();
+	}
+	type_expr(p);
+	p.expect(
+		TokenKind::Ident,
+		format!("expected identifier for struct type field name"),
+	);
+	p.expect(
+		TokenKind::SemiColon,
+		format!("expepcted `;` after struct type field"),
+	);
+	m.complete(p, SyntaxKind::StructTypeField)
+}
+
+fn primitive_type(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T![iN]) || p.at(T![uN]));
 	let m = p.start();
 	p.bump();
 	m.complete(p, SyntaxKind::PrimitiveType)

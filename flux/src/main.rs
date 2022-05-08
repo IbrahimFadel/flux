@@ -1,14 +1,16 @@
 use std::fs;
 
+use flux_hir::HirModule;
 // use indexmap::IndexMap;
 use flux_syntax::{ast, ast::AstNode};
 // use flux_cfg::*;
 // use flux_codegen::lower_mir_module;
-use flux_error::filesystem::FileId;
+use flux_error::{filesystem::FileId, PIErrorReporting};
 // use flux_lexer::*;
 // use flux_mir::*;
 // use flux_codegen::*;
 use flux_parser::*;
+use indexmap::IndexMap;
 // use flux_typecheck::*;
 
 // fn parse_file(
@@ -38,19 +40,35 @@ use flux_parser::*;
 // 	file_ast_map.insert(file_id, ast);
 // }
 
-fn main() {
-	// flux_syntax::generated::generate_ast();
+struct FluxModule {
+	name: String,
+	cst: Parse,
+	hir: HirModule,
+}
 
+fn main() {
 	let src = fs::read_to_string("examples/main.flx").unwrap();
-	let cst = parse(src.as_str(), FileId(0));
+	let mut err_reporting = PIErrorReporting::default();
+	let file_id = err_reporting
+		.add_file(format!("main"), src.clone())
+		.expect("could not add file");
+
+	let cst = parse(src.as_str(), file_id);
+	err_reporting.report(&cst.errors);
 
 	let root = ast::Root::cast(cst.syntax()).unwrap();
 	println!("{}", cst.debug_tree());
 
-	let (db, functions) = flux_hir::lower(root);
+	// let mut module_map: IndexMap<FileId, FluxModule> = IndexMap::new();
 
-	println!("{:#?}", db);
-	println!("{:#?}", functions);
+	let hir_module = flux_hir::lower(root, file_id);
+
+	// println!("{:#?}", hir_module.db);
+	println!("{:#?}", hir_module.types);
+
+	// for err in &db.errors {
+	err_reporting.report(&hir_module.db.errors);
+	// }
 
 	// let res = parse("hi");
 	// println!("{:#?}", res);

@@ -78,6 +78,7 @@ dependencies = [
  "flux-hir",
  "flux-parser",
  "flux-syntax",
+ "indexmap",
 ]
 
 [[package]]
@@ -95,6 +96,7 @@ version = "0.1.0"
 dependencies = [
  "flux-error",
  "flux-syntax",
+ "indexmap",
  "la-arena",
  "smol_str",
 ]

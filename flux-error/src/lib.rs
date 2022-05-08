@@ -128,7 +128,7 @@ impl Span {
 pub struct PIError {
 	msg: String,
 	code: PIErrorCode,
-	primary: (String, Option<Span>),
+	primary: Option<(String, Option<Span>)>,
 	labels: Vec<(String, Option<Span>)>,
 }
 
@@ -137,7 +137,7 @@ impl Default for PIError {
 		Self {
 			msg: String::new(),
 			code: PIErrorCode::NoCode,
-			primary: (String::new(), None),
+			primary: None,
 			labels: vec![],
 		}
 	}
@@ -155,7 +155,7 @@ impl PIError {
 	}
 
 	pub fn with_primary(mut self, msg: String, span: Option<Span>) -> PIError {
-		self.primary = (msg, span);
+		self.primary = Some((msg, span));
 		self
 	}
 
@@ -166,12 +166,13 @@ impl PIError {
 
 	pub fn to_diagnostic(&self) -> Diagnostic<filesystem::FileId> {
 		let mut labels: Vec<Label<filesystem::FileId>> = vec![];
-		if let Some(span) = &self.primary.1 {
-			labels.push(
-				Label::secondary(span.file_id, span.range.clone()).with_message(self.primary.0.clone()),
-			);
-		} else {
-			labels.push(Label::secondary(FileId(0), 0..0).with_message(self.primary.0.clone()));
+		if let Some(ref primary) = self.primary {
+			if let Some(ref span) = primary.1 {
+				labels
+					.push(Label::secondary(span.file_id, span.range.clone()).with_message(primary.0.clone()));
+			} else {
+				labels.push(Label::secondary(FileId(0), 0..0).with_message(primary.0.clone()));
+			}
 		}
 		for (msg, span) in &self.labels {
 			if let Some(span) = span {

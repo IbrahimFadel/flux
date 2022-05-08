@@ -8,13 +8,14 @@ use self::marker::Marker;
 
 pub(crate) mod marker;
 
-const RECOVERY_SET: [TokenKind; 6] = [
+const RECOVERY_SET: [TokenKind; 7] = [
 	TokenKind::INKw,
 	TokenKind::FnKw,
 	TokenKind::LBrace,
 	TokenKind::RBrace,
 	TokenKind::LParen,
 	TokenKind::RParen,
+	TokenKind::SemiColon,
 ];
 
 pub(crate) struct Parser<'t, 'src> {
@@ -83,6 +84,11 @@ impl<'t, 'src> Parser<'t, 'src> {
 		self.peek() == Some(kind)
 	}
 
+	pub(crate) fn next_at(&mut self, kind: TokenKind) -> bool {
+		self.expected_kinds.push(kind);
+		self.peek_next() == Some(kind)
+	}
+
 	pub(crate) fn at_set(&mut self, set: &[TokenKind]) -> bool {
 		self.peek().map_or(false, |k| set.contains(&k))
 	}
@@ -99,5 +105,9 @@ impl<'t, 'src> Parser<'t, 'src> {
 
 	pub(crate) fn peek(&mut self) -> Option<TokenKind> {
 		self.source.peek_kind()
+	}
+
+	pub(crate) fn peek_next(&mut self) -> Option<TokenKind> {
+		self.source.peek_next_kind()
 	}
 }

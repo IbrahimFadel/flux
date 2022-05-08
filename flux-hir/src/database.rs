@@ -1,15 +1,30 @@
-use crate::{BinaryOp, Expr, FnDecl, INType, If, PrefixOp, Stmt, Type};
-use la_arena::Arena;
-use flux_error::{PIError, PIErrorCode};
+use crate::{
+	BinaryOp, Expr, FnDecl, INType, If, PrefixOp, Stmt, StructField, StructType, Type, TypeDecl,
+	UNType,
+};
+use flux_error::{filesystem::FileId, PIError, PIErrorCode, Span};
 use flux_syntax::{
-	ast::{self, IntExpr},
+	ast::{self, AstNode, IntExpr},
 	syntax_kind::SyntaxKind,
 };
+use indexmap::IndexMap;
+use la_arena::Arena;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Database {
 	exprs: Arena<Expr>,
-	errors: Vec<PIError>,
+	pub errors: Vec<PIError>,
+	file_id: FileId,
+}
+
+impl Database {
+	pub fn new(file_id: FileId) -> Self {
+		Self {
+			exprs: Arena::default(),
+			errors: vec![],
+			file_id,
+		}
+	}
 }
 
 impl Database {
@@ -19,19 +34,46 @@ impl Database {
 		} else {
 			vec![]
 		};
-		let return_type = self.lower_type(ast.return_type());
+		let return_type = self.lower_type(ast.return_type())?;
 		Some(FnDecl { block, return_type })
 	}
 
-	fn lower_type(&mut self, ast: Option<ast::Type>) -> Type {
+	pub(crate) fn lower_ty_decl(&mut self, ast: ast::TypeDecl) -> Option<TypeDecl> {
+		Some(TypeDecl {
+			pub_: ast.public().is_some(),
+			name: ast.name()?.text().to_string(),
+			ty: self.lower_type(ast.ty())?,
+		})
+	}
+
+	fn lower_type(&mut self, ast: Option<ast::Type>) -> Option<Type> {
 		if let Some(ast) = ast {
 			match ast {
 				ast::Type::PrimitiveType(ast) => self.lower_primitive_type(ast),
-				_ => Type::Missing,
+				ast::Type::StructType(ast) => self.lower_struct_type(ast),
+				_ => None,
 			}
 		} else {
-			Type::Missing
+			// Type::Missing
+			None
 		}
+	}
+
+	fn lower_struct_type(&mut self, ast: ast::StructType) -> Option<Type> {
+		let mut hir_fields = IndexMap::new();
+		let fields = ast.fields();
+		for field in fields {
+			let name = field.name()?.text().to_string();
+			hir_fields.insert(
+				name,
+				StructField {
+					public: field.public().is_some(),
+					mutable: field.mutable().is_some(),
+					ty: self.lower_type(field.type_())?,
+				},
+			);
+		}
+		Some(Type::StructType(StructType(hir_fields)))
 	}
 
 	fn lower_block(&mut self, ast: ast::BlockStmt) -> Vec<Option<Stmt>> {
@@ -74,7 +116,7 @@ impl Database {
 
 	fn lower_var_decl(&mut self, ast: &ast::VarDecl) -> Option<Stmt> {
 		Some(Stmt::VarDecl {
-			ty: self.lower_type(ast.ty()),
+			ty: self.lower_type(ast.ty())?,
 			name: ast.name()?.text().into(),
 			value: self.lower_expr(ast.value()),
 		})
@@ -107,10 +149,6 @@ impl Database {
 						text = text[2..].to_owned();
 						16
 					}
-					// "08" => {
-					// text = text[2..].to_owned();
-					// 8
-					// }
 					"0b" => {
 						text = text[2..].to_owned();
 						2
@@ -128,7 +166,11 @@ impl Database {
 							"could not lower int expression: {}",
 							err.to_string()
 						))
-						.with_code(PIErrorCode::HirParseIntString),
+						.with_code(PIErrorCode::HirParseIntString)
+						.with_label(
+							format!("could not lower int expression"),
+							Some(Span::new(ast.syntax().text_range(), self.file_id)),
+						),
 				);
 				return Expr::Missing;
 			} else {
@@ -139,13 +181,19 @@ impl Database {
 		}
 	}
 
-	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Type {
+	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Option<Type> {
 		if let Some(ty) = ast.ty() {
+			let signed_str = &ty.text()[0..1];
 			let int_str = &ty.text()[1..];
 			let bits: u32 = int_str.parse().unwrap();
-			Type::INType(INType { bits })
+			if signed_str == "u" {
+				Some(Type::UNType(UNType { bits }))
+			} else {
+				Some(Type::INType(INType { bits }))
+			}
 		} else {
-			Type::Missing
+			// Type::Missing
+			None
 		}
 	}
 

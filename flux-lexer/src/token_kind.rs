@@ -29,12 +29,18 @@ pub enum TokenKind {
 	PubKw,
 	#[token("fn")]
 	FnKw,
+	#[token("type")]
+	TypeKw,
 	#[token("mut")]
 	MutKw,
 	#[token("if")]
 	IfKw,
 	#[token("else")]
 	ElseKw,
+	#[token("struct")]
+	StructKw,
+	#[token("interface")]
+	InterfaceKw,
 	#[regex(r"i[1-9]+")]
 	INKw,
 	#[regex(r"u[1-9]+")]
@@ -95,9 +101,12 @@ macro_rules! T {
 	[intlit] => { $crate::TokenKind::IntLit };
 	[pub] => { $crate::TokenKind::PubKw };
 	[fn] => { $crate::TokenKind::FnKw };
+	[type] => { $crate::TokenKind::TypeKw };
 	[mut] => { $crate::TokenKind::MutKw };
 	[if] => { $crate::TokenKind::IfKw };
 	[else] => { $crate::TokenKind::ElseKw };
+	[struct] => { $crate::TokenKind::StructKw };
+	[interface] => { $crate::TokenKind::InterfaceKw };
 	[iN] => { $crate::TokenKind::INKw };
 	[uN] => { $crate::TokenKind::UNKw };
 	[f64] => { $crate::TokenKind::F64Kw };
@@ -107,7 +116,7 @@ macro_rules! T {
 	[-] => { $crate::TokenKind::Minus };
 	[*] => { $crate::TokenKind::Star };
 	[/] => { $crate::TokenKind::Slash };
-	[arrow] => { $crate::TokenKind::Arrow };
+	[->] => { $crate::TokenKind::Arrow };
 	[comma] => { $crate::TokenKind::Comma };
 	[cmplt] => { $crate::TokenKind::CmpLt };
 	[cmpgt] => { $crate::TokenKind::CmpGt };
@@ -122,44 +131,45 @@ macro_rules! T {
 	[error] => { $crate::TokenKind::Error };
 }
 
-impl Display for TokenKind {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"{}",
-			match self {
-				T![root] => "Root",
-				T![ws] => "WhiteSpace",
-				T![ident] => "Ident",
-				T![intlit] => "IntLit",
-				T![pub] => "Pub",
-				T![fn] => "Fn",
-				T![mut] => "Mut",
-				T![if] => "If",
-				T![else] => "Else",
-				T![iN] => "iN",
-				T![uN] => "uN",
-				T![f64] => "F64",
-				T![f32] => "F32",
-				T![bool] => "bool",
-				T![+] => "+",
-				T![-] => "-",
-				T![*] => "*",
-				T![/] => "/",
-				T![arrow] => "->",
-				T![comma] => ",",
-				T![cmplt] => "<",
-				T![cmpgt] => ">",
-				T![lparen] => "(",
-				T![rparen] => ")",
-				T![lbrace] => "{",
-				T![rbrace] => "}",
-				T![eq] => "=",
-				T![cmpeq] => "==",
-				T![semicolon] => ";",
-				T![comment] => "Comment",
-				T![error] => "Error",
-			}
-		)
-	}
-}
+// impl Display for TokenKind {
+// 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// 		write!(
+// 			f,
+// 			"{}",
+// 			match self {
+// 				T![root] => "Root",
+// 				T![ws] => "WhiteSpace",
+// 				T![ident] => "Ident",
+// 				T![intlit] => "IntLit",
+// 				T![pub] => "Pub",
+// 				T![fn] => "Fn",
+// 				T![type] => "Type",
+// 				T![mut] => "Mut",
+// 				T![if] => "If",
+// 				T![else] => "Else",
+// 				T![iN] => "iN",
+// 				T![uN] => "uN",
+// 				T![f64] => "F64",
+// 				T![f32] => "F32",
+// 				T![bool] => "bool",
+// 				T![+] => "+",
+// 				T![-] => "-",
+// 				T![*] => "*",
+// 				T![/] => "/",
+// 				T![arrow] => "->",
+// 				T![comma] => ",",
+// 				T![cmplt] => "<",
+// 				T![cmpgt] => ">",
+// 				T![lparen] => "(",
+// 				T![rparen] => ")",
+// 				T![lbrace] => "{",
+// 				T![rbrace] => "}",
+// 				T![eq] => "=",
+// 				T![cmpeq] => "==",
+// 				T![semicolon] => ";",
+// 				T![comment] => "Comment",
+// 				T![error] => "Error",
+// 			}
+// 		)
+// 	}
+// }

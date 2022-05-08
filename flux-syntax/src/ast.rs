@@ -27,6 +27,48 @@ impl Root {
 	pub fn functions(&self) -> impl Iterator<Item = FnDecl> {
 		self.0.children().filter_map(FnDecl::cast)
 	}
+
+	pub fn types(&self) -> impl Iterator<Item = TypeDecl> {
+		self.0.children().filter_map(TypeDecl::cast)
+	}
+}
+
+#[derive(Debug)]
+pub struct TypeDecl(SyntaxNode);
+
+impl AstNode for TypeDecl {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		match syntax.kind() {
+			SyntaxKind::TypeDecl => Some(Self(syntax)),
+			_ => None,
+		}
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		&self.0
+	}
+}
+
+impl TypeDecl {
+	pub fn public(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::PubKw)
+	}
+
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
+	}
+
+	pub fn ty(&self) -> Option<Type> {
+		self.0.children().find_map(Type::cast)
+	}
 }
 
 #[derive(Debug)]
@@ -257,12 +299,16 @@ impl AstNode for Expr {
 #[derive(Debug)]
 pub enum Type {
 	PrimitiveType(PrimitiveType),
+	StructType(StructType),
+	InterfaceType(InterfaceType),
 }
 
 impl AstNode for Type {
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		match syntax.kind() {
 			SyntaxKind::PrimitiveType => Some(Self::PrimitiveType(PrimitiveType(syntax))),
+			SyntaxKind::StructType => Some(Self::StructType(StructType(syntax))),
+			SyntaxKind::InterfaceType => Some(Self::InterfaceType(InterfaceType(syntax))),
 			_ => None,
 		}
 	}
@@ -270,7 +316,93 @@ impl AstNode for Type {
 	fn syntax(&self) -> &SyntaxNode {
 		match self {
 			Type::PrimitiveType(node) => &node.0,
+			Type::StructType(node) => &node.0,
+			Type::InterfaceType(node) => &node.0,
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct InterfaceType(SyntaxNode);
+
+impl AstNode for InterfaceType {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		match syntax.kind() {
+			SyntaxKind::InterfaceType => Some(Self(syntax)),
+			_ => None,
+		}
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		&self.0
+	}
+}
+
+#[derive(Debug)]
+pub struct StructType(SyntaxNode);
+
+impl AstNode for StructType {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		match syntax.kind() {
+			SyntaxKind::StructType => Some(Self(syntax)),
+			_ => None,
+		}
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		&self.0
+	}
+}
+
+impl StructType {
+	pub fn fields(&self) -> Vec<StructField> {
+		self.0.children().filter_map(StructField::cast).collect()
+	}
+}
+
+#[derive(Debug)]
+pub struct StructField(SyntaxNode);
+
+impl AstNode for StructField {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		match syntax.kind() {
+			SyntaxKind::StructTypeField => Some(Self(syntax)),
+			_ => None,
+		}
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		&self.0
+	}
+}
+
+impl StructField {
+	pub fn public(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::PubKw)
+	}
+
+	pub fn mutable(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::MutKw)
+	}
+
+	pub fn type_(&self) -> Option<Type> {
+		self.0.children().find_map(Type::cast)
+	}
+
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 }
 
@@ -296,7 +428,7 @@ impl PrimitiveType {
 			.0
 			.children_with_tokens()
 			.filter_map(SyntaxElement::into_token)
-			.find(|token| token.kind() == SyntaxKind::INKw)
+			.find(|token| matches!(token.kind(), SyntaxKind::INKw | SyntaxKind::UNKw))
 	}
 }
 

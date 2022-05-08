@@ -36,6 +36,16 @@ impl<'t, 'src> Source<'t, 'src> {
 		self.peek_kind_raw()
 	}
 
+	pub(super) fn peek_next_kind(&mut self) -> Option<TokenKind> {
+		let initial_cursor_pos = self.cursor;
+		while self.next_at_trivia() {
+			self.cursor += 1;
+		}
+		let kind = self.peek_next_kind_raw();
+		self.cursor = initial_cursor_pos;
+		kind
+	}
+
 	fn eat_trivia(&mut self) {
 		while self.at_trivia() {
 			self.cursor += 1;
@@ -46,6 +56,12 @@ impl<'t, 'src> Source<'t, 'src> {
 		self.peek_kind_raw().map_or(false, TokenKind::is_trivia)
 	}
 
+	fn next_at_trivia(&self) -> bool {
+		self
+			.peek_next_kind_raw()
+			.map_or(false, TokenKind::is_trivia)
+	}
+
 	fn peek_token_raw(&self) -> Option<&Token> {
 		self.tokens.get(self.cursor)
 	}
@@ -54,6 +70,13 @@ impl<'t, 'src> Source<'t, 'src> {
 		self
 			.tokens
 			.get(self.cursor)
+			.map(|Token { kind, .. }| (*kind).into())
+	}
+
+	fn peek_next_kind_raw(&self) -> Option<TokenKind> {
+		self
+			.tokens
+			.get(self.cursor + 1)
 			.map(|Token { kind, .. }| (*kind).into())
 	}
 

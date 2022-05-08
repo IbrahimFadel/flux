@@ -10,3 +10,4 @@ flux-parser = { path = "../flux-parser" }
 flux-syntax = { path = "../flux-syntax" }
 flux-hir = { path = "../flux-hir" }
 flux-error = { path = "../flux-error" }
+indexmap = "1.8.1"

@@ -3,17 +3,49 @@ use crate::grammar::stmt::block;
 use flux_lexer::T;
 
 pub(crate) fn top_level_decl(p: &mut Parser) {
-	if p.at(T!(fn)) {
+	if p.at(T!(pub)) {
+		pub_tob_level_decl(p);
+	} else if p.at(T!(fn)) {
 		fn_decl(p);
+	} else if p.at(T!(type)) {
+		type_decl(p);
 	} else {
 		p.error(format!("expected top level declaration"));
 	}
 }
 
-fn fn_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![fn]));
+fn pub_tob_level_decl(p: &mut Parser) {
+	if p.next_at(T!(fn)) {
+		fn_decl(p);
+	} else if p.next_at(T!(type)) {
+		type_decl(p);
+	} else {
+		p.error(format!("expected top level declaration"));
+	}
+}
+
+fn type_decl(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(type)) || p.at(T!(pub)));
 	let m = p.start();
-	p.bump();
+	if p.at(T!(pub)) {
+		p.bump()
+	}
+	p.expect(T!(type), format!("expected `type` in type declaration"));
+	p.expect(
+		T!(ident),
+		format!("expected identifier in type declaration"),
+	);
+	type_expr(p);
+	m.complete(p, SyntaxKind::TypeDecl)
+}
+
+fn fn_decl(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(fn)) || p.at(T!(pub)));
+	let m = p.start();
+	if p.at(T!(pub)) {
+		p.bump()
+	}
+	p.expect(T!(fn), format!("expected `fn` in function declaration"));
 	p.expect(
 		T![ident],
 		format!("expected identifier in function declaration"),
@@ -22,7 +54,7 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 		generic_list(p);
 	}
 	fn_params(p);
-	if p.at(T![arrow]) {
+	if p.at(T!(->)) {
 		p.bump();
 		type_expr(p);
 	}
