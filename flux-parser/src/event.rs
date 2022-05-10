@@ -1,4 +1,4 @@
-use flux_error::PIError;
+use flux_error::FluxError;
 use flux_syntax::syntax_kind::SyntaxKind;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,6 +9,6 @@ pub(super) enum Event {
 	},
 	AddToken,
 	FinishNode,
-	Error(PIError),
+	Error(FluxError),
 	Placeholder,
 }

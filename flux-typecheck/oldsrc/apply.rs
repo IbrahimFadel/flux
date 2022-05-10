@@ -1,7 +1,7 @@
 // use std::collections::HashMap;
 
 // use flux_ast::{ApplyBlock, Expr, FnDecl, Ident, InterfaceType, Method, Spanned};
-// use flux_error::{PIErrorCode, Span};
+// use flux_error::{FluxErrorCode, Span};
 
 // use crate::{FnCtx, PIResult};
 
@@ -30,7 +30,7 @@
 // 						"expected `{}` to be an interface",
 // 						interface_name.to_string()
 // 					),
-// 					PIErrorCode::TypecheckExpectedTypeToBeInterface,
+// 					FluxErrorCode::TypecheckExpectedTypeToBeInterface,
 // 					vec![],
 // 				));
 // 			}
@@ -40,7 +40,7 @@
 // 					"could not find type with name `{}`",
 // 					interface_name.to_string()
 // 				),
-// 				PIErrorCode::TypecheckCouldNotFindType,
+// 				FluxErrorCode::TypecheckCouldNotFindType,
 // 				vec![],
 // 			));
 // 		}
@@ -95,7 +95,7 @@
 // 					"not all methods of `{}` were implemented in apply block",
 // 					interface_name.to_string(),
 // 				),
-// 				PIErrorCode::TypecheckNotAllInterfaceMethodsImplemented,
+// 				FluxErrorCode::TypecheckNotAllInterfaceMethodsImplemented,
 // 				vec![],
 // 			));
 // 		}
@@ -111,7 +111,7 @@
 // 						method.name.to_string(),
 // 						interface_name.to_string(),
 // 					),
-// 					PIErrorCode::TypecheckCouldNotFindMethodInInterface,
+// 					FluxErrorCode::TypecheckCouldNotFindMethodInInterface,
 // 					vec![],
 // 				));
 // 			}
@@ -137,7 +137,7 @@
 // 		if visibility1 != visibility2 {
 // 			return Err(self.error(
 // 				format!("interface method visibilities do not match"),
-// 				PIErrorCode::TypecheckInterfaceMethodVisibilitiesDontMatch,
+// 				FluxErrorCode::TypecheckInterfaceMethodVisibilitiesDontMatch,
 // 				vec![
 // 					(
 // 						format!(
@@ -260,7 +260,7 @@
 // 		if labels.len() > 1 {
 // 			return Err(self.error(
 // 				"method parameters in appy block do not match the interface method definition".to_owned(),
-// 				PIErrorCode::TypecheckInterfaceMethodParamsDontMatch,
+// 				FluxErrorCode::TypecheckInterfaceMethodParamsDontMatch,
 // 				labels,
 // 			));
 // 		}
@@ -282,7 +282,7 @@
 // 					&*interface_method.ret_ty,
 // 					&*method.ret_ty
 // 				),
-// 				PIErrorCode::TypecheckInterfaceMethodRetTyDontMatch,
+// 				FluxErrorCode::TypecheckInterfaceMethodRetTyDontMatch,
 // 				vec![
 // 					(
 // 						format!("defined with type `{}` in apply block", *method.ret_ty),

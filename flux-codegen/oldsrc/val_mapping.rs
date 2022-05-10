@@ -2,7 +2,7 @@
 
 // use llvm_sys::prelude::LLVMValueRef;
 // use flux_ast::Ident;
-// use flux_error::{filesystem::FileId, PIError, PIErrorCode};
+// use flux_error::{filesystem::FileId, FluxError, FluxErrorCode};
 // use std::ptr;
 // use uuid::Uuid;
 
@@ -25,8 +25,8 @@
 // 	}
 
 // 	#[inline(always)]
-// 	fn error(&self, msg: String, code: PIErrorCode, labels: Vec<(String, Range<usize>)>) -> PIError {
-// 		PIError::new(msg, code, labels, self.file_id)
+// 	fn error(&self, msg: String, code: FluxErrorCode, labels: Vec<(String, Range<usize>)>) -> FluxError {
+// 		FluxError::new(msg, code, labels, self.file_id)
 // 	}
 
 // 	pub fn set_new_function(&mut self, name: String, uuid: Uuid, function: LLVMValueRef) {
@@ -43,7 +43,7 @@
 // 					ptr::null_mut(),
 // 					Some(self.error(
 // 						format!("unknown function `{}` referenced", name.to_string()),
-// 						PIErrorCode::CodegenUnknownFnReferenced,
+// 						FluxErrorCode::CodegenUnknownFnReferenced,
 // 						vec![(
 // 							format!("could not find function `{}`", name.to_string()),
 // 							name.span.clone(),
@@ -56,7 +56,7 @@
 // 				ptr::null_mut(),
 // 				Some(self.error(
 // 					format!("unknown function `{}` referenced", name.to_string()),
-// 					PIErrorCode::CodegenUnknownFnReferenced,
+// 					FluxErrorCode::CodegenUnknownFnReferenced,
 // 					vec![(
 // 						format!("could not find function `{}`", name.to_string()),
 // 						name.span.clone(),

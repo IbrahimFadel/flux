@@ -78,6 +78,7 @@ dependencies = [
  "flux-hir",
  "flux-parser",
  "flux-syntax",
+ "flux-typecheck",
  "indexmap",
 ]
 
@@ -99,6 +100,7 @@ dependencies = [
  "indexmap",
  "la-arena",
  "smol_str",
+ "text-size",
 ]
 
 [[package]]
@@ -142,6 +144,17 @@ dependencies = [
  "rowan",
  "smol_str",
  "ungrammar",
+]
+
+[[package]]
+name = "flux-typecheck"
+version = "0.1.0"
+dependencies = [
+ "flux-error",
+ "flux-hir",
+ "la-arena",
+ "smol_str",
+ "text-size",
 ]
 
 [[package]]

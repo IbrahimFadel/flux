@@ -1,6 +1,5 @@
-pub type Foo struct {
-  pub i32 x;
-  mut u12 y;
-  pub mut i1 z;
-  i2 a;
+type Foo i5
+
+fn main() {
+  Foo x = 1;
 }

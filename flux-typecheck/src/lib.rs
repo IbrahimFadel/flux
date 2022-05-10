@@ -1,141 +1,193 @@
-type PIResult = Result<(), PIError>;
+use std::collections::HashMap;
 
-pub fn typecheck_ast<'a>(
-	file_ast_map: &mut IndexMap<FileId, AST>,
-	_: &'a PIErrorReporting,
-) -> PIResult {
-	// for (id, ast) in file_ast_map.iter_mut() {
-	// 	let mut ftx = FnCtx {
-	// 		file_id: id.clone(),
-	// 		expecting_ty: None,
-	// 		type_decls: HashMap::new(),
-	// 		var_types: HashMap::new(),
-	// 		struct_methods: HashMap::new(),
-	// 		struct_implementations: HashMap::new(),
-	// 	};
+use flux_error::{filesystem::FileId, FluxError, Span};
+use flux_hir::{Expr, HirModule, Stmt, VarDecl};
+use la_arena::{Arena, ArenaMap, Idx};
+use smol_str::SmolStr;
+use text_size::{TextRange, TextSize};
 
-	// 	ftx.check(ast)?;
-	// }
-	Ok(())
+type TypeId = u32;
+
+type BitSize = u32;
+
+#[derive(Debug, Clone)]
+enum TypeInfo {
+	Unknown,
+	SInt(BitSize),
+	UInt(BitSize),
+	Int,
+	F64,
+	F32,
+	Float,
+	Ident(SmolStr),
+	Ref(TypeId),
 }
 
-// use std::collections::HashMap;
+#[derive(Debug)]
+struct TypeEnv<'a> {
+	ident_types: HashMap<&'a str, &'a flux_hir::Type>,
+	var_ids: HashMap<&'a str, TypeId>,
+	var_types: HashMap<TypeId, TypeInfo>,
+	id_counter: u32,
 
-// use indexmap::IndexMap;
-// use flux_ast::{ApplyBlock, Expr, FnDecl, Ident, Return, Spanned, Stmt, TypeDecl, VarDecl, AST};
-// use flux_error::{filesystem::FileId, PIError, PIErrorCode, PIErrorReporting, Span};
+	type_id_exprs: HashMap<TypeId, Idx<Expr>>,
+	currently_unifying_ranges: Option<(TextRange, TextRange)>,
 
-// mod apply;
-// mod expr;
+	expr_ranges: &'a ArenaMap<Idx<Expr>, TextRange>,
+	expr_arena: &'a Arena<Expr>,
+}
 
-// type PIResult = Result<(), PIError>;
-
-// struct FnCtx<'ctx> {
-// 	file_id: FileId,
-// 	expecting_ty: Option<&'ctx Expr>,
-// 	type_decls: HashMap<String, &'ctx TypeDecl>,
-// 	var_types: HashMap<String, &'ctx Expr>,
-// 	struct_methods: HashMap<String, HashMap<String, &'ctx FnDecl>>,
-// 	struct_implementations: HashMap<String, Vec<TypeDecl>>,
-// }
-
-// impl<'ctx> FnCtx<'ctx> {
-// 	pub fn error(&self, msg: String, code: PIErrorCode, labels: Vec<(String, Span)>) -> PIError {
-// 		PIError::new(msg, code, labels)
-// 	}
-
-// 	fn get_type_of_var_in_cur_block(&self, name: &Spanned<Ident>) -> Result<&'ctx Expr, PIError> {
-// 		let res = self.var_types.get(&name.to_string());
-// 		if let Some(ty) = res {
-// 			return Ok(ty);
-// 		}
-// 		Err(self.error(
-// 			format!("could not get type of variable `{}`", name.to_string()),
-// 			PIErrorCode::TypecheckCouldNotGetTypeOfVar,
-// 			vec![(
-// 				format!("could not get type of variable `{}`", name.to_string()),
-// 				name.span.clone(),
-// 			)],
-// 		))
-// 	}
-
-// 	pub fn check(&mut self, ast: &'ctx mut AST) -> PIResult {
-// 		for ty in &ast.types {
-// 			self.type_decls.insert(ty.name.to_string(), &ty);
-// 		}
-
-// 		for apply in &mut ast.apply_blocks {
-// 			self.check_apply(apply)?;
-// 		}
-
-// 		for f in &mut ast.functions {
-// 			self.check_fn(f)?;
-// 		}
-
-// 		Ok(())
-// 	}
-
-// 	fn check_fn(&mut self, f: &'ctx mut FnDecl) -> PIResult {
-// 		for param in &*f.params {
-// 			self.var_types.insert(param.name.to_string(), &param.type_);
-// 		}
-// 		for stmt in &mut f.block {
-// 			self.expecting_ty = Some(&f.ret_ty);
-// 			self.check_stmt(stmt)?;
-// 		}
-// 		self.var_types.clear();
-// 		Ok(())
-// 	}
-
-// 	fn check_stmt(&mut self, stmt: &'ctx mut Stmt) -> PIResult {
-// 		match stmt {
-// 			Stmt::VarDecl(var) => self.check_var(var),
-// 			Stmt::Return(ret) => self.check_ret(ret),
-// 			Stmt::ExprStmt(expr) => self.check_expr(expr),
-// 			_ => Ok(()),
-// 		}
-// 	}
-
-// 	fn check_ret(&mut self, ret: &'ctx mut Return) -> PIResult {
-// 		if let Some(x) = &mut ret.val {
-// 			self.check_expr(x)?;
-// 		}
-// 		Ok(())
-// 	}
-
-// 	fn check_var(&mut self, var: &'ctx mut VarDecl) -> PIResult {
-// 		self.expecting_ty = Some(&var.type_);
-// 		for name in &var.names {
-// 			self.var_types.insert(name.to_string(), &var.type_);
-// 		}
-
-// 		for val in &mut var.values {
-// 			self.check_expr(val)?;
-// 		}
-
-// 		Ok(())
-// 	}
-// }
-
-// pub fn typecheck_ast<'a>(
-// 	file_ast_map: &mut IndexMap<FileId, AST>,
-// 	_: &'a PIErrorReporting,
-// ) -> PIResult {
-// 	for (id, ast) in file_ast_map.iter_mut() {
-// 		let mut ftx = FnCtx {
-// 			file_id: id.clone(),
-// 			expecting_ty: None,
-// 			type_decls: HashMap::new(),
+// impl<'a> Default for TypeEnv<'a> {
+// 	fn default() -> Self {
+// 		Self {
+// 			var_ids: HashMap::new(),
 // 			var_types: HashMap::new(),
-// 			struct_methods: HashMap::new(),
-// 			struct_implementations: HashMap::new(),
-// 		};
-
-// 		ftx.check(ast)?;
+// 			id_counter: 0,
+// 		}
 // 	}
-// 	Ok(())
 // }
 
-use indexmap::IndexMap;
-use flux_ast::AST;
-use flux_error::{filesystem::FileId, PIError, PIErrorReporting};
+impl<'a> TypeEnv<'a> {
+	pub fn new(expr_ranges: &'a ArenaMap<Idx<Expr>, TextRange>, expr_arena: &'a Arena<Expr>) -> Self {
+		Self {
+			ident_types: HashMap::new(),
+			var_ids: HashMap::new(),
+			var_types: HashMap::new(),
+			id_counter: 0,
+			type_id_exprs: HashMap::new(),
+			expr_ranges,
+			currently_unifying_ranges: None,
+			expr_arena,
+		}
+	}
+
+	fn get_expr(&self, idx: Idx<Expr>) -> Expr {
+		self.expr_arena[idx].clone()
+	}
+
+	fn new_typeid(&mut self, info: TypeInfo) -> TypeId {
+		let id = self.id_counter;
+		self.id_counter += 1;
+		self.var_types.insert(id, info);
+		id
+	}
+
+	fn get_type(&self, name: &str) -> TypeInfo {
+		let id = self.var_ids.get(name).unwrap();
+		self.var_types.get(id).unwrap().clone()
+	}
+
+	fn hir_type_to_type_info(&self, ty: &flux_hir::Type) -> TypeInfo {
+		use flux_hir::Type;
+		match ty {
+			Type::F64Type => TypeInfo::F64,
+			Type::F32Type => TypeInfo::F32,
+			Type::INType(int) => TypeInfo::SInt(int.bits),
+			Type::UNType(int) => TypeInfo::UInt(int.bits),
+			Type::IdentType(ident) => {
+				TypeInfo::Ident(ident.clone())
+				// self.hir_type_to_type_info(&self.ident_types.get(ident.as_str()).unwrap())
+			}
+			_ => unreachable!(),
+		}
+	}
+
+	pub fn test(&mut self, var: &'a VarDecl) -> Result<(), FluxError> {
+		let initial_type_info = if var.ty == flux_hir::Type::Missing {
+			TypeInfo::Unknown
+		} else {
+			self.hir_type_to_type_info(&var.ty)
+		};
+		let var_id = self.new_typeid(initial_type_info.clone());
+		self.type_id_exprs.insert(var_id, var.value);
+		self.var_ids.insert(&var.name, var_id);
+		let value = self.get_expr(var.value);
+		let expr_type = self.analyze(&value)?;
+		// self.currently_unifying_ranges = Some((var.));
+		let final_ty = self.unify(initial_type_info, expr_type)?;
+		self.var_types.insert(var_id, final_ty);
+		Ok(())
+	}
+
+	fn analyze(&mut self, expr: &Expr) -> Result<TypeInfo, FluxError> {
+		match expr {
+			Expr::Int { .. } => Ok(TypeInfo::Int),
+			Expr::Float { .. } => Ok(TypeInfo::Float),
+			Expr::Ident { val } => {
+				// let info = self.get_type(val);
+				// return Ok(info);
+				Ok(TypeInfo::Ident(val.clone()))
+			}
+			Expr::Binary { lhs, rhs, .. } => {
+				let lhs_ty = self.analyze(&self.expr_arena[*lhs])?;
+				let rhs_ty = self.analyze(&self.expr_arena[*rhs])?;
+				// self.currently_unifying_ranges = Some((self.expr_ranges[*lhs], self.expr_ranges[*rhs]));
+				self.unify(lhs_ty, rhs_ty)
+			}
+			Expr::Prefix { expr, .. } => {
+				let ty = self.analyze(&self.expr_arena[*expr])?;
+				Ok(ty)
+			}
+			Expr::Missing => {
+				Err(FluxError::default().with_msg(format!("cannot run type inference on missing data")))
+			}
+		}
+	}
+
+	fn unify(&self, a: TypeInfo, b: TypeInfo) -> Result<TypeInfo, FluxError> {
+		use TypeInfo::*;
+		match (&a, &b) {
+			(Float, Float) => Ok(Float),
+			(F32, Float) | (Unknown, F32) | (F32, F32) => Ok(F32),
+			(F64, Float) | (Unknown, F64) | (F64, F64) | (Float, F64) => Ok(F64),
+			(Unknown, Float) => Ok(Float),
+
+			(Unknown, Int) => Ok(Int),
+			(Unknown, UInt(x)) => Ok(UInt(*x)),
+			(UInt(x), Int) => Ok(UInt(*x)),
+			(Int, UInt(x)) => Ok(UInt(*x)),
+			(SInt(x), Int) => Ok(SInt(*x)),
+
+			(Ident(name), _) => self.unify(
+				self.hir_type_to_type_info(&self.ident_types.get(name.as_str()).unwrap()),
+				b,
+			),
+
+			_ => {
+				Err(FluxError::default().with_msg(format!("could not unify {:?} and {:?}", a, b)))
+				// let (a_pos, b_pos) = self.currently_unifying_ranges.unwrap();
+				// Err(
+				// 	FluxError::default()
+				// 		.with_msg(format!("could not unify {:?} and {:?}", a, b))
+				// 		.with_primary(
+				// 			format!("could not unify {:?} and {:?}", a, b),
+				// 			Some(Span::new(a_pos, FileId(0))),
+				// 		)
+				// 		.with_label(format!("{:?}", a), Some(Span::new(a_pos, FileId(0))))
+				// 		.with_label(format!("{:?}", b), Some(Span::new(b_pos, FileId(0)))),
+				// )
+			}
+		}
+	}
+}
+
+pub fn typecheck_hir_module(hir_module: &HirModule) -> Result<(), FluxError> {
+	let mut env = TypeEnv::new(&hir_module.db.expr_ranges, &hir_module.db.exprs);
+
+	for ty in &hir_module.types {
+		env.ident_types.insert(&ty.name, &ty.ty);
+	}
+
+	for f in &hir_module.functions {
+		for stmt in &f.block {
+			if let Some(stmt) = stmt {
+				if let Stmt::VarDecl(var) = stmt {
+					env.test(var)?;
+				}
+			}
+		}
+	}
+
+	println!("{:#?}", env);
+	Ok(())
+}

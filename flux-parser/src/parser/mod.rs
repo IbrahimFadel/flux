@@ -1,4 +1,4 @@
-use flux_error::{PIError, PIErrorCode, Span};
+use flux_error::{FluxError, FluxErrorCode, Span};
 use flux_lexer::{Token, TokenKind};
 use flux_syntax::syntax_kind::SyntaxKind;
 
@@ -66,9 +66,9 @@ impl<'t, 'src> Parser<'t, 'src> {
 		};
 
 		self.events.push(Event::Error(
-			PIError::default()
+			FluxError::default()
 				.with_msg(msg.clone())
-				.with_code(PIErrorCode::UnexpectedToken)
+				.with_code(FluxErrorCode::UnexpectedToken)
 				.with_label(msg, Some(Span::new(range, self.source.file_id()))),
 		));
 

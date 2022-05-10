@@ -7,7 +7,7 @@ use text_size::TextRange;
 pub mod filesystem;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum PIErrorCode {
+pub enum FluxErrorCode {
 	NoCode,
 	UnexpectedEOF,
 	UnexpectedToken,
@@ -106,7 +106,7 @@ pub enum PIErrorCode {
 	// CodegenUnknownFnReferenced
 }
 
-impl std::fmt::Display for PIErrorCode {
+impl std::fmt::Display for FluxErrorCode {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "E{:04}", *self as u8)
 	}
@@ -125,41 +125,41 @@ impl Span {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct PIError {
+pub struct FluxError {
 	msg: String,
-	code: PIErrorCode,
+	code: FluxErrorCode,
 	primary: Option<(String, Option<Span>)>,
 	labels: Vec<(String, Option<Span>)>,
 }
 
-impl Default for PIError {
+impl Default for FluxError {
 	fn default() -> Self {
 		Self {
 			msg: String::new(),
-			code: PIErrorCode::NoCode,
+			code: FluxErrorCode::NoCode,
 			primary: None,
 			labels: vec![],
 		}
 	}
 }
 
-impl PIError {
-	pub fn with_msg(mut self, msg: String) -> PIError {
+impl FluxError {
+	pub fn with_msg(mut self, msg: String) -> FluxError {
 		self.msg = msg;
 		self
 	}
 
-	pub fn with_code(mut self, code: PIErrorCode) -> PIError {
+	pub fn with_code(mut self, code: FluxErrorCode) -> FluxError {
 		self.code = code;
 		self
 	}
 
-	pub fn with_primary(mut self, msg: String, span: Option<Span>) -> PIError {
+	pub fn with_primary(mut self, msg: String, span: Option<Span>) -> FluxError {
 		self.primary = Some((msg, span));
 		self
 	}
 
-	pub fn with_label(mut self, msg: String, span: Option<Span>) -> PIError {
+	pub fn with_label(mut self, msg: String, span: Option<Span>) -> FluxError {
 		self.labels.push((msg, span));
 		self
 	}
@@ -169,9 +169,9 @@ impl PIError {
 		if let Some(ref primary) = self.primary {
 			if let Some(ref span) = primary.1 {
 				labels
-					.push(Label::secondary(span.file_id, span.range.clone()).with_message(primary.0.clone()));
+					.push(Label::primary(span.file_id, span.range.clone()).with_message(primary.0.clone()));
 			} else {
-				labels.push(Label::secondary(FileId(0), 0..0).with_message(primary.0.clone()));
+				labels.push(Label::primary(FileId(0), 0..0).with_message(primary.0.clone()));
 			}
 		}
 		for (msg, span) in &self.labels {
@@ -189,13 +189,13 @@ impl PIError {
 	}
 }
 
-pub struct PIErrorReporting {
+pub struct FluxErrorReporting {
 	files: filesystem::Files,
 	writer: StandardStream,
 	config: Config,
 }
 
-impl Default for PIErrorReporting {
+impl Default for FluxErrorReporting {
 	fn default() -> Self {
 		let files = filesystem::Files::default();
 		let writer = StandardStream::stderr(ColorChoice::Always);
@@ -208,7 +208,7 @@ impl Default for PIErrorReporting {
 	}
 }
 
-impl PIErrorReporting {
+impl FluxErrorReporting {
 	pub fn add_file(&mut self, name: String, source: String) -> Option<filesystem::FileId> {
 		self.files.add(name, source)
 	}
@@ -229,7 +229,7 @@ impl PIErrorReporting {
 		FileId(0)
 	}
 
-	pub fn report(&self, errs: &[PIError]) {
+	pub fn report(&self, errs: &[FluxError]) {
 		for err in errs {
 			let writer = &mut self.writer.lock();
 			let _ = term::emit(writer, &self.config, &self.files, &err.to_diagnostic());

@@ -10,5 +10,5 @@ VarDecl@0..9
   Whitespace@5..6 " "
   Eq@6..7 "="
   Whitespace@7..9 "\n\t"
-PIError { msg: "expected expression lhs", code: UnexpectedToken, primary: ("", None), labels: [("expected expression lhs", Some(Span { range: 9..12, file_id: FileId(0) }))] }
-PIError { msg: "expected `;` after variable declaration", code: UnexpectedToken, primary: ("", None), labels: [("expected `;` after variable declaration", Some(Span { range: 9..12, file_id: FileId(0) }))] }
+FluxError { msg: "expected expression lhs", code: UnexpectedToken, primary: ("", None), labels: [("expected expression lhs", Some(Span { range: 9..12, file_id: FileId(0) }))] }
+FluxError { msg: "expected `;` after variable declaration", code: UnexpectedToken, primary: ("", None), labels: [("expected `;` after variable declaration", Some(Span { range: 9..12, file_id: FileId(0) }))] }

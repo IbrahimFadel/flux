@@ -33,8 +33,12 @@ impl PrefixOp {
 }
 
 pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
-	let result = if p.at(T![iN]) || p.at(T!(uN)) {
+	let result = if p.at(T![iN]) || p.at(T!(uN)) || p.at(T!(f32)) || p.at(T!(f64)) {
 		primitive_type(p)
+	} else if p.at(T!(ident)) {
+		let m = p.start();
+		p.bump();
+		m.complete(p, SyntaxKind::IdentType)
 	} else if p.at(T!(struct)) {
 		struct_type(p)
 	} else if p.at(T!(interface)) {
@@ -97,7 +101,7 @@ fn interface_type_method(p: &mut Parser) -> CompletedMarker {
 		TokenKind::SemiColon,
 		format!("expected `;` at end of interface type method"),
 	);
-	m.complete(p, SyntaxKind::InterfaceTypeMethod)
+	m.complete(p, SyntaxKind::InterfaceMethod)
 }
 
 fn interface_type_method_param(p: &mut Parser) -> CompletedMarker {
@@ -110,7 +114,7 @@ fn interface_type_method_param(p: &mut Parser) -> CompletedMarker {
 		T![ident],
 		format!("expected identifier in interface type method parameter"),
 	);
-	m.complete(p, SyntaxKind::InterfaceTypeMethodParam)
+	m.complete(p, SyntaxKind::FnParam)
 }
 
 fn struct_type(p: &mut Parser) -> CompletedMarker {
@@ -146,7 +150,7 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 }
 
 fn primitive_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![iN]) || p.at(T![uN]));
+	assert!(p.at(T![iN]) || p.at(T![uN]) || p.at(T![f32]) || p.at(T![f64]));
 	let m = p.start();
 	p.bump();
 	m.complete(p, SyntaxKind::PrimitiveType)
@@ -194,9 +198,11 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 }
 
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
-	let cm = if p.at(TokenKind::IntLit) {
+	let cm = if p.at(T!(intlit)) {
 		int_lit(p)
-	} else if p.at(TokenKind::Ident) {
+	} else if p.at(T!(floatlit)) {
+		float_lit(p)
+	} else if p.at(T!(ident)) {
 		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
 		prefix_neg(p)
@@ -214,6 +220,12 @@ fn int_lit(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(TokenKind::IntLit, format!("expected int literal"));
 	m.complete(p, SyntaxKind::IntExpr)
+}
+
+fn float_lit(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(TokenKind::FloatLit, format!("expected float literal"));
+	m.complete(p, SyntaxKind::FloatExpr)
 }
 
 pub(crate) fn ident_expr(p: &mut Parser) -> CompletedMarker {

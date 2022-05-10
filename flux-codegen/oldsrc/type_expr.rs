@@ -19,7 +19,7 @@
 // 						ptr::null_mut(),
 // 						Some(self.error(
 // 							format!("could not codegen type `{:?}`", e),
-// 							PIErrorCode::CodegenCouldNotCodegenTypeExpr,
+// 							FluxErrorCode::CodegenCouldNotCodegenTypeExpr,
 // 							vec![],
 // 						)),
 // 					),
@@ -29,7 +29,7 @@
 // 					ptr::null_mut(),
 // 					Some(self.error(
 // 						format!("could not codegen type `{:?}`", e),
-// 						PIErrorCode::CodegenCouldNotCodegenTypeExpr,
+// 						FluxErrorCode::CodegenCouldNotCodegenTypeExpr,
 // 						vec![],
 // 					)),
 // 				),
@@ -111,7 +111,7 @@
 // 				ptr::null_mut(),
 // 				Some(self.error(
 // 					format!("could not find type `{}`", ident.to_string()),
-// 					PIErrorCode::CodegenUnknownIdentType,
+// 					FluxErrorCode::CodegenUnknownIdentType,
 // 					vec![(
 // 						format!("unkown type `{}` referenced", ident.to_string()),
 // 						ident.span.clone(),

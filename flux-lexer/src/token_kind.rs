@@ -25,6 +25,9 @@ pub enum TokenKind {
 	#[regex("[0-9]+(_[0-9]+)*")]
 	IntLit,
 
+	#[regex(r"[0-9]+\.[0-9]+")]
+	FloatLit,
+
 	#[token("pub")]
 	PubKw,
 	#[token("fn")]
@@ -41,6 +44,8 @@ pub enum TokenKind {
 	StructKw,
 	#[token("interface")]
 	InterfaceKw,
+	#[regex("let")]
+	LetKw,
 	#[regex(r"i[1-9]+")]
 	INKw,
 	#[regex(r"u[1-9]+")]
@@ -99,6 +104,7 @@ macro_rules! T {
 	[ws] => { $crate::TokenKind::Whitespace };
 	[ident] => { $crate::TokenKind::Ident };
 	[intlit] => { $crate::TokenKind::IntLit };
+	[floatlit] => { $crate::TokenKind::FloatLit };
 	[pub] => { $crate::TokenKind::PubKw };
 	[fn] => { $crate::TokenKind::FnKw };
 	[type] => { $crate::TokenKind::TypeKw };
@@ -107,6 +113,7 @@ macro_rules! T {
 	[else] => { $crate::TokenKind::ElseKw };
 	[struct] => { $crate::TokenKind::StructKw };
 	[interface] => { $crate::TokenKind::InterfaceKw };
+	[let] => { $crate::TokenKind::LetKw };
 	[iN] => { $crate::TokenKind::INKw };
 	[uN] => { $crate::TokenKind::UNKw };
 	[f64] => { $crate::TokenKind::F64Kw };

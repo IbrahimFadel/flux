@@ -41,12 +41,12 @@
 // };
 // use flux_cfg::{CompilationSettings, OptimizationLevel};
 // use flux_error::filesystem::FileId;
-// use flux_error::{PIError, PIErrorCode};
+// use flux_error::{FluxError, FluxErrorCode};
 // use smol_str::SmolStr;
 // use uuid::Uuid;
 
-// type PITypeResult = (LLVMTypeRef, Option<PIError>);
-// type PIValueResult = (LLVMValueRef, Option<PIError>);
+// type PITypeResult = (LLVMTypeRef, Option<FluxError>);
+// type PIValueResult = (LLVMValueRef, Option<FluxError>);
 
 // mod symbol_table;
 // use symbol_table::SymbolTable;
@@ -109,10 +109,10 @@
 // 	pub fn error(
 // 		&self,
 // 		msg: String,
-// 		code: PIErrorCode,
+// 		code: FluxErrorCode,
 // 		labels: Vec<(String, Range<usize>)>,
-// 	) -> PIError {
-// 		PIError::new(msg, code, labels, self.file_id)
+// 	) -> FluxError {
+// 		FluxError::new(msg, code, labels, self.file_id)
 // 	}
 
 // 	pub fn dispose(&self) {
@@ -162,7 +162,7 @@
 // 		}
 // 	}
 
-// 	pub fn generate_ir(&mut self, file_ast_map: &'a mut IndexMap<FileId, AST>) -> Option<PIError> {
+// 	pub fn generate_ir(&mut self, file_ast_map: &'a mut IndexMap<FileId, AST>) -> Option<FluxError> {
 // 		// for (_, ast) in file_ast_map {
 // 		// 	self.tmp_data.mod_name = ast.name.clone();
 // 		// 	for (struct_name, interfaces) in &ast.struct_implementations {
@@ -197,7 +197,7 @@
 // 		return None;
 // 	}
 
-// 	fn apply_block(&mut self, apply_block: &mut ApplyBlock) -> Option<PIError> {
+// 	fn apply_block(&mut self, apply_block: &mut ApplyBlock) -> Option<FluxError> {
 // 		for method in &mut apply_block.methods {
 // 			let mut start = String::from("");
 // 			if let Some(name) = &apply_block.interface_name {
@@ -239,7 +239,7 @@
 // 		}
 // 	}
 
-// 	fn fn_decl(&mut self, f: &FnDecl) -> Option<PIError> {
+// 	fn fn_decl(&mut self, f: &FnDecl) -> Option<FluxError> {
 // 		self.tmp_data.cur_fn_name = f.name.to_string();
 // 		unsafe {
 // 			let (fn_ty, err) = self.fn_proto(&f.ret_ty, &f.params);
@@ -303,7 +303,7 @@
 // 		}
 // 	}
 
-// 	fn var_decl(&mut self, var: &VarDecl) -> Option<PIError> {
+// 	fn var_decl(&mut self, var: &VarDecl) -> Option<FluxError> {
 // 		let (ty, err) = self.type_expr(&var.type_);
 // 		if let Some(err) = err {
 // 			return Some(err);
@@ -333,7 +333,7 @@
 // 		return None;
 // 	}
 
-// 	fn type_decl(&mut self, ty: &'a TypeDecl) -> Option<PIError> {
+// 	fn type_decl(&mut self, ty: &'a TypeDecl) -> Option<FluxError> {
 // 		self.tmp_data.cur_type_decl = Some(ty);
 // 		let (ty_val, err) = self.type_expr(&ty.type_);
 // 		if let Some(err) = err {
@@ -376,7 +376,7 @@
 // pub fn codegen_ast<'a>(
 // 	file_ast_map: &'a mut IndexMap<FileId, AST>,
 // 	settings: &'a CompilationSettings,
-// ) -> (Codegen<'a>, Option<PIError>) {
+// ) -> (Codegen<'a>, Option<FluxError>) {
 // 	let entry_file_id = FileId(0);
 // 	let mut codegen = Codegen::new(String::from("main"), &entry_file_id, settings);
 // 	codegen.init_fpm();

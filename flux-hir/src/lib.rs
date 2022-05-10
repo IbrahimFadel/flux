@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use flux_error::filesystem::FileId;
 use indexmap::IndexMap;
 use smol_str::SmolStr;
@@ -27,30 +29,40 @@ pub fn lower(ast: ast::Root, file_id: FileId) -> HirModule {
 #[derive(Debug)]
 pub struct TypeDecl {
 	pub_: bool,
-	name: String,
-	ty: Type,
+	pub name: String,
+	pub ty: Type,
 }
 
 #[derive(Debug)]
 pub struct FnDecl {
-	block: Vec<Option<Stmt>>,
-	return_type: Type,
+	pub block: Vec<Option<Stmt>>,
+	pub return_type: Type,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FnParam {
+	mutable: bool,
+	ty: Type,
+	name: Option<SmolStr>,
 }
 
 #[derive(Debug)]
 pub enum Stmt {
-	VarDecl {
-		ty: Type,
-		name: SmolStr,
-		value: Expr,
-	},
+	VarDecl(VarDecl),
 	Expr(Expr),
 	If(If),
 }
 
 #[derive(Debug)]
+pub struct VarDecl {
+	pub ty: Type,
+	pub name: SmolStr,
+	pub value: Idx<Expr>,
+}
+
+#[derive(Debug)]
 pub struct If {
-	condition: Expr,
+	condition: Idx<Expr>,
 	then: Vec<Option<Stmt>>,
 	else_ifs: Vec<Option<Stmt>>,
 	else_: Vec<Option<Stmt>>,
@@ -58,7 +70,7 @@ pub struct If {
 
 impl If {
 	pub fn new(
-		condition: Expr,
+		condition: Idx<Expr>,
 		then: Vec<Option<Stmt>>,
 		else_ifs: Vec<Option<Stmt>>,
 		else_: Vec<Option<Stmt>>,
@@ -74,7 +86,7 @@ impl If {
 
 type ExprIdx = Idx<Expr>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
 	Binary {
 		op: BinaryOp,
@@ -84,6 +96,9 @@ pub enum Expr {
 	Int {
 		n: u64,
 	},
+	Float {
+		n: f64,
+	},
 	Prefix {
 		op: PrefixOp,
 		expr: ExprIdx,
@@ -91,18 +106,15 @@ pub enum Expr {
 	Ident {
 		val: SmolStr,
 	},
-	PrimitiveType {
-		ty: PrimitiveKind,
-	},
 	Missing,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrimitiveKind {
 	I32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOp {
 	Add,
 	Sub,
@@ -111,35 +123,50 @@ pub enum BinaryOp {
 	CmpEq,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrefixOp {
 	Neg,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Type {
 	INType(INType),
 	UNType(UNType),
+	F64Type,
+	F32Type,
+	IdentType(SmolStr),
 	StructType(StructType),
+	InterfaceType(InterfaceType),
+	VoidType,
 	Missing,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+pub struct InterfaceType(HashMap<String, InterfaceMethod>);
+
+#[derive(Debug, PartialEq)]
+pub struct InterfaceMethod {
+	public: bool,
+	params: Vec<FnParam>,
+	return_ty: Type,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct StructType(IndexMap<String, StructField>);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct StructField {
 	public: bool,
 	mutable: bool,
 	ty: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct INType {
-	bits: u32,
+	pub bits: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct UNType {
-	bits: u32,
+	pub bits: u32,
 }

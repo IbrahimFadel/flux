@@ -1,7 +1,7 @@
 // use super::*;
 
 // impl<'a> Codegen<'a> {
-// 	pub fn block_stmt(&mut self, block: &BlockStmt) -> Option<PIError> {
+// 	pub fn block_stmt(&mut self, block: &BlockStmt) -> Option<FluxError> {
 // 		for stmt in block {
 // 			if let Some(err) = self.stmt(stmt) {
 // 				return Some(err);
@@ -10,7 +10,7 @@
 // 		return None;
 // 	}
 
-// 	fn stmt(&mut self, stmt: &Stmt) -> Option<PIError> {
+// 	fn stmt(&mut self, stmt: &Stmt) -> Option<FluxError> {
 // 		match stmt {
 // 			Stmt::If(if_) => self.if_stmt(if_),
 // 			Stmt::VarDecl(var) => self.var_decl(var),
@@ -21,13 +21,13 @@
 // 					"internal compiler error: could not codegen statement: {:?}",
 // 					stmt
 // 				),
-// 				PIErrorCode::CodegenCouldNotCodegenStmt,
+// 				FluxErrorCode::CodegenCouldNotCodegenStmt,
 // 				vec![],
 // 			)),
 // 		}
 // 	}
 
-// 	fn if_stmt(&mut self, if_: &If) -> Option<PIError> {
+// 	fn if_stmt(&mut self, if_: &If) -> Option<FluxError> {
 // 		let (cond, err) = self.expr(&if_.condition);
 // 		if let Some(err) = err {
 // 			return Some(err);
@@ -105,7 +105,7 @@
 // 		return None;
 // 	}
 
-// 	fn ret_stmt(&mut self, ret: &Return) -> Option<PIError> {
+// 	fn ret_stmt(&mut self, ret: &Return) -> Option<FluxError> {
 // 		unsafe {
 // 			match &ret.val {
 // 				Some(x) => {

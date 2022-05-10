@@ -1,7 +1,7 @@
 use crate::Parse;
 
 use super::event::Event;
-use flux_error::PIError;
+use flux_error::FluxError;
 use flux_lexer::{Token, TokenKind};
 use flux_syntax::syntax_kind::PILanguage;
 use rowan::{GreenNodeBuilder, Language};
@@ -12,7 +12,7 @@ pub(super) struct Sink<'t, 'src> {
 	tokens: &'t [Token<'src>],
 	cursor: usize,
 	events: Vec<Event>,
-	errors: Vec<PIError>,
+	errors: Vec<FluxError>,
 }
 
 impl<'t, 'src> Sink<'t, 'src> {

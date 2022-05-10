@@ -13,7 +13,13 @@ pub(crate) fn block(p: &mut Parser) -> CompletedMarker {
 }
 
 pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
-	if p.at(T!(iN)) {
+	if p.at(T!(let))
+		|| p.at(T!(iN))
+		|| p.at(T!(uN))
+		|| p.at(T!(f32))
+		|| p.at(T!(f64))
+		|| p.at(T!(ident))
+	{
 		Some(var_decl(p))
 	} else if p.at(T!(if)) {
 		Some(if_stmt(p))
@@ -48,7 +54,11 @@ fn else_if_stmt(p: &mut Parser) -> CompletedMarker {
 
 fn var_decl(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	type_expr(p);
+	if p.at(T!(let)) {
+		p.bump();
+	} else {
+		type_expr(p);
+	}
 	p.expect(
 		TokenKind::Ident,
 		format!("expected identifier in variable declaration"),

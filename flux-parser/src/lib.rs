@@ -1,5 +1,5 @@
 use self::{sink::Sink, source::Source};
-use flux_error::{filesystem::FileId, PIError};
+use flux_error::{filesystem::FileId, FluxError};
 use flux_lexer::Lexer;
 use flux_syntax::syntax_kind::SyntaxNode;
 use parser::Parser;
@@ -24,7 +24,7 @@ pub fn parse(src: &str, file_id: FileId) -> Parse {
 #[derive(Debug)]
 pub struct Parse {
 	green_node: GreenNode,
-	pub errors: Vec<PIError>,
+	pub errors: Vec<FluxError>,
 }
 
 impl Parse {

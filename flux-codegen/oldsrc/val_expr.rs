@@ -145,7 +145,7 @@
 // 				ptr::null_mut(),
 // 				Some(self.error(
 // 					format!("unknown variable referenced `{}`", ident.to_string()),
-// 					PIErrorCode::CodegenUnknownVarReferenced,
+// 					FluxErrorCode::CodegenUnknownVarReferenced,
 // 					vec![(
 // 						format!("could not find variable `{}`", ident.to_string()),
 // 						ident.span.clone(),
@@ -252,7 +252,7 @@
 // 						ptr::null_mut(),
 // 						Some(self.error(
 // 							format!("could not find method `{}`", field_name.to_string()),
-// 							PIErrorCode::CodegenCouldNotFindMethod,
+// 							FluxErrorCode::CodegenCouldNotFindMethod,
 // 							vec![],
 // 						)),
 // 					);
@@ -311,7 +311,7 @@
 // 							"cannot compare the two values: `{:?}` and `{:?}`",
 // 							binop.x, binop.y
 // 						),
-// 						PIErrorCode::CodegenCouldNotCmpValsOfType,
+// 						FluxErrorCode::CodegenCouldNotCmpValsOfType,
 // 						vec![],
 // 					)),
 // 				),
