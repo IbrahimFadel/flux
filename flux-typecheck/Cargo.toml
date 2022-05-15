@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+flux-syntax = { path = "../flux-syntax" }
 flux-hir = { path = "../flux-hir" }
 flux-error = { path = "../flux-error" }
 la-arena = "0.2.0"

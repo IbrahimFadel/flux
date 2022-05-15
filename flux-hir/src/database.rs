@@ -1,22 +1,21 @@
 use std::collections::HashMap;
 
 use crate::{
-	BinaryOp, Expr, FnDecl, FnParam, INType, If, InterfaceMethod, InterfaceType, PrefixOp, Stmt,
-	StructField, StructType, Type, TypeDecl, UNType, VarDecl,
+	BinaryOp, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, PrefixOp, Return,
+	Stmt, StructField, StructType, Type, TypeDecl, VarDecl,
 };
 use flux_error::{filesystem::FileId, FluxError, FluxErrorCode, Span};
 use flux_syntax::{
-	ast::{self, AstNode, FloatExpr, IntExpr},
+	ast::{self, AstNode, CallExpr, FloatExpr, IntExpr, Spanned},
 	syntax_kind::SyntaxKind,
 };
 use indexmap::IndexMap;
-use la_arena::{Arena, ArenaMap, Idx};
-use text_size::TextRange;
+use la_arena::{Arena, Idx};
+use text_size::{TextRange, TextSize};
 
 #[derive(Debug)]
 pub struct Database {
-	pub expr_ranges: ArenaMap<Idx<Expr>, TextRange>,
-	pub exprs: Arena<Expr>,
+	pub exprs: Arena<Spanned<Expr>>,
 	pub errors: Vec<FluxError>,
 	file_id: FileId,
 }
@@ -24,7 +23,6 @@ pub struct Database {
 impl Database {
 	pub fn new(file_id: FileId) -> Self {
 		Self {
-			expr_ranges: ArenaMap::default(),
 			exprs: Arena::default(),
 			errors: vec![],
 			file_id,
@@ -34,13 +32,33 @@ impl Database {
 
 impl Database {
 	pub(crate) fn lower_fn(&mut self, ast: ast::FnDecl) -> Option<FnDecl> {
+		let params = self.lower_params(ast.params())?;
 		let block = if let Some(block) = ast.body() {
 			self.lower_block(block)
 		} else {
 			vec![]
 		};
-		let return_type = self.lower_type(ast.return_type())?;
-		Some(FnDecl { block, return_type })
+		let return_type = self.lower_type(ast.return_type());
+		let return_type = if let Some(ty) = &return_type {
+			if let Type::Missing = ty.node {
+				Spanned::new(Type::VoidType, ty.span.clone())
+			} else {
+				return_type.unwrap()
+			}
+		} else {
+			return_type.unwrap()
+		};
+		let name = if let Some(name) = ast.name() {
+			Some(name.text().to_string())
+		} else {
+			None
+		};
+		Some(FnDecl {
+			name,
+			params,
+			block,
+			return_type,
+		})
 	}
 
 	pub(crate) fn lower_ty_decl(&mut self, ast: ast::TypeDecl) -> Option<TypeDecl> {
@@ -51,7 +69,7 @@ impl Database {
 		})
 	}
 
-	fn lower_type(&mut self, ast: Option<ast::Type>) -> Option<Type> {
+	fn lower_type(&mut self, ast: Option<ast::Type>) -> Option<Spanned<Type>> {
 		if let Some(ast) = ast {
 			match ast {
 				ast::Type::PrimitiveType(ast) => self.lower_primitive_type(ast),
@@ -60,15 +78,24 @@ impl Database {
 				ast::Type::IdentType(ast) => self.lower_ident_type(ast),
 			}
 		} else {
-			Some(Type::Missing)
+			Some(Spanned::new(
+				Type::Missing,
+				Span::new(
+					TextRange::new(TextSize::from(0), TextSize::from(0)),
+					self.file_id,
+				),
+			))
 		}
 	}
 
-	fn lower_ident_type(&mut self, ast: ast::IdentType) -> Option<Type> {
-		Some(Type::IdentType(ast.name()?.text().into()))
+	fn lower_ident_type(&mut self, ast: ast::IdentType) -> Option<Spanned<Type>> {
+		Some(Spanned::new(
+			Type::IdentType(ast.name()?.text().into()),
+			Span::new(ast.range(), self.file_id),
+		))
 	}
 
-	fn lower_interface_type(&mut self, ast: ast::InterfaceType) -> Option<Type> {
+	fn lower_interface_type(&mut self, ast: ast::InterfaceType) -> Option<Spanned<Type>> {
 		let mut hir_methods = HashMap::new();
 		let methods = ast.methods();
 		for method in methods {
@@ -83,10 +110,13 @@ impl Database {
 				);
 			}
 		}
-		Some(Type::InterfaceType(InterfaceType(hir_methods)))
+		Some(Spanned::new(
+			Type::InterfaceType(InterfaceType(hir_methods)),
+			Span::new(ast.range(), self.file_id),
+		))
 	}
 
-	fn lower_params(&mut self, ast: Vec<ast::FnParam>) -> Option<Vec<FnParam>> {
+	fn lower_params(&mut self, ast: Vec<ast::FnParam>) -> Option<Vec<Spanned<FnParam>>> {
 		let mut params = vec![];
 		for param in ast {
 			let name = if let Some(name) = param.name() {
@@ -94,16 +124,19 @@ impl Database {
 			} else {
 				None
 			};
-			params.push(FnParam {
-				mutable: param.mutable().is_some(),
-				ty: self.lower_type(param.ty())?,
-				name,
-			});
+			params.push(Spanned::new(
+				FnParam {
+					mutable: param.mutable().is_some(),
+					ty: self.lower_type(param.ty())?,
+					name,
+				},
+				Span::new(param.range(), self.file_id),
+			));
 		}
 		Some(params)
 	}
 
-	fn lower_struct_type(&mut self, ast: ast::StructType) -> Option<Type> {
+	fn lower_struct_type(&mut self, ast: ast::StructType) -> Option<Spanned<Type>> {
 		let mut hir_fields = IndexMap::new();
 		let fields = ast.fields();
 		for field in fields {
@@ -117,10 +150,13 @@ impl Database {
 				},
 			);
 		}
-		Some(Type::StructType(StructType(hir_fields)))
+		Some(Spanned::new(
+			Type::StructType(StructType(hir_fields)),
+			Span::new(ast.range(), self.file_id),
+		))
 	}
 
-	fn lower_block(&mut self, ast: ast::BlockStmt) -> Vec<Option<Stmt>> {
+	fn lower_block(&mut self, ast: ast::BlockStmt) -> Vec<Option<Spanned<Stmt>>> {
 		let mut block = vec![];
 		let stmts = ast.stmts();
 		for stmt in stmts {
@@ -129,15 +165,31 @@ impl Database {
 		block
 	}
 
-	pub(crate) fn lower_stmt(&mut self, ast: ast::Stmt) -> Option<Stmt> {
+	pub(crate) fn lower_stmt(&mut self, ast: ast::Stmt) -> Option<Spanned<Stmt>> {
 		match ast {
 			ast::Stmt::VarDecl(ref ast) => self.lower_var_decl(ast),
 			ast::Stmt::IfStmt(ref ast) => self.lower_if_stmt(ast),
-			_ => None,
+			ast::Stmt::ExprStmt(ref ast) => {
+				let e = self.lower_expr(ast.expr());
+				Some(Spanned::new(
+					Stmt::Expr(e),
+					Span::new(ast.range(), self.file_id),
+				))
+			}
+			ast::Stmt::ReturnStmt(ref ast) => self.lower_return_stmt(ast),
+			ast::Stmt::BlockStmt(_) => None,
 		}
 	}
 
-	fn lower_if_stmt(&mut self, ast: &ast::IfStmt) -> Option<Stmt> {
+	fn lower_return_stmt(&mut self, ast: &ast::ReturnStmt) -> Option<Spanned<Stmt>> {
+		let value = self.lower_expr(ast.value());
+		Some(Spanned::new(
+			Stmt::Return(Return { value }),
+			Span::new(ast.range(), self.file_id),
+		))
+	}
+
+	fn lower_if_stmt(&mut self, ast: &ast::IfStmt) -> Option<Spanned<Stmt>> {
 		let condition = self.lower_expr(ast.condition());
 		let then = if let Some(then) = ast.then() {
 			self.lower_block(then)
@@ -155,22 +207,34 @@ impl Database {
 			vec![]
 		};
 
-		Some(Stmt::If(If::new(condition, then, else_ifs, else_)))
+		Some(Spanned::new(
+			Stmt::If(If::new(condition, then, else_ifs, else_)),
+			Span::new(ast.range(), self.file_id),
+		))
 	}
 
-	fn lower_var_decl(&mut self, ast: &ast::VarDecl) -> Option<Stmt> {
-		Some(Stmt::VarDecl(VarDecl {
-			ty: self.lower_type(ast.ty())?,
-			name: ast.name()?.text().into(),
-			value: self.lower_expr(ast.value()),
-		}))
+	fn lower_var_decl(&mut self, ast: &ast::VarDecl) -> Option<Spanned<Stmt>> {
+		Some(Spanned::new(
+			Stmt::VarDecl(VarDecl {
+				ty: self.lower_type(ast.ty())?,
+				name: ast.name()?.text().into(),
+				value: self.lower_expr(ast.value()),
+			}),
+			Span::new(ast.range(), self.file_id),
+		))
 	}
 
-	pub(crate) fn lower_expr(&mut self, ast: Option<ast::Expr>) -> Idx<Expr> {
+	pub(crate) fn lower_expr(&mut self, ast: Option<ast::Expr>) -> Idx<Spanned<Expr>> {
 		let expr = if let Some(ast) = ast {
 			ast
 		} else {
-			return self.exprs.alloc(Expr::Missing);
+			return self.exprs.alloc(Spanned::new(
+				Expr::Missing,
+				Span::new(
+					TextRange::new(TextSize::from(0), TextSize::from(0)),
+					self.file_id,
+				),
+			));
 		};
 		let range = expr.range();
 		let idx = if let ast::Expr::ParenExpr(ast) = expr {
@@ -184,12 +248,20 @@ impl Database {
 				ast::Expr::IdentExpr(ast) => Expr::Ident {
 					val: ast.name().unwrap().text().into(),
 				},
+				ast::Expr::CallExpr(ast) => self.lower_call(ast),
 				_ => unreachable!(),
 			};
-			self.exprs.alloc(expr)
+			self
+				.exprs
+				.alloc(Spanned::new(expr, Span::new(range, self.file_id)))
 		};
-		self.expr_ranges.insert(idx, range);
 		idx
+	}
+
+	fn lower_call(&mut self, ast: CallExpr) -> Expr {
+		let callee = self.lower_expr(ast.callee());
+		let args = ast.args().map(|arg| self.lower_expr(Some(arg))).collect();
+		Expr::Call(Call { callee, args })
 	}
 
 	fn lower_float(&mut self, ast: FloatExpr) -> Expr {
@@ -255,27 +327,42 @@ impl Database {
 				);
 				return Expr::Missing;
 			} else {
-				return Expr::Int { n: n.unwrap() };
+				return Expr::Int(Int {
+					n: n.unwrap(),
+					ty: Type::UNType(32),
+				});
 			}
 		} else {
 			Expr::Missing
 		}
 	}
 
-	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Option<Type> {
+	fn lower_primitive_type(&mut self, ast: ast::PrimitiveType) -> Option<Spanned<Type>> {
 		if let Some(ty) = ast.ty() {
 			let first_char = &ty.text()[0..1];
 			let rest_str = &ty.text()[1..];
 			let bits: u32 = rest_str.parse().unwrap();
 			if first_char == "u" {
-				Some(Type::UNType(UNType { bits }))
+				Some(Spanned::new(
+					Type::UNType(bits),
+					Span::new(ast.range(), self.file_id),
+				))
 			} else if first_char == "i" {
-				Some(Type::INType(INType { bits }))
+				Some(Spanned::new(
+					Type::INType(bits),
+					Span::new(ast.range(), self.file_id),
+				))
 			} else if first_char == "f" {
 				if bits == 64 {
-					Some(Type::F64Type)
+					Some(Spanned::new(
+						Type::F64Type,
+						Span::new(ast.range(), self.file_id),
+					))
 				} else if bits == 32 {
-					Some(Type::F32Type)
+					Some(Spanned::new(
+						Type::F32Type,
+						Span::new(ast.range(), self.file_id),
+					))
 				} else {
 					None
 				}

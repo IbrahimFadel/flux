@@ -6,9 +6,10 @@ use smol_str::SmolStr;
 
 mod database;
 pub use database::Database;
-use flux_syntax::ast;
+use flux_syntax::ast::{self, Spanned};
 use la_arena::Idx;
 
+#[derive(Debug)]
 pub struct HirModule {
 	pub db: Database,
 	pub functions: Vec<FnDecl>,
@@ -30,50 +31,58 @@ pub fn lower(ast: ast::Root, file_id: FileId) -> HirModule {
 pub struct TypeDecl {
 	pub_: bool,
 	pub name: String,
-	pub ty: Type,
+	pub ty: Spanned<Type>,
 }
 
 #[derive(Debug)]
 pub struct FnDecl {
-	pub block: Vec<Option<Stmt>>,
-	pub return_type: Type,
+	pub name: Option<String>,
+	pub params: Vec<Spanned<FnParam>>,
+	pub block: Vec<Option<Spanned<Stmt>>>,
+	pub return_type: Spanned<Type>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FnParam {
 	mutable: bool,
-	ty: Type,
-	name: Option<SmolStr>,
+	pub ty: Spanned<Type>,
+	pub name: Option<SmolStr>,
 }
 
 #[derive(Debug)]
 pub enum Stmt {
 	VarDecl(VarDecl),
-	Expr(Expr),
+	Expr(ExprIdx),
 	If(If),
+	Return(Return),
+}
+
+#[derive(Debug)]
+pub struct Return {
+	pub value: ExprIdx,
 }
 
 #[derive(Debug)]
 pub struct VarDecl {
-	pub ty: Type,
+	pub ty: Spanned<Type>,
 	pub name: SmolStr,
-	pub value: Idx<Expr>,
+	pub value: Idx<Spanned<Expr>>,
 }
 
 #[derive(Debug)]
 pub struct If {
-	condition: Idx<Expr>,
-	then: Vec<Option<Stmt>>,
-	else_ifs: Vec<Option<Stmt>>,
-	else_: Vec<Option<Stmt>>,
+	condition: ExprIdx,
+	then: Vec<Option<Spanned<Stmt>>>,
+	else_ifs: Vec<Option<Spanned<Stmt>>>,
+	else_: Vec<Option<Spanned<Stmt>>>,
 }
 
 impl If {
 	pub fn new(
-		condition: Idx<Expr>,
-		then: Vec<Option<Stmt>>,
-		else_ifs: Vec<Option<Stmt>>,
-		else_: Vec<Option<Stmt>>,
+		condition: ExprIdx,
+		then: Vec<Option<Spanned<Stmt>>>,
+		else_ifs: Vec<Option<Spanned<Stmt>>>,
+		else_: Vec<Option<Spanned<Stmt>>>,
 	) -> Self {
 		Self {
 			condition,
@@ -84,7 +93,7 @@ impl If {
 	}
 }
 
-type ExprIdx = Idx<Expr>;
+pub type ExprIdx = Idx<Spanned<Expr>>;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
@@ -93,9 +102,7 @@ pub enum Expr {
 		lhs: ExprIdx,
 		rhs: ExprIdx,
 	},
-	Int {
-		n: u64,
-	},
+	Int(Int),
 	Float {
 		n: f64,
 	},
@@ -106,7 +113,20 @@ pub enum Expr {
 	Ident {
 		val: SmolStr,
 	},
+	Call(Call),
 	Missing,
+}
+
+#[derive(Debug, Clone)]
+pub struct Int {
+	n: u64,
+	pub ty: Type,
+}
+
+#[derive(Debug, Clone)]
+pub struct Call {
+	pub callee: ExprIdx,
+	pub args: Vec<ExprIdx>,
 }
 
 #[derive(Debug, Clone)]
@@ -128,10 +148,12 @@ pub enum PrefixOp {
 	Neg,
 }
 
-#[derive(Debug, PartialEq)]
+type BitSize = u32;
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Type {
-	INType(INType),
-	UNType(UNType),
+	INType(BitSize),
+	UNType(BitSize),
 	F64Type,
 	F32Type,
 	IdentType(SmolStr),
@@ -141,32 +163,22 @@ pub enum Type {
 	Missing,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct InterfaceType(HashMap<String, InterfaceMethod>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct InterfaceMethod {
 	public: bool,
-	params: Vec<FnParam>,
-	return_ty: Type,
+	params: Vec<Spanned<FnParam>>,
+	return_ty: Spanned<Type>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct StructType(IndexMap<String, StructField>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct StructField {
 	public: bool,
 	mutable: bool,
-	ty: Type,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct INType {
-	pub bits: u32,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct UNType {
-	pub bits: u32,
+	ty: Spanned<Type>,
 }

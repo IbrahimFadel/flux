@@ -1,3 +1,6 @@
+use std::ops::{Deref, DerefMut};
+
+use flux_error::Span;
 use rowan::TextRange;
 
 use crate::syntax_kind::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -40,6 +43,32 @@ impl Root {
 		self.0.children().filter_map(TypeDecl::cast)
 	}
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spanned<T> {
+	pub node: T,
+	pub span: Span,
+}
+
+impl<T> Spanned<T> {
+	pub fn new(node: T, span: Span) -> Self {
+		Self { node, span }
+	}
+}
+
+impl<T> Deref for Spanned<T> {
+	type Target = T;
+	fn deref(&self) -> &Self::Target {
+		&self.node
+	}
+}
+
+// impl<T> DerefMut for Spanned<T> {
+// 	type Target = T;
+// 	fn deref_mut(&mut self) -> &mut Self::Target {
+// 		&mut self.node
+// 	}
+// }
 
 #[derive(Debug)]
 pub struct TypeDecl(SyntaxNode);
@@ -112,8 +141,8 @@ impl FnDecl {
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
-	pub fn params(&self) -> Option<FnParams> {
-		self.0.children().find_map(FnParams::cast)
+	pub fn params(&self) -> Vec<FnParam> {
+		self.0.children().filter_map(FnParam::cast).collect()
 	}
 
 	pub fn return_type(&self) -> Option<Type> {
@@ -126,12 +155,50 @@ impl FnDecl {
 }
 
 #[derive(Debug)]
-pub struct FnParams(SyntaxNode);
+pub enum Stmt {
+	ExprStmt(ExprStmt),
+	VarDecl(VarDecl),
+	BlockStmt(BlockStmt),
+	IfStmt(IfStmt),
+	ReturnStmt(ReturnStmt),
+}
 
-impl AstNode for FnParams {
+impl AstNode for Stmt {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let result = match syntax.kind() {
+			SyntaxKind::ExprStmt => Self::ExprStmt(ExprStmt(syntax)),
+			SyntaxKind::VarDecl => Self::VarDecl(VarDecl(syntax)),
+			SyntaxKind::BlockStmt => Self::BlockStmt(BlockStmt(syntax)),
+			SyntaxKind::IfStmt => Self::IfStmt(IfStmt(syntax)),
+			SyntaxKind::ReturnStmt => Self::ReturnStmt(ReturnStmt(syntax)),
+			_ => return None,
+		};
+
+		Some(result)
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			Stmt::ExprStmt(node) => &node.0,
+			Stmt::VarDecl(node) => &node.0,
+			Stmt::BlockStmt(node) => &node.0,
+			Stmt::IfStmt(node) => &node.0,
+			Stmt::ReturnStmt(node) => &node.0,
+		}
+	}
+
+	fn range(&self) -> TextRange {
+		self.syntax().text_range()
+	}
+}
+
+#[derive(Debug)]
+pub struct ReturnStmt(SyntaxNode);
+
+impl AstNode for ReturnStmt {
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		match syntax.kind() {
-			SyntaxKind::FnParams => Some(Self(syntax)),
+			SyntaxKind::ReturnStmt => Some(Self(syntax)),
 			_ => None,
 		}
 	}
@@ -145,38 +212,9 @@ impl AstNode for FnParams {
 	}
 }
 
-#[derive(Debug)]
-pub enum Stmt {
-	ExprStmt(ExprStmt),
-	VarDecl(VarDecl),
-	BlockStmt(BlockStmt),
-	IfStmt(IfStmt),
-}
-
-impl AstNode for Stmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let result = match syntax.kind() {
-			SyntaxKind::ExprStmt => Self::ExprStmt(ExprStmt(syntax)),
-			SyntaxKind::VarDecl => Self::VarDecl(VarDecl(syntax)),
-			SyntaxKind::BlockStmt => Self::BlockStmt(BlockStmt(syntax)),
-			SyntaxKind::IfStmt => Self::IfStmt(IfStmt(syntax)),
-			_ => return None,
-		};
-
-		Some(result)
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Stmt::ExprStmt(node) => &node.0,
-			Stmt::VarDecl(node) => &node.0,
-			Stmt::BlockStmt(node) => &node.0,
-			Stmt::IfStmt(node) => &node.0,
-		}
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
+impl ReturnStmt {
+	pub fn value(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
 	}
 }
 
@@ -197,6 +235,12 @@ impl AstNode for ExprStmt {
 
 	fn range(&self) -> TextRange {
 		self.syntax().text_range()
+	}
+}
+
+impl ExprStmt {
+	pub fn expr(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
 	}
 }
 
@@ -310,6 +354,7 @@ pub enum Expr {
 	ParenExpr(ParenExpr),
 	PrefixExpr(PrefixExpr),
 	IdentExpr(IdentExpr),
+	CallExpr(CallExpr),
 }
 
 impl AstNode for Expr {
@@ -321,6 +366,7 @@ impl AstNode for Expr {
 			SyntaxKind::ParenExpr => Self::ParenExpr(ParenExpr(syntax)),
 			SyntaxKind::PrefixExpr => Self::PrefixExpr(PrefixExpr(syntax)),
 			SyntaxKind::IdentExpr => Self::IdentExpr(IdentExpr(syntax)),
+			SyntaxKind::CallExpr => Self::CallExpr(CallExpr(syntax)),
 			_ => return None,
 		};
 
@@ -335,11 +381,42 @@ impl AstNode for Expr {
 			Expr::ParenExpr(node) => &node.0,
 			Expr::PrefixExpr(node) => &node.0,
 			Expr::IdentExpr(node) => &node.0,
+			Expr::CallExpr(node) => &node.0,
 		}
 	}
 
 	fn range(&self) -> TextRange {
 		self.syntax().text_range()
+	}
+}
+
+#[derive(Debug)]
+pub struct CallExpr(SyntaxNode);
+
+impl AstNode for CallExpr {
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		match syntax.kind() {
+			SyntaxKind::CallExpr => Some(Self(syntax)),
+			_ => None,
+		}
+	}
+
+	fn syntax(&self) -> &SyntaxNode {
+		&self.0
+	}
+
+	fn range(&self) -> TextRange {
+		self.syntax().text_range()
+	}
+}
+
+impl CallExpr {
+	pub fn callee(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
+	}
+
+	pub fn args(&self) -> impl Iterator<Item = Expr> {
+		self.0.children().filter_map(Expr::cast).skip(1)
 	}
 }
 

@@ -137,6 +137,7 @@ name = "flux-syntax"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "flux-error",
  "flux-lexer",
  "num-derive",
  "num-traits",
@@ -152,6 +153,7 @@ version = "0.1.0"
 dependencies = [
  "flux-error",
  "flux-hir",
+ "flux-syntax",
  "la-arena",
  "smol_str",
  "text-size",

@@ -164,6 +164,11 @@ impl FluxError {
 		self
 	}
 
+	pub fn prefix_msg(mut self, msg: String) -> FluxError {
+		self.msg = format!("{}{}", msg, self.msg);
+		self
+	}
+
 	pub fn to_diagnostic(&self) -> Diagnostic<filesystem::FileId> {
 		let mut labels: Vec<Label<filesystem::FileId>> = vec![];
 		if let Some(ref primary) = self.primary {

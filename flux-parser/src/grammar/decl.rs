@@ -72,8 +72,7 @@ fn generic_list(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::GenericList)
 }
 
-fn fn_params(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
+fn fn_params(p: &mut Parser) {
 	p.expect(
 		T![lparen],
 		format!("expected `(` at beginning of function parameter list"),
@@ -95,7 +94,6 @@ fn fn_params(p: &mut Parser) -> CompletedMarker {
 		T![rparen],
 		format!("expected `)` at end of function parameter list"),
 	);
-	m.complete(p, SyntaxKind::FnParams)
 }
 
 fn fn_param(p: &mut Parser) -> CompletedMarker {

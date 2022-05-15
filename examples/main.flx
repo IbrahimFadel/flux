@@ -1,5 +1,10 @@
-type Foo i5
+fn foo(u13 a) -> i32 {
+  let b = a;
+  i32 x = b;
+}
 
 fn main() {
-  Foo x = 1;
+  let x = 1 + 4;
+  let y = x;
+  let z = foo(y);
 }

@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use logos::Logos;
 use num_derive::{FromPrimitive, ToPrimitive};
 
@@ -46,6 +44,8 @@ pub enum TokenKind {
 	InterfaceKw,
 	#[regex("let")]
 	LetKw,
+	#[regex("return")]
+	ReturnKw,
 	#[regex(r"i[1-9]+")]
 	INKw,
 	#[regex(r"u[1-9]+")]
@@ -114,6 +114,7 @@ macro_rules! T {
 	[struct] => { $crate::TokenKind::StructKw };
 	[interface] => { $crate::TokenKind::InterfaceKw };
 	[let] => { $crate::TokenKind::LetKw };
+	[return] => { $crate::TokenKind::ReturnKw };
 	[iN] => { $crate::TokenKind::INKw };
 	[uN] => { $crate::TokenKind::UNKw };
 	[f64] => { $crate::TokenKind::F64Kw };

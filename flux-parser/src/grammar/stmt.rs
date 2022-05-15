@@ -18,14 +18,34 @@ pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
 		|| p.at(T!(uN))
 		|| p.at(T!(f32))
 		|| p.at(T!(f64))
-		|| p.at(T!(ident))
+		|| (p.at(T!(ident)) && matches!(p.peek_next(), Some(T!(ident)) | Some(T!(eq))))
 	{
 		Some(var_decl(p))
 	} else if p.at(T!(if)) {
 		Some(if_stmt(p))
+	} else if p.at(T!(return)) {
+		Some(return_stmt(p))
 	} else {
-		expr::expr(p)
+		let m = p.start();
+		expr::expr(p);
+		p.expect(T!(semicolon), format!("expected `;` after expression"));
+		Some(m.complete(p, SyntaxKind::ExprStmt))
 	}
+}
+
+fn return_stmt(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.bump();
+	if p.at(T!(semicolon)) {
+		p.bump();
+		return m.complete(p, SyntaxKind::ReturnStmt);
+	}
+	expr::expr(p);
+	p.expect(
+		T!(semicolon),
+		format!("expected `;` after return statement"),
+	);
+	m.complete(p, SyntaxKind::ReturnStmt)
 }
 
 fn if_stmt(p: &mut Parser) -> CompletedMarker {

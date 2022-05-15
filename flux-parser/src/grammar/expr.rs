@@ -194,7 +194,32 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 		}
 	}
 
-	Some(lhs)
+	let postfix = postfix(p, lhs);
+	Some(postfix)
+}
+
+fn postfix(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
+	if p.at(T!(lparen)) {
+		let m = e.precede(p);
+		p.bump();
+
+		while !p.at(T!(rparen)) && !p.at_end() {
+			expr(p);
+			if !p.at(T!(rparen)) {
+				if !p.at(T!(comma)) {
+					p.error(format!("expected either `,` or `)` in call expression"));
+					break;
+				} else {
+					p.bump();
+				}
+			}
+		}
+		p.expect(T!(rparen), format!("expected `)` in call expression"));
+
+		m.complete(p, SyntaxKind::CallExpr)
+	} else {
+		e
+	}
 }
 
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
