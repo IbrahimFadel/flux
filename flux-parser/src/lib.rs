@@ -6,7 +6,7 @@ use parser::Parser;
 use rowan::GreenNode;
 
 mod event;
-mod grammar;
+pub mod grammar;
 mod parser;
 mod sink;
 mod source;

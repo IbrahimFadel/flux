@@ -8,14 +8,23 @@ enum InfixOp {
 	Mul,
 	Div,
 	CmpEq,
+	CmpNeq,
+	CmpLt,
+	CmpGt,
+	CmpLte,
+	CmpGte,
+	DoubleColon,
 }
 
 impl InfixOp {
 	fn binding_power(&self) -> (u8, u8) {
 		match self {
-			Self::CmpEq => (1, 2),
+			Self::CmpEq | Self::CmpNeq | Self::CmpLt | Self::CmpGt | Self::CmpLte | Self::CmpGte => {
+				(1, 2)
+			}
 			Self::Add | Self::Sub => (3, 4),
 			Self::Mul | Self::Div => (4, 5),
+			Self::DoubleColon => (6, 7),
 		}
 	}
 }
@@ -164,16 +173,28 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 	let mut lhs = lhs(p)?;
 
 	loop {
-		let op = if p.at(TokenKind::Plus) {
+		let op = if p.at(T!(+)) {
 			InfixOp::Add
-		} else if p.at(TokenKind::Minus) {
+		} else if p.at(T!(-)) {
 			InfixOp::Sub
-		} else if p.at(TokenKind::Star) {
+		} else if p.at(T!(*)) {
 			InfixOp::Mul
-		} else if p.at(TokenKind::Slash) {
+		} else if p.at(T!(/)) {
 			InfixOp::Div
-		} else if p.at(TokenKind::CmpEq) {
+		} else if p.at(T!(==)) {
 			InfixOp::CmpEq
+		} else if p.at(T!(!=)) {
+			InfixOp::CmpNeq
+		} else if p.at(T!(<)) {
+			InfixOp::CmpLt
+		} else if p.at(T!(>)) {
+			InfixOp::CmpGt
+		} else if p.at(T!(<=)) {
+			InfixOp::CmpLte
+		} else if p.at(T!(>=)) {
+			InfixOp::CmpGte
+		} else if p.at(T!(::)) {
+			InfixOp::DoubleColon
 		} else {
 			break;
 		};
@@ -284,11 +305,62 @@ fn paren_expr(p: &mut Parser) -> CompletedMarker {
 
 #[cfg(test)]
 mod tests {
-	use crate::test_stmt_str;
-	test_stmt_str!(
+	use crate::test_expr_str;
+
+	// -- Integers --
+
+	test_expr_str!(basic_literals_b10_int, "1");
+	test_expr_str!(basic_literals_b10_int_neg, "-10");
+	test_expr_str!(basic_literals_b10_int_sep, "1_000_000");
+	test_expr_str!(basic_literals_b10_int_neg_sep, "-1_000_000");
+	test_expr_str!(basic_literals_b16_int, "0xff");
+	test_expr_str!(basic_literals_b16_int_neg, "-0xabcdef");
+	test_expr_str!(basic_literals_b16_int_sep, "0xa_b_ff");
+	test_expr_str!(basic_literals_b16_int_neg_sep, "-0xa_b_ff");
+	test_expr_str!(basic_literals_b2_int, "0b1010001");
+	test_expr_str!(basic_literals_b2_int_neg, "-0b1010001");
+	test_expr_str!(basic_literals_b2_int_sep, "0b1_010_001");
+	test_expr_str!(basic_literals_b2_int_neg_sep, "-0b1_010_001");
+
+	// -- Floats --
+
+	test_expr_str!(basic_literals_float, "1.0");
+	test_expr_str!(basic_literals_float_neg, "-1.0");
+	test_expr_str!(basic_literals_float_sep, "1.0_000");
+	test_expr_str!(basic_literals_float_neg_sep, "-1.0_000");
+
+	// ------- Ident -------
+
+	test_expr_str!(ident, "foo");
+	test_expr_str!(ident_nums, "f0o");
+	test_expr_str!(ident_nums_seps, "f0o_B8rr");
+
+	// ------- BinOp -------
+
+	test_expr_str!(binops_int_plus, "1+1");
+	test_expr_str!(binops_int_minus, "0xff-0834");
+	test_expr_str!(binops_int_mult, "0b1001*250");
+	test_expr_str!(binops_int_div, "919/0xadb");
+	test_expr_str!(binops_float_plus, "1.02+2.40_14");
+	test_expr_str!(binops_float_minus, "92.12_10-0.25");
+	test_expr_str!(binops_float_mult, "-2.13*0.2_5");
+	test_expr_str!(binops_float_div, "-0.1_2/1.0");
+	test_expr_str!(binops_cmp_lt, "-1.0_1<1");
+	test_expr_str!(binops_cmp_lte, "1<=1");
+	test_expr_str!(binops_cmp_gt, "1>1");
+	test_expr_str!(binops_cmp_gte, "1>=1");
+	test_expr_str!(binops_cmp_eq, "1==1");
+	test_expr_str!(binops_cmp_ne, "1!=1");
+	test_expr_str!(binops_and, "1&&1");
+	test_expr_str!(binops_or, "1||1");
+	test_expr_str!(binops_eq, "x=1");
+	test_expr_str!(binops_period, "foo.bar");
+	test_expr_str!(binops_double_colon, "foo::bar");
+
+	test_expr_str!(
 		infix_with_comments,
 		r#"// hello
 		-1 + 1"#
 	);
-	test_stmt_str!(unclosed_paren_expr, "(foo");
+	// test_expr_str!(unclosed_paren_expr, "(foo");
 }

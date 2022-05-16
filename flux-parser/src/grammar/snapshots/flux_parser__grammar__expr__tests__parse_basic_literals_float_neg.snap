@@ -1,0 +1,8 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+PrefixExpr@0..4
+  Minus@0..1 "-"
+  FloatExpr@1..4
+    FloatExpr@1..4 "1.0"

@@ -1,0 +1,10 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+BinExpr@0..4
+  IntExpr@0..1
+    IntExpr@0..1 "1"
+  CmpGte@1..3 ">="
+  IntExpr@3..4
+    IntExpr@3..4 "1"

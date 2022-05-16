@@ -98,10 +98,10 @@ fn var_decl(p: &mut Parser) -> CompletedMarker {
 #[cfg(test)]
 mod tests {
 	use crate::test_stmt_str;
-	test_stmt_str!(var_decl, "i32 x = 1;");
-	test_stmt_str!(
-		var_decl_fcont,
-		r#"i32 y =
-	i32 x = 1;"#
-	);
+	// test_stmt_str!(var_decl, "i32 x = 1;");
+	// test_stmt_str!(
+	// 	var_decl_fcont,
+	// 	r#"i32 y =
+	// i32 x = 1;"#
+	// );
 }

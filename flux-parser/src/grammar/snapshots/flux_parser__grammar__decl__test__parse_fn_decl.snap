@@ -1,0 +1,33 @@
+---
+source: flux-parser/src/grammar/decl.rs
+expression: "&parse.debug_tree()"
+---
+FnDecl@0..40
+  FnKw@0..2 "fn"
+  Whitespace@2..3 " "
+  Ident@3..7 "main"
+  LParen@7..8 "("
+  FnParam@8..16
+    PrimitiveType@8..12
+      INKw@8..11 "i15"
+      Whitespace@11..12 " "
+    Ident@12..16 "argc"
+  Comma@16..17 ","
+  Whitespace@17..18 " "
+  FnParam@18..29
+    MutKw@18..21 "mut"
+    Whitespace@21..22 " "
+    PrimitiveType@22..25
+      UNKw@22..24 "u4"
+      Whitespace@24..25 " "
+    Ident@25..29 "test"
+  RParen@29..30 ")"
+  Whitespace@30..31 " "
+  Arrow@31..33 "->"
+  Whitespace@33..34 " "
+  PrimitiveType@34..38
+    F32Kw@34..37 "f32"
+    Whitespace@37..38 " "
+  BlockStmt@38..40
+    RBrace@38..39 "{"
+    RBrace@39..40 "}"

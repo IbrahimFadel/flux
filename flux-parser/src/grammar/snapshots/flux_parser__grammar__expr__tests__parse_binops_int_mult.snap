@@ -1,0 +1,10 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+BinExpr@0..10
+  IntExpr@0..6
+    IntExpr@0..6 "0b1001"
+  Star@6..7 "*"
+  IntExpr@7..10
+    IntExpr@7..10 "250"

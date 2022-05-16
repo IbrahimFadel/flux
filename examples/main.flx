@@ -1,10 +1,4 @@
-fn foo(u13 a) -> i32 {
-  let b = a;
-  i32 x = b;
-}
-
 fn main() {
-  let x = 1 + 4;
-  let y = x;
-  let z = foo(y);
+  let x = 0;
+	i7 y = x;
 }

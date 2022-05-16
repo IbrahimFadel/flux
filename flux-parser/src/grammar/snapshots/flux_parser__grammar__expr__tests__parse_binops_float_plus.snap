@@ -1,0 +1,10 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+BinExpr@0..12
+  FloatExpr@0..4
+    FloatExpr@0..4 "1.02"
+  Plus@4..5 "+"
+  FloatExpr@5..12
+    FloatExpr@5..12 "2.40_14"

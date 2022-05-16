@@ -1,0 +1,9 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+ParenExpr@0..4
+  LParen@0..1 "("
+  IdentExpr@1..4
+    Ident@1..4 "foo"
+FluxError { msg: "expected `)` in paren expression", code: UnexpectedToken, primary: None, labels: [("expected `)` in paren expression", Some(Span { range: 1..4, file_id: FileId(0) }))] }

@@ -1,0 +1,27 @@
+---
+source: flux-parser/src/grammar/decl.rs
+expression: "&parse.debug_tree()"
+---
+TypeDecl@0..40
+  TypeKw@0..4 "type"
+  Whitespace@4..5 " "
+  Ident@5..8 "Foo"
+  Whitespace@8..9 " "
+  InterfaceType@9..40
+    InterfaceKw@9..18 "interface"
+    Whitespace@18..19 " "
+    RBrace@19..20 "{"
+    Whitespace@20..24 "\n\t\t\t"
+    InterfaceMethod@24..39
+      FnKw@24..26 "fn"
+      Whitespace@26..27 " "
+      Ident@27..30 "foo"
+      LParen@30..31 "("
+      RParen@31..32 ")"
+      Whitespace@32..33 " "
+      Arrow@33..35 "->"
+      Whitespace@35..36 " "
+      SemiColon@36..37 ";"
+      Whitespace@37..39 "\n\t"
+    RBrace@39..40 "}"
+FluxError { msg: "could not parse type expression", code: UnexpectedToken, primary: None, labels: [("could not parse type expression", Some(Span { range: 36..37, file_id: FileId(0) }))] }

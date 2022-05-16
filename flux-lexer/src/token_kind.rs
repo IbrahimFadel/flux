@@ -13,17 +13,14 @@ pub enum TokenKind {
 	#[regex("//.*")]
 	#[regex(r"(?s)/\*(.*)\*/")]
 	Comment,
-	// #[regex("/\*")]
-	// BlockComment,
 	#[regex("[A-Za-z][A-Za-z0-9_]*")]
 	Ident,
 	#[regex("0x[0-9a-fA-F]+(_[0-9a-fA-F]+)*")]
-	// #[regex("08[0-9]+(_[0-9]+)*")]
 	#[regex("0b[0-9]+(_[0-9]+)*")]
 	#[regex("[0-9]+(_[0-9]+)*")]
 	IntLit,
 
-	#[regex(r"[0-9]+\.[0-9]+")]
+	#[regex(r"[0-9]+\.[0-9]+(_[0-9]+)*")]
 	FloatLit,
 
 	#[token("pub")]
@@ -59,10 +56,6 @@ pub enum TokenKind {
 
 	#[token(",")]
 	Comma,
-	#[token("<")]
-	CmpLt,
-	#[token(">")]
-	CmpGt,
 	#[token("+")]
 	Plus,
 	#[token("-")]
@@ -85,6 +78,18 @@ pub enum TokenKind {
 	Eq,
 	#[token("==")]
 	CmpEq,
+	#[token("!=")]
+	CmpNeq,
+	#[token("<")]
+	CmpLt,
+	#[token(">")]
+	CmpGt,
+	#[token("<=")]
+	CmpLte,
+	#[token(">=")]
+	CmpGte,
+	#[token("::")]
+	DoubleColon,
 	#[token(";")]
 	SemiColon,
 
@@ -125,9 +130,14 @@ macro_rules! T {
 	[*] => { $crate::TokenKind::Star };
 	[/] => { $crate::TokenKind::Slash };
 	[->] => { $crate::TokenKind::Arrow };
+	[==] => { $crate::TokenKind::CmpEq };
+	[!=] => { $crate::TokenKind::CmpNeq };
+	[<] => { $crate::TokenKind::CmpLt };
+	[>] => { $crate::TokenKind::CmpGt };
+	[<=] => { $crate::TokenKind::CmpLte };
+	[>=] => { $crate::TokenKind::CmpGte };
+	[::] => { $crate::TokenKind::DoubleColon };
 	[comma] => { $crate::TokenKind::Comma };
-	[cmplt] => { $crate::TokenKind::CmpLt };
-	[cmpgt] => { $crate::TokenKind::CmpGt };
 	[lparen] => { $crate::TokenKind::LParen };
 	[rparen] => { $crate::TokenKind::RParen };
 	[lbrace] => { $crate::TokenKind::LBrace };

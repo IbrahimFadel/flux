@@ -1,0 +1,11 @@
+---
+source: flux-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: UNKw,
+        text: "u54",
+        range: 0..3,
+    },
+]

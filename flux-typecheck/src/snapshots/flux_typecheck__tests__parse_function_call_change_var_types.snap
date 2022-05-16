@@ -1,0 +1,316 @@
+---
+source: flux-typecheck/src/tests.rs
+expression: s
+---
+HirModule {
+    db: Database {
+        exprs: Arena {
+            len: 8,
+            data: [
+                Spanned {
+                    node: Int(
+                        Int {
+                            n: 0,
+                            ty: UNType(
+                                32,
+                            ),
+                        },
+                    ),
+                    span: Span {
+                        range: 47..48,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Int(
+                        Int {
+                            n: 1,
+                            ty: UNType(
+                                32,
+                            ),
+                        },
+                    ),
+                    span: Span {
+                        range: 75..77,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Int(
+                        Int {
+                            n: 4,
+                            ty: UNType(
+                                32,
+                            ),
+                        },
+                    ),
+                    span: Span {
+                        range: 79..80,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Binary {
+                        op: Add,
+                        lhs: Idx::<Expr>>(1),
+                        rhs: Idx::<Expr>>(2),
+                    },
+                    span: Span {
+                        range: 75..80,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Ident {
+                        val: "x",
+                    },
+                    span: Span {
+                        range: 92..93,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Ident {
+                        val: "foo",
+                    },
+                    span: Span {
+                        range: 105..108,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Ident {
+                        val: "y",
+                    },
+                    span: Span {
+                        range: 109..110,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+                Spanned {
+                    node: Call(
+                        Call {
+                            callee: Idx::<Expr>>(5),
+                            args: [
+                                Idx::<Expr>>(6),
+                            ],
+                        },
+                    ),
+                    span: Span {
+                        range: 105..111,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+            ],
+        },
+        errors: [],
+        file_id: FileId(
+            0,
+        ),
+    },
+    functions: [
+        FnDecl {
+            name: Some(
+                "foo",
+            ),
+            params: [
+                Spanned {
+                    node: FnParam {
+                        mutable: false,
+                        ty: Spanned {
+                            node: UNType(
+                                13,
+                            ),
+                            span: Span {
+                                range: 21..25,
+                                file_id: FileId(
+                                    0,
+                                ),
+                            },
+                        },
+                        name: Some(
+                            "a",
+                        ),
+                    },
+                    span: Span {
+                        range: 21..26,
+                        file_id: FileId(
+                            0,
+                        ),
+                    },
+                },
+            ],
+            block: [
+                Some(
+                    Spanned {
+                        node: VarDecl(
+                            VarDecl {
+                                ty: Spanned {
+                                    node: INType(
+                                        32,
+                                    ),
+                                    span: Span {
+                                        range: 9..14,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
+                                },
+                                name: "x",
+                                value: Idx::<Expr>>(0),
+                            },
+                        ),
+                        span: Span {
+                            range: 39..50,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
+                    },
+                ),
+            ],
+            return_type: Spanned {
+                node: IdentType(
+                    "Foo",
+                ),
+                span: Span {
+                    range: 31..35,
+                    file_id: FileId(
+                        0,
+                    ),
+                },
+            },
+        },
+        FnDecl {
+            name: Some(
+                "main",
+            ),
+            params: [],
+            block: [
+                Some(
+                    Spanned {
+                        node: VarDecl(
+                            VarDecl {
+                                ty: Spanned {
+                                    node: UNType(
+                                        13,
+                                    ),
+                                    span: Span {
+                                        range: 75..77,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
+                                },
+                                name: "x",
+                                value: Idx::<Expr>>(3),
+                            },
+                        ),
+                        span: Span {
+                            range: 67..84,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
+                    },
+                ),
+                Some(
+                    Spanned {
+                        node: VarDecl(
+                            VarDecl {
+                                ty: Spanned {
+                                    node: UNType(
+                                        13,
+                                    ),
+                                    span: Span {
+                                        range: 92..93,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
+                                },
+                                name: "y",
+                                value: Idx::<Expr>>(4),
+                            },
+                        ),
+                        span: Span {
+                            range: 84..97,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
+                    },
+                ),
+                Some(
+                    Spanned {
+                        node: VarDecl(
+                            VarDecl {
+                                ty: Spanned {
+                                    node: IdentType(
+                                        "Foo",
+                                    ),
+                                    span: Span {
+                                        range: 31..35,
+                                        file_id: FileId(
+                                            0,
+                                        ),
+                                    },
+                                },
+                                name: "z",
+                                value: Idx::<Expr>>(7),
+                            },
+                        ),
+                        span: Span {
+                            range: 97..113,
+                            file_id: FileId(
+                                0,
+                            ),
+                        },
+                    },
+                ),
+            ],
+            return_type: Spanned {
+                node: VoidType,
+                span: Span {
+                    range: 0..0,
+                    file_id: FileId(
+                        0,
+                    ),
+                },
+            },
+        },
+    ],
+    types: [
+        TypeDecl {
+            pub_: false,
+            name: "Foo",
+            ty: Spanned {
+                node: INType(
+                    32,
+                ),
+                span: Span {
+                    range: 9..14,
+                    file_id: FileId(
+                        0,
+                    ),
+                },
+            },
+        },
+    ],
+}

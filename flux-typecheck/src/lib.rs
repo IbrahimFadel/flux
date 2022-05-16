@@ -6,6 +6,9 @@ use flux_syntax::ast::Spanned;
 use la_arena::Arena;
 use smol_str::SmolStr;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone)]
 struct FnSignature {
 	param_types: Vec<Spanned<TypeInfo>>,
@@ -70,30 +73,32 @@ fn hir_type_to_type_info(ty: &Spanned<flux_hir::Type>) -> Spanned<TypeInfo> {
 	}
 }
 
-fn type_info_to_hir_type(info: &TypeInfo) -> flux_hir::Type {
-	use flux_hir::Type;
-	match info {
-		TypeInfo::F64 => Type::F64Type,
-		TypeInfo::F32 => Type::F32Type,
-		TypeInfo::Float => Type::F32Type,
-		TypeInfo::SInt(x) => Type::INType(*x),
-		TypeInfo::UInt(x) => Type::UNType(*x),
-		TypeInfo::Int => Type::UNType(32),
-		TypeInfo::Ident(name) => Type::IdentType(name.clone()),
-		_ => unreachable!(),
-	}
-}
-
 #[derive(Debug)]
 struct TypeEnv<'a> {
-	expr_arena: &'a Arena<Spanned<Expr>>,
+	expr_arena: Arena<Spanned<Expr>>,
 	id_counter: u32,
-	local_ids: &'a mut HashMap<String, TypeId>,
-	local_types: &'a mut HashMap<TypeId, Spanned<TypeInfo>>,
+	local_ids: HashMap<String, TypeId>,
+	local_types: HashMap<TypeId, Spanned<TypeInfo>>,
 	signatures: &'a HashMap<String, FnSignature>,
+	type_decls: &'a HashMap<String, Spanned<TypeInfo>>,
 }
 
 impl<'a> TypeEnv<'a> {
+	fn type_info_to_hir_type(&self, info: &TypeInfo) -> flux_hir::Type {
+		use flux_hir::Type;
+		match info {
+			TypeInfo::F64 => Type::F64Type,
+			TypeInfo::F32 => Type::F32Type,
+			TypeInfo::Float => Type::F32Type,
+			TypeInfo::SInt(x) => Type::INType(*x),
+			TypeInfo::UInt(x) => Type::UNType(*x),
+			TypeInfo::Int => Type::UNType(32),
+			TypeInfo::Ident(name) => Type::IdentType(name.clone()),
+			TypeInfo::Ref(id) => self.type_info_to_hir_type(self.local_types.get(id).unwrap()),
+			_ => unreachable!(format!("cannot convert type info `{:?}` to hir type", info)),
+		}
+	}
+
 	fn new_typeid(&mut self, info: Spanned<TypeInfo>) -> TypeId {
 		let id = self.id_counter;
 		self.id_counter += 1;
@@ -101,7 +106,7 @@ impl<'a> TypeEnv<'a> {
 		id
 	}
 
-	pub fn infer_block(&mut self, block: &'a mut [Option<Spanned<Stmt>>]) -> Result<(), FluxError> {
+	pub fn infer_block(&mut self, block: &[Option<Spanned<Stmt>>]) -> Result<(), FluxError> {
 		for stmt in block {
 			if let Some(stmt) = stmt {
 				self.infer_stmt(stmt)?;
@@ -110,7 +115,7 @@ impl<'a> TypeEnv<'a> {
 		Ok(())
 	}
 
-	fn infer_stmt(&mut self, stmt: &'a Stmt) -> Result<(), FluxError> {
+	fn infer_stmt(&mut self, stmt: &Stmt) -> Result<(), FluxError> {
 		match stmt {
 			Stmt::VarDecl(var_decl) => self.infer_var_decl(var_decl),
 			Stmt::Expr(expr) => {
@@ -121,7 +126,7 @@ impl<'a> TypeEnv<'a> {
 		}
 	}
 
-	fn infer_var_decl(&mut self, var_decl: &'a VarDecl) -> Result<(), FluxError> {
+	fn infer_var_decl(&mut self, var_decl: &VarDecl) -> Result<(), FluxError> {
 		if var_decl.ty.node == flux_hir::Type::Missing {
 			let ty = self.infer_expr(var_decl.value)?;
 			let id = self.new_typeid(ty);
@@ -137,7 +142,7 @@ impl<'a> TypeEnv<'a> {
 	}
 
 	fn infer_expr(&mut self, expr_idx: ExprIdx) -> Result<Spanned<TypeInfo>, FluxError> {
-		match &self.expr_arena[expr_idx].node {
+		match &self.expr_arena[expr_idx].node.clone() {
 			Expr::Int(_) => Ok(Spanned::new(
 				TypeInfo::Int,
 				self.expr_arena[expr_idx].span.clone(),
@@ -218,6 +223,10 @@ impl<'a> TypeEnv<'a> {
 				let type_info = self.local_types.get(a).unwrap();
 				self.unify(type_info.clone(), b)
 			}
+			(_, Ref(b)) => {
+				let type_info = self.local_types.get(b).unwrap();
+				self.unify(a, type_info.clone())
+			}
 			(Int, Int) | (Unknown, Int) => Ok(Spanned::new(Int, a.span)),
 			(Unknown, UInt(x)) => Ok(Spanned::new(UInt(*x), a.span)),
 			(Unknown, SInt(x)) => Ok(Spanned::new(SInt(*x), a.span)),
@@ -230,6 +239,8 @@ impl<'a> TypeEnv<'a> {
 					Err(self.unification_err(&a, &b))
 				}
 			}
+
+			(Ident(name), _) => self.unify(self.type_decls.get(name.as_str()).unwrap().clone(), b),
 			_ => Err(self.unification_err(&a, &b)),
 		}
 	}
@@ -263,6 +274,11 @@ impl<'a> TypeEnv<'a> {
 }
 
 pub fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError> {
+	let mut types = HashMap::new();
+	for ty in &hir_module.types {
+		types.insert(ty.name.clone(), hir_type_to_type_info(&ty.ty));
+	}
+
 	let mut signatures = HashMap::new();
 	for f in &hir_module.functions {
 		if let Some(sig) = generate_function_signature(f) {
@@ -272,25 +288,34 @@ pub fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError>
 	}
 
 	for f in &mut hir_module.functions {
-		let mut local_ids = HashMap::new();
-		let mut local_types = HashMap::new();
+		let arena = hir_module.db.exprs.clone();
 		let mut env = TypeEnv {
-			expr_arena: &mut hir_module.db.exprs,
+			expr_arena: arena,
 			id_counter: 0,
-			local_ids: &mut local_ids,
-			local_types: &mut local_types,
+			local_ids: HashMap::new(),
+			local_types: HashMap::new(),
 			signatures: &signatures,
+			type_decls: &types,
 		};
 
 		for p in &f.params {
 			if let Some(name) = &p.name {
 				let id = env.new_typeid(hir_type_to_type_info(&p.ty));
-				env.local_ids.insert(name.to_string(), id);
+				env.local_ids.insert(name.clone().to_string(), id);
 			}
 		}
 
-		env.infer_block(&mut f.block)?;
-		println!("{:#?}", env);
+		env.infer_block(&f.block)?;
+
+		for stmt in &mut f.block {
+			if let Some(stmt) = stmt {
+				if let Stmt::VarDecl(var) = &mut stmt.node {
+					let id = env.local_ids.get(var.name.as_str()).unwrap();
+					let ty = env.local_types.get(id).unwrap();
+					var.ty = Spanned::new(env.type_info_to_hir_type(ty), ty.span.clone());
+				}
+			}
+		}
 	}
 
 	Ok(())

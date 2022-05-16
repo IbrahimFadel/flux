@@ -42,3 +42,32 @@ pub struct Token<'a> {
 	pub text: &'a str,
 	pub range: TextRange,
 }
+
+#[cfg(test)]
+mod tests {
+	use paste;
+
+	#[macro_export]
+	#[cfg(test)]
+	macro_rules! lex_str {
+		($name:ident, $src:literal) => {
+			paste::paste! {
+					#[test]
+					fn [<test_parse_ $name>]() {
+						let tokens: Vec<_> = crate::Lexer::new($src).collect();
+						let mut settings = insta::Settings::clone_current();
+						let s = format!("{:#?}", tokens);
+						settings.set_snapshot_path("./snapshots");
+						settings.bind(|| {
+							insta::assert_snapshot!(s);
+						});
+					}
+			}
+		};
+	}
+
+	lex_str!(prim_ty_in, "i54");
+	lex_str!(prim_ty_un, "u54");
+	lex_str!(float_sep, "1.0_1");
+	lex_str!(float_addition, "1.02+2.40");
+}

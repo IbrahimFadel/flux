@@ -50,7 +50,7 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 		T![ident],
 		format!("expected identifier in function declaration"),
 	);
-	if p.at(T![cmplt]) {
+	if p.at(T![<]) {
 		generic_list(p);
 	}
 	fn_params(p);
@@ -63,7 +63,7 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 }
 
 fn generic_list(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![cmplt]));
+	assert!(p.at(T![<]));
 	let m = p.start();
 	p.expect(
 		T![ident],
@@ -113,5 +113,30 @@ fn fn_param(p: &mut Parser) -> CompletedMarker {
 mod test {
 	use crate::test_decl_str;
 
-	test_decl_str!(fn_decl, r#"fn main(i32 argc, mut i32 test) -> i32 {}"#);
+	test_decl_str!(fn_decl, r#"fn main(i15 argc, mut u4 test) -> f32 {}"#);
+	test_decl_str!(fn_decl_ret_void, r#"fn main(i15 argc, mut u4 test) {}"#);
+	test_decl_str!(ty_decl_prim, r#"type Foo i32"#);
+	test_decl_str!(
+		ty_decl_struct,
+		r#"type Foo struct {
+		i7 x;
+		pub u1 y;
+		mut f64 z;
+		pub mut Bar a;
+	}"#
+	);
+	test_decl_str!(
+		ty_decl_interface,
+		r#"type Foo interface {
+			fn foo();
+			pub fn bar(i32 x) -> u5;
+			fn bazz(mut f64 x) -> f32;
+	}"#
+	);
+	test_decl_str!(
+		ty_decl_interface_method_missing_ret_ty,
+		r#"type Foo interface {
+			fn foo() -> ;
+	}"#
+	);
 }

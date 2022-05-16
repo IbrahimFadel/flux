@@ -1,0 +1,11 @@
+---
+source: flux-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: FloatLit,
+        text: "1.0_1",
+        range: 0..5,
+    },
+]

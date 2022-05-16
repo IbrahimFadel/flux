@@ -1,5 +1,5 @@
-use std::{fs, process::exit};
 use flux_error::FluxErrorReporting;
+use std::{fs, process::exit};
 // use flux_hir::HirModule;
 use flux_parser::*;
 use flux_syntax::{ast, ast::AstNode};
@@ -10,8 +10,6 @@ use flux_typecheck::*;
 // 	cst: Parse,
 // 	hir: HirModule,
 // }
-
-fn foo(x: u8) {}
 
 fn main() {
 	let src = fs::read_to_string("examples/main.flx").unwrap();
@@ -33,5 +31,5 @@ fn main() {
 		err_reporting.report(&[err]);
 		exit(1);
 	}
-	// println!("{:#?}", hir_module);
+	println!("{:#?}", hir_module);
 }

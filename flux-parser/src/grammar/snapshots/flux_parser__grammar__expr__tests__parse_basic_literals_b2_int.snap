@@ -1,0 +1,6 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+IntExpr@0..9
+  IntExpr@0..9 "0b1010001"

@@ -1,0 +1,63 @@
+---
+source: flux-parser/src/grammar/decl.rs
+expression: "&parse.debug_tree()"
+---
+TypeDecl@0..94
+  TypeKw@0..4 "type"
+  Whitespace@4..5 " "
+  Ident@5..8 "Foo"
+  Whitespace@8..9 " "
+  InterfaceType@9..94
+    InterfaceKw@9..18 "interface"
+    Whitespace@18..19 " "
+    RBrace@19..20 "{"
+    Whitespace@20..24 "\n\t\t\t"
+    InterfaceMethod@24..37
+      FnKw@24..26 "fn"
+      Whitespace@26..27 " "
+      Ident@27..30 "foo"
+      LParen@30..31 "("
+      RParen@31..32 ")"
+      SemiColon@32..33 ";"
+      Whitespace@33..37 "\n\t\t\t"
+    InterfaceMethod@37..65
+      PubKw@37..40 "pub"
+      Whitespace@40..41 " "
+      FnKw@41..43 "fn"
+      Whitespace@43..44 " "
+      Ident@44..47 "bar"
+      LParen@47..48 "("
+      FnParam@48..53
+        PrimitiveType@48..52
+          INKw@48..51 "i32"
+          Whitespace@51..52 " "
+        Ident@52..53 "x"
+      RParen@53..54 ")"
+      Whitespace@54..55 " "
+      Arrow@55..57 "->"
+      Whitespace@57..58 " "
+      PrimitiveType@58..60
+        UNKw@58..60 "u5"
+      SemiColon@60..61 ";"
+      Whitespace@61..65 "\n\t\t\t"
+    InterfaceMethod@65..93
+      FnKw@65..67 "fn"
+      Whitespace@67..68 " "
+      Ident@68..72 "bazz"
+      LParen@72..73 "("
+      FnParam@73..82
+        MutKw@73..76 "mut"
+        Whitespace@76..77 " "
+        PrimitiveType@77..81
+          F64Kw@77..80 "f64"
+          Whitespace@80..81 " "
+        Ident@81..82 "x"
+      RParen@82..83 ")"
+      Whitespace@83..84 " "
+      Arrow@84..86 "->"
+      Whitespace@86..87 " "
+      PrimitiveType@87..90
+        F32Kw@87..90 "f32"
+      SemiColon@90..91 ";"
+      Whitespace@91..93 "\n\t"
+    RBrace@93..94 "}"

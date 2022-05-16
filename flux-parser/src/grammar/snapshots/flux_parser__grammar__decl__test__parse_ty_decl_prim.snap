@@ -1,0 +1,11 @@
+---
+source: flux-parser/src/grammar/decl.rs
+expression: "&parse.debug_tree()"
+---
+TypeDecl@0..12
+  TypeKw@0..4 "type"
+  Whitespace@4..5 " "
+  Ident@5..8 "Foo"
+  Whitespace@8..9 " "
+  PrimitiveType@9..12
+    INKw@9..12 "i32"

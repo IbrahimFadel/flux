@@ -1,0 +1,6 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+IdentExpr@0..3
+  Ident@0..3 "f0o"
