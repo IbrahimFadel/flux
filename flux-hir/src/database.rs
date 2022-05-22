@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-	BinaryOp, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, PrefixOp, Return,
-	Stmt, StructField, StructType, Type, TypeDecl, VarDecl,
+	BinaryOp, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, ModDecl,
+	PrefixOp, Return, Stmt, StructField, StructType, Type, TypeDecl, UseDecl, VarDecl,
 };
 use flux_error::{filesystem::FileId, FluxError, FluxErrorCode, Span};
 use flux_syntax::{
@@ -13,7 +13,7 @@ use indexmap::IndexMap;
 use la_arena::{Arena, Idx};
 use text_size::{TextRange, TextSize};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Database {
 	pub exprs: Arena<Spanned<Expr>>,
 	pub errors: Vec<FluxError>,
@@ -31,7 +31,39 @@ impl Database {
 }
 
 impl Database {
+	pub(crate) fn lower_mod(&mut self, ast: ast::ModDecl) -> Option<ModDecl> {
+		let name = ast.name()?;
+		let name_str = name.text().to_string();
+		let name_span = name.text_range();
+		Some(ModDecl {
+			name: Spanned::new(name_str, Span::new(name_span, self.file_id)),
+		})
+	}
+
+	pub(crate) fn lower_use(&mut self, ast: ast::UseDecl) -> Option<UseDecl> {
+		let mut path = vec![];
+		let token_arr = ast.path();
+		for tok in token_arr {
+			path.push(Spanned::new(
+				String::from(tok.text()),
+				Span::new(tok.text_range(), self.file_id),
+			));
+		}
+		Some(UseDecl { path })
+	}
+
 	pub(crate) fn lower_fn(&mut self, ast: ast::FnDecl) -> Option<FnDecl> {
+		let public = if let Some(p) = ast.public() {
+			Spanned::new(true, Span::new(p.text_range(), self.file_id))
+		} else {
+			Spanned::new(
+				false,
+				Span::new(
+					TextRange::new(TextSize::from(0), TextSize::from(0)),
+					self.file_id,
+				),
+			)
+		};
 		let params = self.lower_params(ast.params())?;
 		let block = if let Some(block) = ast.body() {
 			self.lower_block(block)
@@ -54,6 +86,7 @@ impl Database {
 			None
 		};
 		Some(FnDecl {
+			public,
 			name,
 			params,
 			block,

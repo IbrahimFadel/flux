@@ -5,6 +5,10 @@ use flux_lexer::T;
 pub(crate) fn top_level_decl(p: &mut Parser) {
 	if p.at(T!(pub)) {
 		pub_tob_level_decl(p);
+	} else if p.at(T!(mod)) {
+		mod_decl(p);
+	} else if p.at(T!(use)) {
+		use_decl(p);
 	} else if p.at(T!(fn)) {
 		fn_decl(p);
 	} else if p.at(T!(type)) {
@@ -22,6 +26,38 @@ fn pub_tob_level_decl(p: &mut Parser) {
 	} else {
 		p.error(format!("expected top level declaration"));
 	}
+}
+
+fn mod_decl(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(mod)));
+	let m = p.start();
+	p.bump();
+	p.expect(T!(ident), format!("expected identifier in mod declaration"));
+	p.expect(T!(semicolon), format!("expected `;` after mod declaration"));
+	m.complete(p, SyntaxKind::ModDecl)
+}
+
+fn use_decl(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(use)));
+	let m = p.start();
+	p.bump();
+
+	while !p.at(T!(semicolon)) && !p.at_end() {
+		p.expect(T!(ident), format!("expected identifier in `use` path"));
+		if p.at(T!(semicolon)) {
+			break;
+		} else {
+			if p.at(T!(::)) {
+				p.bump();
+			} else {
+				p.error(format!("expected `::` or `;` in `use` path"));
+				break;
+			}
+		}
+	}
+
+	p.expect(T!(semicolon), format!("expected `;` after `use` path"));
+	m.complete(p, SyntaxKind::UseDecl)
 }
 
 fn type_decl(p: &mut Parser) -> CompletedMarker {

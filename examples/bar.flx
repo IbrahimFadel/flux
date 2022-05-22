@@ -1,0 +1,5 @@
+mod bazz;
+
+pub fn something() {
+  
+}

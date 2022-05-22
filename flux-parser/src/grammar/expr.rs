@@ -155,7 +155,7 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 		TokenKind::SemiColon,
 		format!("expepcted `;` after struct type field"),
 	);
-	m.complete(p, SyntaxKind::StructTypeField)
+	m.complete(p, SyntaxKind::StructField)
 }
 
 fn primitive_type(p: &mut Parser) -> CompletedMarker {

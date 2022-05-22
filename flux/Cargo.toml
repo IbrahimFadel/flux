@@ -12,4 +12,6 @@ flux-hir = { path = "../flux-hir" }
 flux-typecheck = { path = "../flux-typecheck" }
 flux-mir = { path = "../flux-mir" }
 flux-error = { path = "../flux-error" }
-indexmap = "1.8.1"
+flux-lexer = { path = "../flux-lexer" }
+petgraph = "0.6.0"
+text-size = "1.0.0"

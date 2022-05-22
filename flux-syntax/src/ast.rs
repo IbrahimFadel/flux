@@ -1,6 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use flux_error::Span;
+use flux_lexer::TokenKind;
 use rowan::TextRange;
 
 use crate::syntax_kind::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -14,27 +15,102 @@ pub trait AstNode {
 	fn range(&self) -> TextRange;
 }
 
-#[derive(Debug)]
-pub struct Root(SyntaxNode);
+macro_rules! basic_node {
+	($name:ident) => {
+		#[derive(Debug)]
+		pub struct $name(SyntaxNode);
 
-impl AstNode for Root {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::Root => Some(Self(syntax)),
-			_ => None,
+		impl AstNode for $name {
+			fn cast(syntax: SyntaxNode) -> Option<Self> {
+				match syntax.kind() {
+					SyntaxKind::$name => Some(Self(syntax)),
+					_ => None,
+				}
+			}
+
+			fn syntax(&self) -> &SyntaxNode {
+				&self.0
+			}
+
+			fn range(&self) -> TextRange {
+				self.syntax().text_range()
+			}
 		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
+	};
 }
 
+macro_rules! enum_node {
+	($name:ident, $($x:ident),*) => {
+			#[derive(Debug)]
+			pub enum $name {
+				$($x($x)),+
+			}
+
+			impl AstNode for $name {
+				fn cast(syntax: SyntaxNode) -> Option<Self> {
+					let result = match syntax.kind() {
+						$(SyntaxKind::$x => Self::$x($x(syntax))),+,
+						_ => return None,
+					};
+
+					Some(result)
+				}
+
+				fn syntax(&self) -> &SyntaxNode {
+					match self {
+						$($name::$x(node) => &node.0),+
+					}
+				}
+
+				fn range(&self) -> TextRange {
+					self.syntax().text_range()
+				}
+			}
+	};
+}
+
+enum_node!(Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr);
+enum_node!(Stmt, ExprStmt, VarDecl, BlockStmt, IfStmt, ReturnStmt);
+enum_node!(Type, PrimitiveType, StructType, InterfaceType, IdentType);
+
+basic_node!(Root);
+
+basic_node!(ModDecl);
+basic_node!(UseDecl);
+basic_node!(TypeDecl);
+basic_node!(FnDecl);
+basic_node!(FnParam);
+basic_node!(VarDecl);
+
+basic_node!(ReturnStmt);
+basic_node!(IfStmt);
+basic_node!(ExprStmt);
+basic_node!(BlockStmt);
+
+basic_node!(IdentExpr);
+basic_node!(ParenExpr);
+basic_node!(PrefixExpr);
+basic_node!(FloatExpr);
+basic_node!(IntExpr);
+basic_node!(BinExpr);
+basic_node!(CallExpr);
+
+basic_node!(StructField);
+basic_node!(InterfaceMethod);
+
+basic_node!(StructType);
+basic_node!(InterfaceType);
+basic_node!(IdentType);
+
 impl Root {
+	pub fn mods(&self) -> impl Iterator<Item = ModDecl> {
+		self.0.children().filter_map(ModDecl::cast)
+	}
+
+	pub fn uses(&self) -> impl Iterator<Item = UseDecl> {
+		self.0.children().filter_map(UseDecl::cast)
+	}
+
 	pub fn functions(&self) -> impl Iterator<Item = FnDecl> {
 		self.0.children().filter_map(FnDecl::cast)
 	}
@@ -63,30 +139,30 @@ impl<T> Deref for Spanned<T> {
 	}
 }
 
-// impl<T> DerefMut for Spanned<T> {
-// 	type Target = T;
-// 	fn deref_mut(&mut self) -> &mut Self::Target {
-// 		&mut self.node
-// 	}
-// }
-
-#[derive(Debug)]
-pub struct TypeDecl(SyntaxNode);
-
-impl AstNode for TypeDecl {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::TypeDecl => Some(Self(syntax)),
-			_ => None,
-		}
+impl ModDecl {
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
+}
 
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
+impl UseDecl {
+	pub fn path(&self) -> Vec<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.filter_map(|token| {
+				if token.kind() == SyntaxKind::Ident {
+					Some(token)
+				} else {
+					None
+				}
+			})
+			.collect()
 	}
 }
 
@@ -112,27 +188,15 @@ impl TypeDecl {
 	}
 }
 
-#[derive(Debug)]
-pub struct FnDecl(SyntaxNode);
-
-impl AstNode for FnDecl {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::FnDecl => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl FnDecl {
+	pub fn public(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::PubKw)
+	}
+
 	pub fn name(&self) -> Option<SyntaxToken> {
 		self
 			.0
@@ -154,113 +218,15 @@ impl FnDecl {
 	}
 }
 
-#[derive(Debug)]
-pub enum Stmt {
-	ExprStmt(ExprStmt),
-	VarDecl(VarDecl),
-	BlockStmt(BlockStmt),
-	IfStmt(IfStmt),
-	ReturnStmt(ReturnStmt),
-}
-
-impl AstNode for Stmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let result = match syntax.kind() {
-			SyntaxKind::ExprStmt => Self::ExprStmt(ExprStmt(syntax)),
-			SyntaxKind::VarDecl => Self::VarDecl(VarDecl(syntax)),
-			SyntaxKind::BlockStmt => Self::BlockStmt(BlockStmt(syntax)),
-			SyntaxKind::IfStmt => Self::IfStmt(IfStmt(syntax)),
-			SyntaxKind::ReturnStmt => Self::ReturnStmt(ReturnStmt(syntax)),
-			_ => return None,
-		};
-
-		Some(result)
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Stmt::ExprStmt(node) => &node.0,
-			Stmt::VarDecl(node) => &node.0,
-			Stmt::BlockStmt(node) => &node.0,
-			Stmt::IfStmt(node) => &node.0,
-			Stmt::ReturnStmt(node) => &node.0,
-		}
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
-#[derive(Debug)]
-pub struct ReturnStmt(SyntaxNode);
-
-impl AstNode for ReturnStmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::ReturnStmt => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl ReturnStmt {
 	pub fn value(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
 	}
 }
 
-#[derive(Debug)]
-pub struct ExprStmt(SyntaxNode);
-
-impl AstNode for ExprStmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::ExprStmt => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl ExprStmt {
 	pub fn expr(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
-	}
-}
-
-#[derive(Debug)]
-pub struct VarDecl(SyntaxNode);
-
-impl AstNode for VarDecl {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::VarDecl => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -282,49 +248,9 @@ impl VarDecl {
 	}
 }
 
-#[derive(Debug)]
-pub struct BlockStmt(SyntaxNode);
-
-impl AstNode for BlockStmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::BlockStmt => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl BlockStmt {
 	pub fn stmts(&self) -> Vec<Stmt> {
 		self.0.children().filter_map(Stmt::cast).collect()
-	}
-}
-
-#[derive(Debug)]
-pub struct IfStmt(SyntaxNode);
-
-impl AstNode for IfStmt {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::IfStmt => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -346,70 +272,6 @@ impl IfStmt {
 	}
 }
 
-#[derive(Debug)]
-pub enum Expr {
-	BinExpr(BinExpr),
-	IntExpr(IntExpr),
-	FloatExpr(FloatExpr),
-	ParenExpr(ParenExpr),
-	PrefixExpr(PrefixExpr),
-	IdentExpr(IdentExpr),
-	CallExpr(CallExpr),
-}
-
-impl AstNode for Expr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let result = match syntax.kind() {
-			SyntaxKind::BinExpr => Self::BinExpr(BinExpr(syntax)),
-			SyntaxKind::IntExpr => Self::IntExpr(IntExpr(syntax)),
-			SyntaxKind::FloatExpr => Self::FloatExpr(FloatExpr(syntax)),
-			SyntaxKind::ParenExpr => Self::ParenExpr(ParenExpr(syntax)),
-			SyntaxKind::PrefixExpr => Self::PrefixExpr(PrefixExpr(syntax)),
-			SyntaxKind::IdentExpr => Self::IdentExpr(IdentExpr(syntax)),
-			SyntaxKind::CallExpr => Self::CallExpr(CallExpr(syntax)),
-			_ => return None,
-		};
-
-		Some(result)
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Expr::BinExpr(node) => &node.0,
-			Expr::IntExpr(node) => &node.0,
-			Expr::FloatExpr(node) => &node.0,
-			Expr::ParenExpr(node) => &node.0,
-			Expr::PrefixExpr(node) => &node.0,
-			Expr::IdentExpr(node) => &node.0,
-			Expr::CallExpr(node) => &node.0,
-		}
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
-#[derive(Debug)]
-pub struct CallExpr(SyntaxNode);
-
-impl AstNode for CallExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::CallExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl CallExpr {
 	pub fn callee(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
@@ -417,59 +279,6 @@ impl CallExpr {
 
 	pub fn args(&self) -> impl Iterator<Item = Expr> {
 		self.0.children().filter_map(Expr::cast).skip(1)
-	}
-}
-
-#[derive(Debug)]
-pub enum Type {
-	PrimitiveType(PrimitiveType),
-	StructType(StructType),
-	InterfaceType(InterfaceType),
-	IdentType(IdentType),
-}
-
-impl AstNode for Type {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::PrimitiveType => Some(Self::PrimitiveType(PrimitiveType(syntax))),
-			SyntaxKind::StructType => Some(Self::StructType(StructType(syntax))),
-			SyntaxKind::InterfaceType => Some(Self::InterfaceType(InterfaceType(syntax))),
-			SyntaxKind::IdentType => Some(Self::IdentType(IdentType(syntax))),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Type::PrimitiveType(node) => &node.0,
-			Type::StructType(node) => &node.0,
-			Type::InterfaceType(node) => &node.0,
-			Type::IdentType(node) => &node.0,
-		}
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
-#[derive(Debug)]
-pub struct IdentType(SyntaxNode);
-
-impl AstNode for IdentType {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::IdentType => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -483,26 +292,6 @@ impl IdentType {
 	}
 }
 
-#[derive(Debug)]
-pub struct InterfaceType(SyntaxNode);
-
-impl AstNode for InterfaceType {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::InterfaceType => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl InterfaceType {
 	pub fn methods(&self) -> Vec<InterfaceMethod> {
 		self
@@ -510,26 +299,6 @@ impl InterfaceType {
 			.children()
 			.filter_map(InterfaceMethod::cast)
 			.collect()
-	}
-}
-
-#[derive(Debug)]
-pub struct InterfaceMethod(SyntaxNode);
-
-impl AstNode for InterfaceMethod {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::InterfaceMethod => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -559,26 +328,6 @@ impl InterfaceMethod {
 	}
 }
 
-#[derive(Debug)]
-pub struct FnParam(SyntaxNode);
-
-impl AstNode for FnParam {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::FnParam => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl FnParam {
 	pub fn mutable(&self) -> Option<SyntaxToken> {
 		self
@@ -601,49 +350,9 @@ impl FnParam {
 	}
 }
 
-#[derive(Debug)]
-pub struct StructType(SyntaxNode);
-
-impl AstNode for StructType {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::StructType => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl StructType {
 	pub fn fields(&self) -> Vec<StructField> {
 		self.0.children().filter_map(StructField::cast).collect()
-	}
-}
-
-#[derive(Debug)]
-pub struct StructField(SyntaxNode);
-
-impl AstNode for StructField {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::StructTypeField => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -715,26 +424,6 @@ impl PrimitiveType {
 	}
 }
 
-#[derive(Debug)]
-pub struct BinExpr(SyntaxNode);
-
-impl AstNode for BinExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::BinExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl BinExpr {
 	pub fn lhs(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
@@ -762,49 +451,9 @@ impl BinExpr {
 	}
 }
 
-#[derive(Debug)]
-pub struct IntExpr(SyntaxNode);
-
-impl AstNode for IntExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::IntExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl IntExpr {
 	pub fn tok(&self) -> Option<SyntaxToken> {
 		self.0.first_token()
-	}
-}
-
-#[derive(Debug)]
-pub struct FloatExpr(SyntaxNode);
-
-impl AstNode for FloatExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::FloatExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -814,49 +463,9 @@ impl FloatExpr {
 	}
 }
 
-#[derive(Debug)]
-pub struct ParenExpr(SyntaxNode);
-
-impl AstNode for ParenExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::ParenExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
-	}
-}
-
 impl ParenExpr {
 	pub fn expr(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
-	}
-}
-
-#[derive(Debug)]
-pub struct PrefixExpr(SyntaxNode);
-
-impl AstNode for PrefixExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::PrefixExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 
@@ -871,26 +480,6 @@ impl PrefixExpr {
 
 	pub fn expr(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
-	}
-}
-
-#[derive(Debug)]
-pub struct IdentExpr(SyntaxNode);
-
-impl AstNode for IdentExpr {
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		match syntax.kind() {
-			SyntaxKind::IdentExpr => Some(Self(syntax)),
-			_ => None,
-		}
-	}
-
-	fn syntax(&self) -> &SyntaxNode {
-		&self.0
-	}
-
-	fn range(&self) -> TextRange {
-		self.syntax().text_range()
 	}
 }
 

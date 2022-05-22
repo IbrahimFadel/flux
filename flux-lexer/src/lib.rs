@@ -1,6 +1,5 @@
 use logos::Logos;
 use std::ops::Range as StdRange;
-
 mod token_kind;
 use text_size::{TextRange, TextSize};
 pub use token_kind::TokenKind;
@@ -41,6 +40,10 @@ pub struct Token<'a> {
 	pub kind: TokenKind,
 	pub text: &'a str,
 	pub range: TextRange,
+}
+
+extern "C" {
+	pub fn asm_lex(src: *const u8, len: u64) -> u64;
 }
 
 #[cfg(test)]

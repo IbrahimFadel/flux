@@ -23,6 +23,10 @@ pub enum TokenKind {
 	#[regex(r"[0-9]+\.[0-9]+(_[0-9]+)*")]
 	FloatLit,
 
+	#[token("mod")]
+	ModKw,
+	#[token("use")]
+	UseKw,
 	#[token("pub")]
 	PubKw,
 	#[token("fn")]
@@ -110,6 +114,8 @@ macro_rules! T {
 	[ident] => { $crate::TokenKind::Ident };
 	[intlit] => { $crate::TokenKind::IntLit };
 	[floatlit] => { $crate::TokenKind::FloatLit };
+	[mod] => { $crate::TokenKind::ModKw };
+	[use] => { $crate::TokenKind::UseKw };
 	[pub] => { $crate::TokenKind::PubKw };
 	[fn] => { $crate::TokenKind::FnKw };
 	[type] => { $crate::TokenKind::TypeKw };

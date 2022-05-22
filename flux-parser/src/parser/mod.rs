@@ -8,7 +8,7 @@ use self::marker::Marker;
 
 pub(crate) mod marker;
 
-const RECOVERY_SET: [TokenKind; 7] = [
+const RECOVERY_SET: [TokenKind; 8] = [
 	TokenKind::INKw,
 	TokenKind::FnKw,
 	TokenKind::LBrace,
@@ -16,6 +16,7 @@ const RECOVERY_SET: [TokenKind; 7] = [
 	TokenKind::LParen,
 	TokenKind::RParen,
 	TokenKind::SemiColon,
+	TokenKind::UseKw,
 ];
 
 pub(crate) struct Parser<'t, 'src> {

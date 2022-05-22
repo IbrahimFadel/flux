@@ -17,7 +17,7 @@ macro_rules! test_typeinf_success {
 					let cst = parse($src, file_id);
 					assert!(cst.errors.is_empty());
 					let root = ast::Root::cast(cst.syntax()).unwrap();
-					let mut hir_module = lower(root, file_id);
+					let mut hir_module = lower(String::from("foo"), root, file_id);
 					let res = crate::typecheck_hir_module(&mut hir_module);
 					assert!(res.is_ok());
 					let s = format!("{:#?}", hir_module);

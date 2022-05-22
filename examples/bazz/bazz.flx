@@ -1,0 +1,6 @@
+use pkg::test::something;
+use pkg::something;
+
+pub fn something() {
+  
+}

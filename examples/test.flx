@@ -1,0 +1,8 @@
+use pkg::foo;
+use pkg::bar::something;
+use pkg::bar::bazz::something;
+use pkg::bar;
+
+pub fn something() {
+
+}

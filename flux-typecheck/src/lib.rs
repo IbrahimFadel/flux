@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use flux_error::FluxError;
+use flux_error::{filesystem::FileId, FluxError};
 use flux_hir::{Call, Expr, ExprIdx, HirModule, Stmt, VarDecl};
 use flux_syntax::ast::Spanned;
 use la_arena::Arena;
@@ -273,7 +273,7 @@ impl<'a> TypeEnv<'a> {
 	}
 }
 
-pub fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError> {
+fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError> {
 	let mut types = HashMap::new();
 	for ty in &hir_module.types {
 		types.insert(ty.name.clone(), hir_type_to_type_info(&ty.ty));
@@ -318,5 +318,14 @@ pub fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError>
 		}
 	}
 
+	Ok(())
+}
+
+pub fn typecheck_hir_modules(
+	hir_modules: &mut HashMap<FileId, HirModule>,
+) -> Result<(), FluxError> {
+	for (_, hir_module) in hir_modules.iter_mut() {
+		typecheck_hir_module(hir_module)?;
+	}
 	Ok(())
 }
