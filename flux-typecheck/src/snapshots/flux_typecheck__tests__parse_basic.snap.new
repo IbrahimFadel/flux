@@ -1,0 +1,6 @@
+---
+source: flux-typecheck/src/tests.rs
+assertion_line: 34
+expression: s
+---
+foo

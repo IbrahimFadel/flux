@@ -11,6 +11,7 @@ pub enum FluxErrorCode {
 	NoCode,
 	UnexpectedEOF,
 	UnexpectedToken,
+	UnresolvedUse,
 
 	HirParseIntString,
 	// LexUnknownChar,
@@ -130,6 +131,7 @@ pub struct FluxError {
 	code: FluxErrorCode,
 	primary: Option<(String, Option<Span>)>,
 	labels: Vec<(String, Option<Span>)>,
+	notes: Vec<String>,
 }
 
 impl Default for FluxError {
@@ -139,6 +141,7 @@ impl Default for FluxError {
 			code: FluxErrorCode::NoCode,
 			primary: None,
 			labels: vec![],
+			notes: vec![],
 		}
 	}
 }
@@ -161,6 +164,16 @@ impl FluxError {
 
 	pub fn with_label(mut self, msg: String, span: Option<Span>) -> FluxError {
 		self.labels.push((msg, span));
+		self
+	}
+
+	pub fn with_labels(mut self, labels: &mut Vec<(String, Option<Span>)>) -> FluxError {
+		self.labels.append(labels);
+		self
+	}
+
+	pub fn with_note(mut self, msg: String) -> FluxError {
+		self.notes.push(msg);
 		self
 	}
 
@@ -191,6 +204,7 @@ impl FluxError {
 			.with_message(self.msg.clone())
 			.with_code(self.code.to_string())
 			.with_labels(labels)
+			.with_notes(self.notes.clone())
 	}
 }
 

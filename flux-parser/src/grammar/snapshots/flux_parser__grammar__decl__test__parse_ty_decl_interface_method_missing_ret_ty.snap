@@ -24,4 +24,4 @@ TypeDecl@0..40
       SemiColon@36..37 ";"
       Whitespace@37..39 "\n\t"
     RBrace@39..40 "}"
-FluxError { msg: "could not parse type expression", code: UnexpectedToken, primary: None, labels: [("could not parse type expression", Some(Span { range: 36..37, file_id: FileId(0) }))] }
+FluxError { msg: "could not parse type expression", code: UnexpectedToken, primary: None, labels: [("could not parse type expression", Some(Span { range: 36..37, file_id: FileId(0) }))], notes: [] }

@@ -6,12 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+flux-driver = { path = "../flux-driver" }
 flux-parser = { path = "../flux-parser" }
 flux-syntax = { path = "../flux-syntax" }
 flux-hir = { path = "../flux-hir" }
 flux-typecheck = { path = "../flux-typecheck" }
 flux-mir = { path = "../flux-mir" }
 flux-error = { path = "../flux-error" }
-flux-lexer = { path = "../flux-lexer" }
-petgraph = "0.6.0"
 text-size = "1.0.0"

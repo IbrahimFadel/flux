@@ -1,5 +1,5 @@
 [package]
-name = "flux-hir"
+name = "flux-depend"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,8 +7,7 @@ edition = "2021"
 
 [dependencies]
 flux-syntax = { path = "../flux-syntax" }
+flux-parser = { path = "../flux-parser" }
 flux-error = { path = "../flux-error" }
-smol_str = "0.1.21"
-la-arena = "0.2.0"
-indexmap = "1.7.0"
-text-size = "1.0.0"
+flux-hir = { path = "../flux-hir" }
+petgraph = "0.6.1"

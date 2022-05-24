@@ -256,15 +256,36 @@ checksum = "279fb028e20b3c4c320317955b77c5e0c9701f05a1d309905d6fc702cdc5053e"
 name = "flux"
 version = "0.1.0"
 dependencies = [
+ "flux-driver",
  "flux-error",
  "flux-hir",
- "flux-lexer",
  "flux-mir",
  "flux-parser",
  "flux-syntax",
  "flux-typecheck",
- "petgraph",
  "text-size",
+]
+
+[[package]]
+name = "flux-depend"
+version = "0.1.0"
+dependencies = [
+ "flux-error",
+ "flux-hir",
+ "flux-parser",
+ "flux-syntax",
+ "petgraph",
+]
+
+[[package]]
+name = "flux-driver"
+version = "0.1.0"
+dependencies = [
+ "flux-depend",
+ "flux-error",
+ "flux-hir",
+ "flux-parser",
+ "flux-syntax",
 ]
 
 [[package]]
@@ -350,6 +371,8 @@ dependencies = [
 name = "flux-typecheck"
 version = "0.1.0"
 dependencies = [
+ "flux-depend",
+ "flux-driver",
  "flux-error",
  "flux-hir",
  "flux-parser",
@@ -396,9 +419,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.8.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
+checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
 dependencies = [
  "autocfg",
  "hashbrown 0.11.2",
@@ -576,9 +599,9 @@ checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
 
 [[package]]
 name = "petgraph"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
+checksum = "51b305cc4569dd4e8765bab46261f67ef5d4d11a4b6e745100ee5dad8948b46c"
 dependencies = [
  "fixedbitset",
  "indexmap",

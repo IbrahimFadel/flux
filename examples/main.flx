@@ -7,3 +7,5 @@ pub fn foo() {
 pub fn something() {
 
 }
+
+pub type Foo i32

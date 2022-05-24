@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use flux_error::filesystem::FileId;
+use flux_error::{filesystem::FileId, FluxError};
 use indexmap::IndexMap;
 use smol_str::SmolStr;
 
@@ -25,20 +25,80 @@ impl Debug for HirModule {
 	}
 }
 
-pub fn lower(name: String, ast: ast::Root, file_id: FileId) -> HirModule {
+pub fn lower(name: String, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
 	let mut db = Database::new(file_id);
-	let functions = ast.functions().filter_map(|f| db.lower_fn(f)).collect();
-	let types = ast.types().filter_map(|ty| db.lower_ty_decl(ty)).collect();
-	let mods = ast.mods().filter_map(|m| db.lower_mod(m)).collect();
+	let functions: Vec<FnDecl> = ast.functions().filter_map(|f| db.lower_fn(f)).collect();
+	let types: Vec<TypeDecl> = ast.types().filter_map(|ty| db.lower_ty_decl(ty)).collect();
+	let mods: Vec<ModDecl> = ast.mods().filter_map(|m| db.lower_mod(m)).collect();
 	let uses = ast.uses().filter_map(|u| db.lower_use(u)).collect();
-	HirModule {
-		name,
-		db,
-		mods,
-		uses,
-		functions,
-		types,
+	let mut errors = vec![];
+	for f in &functions {
+		if let Some(f_name) = &f.name {
+			for ty in &types {
+				if f_name.node == ty.name.node {
+					errors.push(
+						FluxError::default()
+							.with_msg(format!("duplicate definitions for `{}`", f_name.node))
+							.with_label(
+								format!("function `{}` defined here", f_name.node),
+								Some(f_name.span.clone()),
+							)
+							.with_label(
+								format!("type `{}` defined here", ty.name.node),
+								Some(ty.name.span.clone()),
+							),
+					);
+				}
+			}
+
+			for m in &mods {
+				if f_name.node == m.name.node {
+					errors.push(
+						FluxError::default()
+							.with_msg(format!("duplicate definitions for `{}`", f_name.node))
+							.with_label(
+								format!("function `{}` defined here", f_name.node),
+								Some(f_name.span.clone()),
+							)
+							.with_label(
+								format!("mod `{}` defined here", m.name.node),
+								Some(m.name.span.clone()),
+							),
+					);
+				}
+			}
+		}
 	}
+	for ty in &types {
+		for m in &mods {
+			if ty.name.node == m.name.node {
+				errors.push(
+					FluxError::default()
+						.with_msg(format!("duplicate definitions for `{}`", ty.name.node))
+						.with_label(
+							format!("type `{}` defined here", ty.name.node),
+							Some(ty.name.span.clone()),
+						)
+						.with_label(
+							format!("mod `{}` defined here", m.name.node),
+							Some(m.name.span.clone()),
+						),
+				);
+			}
+		}
+	}
+
+	(
+		HirModule {
+			name,
+			db,
+			mods,
+			uses,
+			functions,
+			types,
+		},
+		errors,
+	)
 }
 
 #[derive(Debug, Clone)]
@@ -53,15 +113,15 @@ pub struct UseDecl {
 
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
-	pub_: bool,
-	pub name: String,
+	pub public: Spanned<bool>,
+	pub name: Spanned<String>,
 	pub ty: Spanned<Type>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FnDecl {
 	pub public: Spanned<bool>,
-	pub name: Option<String>,
+	pub name: Option<Spanned<String>>,
 	pub params: Vec<Spanned<FnParam>>,
 	pub block: Vec<Option<Spanned<Stmt>>>,
 	pub return_type: Spanned<Type>,

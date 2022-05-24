@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fmt};
 
-use flux_error::{filesystem::FileId, FluxError};
+use flux_depend::DependencyGraph;
+use flux_driver::{FunctionExportTable, FunctionSignature, TypeExportTable};
+use flux_error::FluxError;
 use flux_hir::{Call, Expr, ExprIdx, HirModule, Stmt, VarDecl};
 use flux_syntax::ast::Spanned;
 use la_arena::Arena;
@@ -9,11 +11,11 @@ use smol_str::SmolStr;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
-struct FnSignature {
-	param_types: Vec<Spanned<TypeInfo>>,
-	return_type: Spanned<TypeInfo>,
-}
+// #[derive(Debug, Clone)]
+// struct FnSignature {
+// 	param_types: Vec<Spanned<TypeInfo>>,
+// 	return_type: Spanned<TypeInfo>,
+// }
 
 type TypeId = u32;
 
@@ -43,17 +45,16 @@ impl fmt::Display for TypeInfo {
 	}
 }
 
-fn generate_function_signature(f: &flux_hir::FnDecl) -> Option<FnSignature> {
+fn generate_function_signature(f: &flux_hir::FnDecl) -> Option<FunctionSignature> {
 	if let Some(_) = f.name {
 		let mut param_types = vec![];
 		for p in &f.params {
-			param_types.push(hir_type_to_type_info(&p.ty));
+			param_types.push(p.ty.clone());
 		}
-		let return_type = hir_type_to_type_info(&f.return_type);
 
-		Some(FnSignature {
+		Some(FunctionSignature {
 			param_types,
-			return_type,
+			return_type: f.return_type.clone(),
 		})
 	} else {
 		None
@@ -79,7 +80,7 @@ struct TypeEnv<'a> {
 	id_counter: u32,
 	local_ids: HashMap<String, TypeId>,
 	local_types: HashMap<TypeId, Spanned<TypeInfo>>,
-	signatures: &'a HashMap<String, FnSignature>,
+	signatures: &'a HashMap<String, FunctionSignature>,
 	type_decls: &'a HashMap<String, Spanned<TypeInfo>>,
 }
 
@@ -180,12 +181,12 @@ impl<'a> TypeEnv<'a> {
 
 			for (i, arg) in call.args.iter().enumerate() {
 				let arg_ty = self.infer_expr(*arg)?;
-				let param_ty = signature.param_types[i].clone();
+				let param_ty = hir_type_to_type_info(&signature.param_types[i]);
 				let final_ty = self.unify(arg_ty, param_ty)?;
 				self.propogate_local_ty(*arg, final_ty)?;
 			}
 
-			return Ok(signature.return_type.clone());
+			return Ok(hir_type_to_type_info(&signature.return_type));
 		}
 
 		Ok(Spanned::new(
@@ -273,17 +274,29 @@ impl<'a> TypeEnv<'a> {
 	}
 }
 
-fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError> {
+fn typecheck_hir_module(
+	hir_module: &mut HirModule,
+	function_exports: &FunctionExportTable,
+	type_exports: &TypeExportTable,
+) -> Result<(), FluxError> {
 	let mut types = HashMap::new();
+	let mut signatures: HashMap<String, FunctionSignature> = HashMap::new();
 	for ty in &hir_module.types {
-		types.insert(ty.name.clone(), hir_type_to_type_info(&ty.ty));
+		types.insert(ty.name.node.clone(), hir_type_to_type_info(&ty.ty));
+	}
+	for u in &hir_module.uses {
+		let path: Vec<String> = u.path.iter().map(|s| s.to_string()).collect();
+		if let Some(ty) = type_exports.get(&path) {
+			types.insert(path.join("::"), hir_type_to_type_info(&ty));
+		} else if let Some(f) = function_exports.get(&path) {
+			signatures.insert(path.join("::"), (*f).clone());
+		}
 	}
 
-	let mut signatures = HashMap::new();
 	for f in &hir_module.functions {
 		if let Some(sig) = generate_function_signature(f) {
 			let name = f.name.as_ref().unwrap();
-			signatures.insert(name.clone(), sig);
+			signatures.insert(name.node.clone(), sig);
 		}
 	}
 
@@ -322,10 +335,12 @@ fn typecheck_hir_module(hir_module: &mut HirModule) -> Result<(), FluxError> {
 }
 
 pub fn typecheck_hir_modules(
-	hir_modules: &mut HashMap<FileId, HirModule>,
+	hir_modules: &mut [HirModule],
+	function_exports: &FunctionExportTable,
+	type_exports: &TypeExportTable,
 ) -> Result<(), FluxError> {
-	for (_, hir_module) in hir_modules.iter_mut() {
-		typecheck_hir_module(hir_module)?;
+	for hir_module in hir_modules {
+		typecheck_hir_module(hir_module, function_exports, type_exports)?;
 	}
 	Ok(())
 }

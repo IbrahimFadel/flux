@@ -167,6 +167,10 @@ impl UseDecl {
 }
 
 impl TypeDecl {
+	pub fn first_token_range(&self) -> TextRange {
+		self.0.first_child_or_token().unwrap().text_range()
+	}
+
 	pub fn public(&self) -> Option<SyntaxToken> {
 		self
 			.0
@@ -189,6 +193,10 @@ impl TypeDecl {
 }
 
 impl FnDecl {
+	pub fn first_token_range(&self) -> TextRange {
+		self.0.first_child_or_token().unwrap().text_range()
+	}
+
 	pub fn public(&self) -> Option<SyntaxToken> {
 		self
 			.0

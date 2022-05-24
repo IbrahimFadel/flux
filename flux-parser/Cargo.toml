@@ -10,7 +10,7 @@ flux-error = { path = "../flux-error" }
 flux-lexer = { path = "../flux-lexer" }
 flux-syntax = { path = "../flux-syntax" }
 smol_str = "0.1.21"
-indexmap = "1.8.1"
+indexmap = "1.7.0"
 rowan = "0.15.4"
 logos = "0.12.0"
 num-derive = "0.3.3"

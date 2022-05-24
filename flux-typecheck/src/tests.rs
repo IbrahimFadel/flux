@@ -2,6 +2,7 @@ use flux_error::FluxErrorReporting;
 use flux_hir::lower;
 use flux_parser::parse;
 use flux_syntax::{ast, ast::AstNode};
+use std::collections::HashMap;
 
 #[macro_export]
 #[cfg(test)]
@@ -17,8 +18,10 @@ macro_rules! test_typeinf_success {
 					let cst = parse($src, file_id);
 					assert!(cst.errors.is_empty());
 					let root = ast::Root::cast(cst.syntax()).unwrap();
-					let mut hir_module = lower(String::from("foo"), root, file_id);
-					let res = crate::typecheck_hir_module(&mut hir_module);
+					let (mut hir_module, _) = lower(String::from("foo"), root, file_id);
+					let function_exports = HashMap::new();
+					let type_exports = HashMap::new();
+					let res = crate::typecheck_hir_module(&mut hir_module, &function_exports, &type_exports);
 					assert!(res.is_ok());
 					let s = format!("{:#?}", hir_module);
 					let mut settings = insta::Settings::clone_current();

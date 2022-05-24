@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 flux-error = { path = "../flux-error" }
 smol_str = "0.1.21"
-indexmap = "1.8.1"
+indexmap = "1.7.0"

@@ -56,13 +56,7 @@ impl Database {
 		let public = if let Some(p) = ast.public() {
 			Spanned::new(true, Span::new(p.text_range(), self.file_id))
 		} else {
-			Spanned::new(
-				false,
-				Span::new(
-					TextRange::new(TextSize::from(0), TextSize::from(0)),
-					self.file_id,
-				),
-			)
+			Spanned::new(false, Span::new(ast.first_token_range(), self.file_id))
 		};
 		let params = self.lower_params(ast.params())?;
 		let block = if let Some(block) = ast.body() {
@@ -81,7 +75,10 @@ impl Database {
 			return_type.unwrap()
 		};
 		let name = if let Some(name) = ast.name() {
-			Some(name.text().to_string())
+			Some(Spanned::new(
+				name.text().to_string(),
+				Span::new(name.text_range(), self.file_id),
+			))
 		} else {
 			None
 		};
@@ -95,9 +92,19 @@ impl Database {
 	}
 
 	pub(crate) fn lower_ty_decl(&mut self, ast: ast::TypeDecl) -> Option<TypeDecl> {
+		let public = if let Some(public) = ast.public() {
+			Spanned::new(true, Span::new(public.text_range(), self.file_id))
+		} else {
+			Spanned::new(false, Span::new(ast.first_token_range(), self.file_id))
+		};
+		let name = ast.name()?;
+		let name = Spanned::new(
+			name.text().to_string(),
+			Span::new(name.text_range(), self.file_id),
+		);
 		Some(TypeDecl {
-			pub_: ast.public().is_some(),
-			name: ast.name()?.text().to_string(),
+			public,
+			name,
 			ty: self.lower_type(ast.ty())?,
 		})
 	}
