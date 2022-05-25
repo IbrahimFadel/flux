@@ -34,32 +34,32 @@ macro_rules! test_typeinf_success {
 	};
 }
 
-test_typeinf_success!(
-	basic,
-	r#"fn main() {
-  let x = 0;
-}"#
-);
+// test_typeinf_success!(
+// 	basic,
+// 	r#"fn main() {
+//   let x = 0;
+// }"#
+// );
 
-test_typeinf_success!(
-	basic_dependency,
-	r#"fn main() {
-  let x = 0;
-	i7 y = x;
-}"#
-);
+// test_typeinf_success!(
+// 	basic_dependency,
+// 	r#"fn main() {
+//   let x = 0;
+// 	i7 y = x;
+// }"#
+// );
 
-test_typeinf_success!(
-	function_call_change_var_types,
-	r#"type Foo i32
+// test_typeinf_success!(
+// 	function_call_change_var_types,
+// 	r#"type Foo i32
 
-fn foo(u13 a) -> Foo {
-  Foo x = 0;
-}
+// fn foo(u13 a) -> Foo {
+//   Foo x = 0;
+// }
 
-fn main() {
-  let x = 1 + 4;
-  let y = x;
-  let z = foo(y);
-}"#
-);
+// fn main() {
+//   let x = 1 + 4;
+//   let y = x;
+//   let z = foo(y);
+// }"#
+// );

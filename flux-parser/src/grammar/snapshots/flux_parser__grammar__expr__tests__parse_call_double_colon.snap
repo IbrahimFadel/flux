@@ -1,0 +1,17 @@
+---
+source: flux-parser/src/grammar/expr.rs
+expression: "&parse.debug_tree()"
+---
+CallExpr@0..16
+  BinExpr@0..14
+    BinExpr@0..8
+      IdentExpr@0..3
+        Ident@0..3 "foo"
+      DoubleColon@3..5 "::"
+      IdentExpr@5..8
+        Ident@5..8 "bar"
+    DoubleColon@8..10 "::"
+    IdentExpr@10..14
+      Ident@10..14 "bazz"
+  LParen@14..15 "("
+  RParen@15..16 ")"

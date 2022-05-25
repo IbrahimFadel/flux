@@ -171,7 +171,6 @@ pub(crate) fn expr(p: &mut Parser) -> Option<CompletedMarker> {
 
 fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<CompletedMarker> {
 	let mut lhs = lhs(p)?;
-
 	loop {
 		let op = if p.at(T!(+)) {
 			InfixOp::Add
@@ -214,9 +213,10 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 			break;
 		}
 	}
-
-	let postfix = postfix(p, lhs);
-	Some(postfix)
+	if minimum_binding_power == 0 {
+		lhs = postfix(p, lhs);
+	}
+	Some(lhs)
 }
 
 fn postfix(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
@@ -356,6 +356,10 @@ mod tests {
 	test_expr_str!(binops_eq, "x=1");
 	test_expr_str!(binops_period, "foo.bar");
 	test_expr_str!(binops_double_colon, "foo::bar");
+
+	// ------- Call ---------
+	test_expr_str!(call_basic, "foo()");
+	test_expr_str!(call_double_colon, "foo::bar::bazz()");
 
 	test_expr_str!(
 		infix_with_comments,

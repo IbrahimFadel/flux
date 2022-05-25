@@ -11,6 +11,7 @@ use flux_syntax::{
 };
 use indexmap::IndexMap;
 use la_arena::{Arena, Idx};
+use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
 #[derive(Debug, Clone)]
@@ -33,7 +34,7 @@ impl Database {
 impl Database {
 	pub(crate) fn lower_mod(&mut self, ast: ast::ModDecl) -> Option<ModDecl> {
 		let name = ast.name()?;
-		let name_str = name.text().to_string();
+		let name_str = SmolStr::from(name.text());
 		let name_span = name.text_range();
 		Some(ModDecl {
 			name: Spanned::new(name_str, Span::new(name_span, self.file_id)),
@@ -45,7 +46,7 @@ impl Database {
 		let token_arr = ast.path();
 		for tok in token_arr {
 			path.push(Spanned::new(
-				String::from(tok.text()),
+				SmolStr::from(tok.text()),
 				Span::new(tok.text_range(), self.file_id),
 			));
 		}
@@ -76,7 +77,7 @@ impl Database {
 		};
 		let name = if let Some(name) = ast.name() {
 			Some(Spanned::new(
-				name.text().to_string(),
+				SmolStr::from(name.text()),
 				Span::new(name.text_range(), self.file_id),
 			))
 		} else {
@@ -99,7 +100,7 @@ impl Database {
 		};
 		let name = ast.name()?;
 		let name = Spanned::new(
-			name.text().to_string(),
+			SmolStr::from(name.text()),
 			Span::new(name.text_range(), self.file_id),
 		);
 		Some(TypeDecl {
@@ -421,6 +422,7 @@ impl Database {
 			SyntaxKind::Star => BinaryOp::Mul,
 			SyntaxKind::Slash => BinaryOp::Div,
 			SyntaxKind::CmpEq => BinaryOp::CmpEq,
+			SyntaxKind::DoubleColon => BinaryOp::DoubleColon,
 			_ => unreachable!(),
 		};
 

@@ -9,9 +9,9 @@ pub use database::Database;
 use flux_syntax::ast::{self, Spanned};
 use la_arena::Idx;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HirModule {
-	pub name: String,
+	pub name: SmolStr,
 	pub db: Database,
 	pub mods: Vec<ModDecl>,
 	pub uses: Vec<UseDecl>,
@@ -19,13 +19,7 @@ pub struct HirModule {
 	pub types: Vec<TypeDecl>,
 }
 
-impl Debug for HirModule {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.name)
-	}
-}
-
-pub fn lower(name: String, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
+pub fn lower(name: SmolStr, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
 	let mut db = Database::new(file_id);
 	let functions: Vec<FnDecl> = ast.functions().filter_map(|f| db.lower_fn(f)).collect();
 	let types: Vec<TypeDecl> = ast.types().filter_map(|ty| db.lower_ty_decl(ty)).collect();
@@ -103,25 +97,25 @@ pub fn lower(name: String, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<F
 
 #[derive(Debug, Clone)]
 pub struct ModDecl {
-	pub name: Spanned<String>,
+	pub name: Spanned<SmolStr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UseDecl {
-	pub path: Vec<Spanned<String>>,
+	pub path: Vec<Spanned<SmolStr>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
 	pub public: Spanned<bool>,
-	pub name: Spanned<String>,
+	pub name: Spanned<SmolStr>,
 	pub ty: Spanned<Type>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FnDecl {
 	pub public: Spanned<bool>,
-	pub name: Option<Spanned<String>>,
+	pub name: Option<Spanned<SmolStr>>,
 	pub params: Vec<Spanned<FnParam>>,
 	pub block: Vec<Option<Spanned<Stmt>>>,
 	pub return_type: Spanned<Type>,
@@ -219,13 +213,14 @@ pub enum PrimitiveKind {
 	I32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOp {
 	Add,
 	Sub,
 	Mul,
 	Div,
 	CmpEq,
+	DoubleColon,
 }
 
 #[derive(Debug, Clone)]

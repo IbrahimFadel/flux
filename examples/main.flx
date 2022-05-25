@@ -1,11 +1,22 @@
 mod test;
 mod bar;
 
-pub fn foo() {
+use pkg::test::do_test;
+
+fn main() {
+	i32 x = 0;
+	// pkg::test::do_test(x);
+	// do_test(x);
+
+	pkg::bar::do_bar(x, 10);
 }
 
-pub fn something() {
+/*
 
-}
+you should be able to define an interface simply as a collection of interfaces
 
-pub type Foo i32
+type Foo interface {
+	// methods...
+} + Bar + Bazz
+
+*/

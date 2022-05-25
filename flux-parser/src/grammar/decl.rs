@@ -14,7 +14,9 @@ pub(crate) fn top_level_decl(p: &mut Parser) {
 	} else if p.at(T!(type)) {
 		type_decl(p);
 	} else {
-		p.error(format!("expected top level declaration"));
+		if !p.at(T!(comment)) {
+			p.error(format!("expected top level declaration"));
+		}
 	}
 }
 
@@ -24,7 +26,9 @@ fn pub_tob_level_decl(p: &mut Parser) {
 	} else if p.next_at(T!(type)) {
 		type_decl(p);
 	} else {
-		p.error(format!("expected top level declaration"));
+		if !p.at(T!(comment)) {
+			p.error(format!("expected top level declaration"));
+		}
 	}
 }
 

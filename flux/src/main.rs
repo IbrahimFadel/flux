@@ -7,8 +7,8 @@ const PROJECT_DIR: &str = "examples";
 
 fn main() {
 	let mut err_reporting = FluxErrorReporting::default();
-	let mut function_exports = FunctionExportTable::new();
-	let mut type_exports = TypeExportTable::new();
+	let mut function_exports = FunctionExportTable::default();
+	let mut type_exports = TypeExportTable::default();
 
 	let mut modules = flux_driver::parse_main_with_dependencies(
 		PROJECT_DIR,

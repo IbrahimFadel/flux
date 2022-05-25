@@ -1,20 +1,22 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use flux_error::{FluxError, FluxErrorReporting};
+use flux_error::{filesystem::FileId, FluxError, FluxErrorReporting, Span};
 use flux_hir::HirModule;
 use flux_parser::parse;
 use flux_syntax::{
 	ast,
 	ast::{AstNode, Spanned},
 };
+use smol_str::SmolStr;
+use text_size::{TextRange, TextSize};
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
 	pub return_type: Spanned<flux_hir::Type>,
 	pub param_types: Vec<Spanned<flux_hir::Type>>,
 }
-pub type FunctionExportTable = HashMap<Vec<String>, FunctionSignature>;
-pub type TypeExportTable = HashMap<Vec<String>, Spanned<flux_hir::Type>>;
+pub type FunctionExportTable = HashMap<Vec<SmolStr>, FunctionSignature>;
+pub type TypeExportTable = HashMap<Vec<SmolStr>, Spanned<flux_hir::Type>>;
 
 /// Given a mod name `foo`, search for the corresponding source file:
 /// `./foo.flx` || `./foo/foo.flx`
@@ -22,7 +24,7 @@ pub type TypeExportTable = HashMap<Vec<String>, Spanned<flux_hir::Type>>;
 /// Err(FileNotFound)
 fn find_path_with_mod_name(
 	parent_dir: &str,
-	name: &Spanned<String>,
+	name: &Spanned<SmolStr>,
 ) -> Result<(String, String), FluxError> {
 	let src = fs::read_to_string(&format!("{}/{}.flx", parent_dir, name.node));
 	if let Some(_) = src.as_ref().err() {
@@ -56,7 +58,7 @@ fn find_path_with_mod_name(
 
 fn populate_export_table(
 	module: &HirModule,
-	module_path: Vec<String>,
+	module_path: Vec<SmolStr>,
 	function_exports: &mut FunctionExportTable,
 	type_exports: &mut TypeExportTable,
 ) {
@@ -64,7 +66,7 @@ fn populate_export_table(
 		if f.public.node {
 			if let Some(name) = &f.name {
 				let mut path = module_path.clone();
-				path.push(name.to_string());
+				path.push(name.node.clone());
 				function_exports.insert(path, generate_function_signature(f));
 			}
 		}
@@ -72,7 +74,7 @@ fn populate_export_table(
 	for ty in &module.types {
 		if ty.public.node {
 			let mut path = module_path.clone();
-			path.push(ty.name.to_string());
+			path.push(ty.name.node.clone());
 			type_exports.insert(path, ty.ty.clone());
 		}
 	}
@@ -80,8 +82,8 @@ fn populate_export_table(
 
 fn parse_file_and_submodules<'a>(
 	parent_dir: &str,
-	module_path: Vec<String>,
-	name: &Spanned<String>,
+	module_path: Vec<SmolStr>,
+	name: &Spanned<SmolStr>,
 	err_reporting: &mut FluxErrorReporting,
 	function_exports: &mut FunctionExportTable,
 	type_exports: &mut TypeExportTable,
@@ -107,14 +109,14 @@ fn parse_file_and_submodules<'a>(
 		exit(1);
 	}
 
-	// let child = dependency_graph.add_node(hir_module.clone());
-	// dependency_graph.add_edge(parent, child, DependencyType::SubModule);
 	populate_export_table(
 		&hir_module,
 		module_path.clone(),
 		function_exports,
 		type_exports,
 	);
+
+	report_ambiguous_uses(&hir_module.uses, err_reporting);
 
 	for m in &hir_module.mods {
 		let parent_dir = Path::new(&path).parent().unwrap();
@@ -141,6 +143,35 @@ fn generate_function_signature(f: &flux_hir::FnDecl) -> FunctionSignature {
 	}
 }
 
+fn report_ambiguous_uses(uses: &[flux_hir::UseDecl], err_reporting: &mut FluxErrorReporting) {
+	let mut errors = vec![];
+	let mut unique_uses: Vec<Spanned<SmolStr>> = vec![]; // hash set
+	for u in uses {
+		let last = u.path.last().unwrap();
+		if let Some(idx) = unique_uses.iter().position(|u| u.node == last.as_str()) {
+			errors.push(
+				FluxError::default()
+					.with_msg(format!("ambiguous `use` for `{}`", last.to_string()))
+					.with_label(format!("one here"), Some(unique_uses[idx].span.clone()))
+					.with_label(format!("another here"), Some(last.span.clone()))
+					.with_note(format!(
+						"(hint) consider doing `use {} as foo;` to disambiguate",
+						u.path
+							.iter()
+							.map(|s| s.to_string())
+							.collect::<Vec<String>>()
+							.join("::")
+					)),
+			);
+		} else {
+			unique_uses.push(last.clone());
+		}
+	}
+	if !errors.is_empty() {
+		err_reporting.report(&errors);
+	}
+}
+
 pub fn parse_main_with_dependencies(
 	directory: &str,
 	function_exports: &mut FunctionExportTable,
@@ -148,38 +179,20 @@ pub fn parse_main_with_dependencies(
 	err_reporting: &mut FluxErrorReporting,
 ) -> Vec<HirModule> {
 	let mut hir_modules = vec![];
-	let src = fs::read_to_string(&format!("{}/{}", directory, "main.flx")).unwrap();
-	let entry_file_id = err_reporting
-		.add_file(format!("{}/main.flx", directory), src.clone())
-		.expect("could not add file");
-	let entry_cst = parse(src.as_str(), entry_file_id);
-	err_reporting.report(&entry_cst.errors);
-	let root = ast::Root::cast(entry_cst.syntax()).unwrap();
-	let (hir_module, errors) = flux_hir::lower(String::from("main"), root, entry_file_id);
-	err_reporting.report(&errors);
-	err_reporting.report(&hir_module.db.errors);
-	if errors.len() + entry_cst.errors.len() + hir_module.db.errors.len() > 0 {
-		exit(1);
-	}
-
-	populate_export_table(
-		&hir_module,
-		vec!["pkg".to_string()],
+	parse_file_and_submodules(
+		directory,
+		vec![SmolStr::from("pkg")],
+		&Spanned::new(
+			SmolStr::from("main"),
+			Span::new(
+				TextRange::new(TextSize::from(0), TextSize::from(0)),
+				FileId(0), // this might be problematic... but like, meh it's just error reporting who cares
+			),
+		),
+		err_reporting,
 		function_exports,
 		type_exports,
+		&mut hir_modules,
 	);
-
-	for m in &hir_module.mods {
-		parse_file_and_submodules(
-			directory,
-			vec!["pkg".to_string(), m.name.node.clone()],
-			&m.name,
-			err_reporting,
-			function_exports,
-			type_exports,
-			&mut hir_modules,
-		);
-	}
-	hir_modules.push(hir_module);
 	hir_modules
 }

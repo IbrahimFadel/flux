@@ -1,9 +1,3 @@
-use pkg::foo;
-use pkg::bar::something;
-use pkg::bar::bazz::something;
-use pkg::bar;
-use pkg::Foo;
-
-pub fn something() {
-
+pub fn do_test(u5 x) {
+	
 }

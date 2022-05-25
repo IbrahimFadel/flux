@@ -11,7 +11,7 @@ pub enum TokenKind {
 	Whitespace,
 
 	#[regex("//.*")]
-	#[regex(r"(?s)/\*(.*)\*/")]
+	#[regex(r"/\*([^*]|\**[^*/])*\*+/")]
 	Comment,
 	#[regex("[A-Za-z][A-Za-z0-9_]*")]
 	Ident,
@@ -97,6 +97,7 @@ pub enum TokenKind {
 	#[token(";")]
 	SemiColon,
 
+	#[regex(r"/\*([^*]|\*+[^*/])*\*?")]
 	#[error]
 	Error,
 }

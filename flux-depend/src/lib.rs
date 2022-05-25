@@ -12,13 +12,14 @@ use petgraph::{
 	graph::{DiGraph, NodeIndex},
 	visit::EdgeRef,
 };
+use smol_str::SmolStr;
 
 #[derive(Debug)]
 pub enum DependencyType {
 	SubModule,
 	UseCrate,
-	UseFunction(String),
-	UseType(String),
+	UseFunction(SmolStr),
+	UseType(SmolStr),
 }
 
 pub type DependencyGraph = DiGraph<HirModule, DependencyType>;
@@ -40,7 +41,7 @@ fn find_node_child(
 
 fn find_function<'a>(
 	module: &'a HirModule,
-	name: &Spanned<String>,
+	name: &Spanned<SmolStr>,
 ) -> Option<&'a flux_hir::FnDecl> {
 	let result = module.functions.iter().find_map(|f| {
 		if let Some(n) = &f.name {
@@ -60,7 +61,7 @@ fn find_function<'a>(
 	None
 }
 
-fn find_type<'a>(module: &'a HirModule, name: &Spanned<String>) -> Option<&'a flux_hir::TypeDecl> {
+fn find_type<'a>(module: &'a HirModule, name: &Spanned<SmolStr>) -> Option<&'a flux_hir::TypeDecl> {
 	let result = module.types.iter().find_map(|ty| {
 		if ty.name.node == name.node {
 			Some(ty)
@@ -77,7 +78,7 @@ fn find_type<'a>(module: &'a HirModule, name: &Spanned<String>) -> Option<&'a fl
 
 fn get_node_idx_from_use_path(
 	graph: &DiGraph<HirModule, DependencyType>,
-	path: &Vec<Spanned<String>>,
+	path: &Vec<Spanned<SmolStr>>,
 ) -> Result<(NodeIndex, DependencyType), FluxError> {
 	if path[0].node != "pkg" {
 		panic!("`use` paths that don't begin with `pkg` are not yet supported");
@@ -87,9 +88,9 @@ fn get_node_idx_from_use_path(
 		.clone()
 		.iter()
 		.map(|x| x.node.clone())
-		.collect::<Vec<String>>()
+		.collect::<Vec<SmolStr>>()
 		.join("::");
-	let mut path: Vec<Spanned<String>> = path.iter().rev().map(|x| x.clone()).collect();
+	let mut path: Vec<Spanned<SmolStr>> = path.iter().rev().map(|x| x.clone()).collect();
 	path.pop();
 	let mut idx = NodeIndex::new(0);
 	loop {
@@ -226,6 +227,6 @@ fn add_use_edges(graph: &mut DependencyGraph, err_reporting: &mut FluxErrorRepor
 }
 
 pub fn create_dot_file(graph: &DependencyGraph, path: &str) -> Result<(), std::io::Error> {
-	let s = format!("{:?}", Dot::new(graph));
-	fs::write(path, s)
+	// let s = format!("{:?}", Dot::new(graph));
+	fs::write(path, "")
 }

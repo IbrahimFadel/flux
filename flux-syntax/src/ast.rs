@@ -453,7 +453,8 @@ impl BinExpr {
 						| SyntaxKind::Minus
 						| SyntaxKind::Star
 						| SyntaxKind::Slash
-						| SyntaxKind::CmpEq,
+						| SyntaxKind::CmpEq
+						| SyntaxKind::DoubleColon,
 				)
 			})
 	}
