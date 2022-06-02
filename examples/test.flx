@@ -1,3 +1,2 @@
-pub fn do_test(u5 x) {
-	
+fn do_test(u5 x) {	
 }

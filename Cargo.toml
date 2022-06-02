@@ -1,3 +1,3 @@
 [workspace]
 
-members = ["flux", "flux-lexer", "flux-error", "flux-hir"]
+members = ["compiler/*"]

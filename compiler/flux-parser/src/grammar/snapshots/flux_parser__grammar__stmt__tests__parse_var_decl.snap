@@ -1,0 +1,15 @@
+---
+source: flux-parser/src/grammar/stmt.rs
+expression: "&parse.debug_tree()"
+---
+VarDecl@0..10
+  PrimitiveType@0..4
+    INKw@0..3 "i32"
+    Whitespace@3..4 " "
+  Ident@4..5 "x"
+  Whitespace@5..6 " "
+  Eq@6..7 "="
+  Whitespace@7..8 " "
+  IntExpr@8..9
+    IntExpr@8..9 "1"
+  SemiColon@9..10 ";"

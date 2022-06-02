@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.flux",
+  "patterns": [
+    { "include": "#keywords" },
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#modules" },
+    { "include": "#types" },
+    { "include": "#punctuation" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "keywords": {
+      "match": "\\b(fn|let)\\b",
+      "name": "keyword.flux"
+    },
+    "comments": {
+      "match": "//.*",
+      "name": "comment.flux"
+    },
+    "strings": {
+      "match": "\".*\"",
+      "name": "string.flux"
+    },
+    "numbers": {
+      "match": "\\b[0-9]+\\b",
+      "name": "constant.numeric.flux"
+    },
+    "modules": {
+      "match": "[a-zA-Z][a-zA-Z0-9_]*",
+      "name": "entity.name.type.namespace.flux"
+    },
+    "types": {
+      "match": "(?<=:\\s*)[a-zA-Z][a-zA-Z0-9_]*",
+      "name": "entity.name.type.flux"
+    },
+    "punctuation": {
+      "match": "(\\.|=|{|}|:|,|->|;)",
+      "name": "punctuation.flux"
+    },
+    "operators": {
+      "match": "(\\+|-|\\*|/)",
+      "name": "keyword.operator.flux"
+    }
+  },
+  "fileTypes": ["flx"]
+}

@@ -1,5 +1,10 @@
 mod bazz;
 
-pub fn do_bar(i32 x, u17 y) {
+fn do_bar(i32 x) {
+	let x = 0 - 0.1;
 
+	bazz::foo();
+	bazz::foo(1, x);
+
+	return;
 }
