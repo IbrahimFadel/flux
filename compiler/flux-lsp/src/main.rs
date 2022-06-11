@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use dashmap::DashMap;
 use flux_error::filesystem::FileId;
 use flux_hir::{lower, HirModule};
@@ -10,7 +8,8 @@ use tower_lsp::{jsonrpc::Result, lsp_types::*, Client, LanguageServer, LspServic
 
 use flux_lsp::{
 	capabilities, completion,
-	semantic_tokens::{self, flux_range_to_position},
+	position::flux_span_to_location,
+	semantic_tokens::{self},
 };
 
 #[derive(Debug)]
@@ -172,13 +171,13 @@ impl Backend {
 		self
 			.file_source_map
 			.insert(params.uri.clone(), params.text.clone());
-		let (hir_module, mut errors, semantic_tokens) = {
+		let (hir_module, errors, semantic_tokens) = {
 			let src = params.text.clone();
 			let mut cst = parse(src.as_str(), file_id);
 			self.cst_map.insert(params.uri.clone(), cst.clone());
 			let root = ast::Root::cast(cst.syntax()).unwrap();
 			let semantic_tokens = semantic_tokens::cst_to_semantic_tokens(&root, &params.text);
-			let (module, mut errs) = lower(SmolStr::from(params.uri.clone()), root, file_id);
+			let (module, mut errs) = lower(vec![SmolStr::from(params.uri.clone())], root, file_id);
 			errs.append(&mut cst.errors);
 			(module, errs, semantic_tokens)
 		};
@@ -212,7 +211,16 @@ impl Backend {
 	fn flux_error_to_diagnostic(&self, err: &flux_error::FluxError) -> Diagnostic {
 		let range = if let Some(primary) = &err.primary {
 			if let Some(span) = &primary.1 {
-				self.flux_span_to_location(span).range
+				let uri = self
+					.file_uri_map
+					.get(&span.file_id)
+					.expect("expected to find file uri");
+
+				let src = self
+					.file_source_map
+					.get(&uri)
+					.expect("expected to find file source");
+				flux_span_to_location(&*uri, span, &*src).range
 			} else {
 				Range::new(Position::new(0, 0), Position::new(0, 0))
 			}
@@ -223,8 +231,17 @@ impl Backend {
 		let mut diagnostic_related_informations = vec![];
 		for label in &err.labels {
 			if let Some(span) = &label.1 {
+				let uri = self
+					.file_uri_map
+					.get(&span.file_id)
+					.expect("expected to find file uri");
+
+				let src = self
+					.file_source_map
+					.get(&uri)
+					.expect("expected to find file source");
 				diagnostic_related_informations.push(DiagnosticRelatedInformation {
-					location: self.flux_span_to_location(span),
+					location: flux_span_to_location(&*uri, span, &*src),
 					message: label.0.clone(),
 				})
 			}
@@ -238,43 +255,6 @@ impl Backend {
 			Some(diagnostic_related_informations),
 			None,
 		)
-	}
-
-	fn range_to_offset(&self, range: &Range, src: &str) -> std::ops::Range<usize> {
-		let mut start_offset = 0;
-		let mut new_lines = 0;
-		for c in src.chars() {
-			if c == '\n' {
-				new_lines += 1;
-				if new_lines == range.start.line {
-					break;
-				}
-			}
-
-			start_offset += 1;
-		}
-
-		eprintln!("{:?}", range);
-		eprintln!("{}", start_offset);
-
-		0..0
-	}
-
-	fn flux_span_to_location(&self, span: &flux_error::Span) -> Location {
-		let uri = self
-			.file_uri_map
-			.get(&span.file_id)
-			.expect("expected to find file uri");
-
-		let src = self
-			.file_source_map
-			.get(&uri)
-			.expect("expected to find file source");
-		let range = flux_range_to_position(span.range, &*src);
-		Location {
-			uri: uri.clone(),
-			range,
-		}
 	}
 }
 

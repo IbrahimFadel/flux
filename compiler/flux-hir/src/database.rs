@@ -318,9 +318,17 @@ impl Database {
 	}
 
 	fn lower_path(&mut self, ast: PathExpr) -> Expr {
-		Expr::Path(Path {
-			names: ast.names().map(|name| SmolStr::from(name.text())).collect(),
-		})
+		Expr::Path(
+			ast
+				.names()
+				.map(|name| {
+					Spanned::new(
+						SmolStr::from(name.text()),
+						Span::new(name.text_range(), self.file_id),
+					)
+				})
+				.collect(),
+		)
 	}
 
 	fn lower_call(&mut self, ast: CallExpr) -> Expr {

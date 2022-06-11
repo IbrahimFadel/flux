@@ -1,3 +1,4 @@
+import { join } from "path";
 import { ExtensionContext, window as Window } from "vscode";
 
 import {
@@ -9,8 +10,9 @@ import {
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
+  const command = context.asAbsolutePath('flux-lsp');
   const serverOptions: ServerOptions = {
-    command: "/home/ibrahim/dev/flux-lsp/target/debug/flux-lsp",
+    command,
     args: ["server"],
   };
 

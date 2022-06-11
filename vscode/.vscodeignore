@@ -1,0 +1,10 @@
+node_modules/
+client/node_modules/
+client/src/
+target/**
+!target/debug/flux-lsp
+tsconfig.json
+webpack.config.js
+Cargo.lock
+Cargo.toml
+rustfmt.toml

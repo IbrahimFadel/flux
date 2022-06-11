@@ -14,7 +14,7 @@ use la_arena::Idx;
 
 #[derive(Clone, Debug)]
 pub struct HirModule {
-	pub name: SmolStr,
+	pub path: Vec<SmolStr>,
 	pub db: Database,
 	pub mods: Vec<ModDecl>,
 	pub uses: Vec<UseDecl>,
@@ -22,7 +22,7 @@ pub struct HirModule {
 	pub types: Vec<TypeDecl>,
 }
 
-pub fn lower(name: SmolStr, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
+pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
 	let mut db = Database::new(file_id);
 	let functions: Vec<FnDecl> = ast.functions().filter_map(|f| db.lower_fn(f)).collect();
 	let types: Vec<TypeDecl> = ast.types().filter_map(|ty| db.lower_ty_decl(ty)).collect();
@@ -101,7 +101,7 @@ pub fn lower(name: SmolStr, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<
 
 	(
 		HirModule {
-			name,
+			path,
 			db,
 			mods,
 			uses,
@@ -214,10 +214,11 @@ pub enum Expr {
 	Missing,
 }
 
-#[derive(Debug, Clone)]
-pub struct Path {
-	names: Vec<SmolStr>,
-}
+pub type Path = Vec<Spanned<SmolStr>>;
+// #[derive(Debug, Clone)]
+// pub struct Path {
+// pub names: Vec<Spanned<SmolStr>>,
+// }
 
 #[derive(Debug, Clone)]
 pub struct Int {

@@ -24,5 +24,5 @@ fn main() {
 		exit(1);
 	}
 
-	println!("{:#?}", modules);
+	// println!("{:#?}", modules);
 }

@@ -3,7 +3,9 @@ use flux_syntax::{
 	syntax_kind::SyntaxKind,
 };
 use text_size::{TextRange, TextSize};
-use tower_lsp::lsp_types::{Position, Range, SemanticToken, SemanticTokenType};
+use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
+
+use crate::position::flux_range_to_position;
 
 pub const LEGEND_TYPE: &[SemanticTokenType] = &[
 	SemanticTokenType::FUNCTION,
@@ -192,52 +194,6 @@ pub fn cst_to_semantic_tokens(root: &Root, src: &str) -> Vec<SemanticToken> {
 	let mut builder = SemanticTokenBuilder::new(src);
 	builder.tokens_at_level(root.syntax());
 	builder.tokens
-}
-
-pub fn flux_range_to_position(range: TextRange, src: &str) -> Range {
-	let mut start_line_number = 0;
-	let mut start_character = 0;
-	let mut offset = 0;
-	for c in src.chars() {
-		if TextSize::from(offset) == range.start() {
-			break;
-		}
-		if c == '\n' {
-			start_line_number += 1;
-			start_character = 0;
-		} else {
-			start_character += 1;
-		}
-		offset += 1;
-	}
-	let mut end_line_number = 0;
-	let mut end_character = 0;
-	for i in offset..u32::from(range.end()) {
-		let c = src
-			.chars()
-			.nth(i as usize)
-			.expect(&format!("expected character at index {}", i));
-		if TextSize::from(offset) == range.end() {
-			break;
-		}
-		if c == '\n' {
-			end_line_number += 1;
-			end_character = 0;
-		} else {
-			end_character += 1;
-		}
-		offset += 1;
-	}
-	Range {
-		start: Position {
-			line: start_line_number,
-			character: start_character,
-		},
-		end: Position {
-			line: end_line_number + start_line_number,
-			character: end_character,
-		},
-	}
 }
 
 fn get_token_type(ty: SemanticTokenType) -> u32 {

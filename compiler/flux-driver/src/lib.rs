@@ -102,7 +102,7 @@ fn parse_file_and_submodules<'a>(
 	let cst = parse(src.as_str(), file_id);
 	err_reporting.report(&cst.errors);
 	let root = ast::Root::cast(cst.syntax()).unwrap();
-	let (hir_module, errors) = flux_hir::lower(name.node.clone(), root, file_id);
+	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
 	err_reporting.report(&errors);
 	err_reporting.report(&hir_module.db.errors);
 	if errors.len() + cst.errors.len() + hir_module.db.errors.len() > 0 {

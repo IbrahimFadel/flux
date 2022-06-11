@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use flux_driver::{FunctionExportTable, FunctionSignature, TypeExportTable};
 use flux_error::{FluxError, Span};
-use flux_hir::{BinaryOp, Call, Expr, ExprIdx, HirModule, Stmt, VarDecl};
+use flux_hir::{BinaryOp, Call, Expr, ExprIdx, HirModule, Path, Stmt, VarDecl};
 use flux_syntax::ast::Spanned;
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
@@ -83,6 +83,7 @@ struct TypeEnv<'a> {
 	signatures: &'a HashMap<SmolStr, FunctionSignature>,
 	type_decls: &'a HashMap<SmolStr, Spanned<TypeInfo>>,
 	function_exports: &'a FunctionExportTable,
+	module_path: &'a [SmolStr],
 	// type_exports: &'a TypeExportTable,
 }
 
@@ -98,7 +99,7 @@ impl<'a> TypeEnv<'a> {
 			TypeInfo::Int => Type::UNType(32),
 			TypeInfo::Ident(name) => Type::IdentType(name.clone()),
 			TypeInfo::Ref(id) => self.type_info_to_hir_type(self.local_types.get(id).unwrap()),
-			_ => unreachable!("cannot convert type info to hir type"),
+			_ => unreachable!("cannot convert type info to hir type: {:?}", info),
 		}
 	}
 
@@ -263,124 +264,197 @@ impl<'a> TypeEnv<'a> {
 		self.infer_call_with_signature(call, fn_name, signature)
 	}
 
-	fn infer_binop_doublecolon_call(
-		&mut self,
-		call: &Call,
-		lhs: Idx<Spanned<Expr>>,
-		rhs: Idx<Spanned<Expr>>,
-	) -> Result<Spanned<TypeInfo>, FluxError> {
-		// { { { pkg, foo }, test}, do_test }
-		let mut absolute_path: Vec<SmolStr> = vec![];
+	// fn infer_binop_doublecolon_call(
+	// 	&mut self,
+	// 	call: &Call,
+	// 	lhs: Idx<Spanned<Expr>>,
+	// 	rhs: Idx<Spanned<Expr>>,
+	// ) -> Result<Spanned<TypeInfo>, FluxError> {
+	// 	// { { { pkg, foo }, test}, do_test }
+	// 	let mut absolute_path: Vec<SmolStr> = vec![];
 
-		let lhs_span_start = self.expr_arena[lhs].span.range.start();
-		let rhs_span_end = self.expr_arena[rhs].span.range.end();
-		let callee_span = Span::new(
-			TextRange::new(lhs_span_start, rhs_span_end),
-			self.expr_arena[lhs].span.file_id,
-		);
+	// 	let lhs_span_start = self.expr_arena[lhs].span.range.start();
+	// 	let rhs_span_end = self.expr_arena[rhs].span.range.end();
+	// 	let callee_span = Span::new(
+	// 		TextRange::new(lhs_span_start, rhs_span_end),
+	// 		self.expr_arena[lhs].span.file_id,
+	// 	);
 
-		let mut lhs = lhs;
-		while let Expr::Binary { lhs: l, rhs: r, .. } = &self.expr_arena[lhs].node {
-			let rhs_name = match &self.expr_arena[*r].node {
-				Expr::Ident { path } => SmolStr::from(path.join("::")),
-				_ => {
-					return Err(
-						FluxError::default()
-							.with_msg(format!("expected identifier on lhs of `::`"))
-							.with_primary(
-								format!("expected identifier on lhs of `::`"),
-								Some(self.expr_arena[*r].span.clone()),
-							),
-					);
-				}
-			};
-			absolute_path.push(rhs_name.clone());
-			match &self.expr_arena[*l].node {
-				Expr::Ident { path } => absolute_path.push(SmolStr::from(path.join("::"))),
-				Expr::Binary { op, .. } => {
-					if *op != BinaryOp::DoubleColon {
-						return Err(
-							FluxError::default()
-								.with_msg(format!("expected `::` to be operator in function call")),
-						);
-					}
-				}
-				_ => panic!(""),
-			}
-			lhs = *l;
-		}
+	// 	let mut lhs = lhs;
+	// 	while let Expr::Binary { lhs: l, rhs: r, .. } = &self.expr_arena[lhs].node {
+	// 		let rhs_name = match &self.expr_arena[*r].node {
+	// 			Expr::Ident { path } => SmolStr::from(path.join("::")),
+	// 			_ => {
+	// 				return Err(
+	// 					FluxError::default()
+	// 						.with_msg(format!("expected identifier on lhs of `::`"))
+	// 						.with_primary(
+	// 							format!("expected identifier on lhs of `::`"),
+	// 							Some(self.expr_arena[*r].span.clone()),
+	// 						),
+	// 				);
+	// 			}
+	// 		};
+	// 		absolute_path.push(rhs_name.clone());
+	// 		match &self.expr_arena[*l].node {
+	// 			Expr::Ident { path } => absolute_path.push(SmolStr::from(path.join("::"))),
+	// 			Expr::Binary { op, .. } => {
+	// 				if *op != BinaryOp::DoubleColon {
+	// 					return Err(
+	// 						FluxError::default()
+	// 							.with_msg(format!("expected `::` to be operator in function call")),
+	// 					);
+	// 				}
+	// 			}
+	// 			_ => panic!(""),
+	// 		}
+	// 		lhs = *l;
+	// 	}
 
-		let fn_name = match self.expr_arena[rhs].node.clone() {
-			Expr::Ident { path } => SmolStr::from(path.join("::")),
-			_ => {
+	// 	let fn_name = match self.expr_arena[rhs].node.clone() {
+	// 		Expr::Ident { path } => SmolStr::from(path.join("::")),
+	// 		_ => {
+	// 			return Err(
+	// 				FluxError::default()
+	// 					.with_msg(format!("expected identifier on rhs of `::`"))
+	// 					.with_primary(
+	// 						format!("expected identifier on rhs of `::`"),
+	// 						Some(self.expr_arena[rhs].span.clone()),
+	// 					),
+	// 				// TODO: search module for public functions and suggest replacements
+	// 				// possibly only suggest replacements with the same number of args
+	// 			);
+	// 		}
+	// 	};
+	// 	absolute_path = absolute_path.into_iter().rev().collect();
+	// 	absolute_path.push(fn_name.clone());
+
+	// 	match self.function_exports.get(&absolute_path) {
+	// 		Some(signature) => self.infer_call_with_signature(call, &fn_name, signature),
+	// 		_ => Err(
+	// 			FluxError::default()
+	// 				.with_msg(format!(
+	// 					"could not find function signature for `{}::{}`",
+	// 					absolute_path.join("::"),
+	// 					fn_name
+	// 				))
+	// 				.with_primary(
+	// 					format!(
+	// 						"could not find function signature for `{}::{}`",
+	// 						absolute_path.join("::"),
+	// 						fn_name
+	// 					),
+	// 					Some(callee_span),
+	// 				)
+	// 				.with_note(format!(
+	// 					"(hint) you might need to mark `{}` as public",
+	// 					fn_name
+	// 				)),
+	// 		),
+	// 	}
+	// }
+
+	// fn infer_binop_call(
+	// 	&mut self,
+	// 	call: &Call,
+	// 	op: BinaryOp,
+	// 	lhs: Idx<Spanned<Expr>>,
+	// 	rhs: Idx<Spanned<Expr>>,
+	// ) -> Result<Spanned<TypeInfo>, FluxError> {
+	// 	match op {
+	// 		BinaryOp::DoubleColon => self.infer_binop_doublecolon_call(call, lhs, rhs),
+	// 		_ => panic!(
+	// 			"internal compiler error: typecheck unimplemented for binop call: {:?}",
+	// 			op
+	// 		),
+	// 	}
+	// }
+
+	// fn infer_path_call(&mut self, call: &Call, path: &Path) -> Result<Spanned<TypeInfo>, FluxError> {
+	// 	Ok()
+	// }
+
+	fn get_signature_with_path(
+		&self,
+		path: &[Spanned<SmolStr>],
+	) -> Result<FunctionSignature, FluxError> {
+		if path.len() == 1 {
+			if let Some(signature) = self.signatures.get(path[0].as_str()) {
+				return Ok(signature.clone());
+			} else {
 				return Err(
 					FluxError::default()
-						.with_msg(format!("expected identifier on rhs of `::`"))
+						.with_msg(format!(
+							"could not find function signature for `{}`",
+							path[0].node
+						))
 						.with_primary(
-							format!("expected identifier on rhs of `::`"),
-							Some(self.expr_arena[rhs].span.clone()),
+							format!("could not find function signature for `{}`", path[0].node),
+							Some(path[0].span.clone()),
 						),
-					// TODO: search module for public functions and suggest replacements
-					// possibly only suggest replacements with the same number of args
 				);
+			};
+		}
+
+		println!("{:#?}", self.signatures);
+		// println!("{:#?}", self.function_exports);
+		// println!("{:?}", self.module_path);
+
+		let unspanned_path = path.iter().map(|n| n.as_str()).collect::<Vec<_>>();
+
+		for (p, signature) in self.function_exports {
+			if p.as_slice() == unspanned_path {
+				return Ok(signature.clone());
+			} else {
+				let module_path_len = self.module_path.len();
+				if p[module_path_len..] == unspanned_path {
+					return Ok(signature.clone());
+				} else {
+					// let path_with_use_substituted =
+				}
 			}
-		};
-		absolute_path = absolute_path.into_iter().rev().collect();
-		absolute_path.push(fn_name.clone());
-
-		match self.function_exports.get(&absolute_path) {
-			Some(signature) => self.infer_call_with_signature(call, &fn_name, signature),
-			_ => Err(
-				FluxError::default()
-					.with_msg(format!(
-						"could not find function signature for `{}::{}`",
-						absolute_path.join("::"),
-						fn_name
-					))
-					.with_primary(
-						format!(
-							"could not find function signature for `{}::{}`",
-							absolute_path.join("::"),
-							fn_name
-						),
-						Some(callee_span),
-					)
-					.with_note(format!(
-						"(hint) you might need to mark `{}` as public",
-						fn_name
-					)),
-			),
 		}
-	}
 
-	fn infer_binop_call(
-		&mut self,
-		call: &Call,
-		op: BinaryOp,
-		lhs: Idx<Spanned<Expr>>,
-		rhs: Idx<Spanned<Expr>>,
-	) -> Result<Spanned<TypeInfo>, FluxError> {
-		match op {
-			BinaryOp::DoubleColon => self.infer_binop_doublecolon_call(call, lhs, rhs),
-			_ => panic!(
-				"internal compiler error: typecheck unimplemented for binop call: {:?}",
-				op
+		let string_name = path
+			.iter()
+			.map(|n| n.as_str())
+			.collect::<Vec<_>>()
+			.join("::");
+
+		let name_span = Span::new(
+			TextRange::new(
+				path[0].span.range.start(),
+				path.last().unwrap().span.range.end(),
 			),
-		}
+			path[0].span.file_id,
+		);
+
+		Err(
+			FluxError::default()
+				.with_msg(format!(
+					"could not get function signature for `{}`",
+					string_name
+				))
+				.with_primary(
+					format!("could not get function signature for `{}`", string_name),
+					Some(name_span),
+				),
+		)
 	}
 
 	fn infer_call(&mut self, call: &Call) -> Result<Spanned<TypeInfo>, FluxError> {
 		let callee = &self.expr_arena[call.callee].clone();
-		match &callee.node {
-			Expr::Ident { path: fn_name } => {
-				self.infer_ident_call(call, &SmolStr::from(fn_name.join("::")))?
-			}
-			Expr::Binary { op, lhs, rhs } => self.infer_binop_call(call, op.clone(), *lhs, *rhs)?,
+		let path = match &callee.node {
+			Expr::Path(p) => p,
 			_ => panic!(
 				"internal compiler error: unhandled callee type: {:#?}",
 				callee.node
 			),
 		};
+
+		let signature = self.get_signature_with_path(path)?;
+		self.infer_call_with_signature(call, path.last().unwrap(), &signature)?;
+
 		Ok(Spanned::new(
 			TypeInfo::Unknown,
 			self.expr_arena[call.callee].span.clone(),
@@ -510,11 +584,18 @@ fn typecheck_hir_module(
 	}
 	for u in &hir_module.uses {
 		let path: Vec<SmolStr> = u.path.iter().map(|s| s.node.clone()).collect();
+		println!("PATH: {:?}", path);
 		if let Some(ty) = type_exports.get(&path) {
 			types.insert(SmolStr::from(path.join("::")), hir_type_to_type_info(&ty));
 		} else if let Some(f) = function_exports.get(&path) {
-			// signatures.insert(path.join("::"), (*f).clone());
 			signatures.insert(path.last().unwrap().clone(), (*f).clone());
+		} else {
+			let mut full_path = hir_module.path.clone();
+			full_path.extend_from_slice(&path);
+			println!("full: {:?}", full_path);
+			if let Some(f) = function_exports.get(&path) {
+				signatures.insert(full_path.last().unwrap().clone(), (*f).clone());
+			}
 		}
 	}
 
@@ -536,6 +617,7 @@ fn typecheck_hir_module(
 			signatures: &signatures,
 			type_decls: &types,
 			function_exports,
+			module_path: &hir_module.path,
 			// type_exports,
 		};
 

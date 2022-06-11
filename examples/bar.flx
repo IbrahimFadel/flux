@@ -1,10 +1,13 @@
 mod bazz;
 
-fn do_bar(i32 x) {
-	let x = 0 - 0.1;
+use bazz::foo;
 
+pub fn do_bar(i32 x) {
+	let x = 0 - 1;
+
+	pkg::bar::bazz::foo();
 	bazz::foo();
-	bazz::foo(1, x);
+	foo();
 
 	return;
 }
