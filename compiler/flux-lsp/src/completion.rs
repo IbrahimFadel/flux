@@ -13,7 +13,6 @@ pub fn get_completion_items(
 	let mut closest_function: Option<(u32, &FnDecl)> = None;
 	hir_module.functions.iter().for_each(|f| {
 		if let Some(name) = &f.name {
-			eprintln!("{:?}", name);
 			let off = position_to_offset(position, src);
 			if u32::from(name.span.range.end()) < off {
 				if let Some(closest) = closest_function {
@@ -32,8 +31,6 @@ pub fn get_completion_items(
 			});
 		}
 	});
-
-	eprintln!("{:?}", closest_function); // we need closest function to store the function declaration, not range
 
 	if let Some(closest_function) = closest_function {
 		for stmt in &closest_function.1.block {

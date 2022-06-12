@@ -8,10 +8,10 @@
 			"runtimeExecutable": "${execPath}",
 			"args": ["--extensionDevelopmentPath=${workspaceRoot}"],
 			"outFiles": ["${workspaceRoot}/vscode/client/out/**/*.js"],
-			"preLaunchTask": {
-				"type": "npm",
-				"script": "watch"
-			}
+			// "preLaunchTask": {
+			// 	"type": "npm",
+			// 	"script": "watch"
+			// }
 		},
 	],
 }

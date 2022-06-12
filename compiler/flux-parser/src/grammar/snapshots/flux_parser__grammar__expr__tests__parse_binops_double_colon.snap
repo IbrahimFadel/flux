@@ -1,10 +1,8 @@
 ---
-source: flux-parser/src/grammar/expr.rs
+source: compiler/flux-parser/src/grammar/expr.rs
 expression: "&parse.debug_tree()"
 ---
-BinExpr@0..8
-  IdentExpr@0..3
-    Ident@0..3 "foo"
+PathExpr@0..8
+  Ident@0..3 "foo"
   DoubleColon@3..5 "::"
-  IdentExpr@5..8
-    Ident@5..8 "bar"
+  Ident@5..8 "bar"

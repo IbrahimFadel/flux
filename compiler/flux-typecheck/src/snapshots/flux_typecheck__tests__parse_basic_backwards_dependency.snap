@@ -1,0 +1,9 @@
+---
+source: compiler/flux-typecheck/src/tests.rs
+expression: s
+---
+main
+--------------------
+x -> Ref(1)
+y -> SInt(16)
+

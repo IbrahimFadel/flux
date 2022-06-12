@@ -1,13 +1,5 @@
 mod bazz;
 
-use bazz::foo;
+pub fn do_bar(i7 x) {
 
-pub fn do_bar(i32 x) {
-	let x = 0 - 1;
-
-	pkg::bar::bazz::foo();
-	bazz::foo();
-	foo();
-
-	return;
 }

@@ -1,24 +1,9 @@
-mod test;
-mod bar;
-
-use pkg::test::do_test;
-
-fn bazz(i32 x, i5 y) -> i3 {
-
+fn foo(i13 x) {
+	
 }
 
 fn main() {
-	i16 x = 0 + 2;
-	let y = 10;
-
-	pkg::bar::do_bar(x, y);
+	let x = 0;
+	let y = x;
+	foo(y);
 }
-
-/*
-
-TODO: you should be able to define an interface simply as a collection of interfaces
-
-type Foo interface {
-	// methods...
-} + Bar + Bazz
-*/ 

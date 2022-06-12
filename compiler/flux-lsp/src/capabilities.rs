@@ -52,6 +52,8 @@ pub fn capabilities() -> ServerCapabilities {
 		definition_provider: Some(OneOf::Left(true)),
 		references_provider: Some(OneOf::Left(true)),
 		rename_provider: Some(OneOf::Left(true)),
+		// hover_provider: Some(HoverProviderCapability::Simple(true)),
+		hover_provider: Some(HoverProviderCapability::Options(HoverOptions::default())),
 		..ServerCapabilities::default()
 	}
 }

@@ -1,0 +1,8 @@
+---
+source: compiler/flux-typecheck/src/tests.rs
+expression: s
+---
+main
+--------------------
+x -> Int
+

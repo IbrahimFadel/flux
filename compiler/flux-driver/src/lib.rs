@@ -13,7 +13,7 @@ use text_size::{TextRange, TextSize};
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
 	pub return_type: Spanned<flux_hir::Type>,
-	pub param_types: Vec<Spanned<flux_hir::Type>>,
+	pub param_types: Spanned<Vec<Spanned<flux_hir::Type>>>,
 }
 pub type FunctionExportTable = HashMap<Vec<SmolStr>, FunctionSignature>;
 pub type TypeExportTable = HashMap<Vec<SmolStr>, Spanned<flux_hir::Type>>;
@@ -139,7 +139,10 @@ fn parse_file_and_submodules<'a>(
 fn generate_function_signature(f: &flux_hir::FnDecl) -> FunctionSignature {
 	FunctionSignature {
 		return_type: f.return_type.clone(),
-		param_types: f.params.iter().map(|p| p.ty.clone()).collect(),
+		param_types: Spanned::new(
+			f.params.iter().map(|p| p.ty.clone()).collect(),
+			f.params.span.clone(),
+		),
 	}
 }
 

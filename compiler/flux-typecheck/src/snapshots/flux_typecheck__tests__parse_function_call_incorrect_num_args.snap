@@ -1,0 +1,38 @@
+---
+source: compiler/flux-typecheck/src/tests.rs
+expression: s
+---
+Diagnostic {
+    severity: Error,
+    code: Some(
+        "E0000",
+    ),
+    message: "function `foo` expects 1 arguments, but 0 were provided",
+    labels: [
+        Label {
+            style: Primary,
+            file_id: FileId(
+                0,
+            ),
+            range: 33..36,
+            message: "function `foo` expects 1 arguments, but 0 were provided",
+        },
+        Label {
+            style: Secondary,
+            file_id: FileId(
+                0,
+            ),
+            range: 36..38,
+            message: "0 arguments supplied",
+        },
+        Label {
+            style: Secondary,
+            file_id: FileId(
+                0,
+            ),
+            range: 0..2,
+            message: "`foo` defined with 1 parameters",
+        },
+    ],
+    notes: [],
+}

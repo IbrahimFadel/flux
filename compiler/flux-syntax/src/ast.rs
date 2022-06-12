@@ -210,8 +210,24 @@ impl FnDecl {
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
+	pub fn lparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::LParen)
+	}
+
 	pub fn params(&self) -> Vec<FnParam> {
 		self.0.children().filter_map(FnParam::cast).collect()
+	}
+
+	pub fn rparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::RParen)
 	}
 
 	pub fn return_type(&self) -> Option<Type> {
@@ -298,8 +314,24 @@ impl CallExpr {
 		self.0.children().find_map(Expr::cast)
 	}
 
+	pub fn lparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::LParen)
+	}
+
 	pub fn args(&self) -> impl Iterator<Item = Expr> {
 		self.0.children().filter_map(Expr::cast).skip(1)
+	}
+
+	pub fn rparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::RParen)
 	}
 }
 

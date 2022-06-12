@@ -30,14 +30,17 @@
 			]
 		},
 		{
-			"label": "cargo build",
+			"label": "Build Language Server",
 			"type": "shell",
 			"command": "~/.cargo/bin/cargo", // note: full path to the cargo
 			"args": [
 					"build",
-					// "--release",
-					// "--",
-					// "arg1"
+					"--package",
+					"flux-lsp",
+					"&&",
+					"cp",
+					"target/debug/flux-lsp",
+					"vscode",
 			],
 			"group": {
 					"kind": "build",

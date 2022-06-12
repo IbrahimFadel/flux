@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use flux_error::filesystem::FileId;
-use flux_hir::{lower, HirModule};
+use flux_hir::{lower, FnDecl, HirModule};
 use flux_parser::{parse, Parse};
 use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
@@ -8,7 +8,7 @@ use tower_lsp::{jsonrpc::Result, lsp_types::*, Client, LanguageServer, LspServic
 
 use flux_lsp::{
 	capabilities, completion,
-	position::flux_span_to_location,
+	position::{flux_span_to_location, position_to_offset},
 	semantic_tokens::{self},
 };
 
@@ -97,6 +97,52 @@ impl LanguageServer for Backend {
 		})))
 	}
 
+	async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+		self.client.log_message(MessageType::INFO, "hover").await;
+		let uri = params.text_document_position_params.text_document.uri;
+		let pos = params.text_document_position_params.position;
+
+		let hir_module = self.hir_module_map.get(&uri).expect("expected hir module");
+		let src = self.file_source_map.get(&uri).expect("expected source");
+		eprintln!("{:?}", pos);
+
+		let mut closest_function: Option<(u32, &FnDecl)> = None;
+		hir_module.functions.iter().for_each(|f| {
+			if let Some(name) = &f.name {
+				let off = position_to_offset(&pos, &*src);
+				eprintln!("{:?}", off);
+				if u32::from(name.span.range.end()) < off {
+					if let Some(closest) = closest_function {
+						if off > closest.0 {
+							closest_function = Some((off, f));
+						}
+					} else {
+						closest_function = Some((off, f));
+					}
+				}
+			}
+		});
+
+		if let Some((_, f)) = closest_function {
+			for stmt in &f.block {
+				if let Some(stmt) = stmt {
+					eprintln!("{:?}", stmt.span.range);
+					eprintln!("{:?}", pos);
+				}
+			}
+		}
+
+		Ok(None)
+	}
+
+	async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+		self
+			.client
+			.log_message(MessageType::INFO, "formatting")
+			.await;
+		Ok(None)
+	}
+
 	async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
 		let file_id = self
 			.file_id_map
@@ -137,7 +183,7 @@ impl LanguageServer for Backend {
 			.client
 			.log_message(
 				MessageType::INFO,
-				format!("opened file `{}`", params.text_document.uri),
+				format!("opened f `{}`", params.text_document.uri),
 			)
 			.await;
 

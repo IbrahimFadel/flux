@@ -133,7 +133,7 @@ pub struct TypeDecl {
 pub struct FnDecl {
 	pub public: Spanned<bool>,
 	pub name: Option<Spanned<SmolStr>>,
-	pub params: Vec<Spanned<FnParam>>,
+	pub params: Spanned<Vec<Spanned<FnParam>>>,
 	pub block: Vec<Option<Spanned<Stmt>>>,
 	pub return_type: Spanned<Type>,
 }
@@ -229,7 +229,7 @@ pub struct Int {
 #[derive(Debug, Clone)]
 pub struct Call {
 	pub callee: ExprIdx,
-	pub args: Vec<ExprIdx>,
+	pub args: Spanned<Vec<ExprIdx>>,
 }
 
 #[derive(Debug, Clone)]
@@ -256,23 +256,26 @@ type BitSize = u32;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Type {
-	INType(BitSize),
-	UNType(BitSize),
-	F64Type,
-	F32Type,
-	IdentType(SmolStr),
-	StructType(StructType),
-	InterfaceType(InterfaceType),
-	VoidType,
-	Missing,
+	SInt(BitSize),
+	UInt(BitSize),
+	Int,
+	F64,
+	F32,
+	Float,
+	Ref(usize),
+	Ident(SmolStr),
+	Struct(StructType),
+	Interface(InterfaceType),
+	Void,
+	Unknown,
 }
 
 impl fmt::Display for Type {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Type::INType(n) => write!(f, "i{}", *n),
-			Type::UNType(n) => write!(f, "u{}", *n),
-			Type::VoidType => write!(f, "void"),
+			Type::SInt(n) => write!(f, "i{}", *n),
+			Type::UInt(n) => write!(f, "u{}", *n),
+			Type::Void => write!(f, "void"),
 			_ => write!(f, "{:?}", self),
 		}
 	}

@@ -1,0 +1,38 @@
+---
+source: compiler/flux-typecheck/src/tests.rs
+expression: s
+---
+Diagnostic {
+    severity: Error,
+    code: Some(
+        "E0000",
+    ),
+    message: "could not unify `i32` and `i13`",
+    labels: [
+        Label {
+            style: Primary,
+            file_id: FileId(
+                0,
+            ),
+            range: 49..50,
+            message: "could not unify `i32` and `i13`",
+        },
+        Label {
+            style: Secondary,
+            file_id: FileId(
+                0,
+            ),
+            range: 33..37,
+            message: "`i32` type",
+        },
+        Label {
+            style: Secondary,
+            file_id: FileId(
+                0,
+            ),
+            range: 7..11,
+            message: "`i13` type",
+        },
+    ],
+    notes: [],
+}

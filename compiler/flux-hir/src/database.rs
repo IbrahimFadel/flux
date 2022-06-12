@@ -69,6 +69,31 @@ impl Database {
 			)
 		};
 		let params = self.lower_params(ast.params())?;
+		let params_range = match (ast.lparen(), ast.rparen()) {
+			(Some(lparen), Some(rparen)) => {
+				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
+			}
+			(Some(lparen), _) => {
+				if !params.is_empty() {
+					TextRange::new(
+						lparen.text_range().start(),
+						params.last().unwrap().span.range.end(),
+					)
+				} else {
+					TextRange::new(lparen.text_range().start(), lparen.text_range().end())
+				}
+			}
+			(_, Some(rparen)) => {
+				if !params.is_empty() {
+					TextRange::new(params[0].span.range.end(), rparen.text_range().end())
+				} else {
+					TextRange::new(rparen.text_range().start(), rparen.text_range().end())
+				}
+			}
+			_ => ast.range(),
+		};
+		let params = Spanned::new(params, Span::new(params_range, self.file_id));
+
 		let block = if let Some(block) = ast.body() {
 			self.lower_block(block)
 		} else {
@@ -76,8 +101,8 @@ impl Database {
 		};
 		let return_type = self.lower_type(ast.return_type());
 		let return_type = if let Some(ty) = &return_type {
-			if let Type::Missing = ty.node {
-				Spanned::new(Type::VoidType, ty.span.clone())
+			if let Type::Unknown = ty.node {
+				Spanned::new(Type::Void, ty.span.clone())
 			} else {
 				return_type.unwrap()
 			}
@@ -132,7 +157,7 @@ impl Database {
 			}
 		} else {
 			Some(Spanned::new(
-				Type::Missing,
+				Type::Unknown,
 				Span::new(
 					TextRange::new(TextSize::from(0), TextSize::from(0)),
 					self.file_id,
@@ -143,7 +168,7 @@ impl Database {
 
 	fn lower_ident_type(&mut self, ast: ast::IdentType) -> Option<Spanned<Type>> {
 		Some(Spanned::new(
-			Type::IdentType(ast.name()?.text().into()),
+			Type::Ident(ast.name()?.text().into()),
 			Span::new(ast.range(), self.file_id),
 		))
 	}
@@ -164,7 +189,7 @@ impl Database {
 			}
 		}
 		Some(Spanned::new(
-			Type::InterfaceType(InterfaceType(hir_methods)),
+			Type::Interface(InterfaceType(hir_methods)),
 			Span::new(ast.range(), self.file_id),
 		))
 	}
@@ -204,7 +229,7 @@ impl Database {
 			);
 		}
 		Some(Spanned::new(
-			Type::StructType(StructType(hir_fields)),
+			Type::Struct(StructType(hir_fields)),
 			Span::new(ast.range(), self.file_id),
 		))
 	}
@@ -333,7 +358,37 @@ impl Database {
 
 	fn lower_call(&mut self, ast: CallExpr) -> Expr {
 		let callee = self.lower_expr(ast.callee());
-		let args = ast.args().map(|arg| self.lower_expr(Some(arg))).collect();
+		let args: Vec<Idx<Spanned<Expr>>> = ast.args().map(|arg| self.lower_expr(Some(arg))).collect();
+		let args_range = match (ast.lparen(), ast.rparen()) {
+			(Some(lparen), Some(rparen)) => {
+				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
+			}
+			(Some(lparen), _) => {
+				if !args.is_empty() {
+					TextRange::new(
+						lparen.text_range().start(),
+						self.exprs[*args.last().unwrap()].span.range.end(),
+					)
+				} else {
+					TextRange::new(lparen.text_range().start(), lparen.text_range().end())
+				}
+			}
+			(_, Some(rparen)) => {
+				if !args.is_empty() {
+					TextRange::new(
+						self.exprs[args[0]].span.range.end(),
+						rparen.text_range().end(),
+					)
+				} else {
+					TextRange::new(
+						self.exprs[callee].span.range.end(),
+						rparen.text_range().end(),
+					)
+				}
+			}
+			_ => ast.range(),
+		};
+		let args = Spanned::new(args, Span::new(args_range, self.file_id));
 		Expr::Call(Call { callee, args })
 	}
 
@@ -410,7 +465,7 @@ impl Database {
 			} else {
 				return Expr::Int(Int {
 					n: n.unwrap(),
-					ty: Type::UNType(32),
+					ty: Type::UInt(32),
 				});
 			}
 		} else {
@@ -425,23 +480,23 @@ impl Database {
 			let bits: u32 = rest_str.parse().unwrap();
 			if first_char == "u" {
 				Some(Spanned::new(
-					Type::UNType(bits),
+					Type::UInt(bits),
 					Span::new(ast.range(), self.file_id),
 				))
 			} else if first_char == "i" {
 				Some(Spanned::new(
-					Type::INType(bits),
+					Type::SInt(bits),
 					Span::new(ast.range(), self.file_id),
 				))
 			} else if first_char == "f" {
 				if bits == 64 {
 					Some(Spanned::new(
-						Type::F64Type,
+						Type::F64,
 						Span::new(ast.range(), self.file_id),
 					))
 				} else if bits == 32 {
 					Some(Spanned::new(
-						Type::F32Type,
+						Type::F32,
 						Span::new(ast.range(), self.file_id),
 					))
 				} else {

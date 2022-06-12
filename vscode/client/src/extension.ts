@@ -1,5 +1,4 @@
-import { join } from "path";
-import { ExtensionContext, window as Window } from "vscode";
+import { ExtensionContext, window as Window, languages, TextDocument, TextEdit } from "vscode";
 
 import {
   LanguageClient,
