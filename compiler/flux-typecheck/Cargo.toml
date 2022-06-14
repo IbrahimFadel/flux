@@ -19,3 +19,4 @@ smol_str = "0.1.21"
 insta = "1.14.0"
 paste = "1.0.7"
 flux-parser = { path = "../flux-parser" }
+codespan-reporting = "0.11.1"

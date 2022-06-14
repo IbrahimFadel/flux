@@ -1,16 +1,14 @@
-use std::{
-	collections::HashMap,
-	fmt::{self, Debug},
-};
+use std::{collections::HashMap, fmt::Debug};
 
 use flux_error::{filesystem::FileId, FluxError};
+use flux_syntax::ast::{self, Spanned};
 use indexmap::IndexMap;
+use la_arena::Idx;
 use smol_str::SmolStr;
 
 mod database;
 pub use database::Database;
-use flux_syntax::ast::{self, Spanned};
-use la_arena::Idx;
+mod print;
 
 #[derive(Clone, Debug)]
 pub struct HirModule {
@@ -130,11 +128,14 @@ pub struct TypeDecl {
 }
 
 #[derive(Debug, Clone)]
+pub struct Block(pub Vec<Option<Spanned<Stmt>>>);
+
+#[derive(Debug, Clone)]
 pub struct FnDecl {
 	pub public: Spanned<bool>,
 	pub name: Option<Spanned<SmolStr>>,
 	pub params: Spanned<Vec<Spanned<FnParam>>>,
-	pub block: Vec<Option<Spanned<Stmt>>>,
+	pub block: Block,
 	pub return_type: Spanned<Type>,
 }
 
@@ -167,19 +168,14 @@ pub struct VarDecl {
 
 #[derive(Debug, Clone)]
 pub struct If {
-	condition: ExprIdx,
-	then: Vec<Option<Spanned<Stmt>>>,
-	else_ifs: Vec<Option<Spanned<Stmt>>>,
-	else_: Vec<Option<Spanned<Stmt>>>,
+	pub condition: ExprIdx,
+	pub then: Block,
+	pub else_ifs: Block,
+	pub else_: Block,
 }
 
 impl If {
-	pub fn new(
-		condition: ExprIdx,
-		then: Vec<Option<Spanned<Stmt>>>,
-		else_ifs: Vec<Option<Spanned<Stmt>>>,
-		else_: Vec<Option<Spanned<Stmt>>>,
-	) -> Self {
+	pub fn new(condition: ExprIdx, then: Block, else_ifs: Block, else_: Block) -> Self {
 		Self {
 			condition,
 			then,
@@ -206,19 +202,20 @@ pub enum Expr {
 		op: PrefixOp,
 		expr: ExprIdx,
 	},
-	Ident {
-		path: Vec<SmolStr>,
-	},
+	Ident(Path),
 	Call(Call),
 	Path(Path),
+	Struct(Struct),
 	Missing,
 }
 
+#[derive(Debug, Clone)]
+pub struct Struct {
+	pub name: Option<Spanned<SmolStr>>,
+	pub fields: Spanned<Vec<(Option<Spanned<SmolStr>>, ExprIdx)>>,
+}
+
 pub type Path = Vec<Spanned<SmolStr>>;
-// #[derive(Debug, Clone)]
-// pub struct Path {
-// pub names: Vec<Spanned<SmolStr>>,
-// }
 
 #[derive(Debug, Clone)]
 pub struct Int {
@@ -270,17 +267,6 @@ pub enum Type {
 	Unknown,
 }
 
-impl fmt::Display for Type {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Type::SInt(n) => write!(f, "i{}", *n),
-			Type::UInt(n) => write!(f, "u{}", *n),
-			Type::Void => write!(f, "void"),
-			_ => write!(f, "{:?}", self),
-		}
-	}
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct InterfaceType(HashMap<String, InterfaceMethod>);
 
@@ -292,11 +278,11 @@ pub struct InterfaceMethod {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct StructType(IndexMap<String, StructField>);
+pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct StructField {
+pub struct StructTypeField {
 	public: bool,
 	mutable: bool,
-	ty: Spanned<Type>,
+	pub ty: Spanned<Type>,
 }

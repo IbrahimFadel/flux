@@ -1,9 +1,9 @@
-fn foo(i13 x) {
-	
+type Foo struct {
+
 }
 
 fn main() {
 	let x = 0;
-	let y = x;
-	foo(y);
+	if x == 0 {
+	}
 }

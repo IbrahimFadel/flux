@@ -65,7 +65,7 @@ macro_rules! test_expr_str {
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
-					crate::grammar::expr::expr(&mut parser);
+					crate::grammar::expr::expr(&mut parser, true);
 					let sink = crate::Sink::new(&tokens, parser.events);
 					let parse = sink.finish();
 					let mut settings = insta::Settings::clone_current();

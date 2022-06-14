@@ -27,7 +27,7 @@ pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
 		Some(return_stmt(p))
 	} else {
 		let m = p.start();
-		expr::expr(p);
+		expr::expr(p, true);
 		p.expect(T!(semicolon), format!("expected `;` after expression"));
 		Some(m.complete(p, SyntaxKind::ExprStmt))
 	}
@@ -40,7 +40,7 @@ fn return_stmt(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 		return m.complete(p, SyntaxKind::ReturnStmt);
 	}
-	expr::expr(p);
+	expr::expr(p, true);
 	p.expect(
 		T!(semicolon),
 		format!("expected `;` after return statement"),
@@ -51,7 +51,7 @@ fn return_stmt(p: &mut Parser) -> CompletedMarker {
 fn if_stmt(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(T!(if), format!("expected `if` in if statement"));
-	expr::expr(p);
+	expr::expr(p, false);
 	block(p);
 	while p.at(T!(else)) {
 		p.bump();
@@ -67,7 +67,7 @@ fn if_stmt(p: &mut Parser) -> CompletedMarker {
 fn else_if_stmt(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.expect(T!(if), format!("expected `if` in else if statement"));
-	expr::expr(p);
+	expr::expr(p, false);
 	block(p);
 	m.complete(p, SyntaxKind::IfStmt)
 }
@@ -87,7 +87,7 @@ fn var_decl(p: &mut Parser) -> CompletedMarker {
 		TokenKind::Eq,
 		format!("expected `=` in variable declaration"),
 	);
-	expr::expr(p);
+	expr::expr(p, true);
 	p.expect(
 		TokenKind::SemiColon,
 		format!("expected `;` after variable declaration"),

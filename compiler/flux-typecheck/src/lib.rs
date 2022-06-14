@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use flux_driver::{FunctionExportTable, FunctionSignature, TypeExportTable};
 use flux_error::{FluxError, Span};
-use flux_hir::{Call, Expr, FnDecl, HirModule, Stmt, Type, VarDecl};
+use flux_hir::{Call, Expr, FnDecl, HirModule, If, Stmt, Struct, Type, VarDecl};
 use flux_syntax::ast::Spanned;
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
@@ -10,6 +10,7 @@ use text_size::TextRange;
 
 #[cfg(test)]
 mod tests;
+mod unification;
 
 type TypeId = usize;
 
@@ -30,36 +31,128 @@ fn generate_function_signature(f: &flux_hir::FnDecl) -> Option<FunctionSignature
 }
 
 #[derive(Debug)]
+struct SymbolTable {
+	locals: HashMap<TypeId, Spanned<Type>>,
+	local_ids: HashMap<SmolStr, TypeId>,
+}
+
+impl Default for SymbolTable {
+	fn default() -> Self {
+		Self {
+			locals: HashMap::new(),
+			local_ids: HashMap::new(),
+		}
+	}
+}
+
+#[derive(Debug)]
 struct TypeEnv<'a> {
 	expr_arena: &'a Arena<Spanned<Expr>>,
 	id_counter: usize,
-	locals: HashMap<TypeId, Spanned<Type>>,
-	local_ids: HashMap<SmolStr, TypeId>,
+	scopes: Vec<SymbolTable>,
 	signatures: &'a HashMap<Vec<SmolStr>, FunctionSignature>,
 	module_path: &'a [SmolStr],
 	use_paths: &'a [Vec<SmolStr>],
+	types: &'a HashMap<Vec<SmolStr>, &'a Spanned<Type>>,
 }
 
 impl<'a> TypeEnv<'a> {
+	pub fn new(
+		expr_arena: &'a Arena<Spanned<Expr>>,
+		types: &'a HashMap<Vec<SmolStr>, &'a Spanned<Type>>,
+		signatures: &'a HashMap<Vec<SmolStr>, FunctionSignature>,
+		module_path: &'a [SmolStr],
+		use_paths: &'a [Vec<SmolStr>],
+	) -> Self {
+		Self {
+			expr_arena,
+			types,
+			id_counter: 0,
+			scopes: vec![],
+			signatures,
+			module_path,
+			use_paths,
+		}
+	}
+
+	fn add_var_to_scope(&mut self, name: SmolStr, ty: Spanned<Type>) {
+		let id = self.insert(ty.clone());
+		self.scopes.last_mut().unwrap().local_ids.insert(name, id);
+		self.scopes.last_mut().unwrap().locals.insert(id, ty);
+	}
+
+	fn get_var_id(&self, name: &str) -> Option<&TypeId> {
+		for scope in self.scopes.iter().rev() {
+			if let Some(id) = scope.local_ids.get(name) {
+				return Some(id);
+			}
+		}
+		None
+	}
+
+	fn get_type_with_id(&self, id: TypeId) -> &Spanned<Type> {
+		for scope in self.scopes.iter().rev() {
+			if let Some(ty) = scope.locals.get(&id) {
+				return ty;
+			}
+		}
+		panic!(
+			"internal compiler error: could not find type with id `{}`",
+			id
+		);
+	}
+
+	fn set_id_type(&mut self, id: TypeId, ty: Spanned<Type>) {
+		self.scopes.last_mut().unwrap().locals.insert(id, ty);
+	}
+
 	pub fn insert(&mut self, info: Spanned<Type>) -> TypeId {
 		let id = self.id_counter;
 		self.id_counter += 1;
-		self.locals.insert(id, info);
+		self.scopes.last_mut().unwrap().locals.insert(id, info);
 		id
 	}
 
-	pub fn infer_function(&mut self, f: &FnDecl) -> Result<(), FluxError> {
-		for stmt in &f.block {
-			if let Some(stmt) = stmt {
-				self.infer_stmt(stmt)?;
-			}
-		}
+	pub fn infer_function(&mut self, f: &mut FnDecl) -> Result<(), FluxError> {
+		self.infer_block(&mut f.block.0)?;
 		Ok(())
 	}
 
-	fn infer_stmt(&mut self, stmt: &Stmt) -> Result<(), FluxError> {
+	fn infer_block(&mut self, block: &mut Vec<Option<Spanned<Stmt>>>) -> Result<(), FluxError> {
+		self.scopes.push(SymbolTable::default());
+		for stmt in block.iter_mut() {
+			if let Some(stmt) = stmt {
+				self.infer_stmt(&mut stmt.node)?;
+			}
+		}
+
+		for stmt in block {
+			if let Some(stmt) = stmt {
+				if let Stmt::VarDecl(var) = &mut stmt.node {
+					if let Some(id) = self.get_var_id(&var.name) {
+						let mut ty = self.get_type_with_id(*id).node.clone();
+						while let Type::Ref(id) = &ty {
+							ty = self.get_type_with_id(*id).node.clone();
+						}
+						if ty == Type::Int {
+							ty = Type::UInt(32);
+						} else if ty == Type::Float {
+							ty = Type::F32;
+						}
+						var.ty.node = ty;
+					}
+				}
+			}
+		}
+
+		self.scopes.pop();
+		Ok(())
+	}
+
+	fn infer_stmt(&mut self, stmt: &mut Stmt) -> Result<(), FluxError> {
 		match stmt {
 			Stmt::VarDecl(var) => self.infer_var_decl(var),
+			Stmt::If(if_) => self.infer_if(if_),
 			Stmt::Expr(expr) => {
 				self.infer_expr(*expr)?;
 				Ok(())
@@ -68,12 +161,18 @@ impl<'a> TypeEnv<'a> {
 		}
 	}
 
+	fn infer_if(&mut self, if_stmt: &mut If) -> Result<(), FluxError> {
+		self.infer_expr(if_stmt.condition)?;
+		self.infer_block(&mut if_stmt.then.0)?;
+		self.infer_block(&mut if_stmt.else_ifs.0)?;
+		self.infer_block(&mut if_stmt.else_.0)?;
+		Ok(())
+	}
+
 	fn infer_var_decl(&mut self, var: &VarDecl) -> Result<(), FluxError> {
 		if var.ty.node == flux_hir::Type::Unknown {
 			let ty = self.infer_expr(var.value)?;
-			let id = self.insert(ty.clone());
-			self.local_ids.insert(var.name.clone(), id);
-			self.locals.insert(id, ty);
+			self.add_var_to_scope(var.name.clone(), ty);
 		} else {
 			let var_ty_id = self.insert(var.ty.clone());
 			let expr_ty = self.infer_expr(var.value)?;
@@ -89,9 +188,7 @@ impl<'a> TypeEnv<'a> {
 					var.ty.span.file_id,
 				),
 			)?;
-			let final_ty_id = self.insert(final_ty.clone());
-			self.local_ids.insert(var.name.clone(), final_ty_id);
-			self.locals.insert(final_ty_id, final_ty);
+			self.add_var_to_scope(var.name.clone(), final_ty);
 		}
 		Ok(())
 	}
@@ -120,14 +217,113 @@ impl<'a> TypeEnv<'a> {
 				}
 				return result;
 			}
-			Expr::Path(path) => Spanned::new(
-				Type::Ref(*self.local_ids.get(&path_to_string(path)).unwrap()),
-				self.expr_arena[idx].span.clone(),
-			),
+			Expr::Path(path) => {
+				if let Some(var) = self.get_var_id(&path_to_string(path)) {
+					Spanned::new(Type::Ref(*var), self.expr_arena[idx].span.clone())
+				} else {
+					let path_span = Span::new(
+						TextRange::new(
+							path[0].span.range.start(),
+							path.last().unwrap().span.range.end(),
+						),
+						path[0].span.file_id,
+					);
+					return Err(
+						FluxError::default()
+							.with_msg(format!(
+								"unknown variable referenced `{}`",
+								path_to_string(path)
+							))
+							.with_primary(
+								format!("unknown variable referenced `{}`", path_to_string(path)),
+								Some(path_span),
+							),
+					);
+				}
+			}
 			Expr::Call(call) => self.infer_call(call)?,
-			_ => Spanned::new(Type::Unknown, self.expr_arena[idx].span.clone()),
+			Expr::Struct(struct_expr) => {
+				self.infer_struct(struct_expr)?;
+				Spanned::new(
+					Type::Ident(struct_expr.name.as_ref().unwrap().node.clone()),
+					self.expr_arena[idx].span.clone(),
+				)
+			}
+			_ => unreachable!(),
 		};
 		Ok(res)
+	}
+
+	fn infer_struct(&mut self, struct_expr: &Struct) -> Result<(), FluxError> {
+		if struct_expr.name.is_none() {
+			return Err(FluxError::default());
+		}
+		let name = struct_expr.name.as_ref().unwrap();
+		let ty = self.expect_type(name)?;
+		let ty = match ty {
+			Type::Struct(struct_ty) => struct_ty,
+			_ => panic!("internal compiler error: tried to infer struct but got non-struct type"),
+		};
+
+		let ty_len = ty.0.len();
+		let e_len = struct_expr.fields.len();
+		if ty_len != e_len {
+			return Err(
+				FluxError::default()
+					.with_msg(format!(
+						"incorrect number of fields supplied in struct expression"
+					))
+					.with_primary(
+						format!(
+							"type `{}` expects {} fields, but {} were supplied",
+							name.node, ty_len, e_len
+						),
+						Some(struct_expr.fields.span.clone()),
+					)
+					.with_label(
+						format!("`{}` defined with {} fields", name.node, ty_len),
+						Some(ty.0.span.clone()),
+					),
+			);
+		}
+
+		for (e_name, e_val) in &struct_expr.fields.node {
+			if e_name.is_none() {
+				return Err(FluxError::default().with_msg(format!("missing field name")));
+			}
+			let e_name = e_name.as_ref().unwrap();
+			if let Some(struct_type_field) = ty.0.get(&e_name.node) {
+				let e_ty = self.infer_expr(*e_val)?;
+				let e_id = self.insert(e_ty);
+				let ty_id = self.insert(struct_type_field.ty.clone());
+				self.unify(e_id, ty_id, e_name.span.clone())?;
+			} else {
+				return Err(
+					FluxError::default()
+						.with_msg(format!(
+							"type `{}` contains no field called `{}`",
+							name.node, e_name.node
+						))
+						.with_primary(
+							format!(
+								"type `{}` contains no field called `{}`",
+								name.node, e_name.node
+							),
+							Some(e_name.span.clone()),
+						),
+				);
+			}
+		}
+
+		Ok(())
+	}
+
+	//TODO: resolve imports, uses, etc
+	fn expect_type(&self, name: &Spanned<SmolStr>) -> Result<&'a Type, FluxError> {
+		if let Some(ty) = self.types.get(&vec![name.node.clone()]) {
+			return Ok(ty);
+		}
+		Err(FluxError::default().with_msg(format!("could not find type `{}`", name.node)))
 	}
 
 	fn expect_signature(&self, path: &[Spanned<SmolStr>]) -> Result<FunctionSignature, FluxError> {
@@ -221,9 +417,8 @@ impl<'a> TypeEnv<'a> {
 			let arg_id = self.insert(arg_ty);
 			let param_id = self.insert(signature.param_types[i].clone());
 			let final_ty = self.unify(arg_id, param_id, self.expr_arena[*arg].span.clone())?;
-			let final_id = self.insert(final_ty);
 			if let Expr::Path(name) = &self.expr_arena[*arg].node {
-				self.local_ids.insert(path_to_string(name), final_id);
+				self.add_var_to_scope(path_to_string(name), final_ty);
 			}
 		}
 
@@ -240,94 +435,6 @@ impl<'a> TypeEnv<'a> {
 			}
 			_ => todo!(),
 		};
-	}
-
-	fn unify(&mut self, a: TypeId, b: TypeId, span: Span) -> Result<Spanned<Type>, FluxError> {
-		use Type::*;
-		let ty = match (self.locals[&a].node.clone(), self.locals[&b].node.clone()) {
-			(Float, Float) => Float,
-			(Int, Int) => Int,
-			(Int, x) => {
-				let span = self.locals[&a].span.clone();
-				self.locals.insert(a, Spanned::new(Ref(b), span));
-				x
-			}
-			(x, Int) => {
-				let span = self.locals[&b].span.clone();
-				self.locals.insert(b, Spanned::new(Ref(a), span));
-				x
-			}
-			(F32, Float) | (Float, F32) | (F32, F32) => F32,
-			(F64, Float) | (Float, F64) | (F64, F64) => F64,
-			(Ref(a), Ref(b)) => {
-				// this pattern isn't necessary, but it saves one function call if both sides are references. Since comparing variables is quite common, i think it makes sense to have
-				return self.unify(a, b, span);
-			}
-			(Ref(a), _) => return self.unify(a, b, span),
-			(_, Ref(b)) => return self.unify(a, b, span),
-			(SInt(n1), SInt(n2)) => {
-				if n1 == n2 {
-					SInt(n1)
-				} else {
-					return Err(self.unification_err(a, b, span));
-				}
-			}
-			(UInt(n1), UInt(n2)) => {
-				if n1 == n2 {
-					UInt(n1)
-				} else {
-					return Err(self.unification_err(a, b, span));
-				}
-			}
-			_ => return Err(self.unification_err(a, b, span)),
-		};
-		Ok(Spanned::new(ty, self.locals[&a].span.clone()))
-	}
-
-	fn unification_err(&self, a: TypeId, b: TypeId, span: Span) -> FluxError {
-		let mut a_info = self.locals[&a].clone();
-		let mut a_i = 0;
-		while let Type::Ref(id) = &a_info.node {
-			a_info = self.locals.get(id).unwrap().clone();
-			a_i += 1;
-		}
-		let mut b_info = self.locals[&b].clone();
-		let mut b_i = 0;
-		while let Type::Ref(id) = &b_info.node {
-			b_info = self.locals.get(id).unwrap().clone();
-			b_i += 1;
-		}
-		let mut err = FluxError::default()
-			.with_msg(format!(
-				"could not unify `{}` and `{}`",
-				a_info.node, b_info.node
-			))
-			.with_primary(
-				format!("could not unify `{}` and `{}`", a_info.node, b_info.node),
-				Some(span),
-			)
-			.with_label(
-				format!("`{}` type", a_info.node),
-				Some(self.locals[&a].span.clone()),
-			)
-			.with_label(
-				format!("`{}` type", b_info.node),
-				Some(self.locals[&b].span.clone()),
-			);
-
-		if a_i > 0 {
-			err = err.with_label(
-				format!("type `{}` inferred from here", a_info.node),
-				Some(a_info.span),
-			);
-		}
-		if b_i > 0 {
-			err = err.with_label(
-				format!("type `{}` inferred from here", b_info.node),
-				Some(b_info.span),
-			);
-		}
-		err
 	}
 }
 
@@ -346,6 +453,11 @@ fn typecheck_hir_module(
 	function_exports: &FunctionExportTable,
 	type_exports: &TypeExportTable,
 ) -> Result<(), FluxError> {
+	let mut types = HashMap::new();
+	for ty in &hir_module.types {
+		types.insert(vec![ty.name.node.clone()], &ty.ty);
+	}
+
 	let mut signatures = HashMap::new();
 	for (path, signature) in function_exports {
 		signatures.insert(path.clone(), signature.clone());
@@ -370,29 +482,17 @@ fn typecheck_hir_module(
 		.collect();
 
 	for f in &mut hir_module.functions {
-		let mut env = TypeEnv {
-			expr_arena: &hir_module.db.exprs,
-			id_counter: 0,
-			locals: HashMap::new(),
-			local_ids: HashMap::new(),
-			signatures: &signatures,
-			module_path: &hir_module.path,
-			use_paths: &use_paths,
-		};
+		let mut env = TypeEnv::new(
+			&hir_module.db.exprs,
+			&types,
+			&signatures,
+			&hir_module.path,
+			&use_paths,
+		);
 
 		env.infer_function(f)?;
 
-		for stmt in &mut f.block {
-			if let Some(stmt) = stmt {
-				if let Stmt::VarDecl(var) = &mut stmt.node {
-					if let Some(id) = env.local_ids.get(&var.name) {
-						var.ty.node = env.locals[id].node.clone();
-					}
-				}
-			}
-		}
-
-		println!("{:#?}", f);
+		println!("{}", f);
 	}
 
 	Ok(())

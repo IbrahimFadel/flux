@@ -1,6 +1,47 @@
+use codespan_reporting::term::termcolor::WriteColor;
 use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::{collections::HashMap, str};
+
+struct ErrorStream {
+	s: String,
+}
+
+impl WriteColor for ErrorStream {
+	fn supports_color(&self) -> bool {
+		false
+	}
+
+	fn is_synchronous(&self) -> bool {
+		false
+	}
+
+	fn reset(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+
+	fn set_color(
+		&mut self,
+		_: &codespan_reporting::term::termcolor::ColorSpec,
+	) -> std::io::Result<()> {
+		Ok(())
+	}
+}
+
+impl std::io::Write for ErrorStream {
+	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+		let s = match str::from_utf8(buf) {
+			Ok(v) => v,
+			Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+		};
+		self.s += s;
+		Ok(buf.len())
+	}
+
+	fn flush(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+}
 
 #[macro_export]
 #[cfg(test)]
@@ -21,15 +62,17 @@ macro_rules! test_typeinf {
 					let type_exports = HashMap::new();
 					let res = crate::typecheck_hir_module(&mut hir_module, &function_exports, &type_exports);
 					let mut s = String::new();
-
 					if let Some(err) = res.err() {
-						s = format!("{:#?}", err.to_diagnostic());
+						let mut writer = ErrorStream {
+							s: String::new()
+						};
+						let _ = codespan_reporting::term::emit(&mut writer, &codespan_reporting::term::Config::default(), &err_reporting.files, &err.to_diagnostic());
+						s = writer.s;
 					} else {
 						for f in &hir_module.functions {
 							if let Some(name) = &f.name {
 								s += &format!("{}\n--------------------\n", name.node);
-
-								for stmt in &f.block {
+								for stmt in &f.block.0 {
 									if let Some(stmt) = stmt {
 										if let flux_hir::Stmt::VarDecl(var) = &stmt.node {
 											s += &format!("{} -> {:?}\n", var.name, var.ty.node);
@@ -39,7 +82,6 @@ macro_rules! test_typeinf {
 							}
 						}
 					}
-
 					let mut settings = insta::Settings::clone_current();
 					settings.set_snapshot_path("./snapshots");
 					settings.bind(|| {
@@ -74,7 +116,7 @@ test_typeinf!(
 );
 
 test_typeinf!(
-	function_call_type_propogation,
+	function_call_type_propagation,
 	r#"fn foo(i13 x) {
 
 }
@@ -106,5 +148,41 @@ test_typeinf!(
 fn main() {
 	i32 y = 0;
 	foo(y);
+}"#
+);
+
+test_typeinf!(
+	function_call_type_propagation_to_addition,
+	r#"fn foo(i13 x) {
+
+}
+
+fn main() {
+	let x = 0;
+	let y = x;
+	i32 a = 1;
+	foo(y);
+	let z = y + a;
+}"#
+);
+
+test_typeinf!(
+	function_call_type_propagation_throughout_scopes,
+	r#"fn foo(i13 x) {
+	
+}
+
+fn main() {
+	let x = 0;
+	let y = x;
+	foo(y);
+
+	if x == 0 {
+		let z = y;
+		i32 y = 10;
+		if z == y {
+
+		}
+	}
 }"#
 );

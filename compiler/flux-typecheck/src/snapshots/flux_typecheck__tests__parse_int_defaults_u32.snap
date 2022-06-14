@@ -4,5 +4,5 @@ expression: s
 ---
 main
 --------------------
-x -> Int
+x -> UInt(32)
 

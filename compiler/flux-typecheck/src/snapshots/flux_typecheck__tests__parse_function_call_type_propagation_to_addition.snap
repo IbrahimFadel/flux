@@ -1,0 +1,17 @@
+---
+source: compiler/flux-typecheck/src/tests.rs
+expression: s
+---
+error[E0000]: could not unify `i13` and `i32`
+   ┌─ main:10:10
+   │
+ 6 │     let x = 0;
+   │             - `i13` type
+ 7 │     let y = x;
+ 8 │     i32 a = 1;
+   │     ---- `i32` type
+ 9 │     foo(y);
+10 │     let z = y + a;
+   │             ^^^^^ could not unify `i13` and `i32`
+
+

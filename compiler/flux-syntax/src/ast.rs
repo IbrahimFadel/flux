@@ -68,7 +68,10 @@ macro_rules! enum_node {
 	};
 }
 
-enum_node!(Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr, PathExpr);
+enum_node!(
+	Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr, PathExpr,
+	StructExpr
+);
 enum_node!(Stmt, ExprStmt, VarDecl, BlockStmt, IfStmt, ReturnStmt);
 enum_node!(Type, PrimitiveType, StructType, InterfaceType, IdentType);
 
@@ -94,8 +97,10 @@ basic_node!(IntExpr);
 basic_node!(BinExpr);
 basic_node!(CallExpr);
 basic_node!(PathExpr);
+basic_node!(StructExpr);
+basic_node!(StructExprField);
 
-basic_node!(StructField);
+basic_node!(StructTypeField);
 basic_node!(InterfaceMethod);
 
 basic_node!(StructType);
@@ -404,12 +409,16 @@ impl FnParam {
 }
 
 impl StructType {
-	pub fn fields(&self) -> Vec<StructField> {
-		self.0.children().filter_map(StructField::cast).collect()
+	pub fn fields(&self) -> Vec<StructTypeField> {
+		self
+			.0
+			.children()
+			.filter_map(StructTypeField::cast)
+			.collect()
 	}
 }
 
-impl StructField {
+impl StructTypeField {
 	pub fn public(&self) -> Option<SyntaxToken> {
 		self
 			.0
@@ -556,5 +565,41 @@ impl PathExpr {
 					None
 				}
 			})
+	}
+}
+
+impl StructExpr {
+	pub fn name(&self) -> Option<PathExpr> {
+		self.0.children().find_map(PathExpr::cast)
+	}
+
+	pub fn lparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::LParen)
+	}
+
+	pub fn fields(&self) -> impl Iterator<Item = StructExprField> {
+		self.0.children().filter_map(StructExprField::cast)
+	}
+
+	pub fn rparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::RParen)
+	}
+}
+
+impl StructExprField {
+	pub fn name(&self) -> Option<PathExpr> {
+		self.0.children().find_map(PathExpr::cast)
+	}
+
+	pub fn value(&self) -> Option<Expr> {
+		self.0.children().filter_map(Expr::cast).nth(1)
 	}
 }

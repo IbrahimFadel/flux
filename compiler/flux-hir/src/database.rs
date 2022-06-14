@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-	BinaryOp, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, ModDecl, Path,
-	PrefixOp, Return, Stmt, StructField, StructType, Type, TypeDecl, UseDecl, VarDecl,
+	BinaryOp, Block, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, ModDecl,
+	PrefixOp, Return, Stmt, Struct, StructType, StructTypeField, Type, TypeDecl, UseDecl, VarDecl,
 };
 use flux_error::{filesystem::FileId, FluxError, FluxErrorCode, Span};
 use flux_syntax::{
@@ -97,7 +97,7 @@ impl Database {
 		let block = if let Some(block) = ast.body() {
 			self.lower_block(block)
 		} else {
-			vec![]
+			Block(vec![])
 		};
 		let return_type = self.lower_type(ast.return_type());
 		let return_type = if let Some(ty) = &return_type {
@@ -218,10 +218,10 @@ impl Database {
 		let mut hir_fields = IndexMap::new();
 		let fields = ast.fields();
 		for field in fields {
-			let name = field.name()?.text().to_string();
+			let name = SmolStr::from(field.name()?.text());
 			hir_fields.insert(
 				name,
-				StructField {
+				StructTypeField {
 					public: field.public().is_some(),
 					mutable: field.mutable().is_some(),
 					ty: self.lower_type(field.type_())?,
@@ -229,18 +229,21 @@ impl Database {
 			);
 		}
 		Some(Spanned::new(
-			Type::Struct(StructType(hir_fields)),
+			Type::Struct(StructType(Spanned::new(
+				hir_fields,
+				Span::new(ast.range(), self.file_id),
+			))),
 			Span::new(ast.range(), self.file_id),
 		))
 	}
 
-	fn lower_block(&mut self, ast: ast::BlockStmt) -> Vec<Option<Spanned<Stmt>>> {
+	fn lower_block(&mut self, ast: ast::BlockStmt) -> Block {
 		let mut block = vec![];
 		let stmts = ast.stmts();
 		for stmt in stmts {
 			block.push(self.lower_stmt(stmt));
 		}
-		block
+		Block(block)
 	}
 
 	pub(crate) fn lower_stmt(&mut self, ast: ast::Stmt) -> Option<Spanned<Stmt>> {
@@ -272,17 +275,19 @@ impl Database {
 		let then = if let Some(then) = ast.then() {
 			self.lower_block(then)
 		} else {
-			vec![]
+			Block(vec![])
 		};
-		let else_ifs = ast
-			.else_ifs()
-			.iter()
-			.map(|else_if| self.lower_if_stmt(else_if))
-			.collect();
+		let else_ifs = Block(
+			ast
+				.else_ifs()
+				.iter()
+				.map(|else_if| self.lower_if_stmt(else_if))
+				.collect(),
+		);
 		let else_ = if let Some(else_) = ast.else_() {
 			self.lower_block(else_)
 		} else {
-			vec![]
+			Block(vec![])
 		};
 
 		Some(Spanned::new(
@@ -316,23 +321,31 @@ impl Database {
 		};
 		let range = expr.range();
 		let idx = if let ast::Expr::ParenExpr(ast) = expr {
-			self.lower_expr(ast.expr())
+			let e = self.lower_expr(ast.expr());
+			self.exprs[e].span.range = TextRange::from(ast.range()); // update range to include the parens
+			e
 		} else {
 			let expr = match expr {
 				ast::Expr::BinExpr(ast) => self.lower_binary(ast),
 				ast::Expr::IntExpr(ast) => self.lower_int(ast),
 				ast::Expr::FloatExpr(ast) => self.lower_float(ast),
 				ast::Expr::PrefixExpr(ast) => self.lower_unary(ast),
-				ast::Expr::IdentExpr(ast) => Expr::Ident {
-					path: ast
+				ast::Expr::IdentExpr(ast) => Expr::Ident(
+					ast
 						.path()
 						.unwrap()
 						.names()
-						.map(|name| SmolStr::from(name.text()))
+						.map(|name| {
+							Spanned::new(
+								SmolStr::from(name.text()),
+								Span::new(name.text_range(), self.file_id),
+							)
+						})
 						.collect(),
-				},
+				),
 				ast::Expr::CallExpr(ast) => self.lower_call(ast),
 				ast::Expr::PathExpr(ast) => self.lower_path(ast),
+				ast::Expr::StructExpr(ast) => self.lower_struct_expr(ast),
 				_ => unreachable!(),
 			};
 			self
@@ -340,6 +353,44 @@ impl Database {
 				.alloc(Spanned::new(expr, Span::new(range, self.file_id)))
 		};
 		idx
+	}
+
+	fn lower_struct_expr(&mut self, ast: ast::StructExpr) -> Expr {
+		let name = if let Some(name) = ast.name() {
+			let syntax = &name.names().collect::<Vec<_>>()[0];
+			Some(Spanned::new(
+				SmolStr::from(syntax.text()),
+				Span::new(syntax.text_range(), self.file_id),
+			))
+		} else {
+			None
+		};
+		let fields = ast
+			.fields()
+			.map(|field| {
+				(
+					if let Some(name) = field.name() {
+						let syntax = &name.names().collect::<Vec<_>>()[0];
+						Some(Spanned::new(
+							SmolStr::from(syntax.text()),
+							Span::new(syntax.text_range(), self.file_id),
+						))
+					} else {
+						None
+					},
+					self.lower_expr(field.value()),
+				)
+			})
+			.collect::<Vec<_>>();
+		let fields_range = match (ast.lparen(), ast.rparen()) {
+			(Some(lparen), Some(rparen)) => {
+				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
+			}
+			_ => ast.range(),
+		};
+		let fields = Spanned::new(fields, Span::new(fields_range, self.file_id));
+
+		Expr::Struct(Struct { name, fields })
 	}
 
 	fn lower_path(&mut self, ast: PathExpr) -> Expr {

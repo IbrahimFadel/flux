@@ -33,7 +33,7 @@ pub fn get_completion_items(
 	});
 
 	if let Some(closest_function) = closest_function {
-		for stmt in &closest_function.1.block {
+		for stmt in &closest_function.1.block.0 {
 			if let Some(stmt) = stmt {
 				match &stmt.node {
 					flux_hir::Stmt::VarDecl(var) => names.push(CompletionItem {

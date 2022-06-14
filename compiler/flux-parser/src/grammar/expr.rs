@@ -153,7 +153,7 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 		TokenKind::SemiColon,
 		format!("expepcted `;` after struct type field"),
 	);
-	m.complete(p, SyntaxKind::StructField)
+	m.complete(p, SyntaxKind::StructTypeField)
 }
 
 fn primitive_type(p: &mut Parser) -> CompletedMarker {
@@ -163,12 +163,16 @@ fn primitive_type(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::PrimitiveType)
 }
 
-pub(crate) fn expr(p: &mut Parser) -> Option<CompletedMarker> {
-	expr_binding_power(p, 0)
+pub(crate) fn expr(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker> {
+	expr_binding_power(p, 0, allow_struct_expressions)
 }
 
-fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<CompletedMarker> {
-	let mut lhs = lhs(p)?;
+fn expr_binding_power(
+	p: &mut Parser,
+	minimum_binding_power: u8,
+	allow_struct_expressions: bool,
+) -> Option<CompletedMarker> {
+	let mut lhs = lhs(p, allow_struct_expressions)?;
 	loop {
 		let op = if p.at(T!(+)) {
 			InfixOp::Add
@@ -202,7 +206,7 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 		p.bump();
 
 		let m = lhs.precede(p);
-		let parsed_rhs = expr_binding_power(p, right_binding_power).is_some();
+		let parsed_rhs = expr_binding_power(p, right_binding_power, allow_struct_expressions).is_some();
 		lhs = m.complete(p, SyntaxKind::BinExpr);
 
 		if !parsed_rhs {
@@ -210,13 +214,12 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 		}
 	}
 	if minimum_binding_power == 0 {
-		lhs = postfix(p, lhs);
+		lhs = postfix(p, lhs, allow_struct_expressions);
 	}
 	Some(lhs)
 }
 
 pub(crate) fn path(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(ident)));
 	let m = p.start();
 	p.expect(T!(ident), format!("expected identifier in path"));
 	while p.at(T!(::)) && !p.at_end() {
@@ -226,32 +229,72 @@ pub(crate) fn path(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::PathExpr)
 }
 
-fn postfix(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
+fn postfix(p: &mut Parser, e: CompletedMarker, allow_struct_expressions: bool) -> CompletedMarker {
 	if p.at(T!(lparen)) {
-		let m = e.precede(p);
-
-		p.bump();
-
-		while !p.at(T!(rparen)) && !p.at_end() {
-			expr(p);
-			if !p.at(T!(rparen)) {
-				if !p.at(T!(comma)) {
-					p.error(format!("expected either `,` or `)` in call expression"));
-					break;
-				} else {
-					p.bump();
-				}
-			}
-		}
-		p.expect(T!(rparen), format!("expected `)` in call expression"));
-
-		m.complete(p, SyntaxKind::CallExpr)
+		call(p, e)
+	} else if allow_struct_expressions && p.at(T!(lbrace)) {
+		struct_initialization(p, e)
 	} else {
 		e
 	}
 }
 
-fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
+fn struct_initialization(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
+	assert!(p.at(T!(lbrace)));
+	let m = e.precede(p);
+	p.bump();
+
+	while !p.at(T!(rbrace)) && !p.at_end() {
+		let m = p.start();
+		ident_expr(p);
+		if p.at(T!(comma)) {
+			p.bump();
+		} else {
+			p.expect(
+				T!(:),
+				format!("expected `:` in struct field initialization"),
+			);
+			expr(p, true);
+			if !p.at(T!(rbrace)) {
+				p.expect(
+					T!(comma),
+					format!("expected `,` after struct field initialization"),
+				);
+			}
+		}
+		m.complete(p, SyntaxKind::StructExprField);
+	}
+
+	p.expect(
+		T!(rbrace),
+		format!("expected `}}` after struct initialization"),
+	);
+
+	m.complete(p, SyntaxKind::StructExpr)
+}
+
+fn call(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
+	let m = e.precede(p);
+
+	p.bump();
+
+	while !p.at(T!(rparen)) && !p.at_end() {
+		expr(p, true);
+		if !p.at(T!(rparen)) {
+			if !p.at(T!(comma)) {
+				p.error(format!("expected either `,` or `)` in call expression"));
+				break;
+			} else {
+				p.bump();
+			}
+		}
+	}
+	p.expect(T!(rparen), format!("expected `)` in call expression"));
+
+	m.complete(p, SyntaxKind::CallExpr)
+}
+
+fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker> {
 	let cm = if p.at(T!(intlit)) {
 		int_lit(p)
 	} else if p.at(T!(floatlit)) {
@@ -259,9 +302,9 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 	} else if p.at(T!(ident)) {
 		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
-		prefix_neg(p)
+		prefix_neg(p, allow_struct_expressions)
 	} else if p.at(TokenKind::LParen) {
-		paren_expr(p)
+		paren_expr(p, allow_struct_expressions)
 	} else {
 		p.error(format!("expected expression lhs"));
 		return None;
@@ -286,22 +329,22 @@ pub(crate) fn ident_expr(p: &mut Parser) -> CompletedMarker {
 	path(p)
 }
 
-fn prefix_neg(p: &mut Parser) -> CompletedMarker {
+fn prefix_neg(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {
 	let m = p.start();
 
 	let op = PrefixOp::Neg;
 	let (_, right_binding_power) = op.binding_power();
 	p.bump();
-	expr_binding_power(p, right_binding_power);
+	expr_binding_power(p, right_binding_power, allow_struct_expressions);
 
 	m.complete(p, SyntaxKind::PrefixExpr)
 }
 
-fn paren_expr(p: &mut Parser) -> CompletedMarker {
+fn paren_expr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {
 	assert!(p.at(TokenKind::LParen));
 	let m = p.start();
 	p.bump();
-	expr_binding_power(p, 0);
+	expr_binding_power(p, 0, allow_struct_expressions);
 	p.expect(
 		TokenKind::RParen,
 		format!("expected `)` in paren expression"),

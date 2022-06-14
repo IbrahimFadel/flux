@@ -1,5 +1,5 @@
 ---
-source: flux-parser/src/grammar/decl.rs
+source: compiler/flux-parser/src/grammar/decl.rs
 expression: "&parse.debug_tree()"
 ---
 TypeDecl@0..70
@@ -12,14 +12,14 @@ TypeDecl@0..70
     Whitespace@15..16 " "
     RBrace@16..17 "{"
     Whitespace@17..20 "\n\t\t"
-    StructField@20..28
+    StructTypeField@20..28
       PrimitiveType@20..23
         INKw@20..22 "i7"
         Whitespace@22..23 " "
       Ident@23..24 "x"
       SemiColon@24..25 ";"
       Whitespace@25..28 "\n\t\t"
-    StructField@28..40
+    StructTypeField@28..40
       PubKw@28..31 "pub"
       Whitespace@31..32 " "
       PrimitiveType@32..35
@@ -28,7 +28,7 @@ TypeDecl@0..70
       Ident@35..36 "y"
       SemiColon@36..37 ";"
       Whitespace@37..40 "\n\t\t"
-    StructField@40..53
+    StructTypeField@40..53
       MutKw@40..43 "mut"
       Whitespace@43..44 " "
       PrimitiveType@44..48
@@ -37,7 +37,7 @@ TypeDecl@0..70
       Ident@48..49 "z"
       SemiColon@49..50 ";"
       Whitespace@50..53 "\n\t\t"
-    StructField@53..69
+    StructTypeField@53..69
       PubKw@53..56 "pub"
       Whitespace@56..57 " "
       MutKw@57..60 "mut"

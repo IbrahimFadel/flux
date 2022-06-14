@@ -124,7 +124,7 @@ impl LanguageServer for Backend {
 		});
 
 		if let Some((_, f)) = closest_function {
-			for stmt in &f.block {
+			for stmt in &f.block.0 {
 				if let Some(stmt) = stmt {
 					eprintln!("{:?}", stmt.span.range);
 					eprintln!("{:?}", pos);

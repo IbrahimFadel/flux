@@ -5,5 +5,5 @@ expression: s
 main
 --------------------
 x -> SInt(16)
-y -> Ref(2)
+y -> SInt(16)
 

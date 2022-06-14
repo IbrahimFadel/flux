@@ -1,7 +1,6 @@
-use std::process::exit;
-
 use flux_driver::{FunctionExportTable, TypeExportTable};
 use flux_error::FluxErrorReporting;
+use std::process::exit;
 
 const PROJECT_DIR: &str = ".";
 
@@ -23,6 +22,4 @@ fn main() {
 		err_reporting.report(&[err]);
 		exit(1);
 	}
-
-	// println!("{:#?}", modules);
 }

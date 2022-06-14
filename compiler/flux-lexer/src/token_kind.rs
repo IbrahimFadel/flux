@@ -70,6 +70,8 @@ pub enum TokenKind {
 	Slash,
 	#[token("->")]
 	Arrow,
+	#[token(":")]
+	Colon,
 	#[token("(")]
 	LParen,
 	#[token(")")]
@@ -143,6 +145,7 @@ macro_rules! T {
 	[>] => { $crate::TokenKind::CmpGt };
 	[<=] => { $crate::TokenKind::CmpLte };
 	[>=] => { $crate::TokenKind::CmpGte };
+	[:] => { $crate::TokenKind::Colon };
 	[::] => { $crate::TokenKind::DoubleColon };
 	[comma] => { $crate::TokenKind::Comma };
 	[lparen] => { $crate::TokenKind::LParen };
