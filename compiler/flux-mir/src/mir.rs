@@ -1,17 +1,40 @@
-use std::{collections::HashMap, fmt};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
-pub type MirID = usize;
+use smol_str::SmolStr;
+
+pub mod builder;
+mod print;
+
+pub struct MirModule {
+	functions: Vec<Rc<RefCell<FnDecl>>>,
+}
+
+impl MirModule {
+	pub fn new_function<'a>(
+		&mut self,
+		name: SmolStr,
+		params: Vec<FnParam>,
+		return_ty: Type,
+	) -> Rc<RefCell<FnDecl>> {
+		let f = RefCell::new(FnDecl::new(name, return_ty, params));
+		self.functions.push(Rc::new(f));
+		self.functions.last().unwrap().clone()
+	}
+}
+
+impl Default for MirModule {
+	fn default() -> Self {
+		Self { functions: vec![] }
+	}
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct MirID(usize);
+type BitSize = u32;
 
 #[derive(Debug, Clone)]
 pub enum Type {
-	I64,
-	U64,
-	I32,
-	U32,
-	I16,
-	U16,
-	I8,
-	U8,
+	Int(BitSize),
 	F64,
 	F32,
 	Bool,
@@ -24,28 +47,6 @@ pub enum Type {
 
 pub type Ident = String;
 pub type Ptr = Box<Type>;
-
-impl fmt::Display for Type {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Type::Ptr(ptr) => write!(f, "{}*", *ptr),
-			Type::Ident(ident) => write!(f, "{ident}"),
-			Type::StructTy(struct_ty) => {
-				write!(f, "\\{{ ")?;
-				for (i, ty) in struct_ty.iter().enumerate() {
-					write!(f, "{}", ty)?;
-					if i != struct_ty.len() - 1 {
-						write!(f, ", ")?;
-					}
-				}
-				write!(f, " \\}}")?;
-				Ok(())
-			}
-			Type::Vector(vec) => write!(f, "[ {} x {} ]", vec.count, *vec.ty),
-			_ => write!(f, "{:?}", self),
-		}
-	}
-}
 
 #[derive(Debug, Clone)]
 pub struct VectorTy {
@@ -62,79 +63,104 @@ impl VectorTy {
 #[derive(Debug, Clone)]
 pub enum RValue {
 	Local(MirID),
-	I64(i64),
-	I32(i32),
-	I16(i16),
-	I8(i8),
-	U64(u64),
-	U32(u32),
-	U16(u16),
-	U8(u8),
+	Int(Int),
 	F64(f64),
 	F32(f32),
+	Unit,
+}
+
+#[derive(Debug, Clone)]
+pub struct Int {
+	pub n: u64,
+	pub size: BitSize,
 }
 
 pub type StructType = Vec<Type>;
 
 #[derive(Debug)]
 pub struct FnDecl {
-	pub name: String,
+	pub name: SmolStr,
 	pub ret_ty: Type,
 	pub params: Vec<FnParam>,
-	pub blocks: Vec<Block>,
-	pub block_count: usize,
-	pub instr_count: usize,
-	pub cur_block_id: MirID,
-	pub locals: HashMap<String, MirID>,
-	pub local_types: HashMap<MirID, Type>,
+	pub blocks: Vec<Rc<RefCell<Block>>>,
+	id_count: usize,
 }
 
 impl FnDecl {
-	pub fn new(name: String, ret_ty: Type, params: Vec<FnParam>) -> Self {
+	pub fn new(name: SmolStr, ret_ty: Type, params: Vec<FnParam>) -> Self {
 		Self {
 			name: name,
 			ret_ty,
 			params,
 			blocks: vec![],
-			block_count: 0,
-			instr_count: 0,
-			cur_block_id: 0,
+			id_count: 0,
+		}
+	}
+
+	pub fn append_new_block(&mut self) -> Rc<RefCell<Block>> {
+		let block = Block {
+			id: BlockID(self.id_count),
+			instrs: vec![],
+			terminator: None,
 			locals: HashMap::new(),
 			local_types: HashMap::new(),
-		}
+			id_count: 0,
+		};
+		self.id_count += 1;
+		self.blocks.push(Rc::new(RefCell::new(block)));
+		self.blocks.last().unwrap().clone()
+	}
+
+	pub fn new_block(&mut self) -> Rc<RefCell<Block>> {
+		let block = Block {
+			id: BlockID(self.id_count),
+			instrs: vec![],
+			terminator: None,
+			locals: HashMap::new(),
+			local_types: HashMap::new(),
+			id_count: 0,
+		};
+		self.id_count += 1;
+		Rc::new(RefCell::new(block))
 	}
 }
 
 #[derive(Debug)]
 pub struct FnParam {
-	pub mut_: bool,
-	pub name: String,
+	pub name: SmolStr,
 	pub ty: Type,
 }
 
 impl FnParam {
-	pub fn new(mut_: bool, name: String, ty: Type) -> Self {
-		Self { mut_, name, ty }
+	pub fn new(name: SmolStr, ty: Type) -> Self {
+		Self { name, ty }
 	}
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BlockID(pub usize);
+
 #[derive(Debug, Clone)]
 pub struct Block {
-	pub id: MirID,
+	pub id: BlockID,
 	pub instrs: Vec<Instruction>,
+	pub terminator: Option<Instruction>,
+	pub locals: HashMap<SmolStr, MirID>,
+	pub local_types: HashMap<MirID, Type>,
+	pub id_count: usize,
 }
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-	Alloca(Alloca),
+	StackAlloc(StackAlloc),
 	Store(Store),
 	Load(Load),
 	Call(Call),
 	Br(Br),
-	BrCond(BrCond),
+	BrNZ(BrNZ),
 	Ret(Ret),
 	Add(Add),
-	CmpEq(CmpEq),
+	ICmp(ICmp),
 	IndexAccess(IndexAccess),
 	PtrCast(PtrCast),
 }
@@ -180,17 +206,18 @@ impl Call {
 }
 
 #[derive(Debug, Clone)]
-pub struct CmpEq {
+pub struct ICmp {
 	pub id: MirID,
-	pub ty: Type,
+	pub kind: ICmpKind,
 	pub lhs: RValue,
 	pub rhs: RValue,
 }
 
-impl CmpEq {
-	pub fn new(id: MirID, ty: Type, lhs: RValue, rhs: RValue) -> Self {
-		Self { id, ty, lhs, rhs }
-	}
+#[derive(Debug, Clone)]
+pub enum ICmpKind {
+	Eq,
+	ULt,
+	SLt,
 }
 
 #[derive(Debug, Clone)]
@@ -208,45 +235,19 @@ impl Add {
 
 #[derive(Debug, Clone)]
 pub struct Ret {
-	pub id: MirID,
 	pub val: Option<RValue>,
-}
-
-impl Ret {
-	pub fn new(id: MirID, val: Option<RValue>) -> Self {
-		Self { id, val }
-	}
 }
 
 #[derive(Debug, Clone)]
 pub struct Br {
-	pub id: MirID,
-	pub to: MirID,
-}
-
-impl Br {
-	pub fn new(id: MirID, to: MirID) -> Self {
-		Self { id, to }
-	}
+	pub to: BlockID,
 }
 
 #[derive(Debug, Clone)]
-pub struct BrCond {
-	pub id: MirID,
-	pub cond: RValue,
-	pub then: MirID,
-	pub else_: MirID,
-}
-
-impl BrCond {
-	pub fn new(id: MirID, cond: RValue, then: MirID, else_: MirID) -> Self {
-		Self {
-			id,
-			cond,
-			then,
-			else_,
-		}
-	}
+pub struct BrNZ {
+	pub val: RValue,
+	pub then: BlockID,
+	pub else_: BlockID,
 }
 
 #[derive(Debug, Clone)]
@@ -264,26 +265,12 @@ impl Load {
 
 #[derive(Debug, Clone)]
 pub struct Store {
-	pub id: MirID,
-	pub ty: Type,
 	pub val: RValue,
 	pub ptr: MirID,
 }
 
-impl Store {
-	pub fn new(id: MirID, ty: Type, val: RValue, ptr: MirID) -> Self {
-		Self { id, ty, val, ptr }
-	}
-}
-
 #[derive(Debug, Clone)]
-pub struct Alloca {
+pub struct StackAlloc {
 	pub id: MirID,
 	pub ty: Type,
-}
-
-impl Alloca {
-	pub fn new(id: MirID, ty: Type) -> Self {
-		Self { id, ty }
-	}
 }

@@ -312,7 +312,7 @@ dependencies = [
  "flux-mir",
  "flux-parser",
  "flux-syntax",
- "flux-typecheck",
+ "flux-typesystem",
  "text-size",
 ]
 
@@ -378,6 +378,7 @@ version = "0.1.0"
 dependencies = [
  "flux-error",
  "flux-syntax",
+ "flux-typesystem",
  "indexmap",
  "la-arena",
  "smol_str",
@@ -419,8 +420,11 @@ dependencies = [
 name = "flux-mir"
 version = "0.1.0"
 dependencies = [
- "flux-error",
+ "flux-hir",
+ "flux-syntax",
  "indexmap",
+ "la-arena",
+ "paste",
  "smol_str",
 ]
 
@@ -475,6 +479,15 @@ dependencies = [
  "paste",
  "smol_str",
  "text-size",
+]
+
+[[package]]
+name = "flux-typesystem"
+version = "0.1.0"
+dependencies = [
+ "flux-error",
+ "flux-syntax",
+ "smol_str",
 ]
 
 [[package]]

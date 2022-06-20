@@ -8,12 +8,12 @@ use self::marker::Marker;
 
 pub(crate) mod marker;
 
-const RECOVERY_SET: [TokenKind; 9] = [
+const RECOVERY_SET: [TokenKind; 7] = [
 	TokenKind::INKw,
 	TokenKind::UNKw,
 	TokenKind::FnKw,
-	TokenKind::LBrace,
-	TokenKind::RBrace,
+	// TokenKind::LBrace,
+	// TokenKind::RBrace,
 	TokenKind::LParen,
 	TokenKind::RParen,
 	TokenKind::SemiColon,
@@ -58,6 +58,35 @@ impl<'t, 'src> Parser<'t, 'src> {
 		}
 	}
 
+	pub(crate) fn test_and_skip(
+		&mut self,
+		valid_set: &[TokenKind],
+		additional_set: &[TokenKind],
+		msg: String,
+	) {
+		if !self.at_set(valid_set) {
+			let current_token = self.source.peek_token();
+
+			let range = if let Some(Token { range, .. }) = current_token {
+				*range
+			} else {
+				self.source.last_token_range().unwrap()
+			};
+
+			self.events.push(Event::Error(
+				FluxError::default()
+					.with_msg(msg.clone())
+					.with_primary(msg.clone(), Some(Span::new(range, self.source.file_id())))
+					.with_code(FluxErrorCode::UnexpectedToken)
+					.with_label(msg, Some(Span::new(range, self.source.file_id()))),
+			));
+
+			while !self.at_set(additional_set) {
+				self.bump();
+			}
+		}
+	}
+
 	pub(crate) fn error(&mut self, msg: String) {
 		let current_token = self.source.peek_token();
 
@@ -75,16 +104,27 @@ impl<'t, 'src> Parser<'t, 'src> {
 				.with_label(msg, Some(Span::new(range, self.source.file_id()))),
 		));
 
-		if !self.at_set(&RECOVERY_SET) && !self.at_end() {
+		if !self.at_end() {
 			let m = self.start();
 			self.bump();
 			m.complete(self, SyntaxKind::Error);
 		}
+
+		// if !self.at_set(&RECOVERY_SET) && !self.at_end() {
+		// 	let m = self.start();
+		// 	self.bump();
+		// 	m.complete(self, SyntaxKind::Error);
+		// }
 	}
 
 	pub(crate) fn at(&mut self, kind: TokenKind) -> bool {
 		self.expected_kinds.push(kind);
 		self.peek() == Some(kind)
+	}
+
+	pub(crate) fn loop_safe_not_at(&mut self, kind: TokenKind) -> bool {
+		self.expected_kinds.push(kind);
+		!self.at(kind) && !self.at(TokenKind::Error) && !self.at_end()
 	}
 
 	pub(crate) fn next_at(&mut self, kind: TokenKind) -> bool {

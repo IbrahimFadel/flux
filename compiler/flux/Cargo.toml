@@ -10,7 +10,7 @@ flux-driver = { path = "../flux-driver" }
 flux-parser = { path = "../flux-parser" }
 flux-syntax = { path = "../flux-syntax" }
 flux-hir = { path = "../flux-hir" }
-flux-typecheck = { path = "../flux-typecheck" }
+flux-typesystem = { path = "../flux-typesystem" }
 flux-mir = { path = "../flux-mir" }
 flux-error = { path = "../flux-error" }
 text-size = "1.0.0"

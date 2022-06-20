@@ -72,10 +72,12 @@ macro_rules! test_typeinf {
 						for f in &hir_module.functions {
 							if let Some(name) = &f.name {
 								s += &format!("{}\n--------------------\n", name.node);
-								for stmt in &f.block.0 {
-									if let Some(stmt) = stmt {
-										if let flux_hir::Stmt::VarDecl(var) = &stmt.node {
-											s += &format!("{} -> {:?}\n", var.name, var.ty.node);
+								if let flux_hir::Expr::Block(block) = &hir_module.db.exprs[f.block].node {
+									for stmt in &block.0 {
+										if let Some(stmt) = stmt {
+											if let flux_hir::Stmt::VarDecl(var) = &stmt.node {
+												s += &format!("{} -> {:?}\n", var.name, var.ty.node);
+											}
 										}
 									}
 								}

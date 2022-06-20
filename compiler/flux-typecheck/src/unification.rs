@@ -1,3 +1,5 @@
+use flux_error::Span;
+
 use super::*;
 
 impl<'a> TypeEnv<'a> {

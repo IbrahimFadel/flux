@@ -2,17 +2,7 @@ use flux_lexer::T;
 
 use super::{expr::type_expr, *};
 
-pub(crate) fn block(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	p.expect(T![lbrace], format!("expected `{{` at start of block"));
-	while !p.at(T![rbrace]) && !p.at_end() {
-		stmt(p);
-	}
-	p.expect(T![rbrace], format!("expected `}}` at end of block"));
-	m.complete(p, SyntaxKind::BlockStmt)
-}
-
-pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
+pub(crate) fn stmt(p: &mut Parser) -> CompletedMarker {
 	if p.at(T!(let))
 		|| p.at(T!(iN))
 		|| p.at(T!(uN))
@@ -20,16 +10,16 @@ pub(crate) fn stmt(p: &mut Parser) -> Option<CompletedMarker> {
 		|| p.at(T!(f64))
 		|| (p.at(T!(ident)) && matches!(p.peek_next(), Some(T!(ident)) | Some(T!(eq))))
 	{
-		Some(var_decl(p))
-	} else if p.at(T!(if)) {
-		Some(if_stmt(p))
+		var_decl(p)
 	} else if p.at(T!(return)) {
-		Some(return_stmt(p))
+		return_stmt(p)
 	} else {
 		let m = p.start();
 		expr::expr(p, true);
-		p.expect(T!(semicolon), format!("expected `;` after expression"));
-		Some(m.complete(p, SyntaxKind::ExprStmt))
+		if p.at(T!(semicolon)) {
+			p.bump();
+		}
+		m.complete(p, SyntaxKind::ExprStmt)
 	}
 }
 
@@ -48,29 +38,13 @@ fn return_stmt(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::ReturnStmt)
 }
 
-fn if_stmt(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	p.expect(T!(if), format!("expected `if` in if statement"));
-	expr::expr(p, false);
-	block(p);
-	while p.at(T!(else)) {
-		p.bump();
-		if p.at(T!(lbrace)) {
-			block(p);
-		} else {
-			else_if_stmt(p);
-		}
-	}
-	m.complete(p, SyntaxKind::IfStmt)
-}
-
-fn else_if_stmt(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	p.expect(T!(if), format!("expected `if` in else if statement"));
-	expr::expr(p, false);
-	block(p);
-	m.complete(p, SyntaxKind::IfStmt)
-}
+// fn else_if_stmt(p: &mut Parser) -> CompletedMarker {
+// 	let m = p.start();
+// 	p.expect(T!(if), format!("expected `if` in else if statement"));
+// 	expr::expr(p, false);
+// 	block(p);
+// 	m.complete(p, SyntaxKind::IfStmt)
+// }
 
 fn var_decl(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();

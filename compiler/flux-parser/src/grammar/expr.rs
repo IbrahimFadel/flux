@@ -51,7 +51,7 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 	} else if p.at(T!(interface)) {
 		interface_type(p)
 	} else {
-		p.error(format!("could not parse type expression"));
+		p.error(format!("expected type expression"));
 		return None;
 	};
 
@@ -305,6 +305,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		prefix_neg(p, allow_struct_expressions)
 	} else if p.at(TokenKind::LParen) {
 		paren_expr(p, allow_struct_expressions)
+	} else if p.at(T!(if)) {
+		if_expr(p)
 	} else {
 		p.error(format!("expected expression lhs"));
 		return None;
@@ -350,6 +352,32 @@ fn paren_expr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker
 		format!("expected `)` in paren expression"),
 	);
 	m.complete(p, SyntaxKind::ParenExpr)
+}
+
+fn if_expr(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(T!(if), format!("expected `if` in if statement"));
+	expr::expr(p, false);
+	expr::block_expr(p);
+	if p.at(T!(else)) {
+		p.bump();
+		if p.at(T!(if)) {
+			if_expr(p);
+		} else {
+			expr::block_expr(p);
+		}
+	}
+	m.complete(p, SyntaxKind::IfExpr)
+}
+
+pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(T![lbrace], format!("expected `{{` at start of block"));
+	while p.loop_safe_not_at(T![rbrace]) {
+		stmt::stmt(p);
+	}
+	p.expect(T![rbrace], format!("expected `}}` at end of block"));
+	m.complete(p, SyntaxKind::BlockExpr)
 }
 
 #[cfg(test)]

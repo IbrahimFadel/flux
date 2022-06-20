@@ -12,11 +12,11 @@ use text_size::{TextRange, TextSize};
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
-	pub return_type: Spanned<flux_hir::Type>,
-	pub param_types: Spanned<Vec<Spanned<flux_hir::Type>>>,
+	pub return_type: Spanned<flux_hir::hir::Type>,
+	pub param_types: Spanned<Vec<Spanned<flux_hir::hir::Type>>>,
 }
 pub type FunctionExportTable = HashMap<Vec<SmolStr>, FunctionSignature>;
-pub type TypeExportTable = HashMap<Vec<SmolStr>, Spanned<flux_hir::Type>>;
+pub type TypeExportTable = HashMap<Vec<SmolStr>, Spanned<flux_hir::hir::Type>>;
 
 /// Given a mod name `foo`, search for the corresponding source file:
 /// `./foo.flx` || `./foo/foo.flx`
@@ -64,11 +64,9 @@ fn populate_export_table(
 ) {
 	for f in &module.functions {
 		if f.public.node {
-			if let Some(name) = &f.name {
-				let mut path = module_path.clone();
-				path.push(name.node.clone());
-				function_exports.insert(path, generate_function_signature(f));
-			}
+			let mut path = module_path.clone();
+			path.push(f.name.node.clone());
+			function_exports.insert(path, generate_function_signature(f));
 		}
 	}
 	for ty in &module.types {
@@ -104,8 +102,7 @@ fn parse_file_and_submodules<'a>(
 	let root = ast::Root::cast(cst.syntax()).unwrap();
 	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
 	err_reporting.report(&errors);
-	err_reporting.report(&hir_module.db.errors);
-	if errors.len() + cst.errors.len() + hir_module.db.errors.len() > 0 {
+	if errors.len() + cst.errors.len() > 0 {
 		exit(1);
 	}
 
@@ -136,7 +133,7 @@ fn parse_file_and_submodules<'a>(
 	hir_modules.push(hir_module);
 }
 
-fn generate_function_signature(f: &flux_hir::FnDecl) -> FunctionSignature {
+fn generate_function_signature(f: &flux_hir::hir::FnDecl) -> FunctionSignature {
 	FunctionSignature {
 		return_type: f.return_type.clone(),
 		param_types: Spanned::new(
@@ -146,7 +143,7 @@ fn generate_function_signature(f: &flux_hir::FnDecl) -> FunctionSignature {
 	}
 }
 
-fn report_ambiguous_uses(uses: &[flux_hir::UseDecl], err_reporting: &mut FluxErrorReporting) {
+fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut FluxErrorReporting) {
 	let mut errors = vec![];
 	let mut unique_uses: Vec<Spanned<SmolStr>> = vec![]; // hash set
 	for u in uses {

@@ -12,7 +12,7 @@ TypeDecl@0..40
     Whitespace@18..19 " "
     RBrace@19..20 "{"
     Whitespace@20..24 "\n\t\t\t"
-    InterfaceMethod@24..39
+    InterfaceMethod@24..40
       FnKw@24..26 "fn"
       Whitespace@26..27 " "
       Ident@27..30 "foo"
@@ -21,7 +21,11 @@ TypeDecl@0..40
       Whitespace@32..33 " "
       Arrow@33..35 "->"
       Whitespace@35..36 " "
-      SemiColon@36..37 ";"
-      Whitespace@37..39 "\n\t"
-    RBrace@39..40 "}"
-FluxError { msg: "could not parse type expression", code: UnexpectedToken, primary: Some(("could not parse type expression", Some(Span { range: 36..37, file_id: FileId(0) }))), labels: [("could not parse type expression", Some(Span { range: 36..37, file_id: FileId(0) }))], notes: [] }
+      Error@36..39
+        SemiColon@36..37 ";"
+        Whitespace@37..39 "\n\t"
+      Error@39..40
+        RBrace@39..40 "}"
+FluxError { msg: "expected type expression", code: UnexpectedToken, primary: Some(("expected type expression", Some(Span { range: 36..37, file_id: FileId(0) }))), labels: [("expected type expression", Some(Span { range: 36..37, file_id: FileId(0) }))], notes: [] }
+FluxError { msg: "expected `;` at end of interface type method", code: UnexpectedToken, primary: Some(("expected `;` at end of interface type method", Some(Span { range: 39..40, file_id: FileId(0) }))), labels: [("expected `;` at end of interface type method", Some(Span { range: 39..40, file_id: FileId(0) }))], notes: [] }
+FluxError { msg: "expected `}` at end of interface type", code: UnexpectedToken, primary: Some(("expected `}` at end of interface type", Some(Span { range: 39..40, file_id: FileId(0) }))), labels: [("expected `}` at end of interface type", Some(Span { range: 39..40, file_id: FileId(0) }))], notes: [] }

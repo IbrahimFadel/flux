@@ -3,14 +3,14 @@ use std::{
 	fmt::{Display, Formatter},
 };
 
-use crate::{Block, FnDecl, FnParam, Stmt, Type};
+use crate::hir::{Block, FnDecl, FnParam, Stmt, Type};
 
 impl Display for Type {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Type::SInt(n) => write!(f, "i{}", *n),
 			Type::UInt(n) => write!(f, "u{}", *n),
-			Type::Void => write!(f, "void"),
+			Type::Unit => write!(f, "()"),
 			Type::Ident(name) => write!(f, "{}", name),
 			_ => write!(f, "{:?}", self),
 		}
@@ -25,11 +25,7 @@ impl Display for Block {
 			self
 				.0
 				.iter()
-				.map(|stmt| if let Some(stmt) = &stmt {
-					format!("{}", stmt.node)
-				} else {
-					"<empty>".to_string()
-				})
+				.map(|stmt| format!("{}", stmt.node))
 				.collect::<Vec<_>>()
 				.join("\n")
 		)
@@ -40,7 +36,6 @@ impl Display for Stmt {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		match self {
 			Stmt::VarDecl(var) => write!(f, "{} {}", var.ty.node, var.name),
-			Stmt::If(if_) => write!(f, "if <expr> {}", if_.then),
 			_ => write!(f, ""),
 		}
 	}
@@ -50,13 +45,9 @@ impl fmt::Display for FnDecl {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
-			"{}fn {}({}) -> {} {}",
+			"{}fn {}({}) -> {}",
 			if self.public.node { "pub " } else { "" },
-			if let Some(name) = &self.name {
-				name.node.as_str()
-			} else {
-				"<unknown>"
-			},
+			self.name.node,
 			self
 				.params
 				.node
@@ -65,7 +56,6 @@ impl fmt::Display for FnDecl {
 				.collect::<Vec<_>>()
 				.join(", "),
 			self.return_type.node,
-			self.block
 		)
 	}
 }

@@ -70,9 +70,9 @@ macro_rules! enum_node {
 
 enum_node!(
 	Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr, PathExpr,
-	StructExpr
+	StructExpr, IfExpr, BlockExpr
 );
-enum_node!(Stmt, ExprStmt, VarDecl, BlockStmt, IfStmt, ReturnStmt);
+enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
 enum_node!(Type, PrimitiveType, StructType, InterfaceType, IdentType);
 
 basic_node!(Root);
@@ -85,9 +85,7 @@ basic_node!(FnParam);
 basic_node!(VarDecl);
 
 basic_node!(ReturnStmt);
-basic_node!(IfStmt);
 basic_node!(ExprStmt);
-basic_node!(BlockStmt);
 
 basic_node!(IdentExpr);
 basic_node!(ParenExpr);
@@ -99,6 +97,8 @@ basic_node!(CallExpr);
 basic_node!(PathExpr);
 basic_node!(StructExpr);
 basic_node!(StructExprField);
+basic_node!(IfExpr);
+basic_node!(BlockExpr);
 
 basic_node!(StructTypeField);
 basic_node!(InterfaceMethod);
@@ -125,7 +125,7 @@ impl Root {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spanned<T> {
 	pub node: T,
 	pub span: Span,
@@ -223,8 +223,8 @@ impl FnDecl {
 			.find(|token| token.kind() == SyntaxKind::LParen)
 	}
 
-	pub fn params(&self) -> Vec<FnParam> {
-		self.0.children().filter_map(FnParam::cast).collect()
+	pub fn params(&self) -> impl Iterator<Item = FnParam> {
+		self.0.children().filter_map(FnParam::cast)
 	}
 
 	pub fn rparen(&self) -> Option<SyntaxToken> {
@@ -239,8 +239,8 @@ impl FnDecl {
 		self.0.children().find_map(Type::cast)
 	}
 
-	pub fn body(&self) -> Option<BlockStmt> {
-		self.0.children().find_map(BlockStmt::cast)
+	pub fn body(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
 	}
 }
 
@@ -290,27 +290,23 @@ impl VarDecl {
 	}
 }
 
-impl BlockStmt {
+impl BlockExpr {
 	pub fn stmts(&self) -> Vec<Stmt> {
 		self.0.children().filter_map(Stmt::cast).collect()
 	}
 }
 
-impl IfStmt {
+impl IfExpr {
 	pub fn condition(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
 	}
 
-	pub fn then(&self) -> Option<BlockStmt> {
-		self.0.children().find_map(BlockStmt::cast)
+	pub fn then(&self) -> Option<BlockExpr> {
+		self.0.children().find_map(BlockExpr::cast)
 	}
 
-	pub fn else_ifs(&self) -> Vec<IfStmt> {
-		self.0.children().filter_map(IfStmt::cast).collect()
-	}
-
-	pub fn else_(&self) -> Option<BlockStmt> {
-		self.0.children().filter_map(BlockStmt::cast).nth(1)
+	pub fn else_(&self) -> Option<Expr> {
+		self.0.children().filter_map(Expr::cast).nth(2)
 	}
 }
 
@@ -351,12 +347,8 @@ impl IdentType {
 }
 
 impl InterfaceType {
-	pub fn methods(&self) -> Vec<InterfaceMethod> {
-		self
-			.0
-			.children()
-			.filter_map(InterfaceMethod::cast)
-			.collect()
+	pub fn methods(&self) -> impl Iterator<Item = InterfaceMethod> {
+		self.0.children().filter_map(InterfaceMethod::cast)
 	}
 }
 
@@ -377,8 +369,8 @@ impl InterfaceMethod {
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
-	pub fn params(&self) -> Vec<FnParam> {
-		self.0.children().filter_map(FnParam::cast).collect()
+	pub fn params(&self) -> impl Iterator<Item = FnParam> {
+		self.0.children().filter_map(FnParam::cast)
 	}
 
 	pub fn return_ty(&self) -> Option<Type> {
@@ -409,12 +401,8 @@ impl FnParam {
 }
 
 impl StructType {
-	pub fn fields(&self) -> Vec<StructTypeField> {
-		self
-			.0
-			.children()
-			.filter_map(StructTypeField::cast)
-			.collect()
+	pub fn fields(&self) -> impl Iterator<Item = StructTypeField> {
+		self.0.children().filter_map(StructTypeField::cast)
 	}
 }
 

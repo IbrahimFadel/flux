@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-	BinaryOp, Block, Call, Expr, FnDecl, FnParam, If, Int, InterfaceMethod, InterfaceType, ModDecl,
-	PrefixOp, Return, Stmt, Struct, StructType, StructTypeField, Type, TypeDecl, UseDecl, VarDecl,
+	Binary, BinaryOp, Block, Call, Expr, Float, FnDecl, FnParam, If, Int, InterfaceMethod,
+	InterfaceType, ModDecl, PrefixOp, Return, Stmt, Struct, StructType, StructTypeField, Type,
+	TypeDecl, UseDecl, VarDecl,
 };
 use flux_error::{filesystem::FileId, FluxError, FluxErrorCode, Span};
 use flux_syntax::{
@@ -94,11 +95,7 @@ impl Database {
 		};
 		let params = Spanned::new(params, Span::new(params_range, self.file_id));
 
-		let block = if let Some(block) = ast.body() {
-			self.lower_block(block)
-		} else {
-			Block(vec![])
-		};
+		let block = self.lower_expr(ast.body());
 		let return_type = self.lower_type(ast.return_type());
 		let return_type = if let Some(ty) = &return_type {
 			if let Type::Unknown = ty.node {
@@ -237,19 +234,9 @@ impl Database {
 		))
 	}
 
-	fn lower_block(&mut self, ast: ast::BlockStmt) -> Block {
-		let mut block = vec![];
-		let stmts = ast.stmts();
-		for stmt in stmts {
-			block.push(self.lower_stmt(stmt));
-		}
-		Block(block)
-	}
-
 	pub(crate) fn lower_stmt(&mut self, ast: ast::Stmt) -> Option<Spanned<Stmt>> {
 		match ast {
 			ast::Stmt::VarDecl(ref ast) => self.lower_var_decl(ast),
-			ast::Stmt::IfStmt(ref ast) => self.lower_if_stmt(ast),
 			ast::Stmt::ExprStmt(ref ast) => {
 				let e = self.lower_expr(ast.expr());
 				Some(Spanned::new(
@@ -258,7 +245,6 @@ impl Database {
 				))
 			}
 			ast::Stmt::ReturnStmt(ref ast) => self.lower_return_stmt(ast),
-			ast::Stmt::BlockStmt(_) => None,
 		}
 	}
 
@@ -266,32 +252,6 @@ impl Database {
 		let value = self.lower_expr(ast.value());
 		Some(Spanned::new(
 			Stmt::Return(Return { value }),
-			Span::new(ast.range(), self.file_id),
-		))
-	}
-
-	fn lower_if_stmt(&mut self, ast: &ast::IfStmt) -> Option<Spanned<Stmt>> {
-		let condition = self.lower_expr(ast.condition());
-		let then = if let Some(then) = ast.then() {
-			self.lower_block(then)
-		} else {
-			Block(vec![])
-		};
-		let else_ifs = Block(
-			ast
-				.else_ifs()
-				.iter()
-				.map(|else_if| self.lower_if_stmt(else_if))
-				.collect(),
-		);
-		let else_ = if let Some(else_) = ast.else_() {
-			self.lower_block(else_)
-		} else {
-			Block(vec![])
-		};
-
-		Some(Spanned::new(
-			Stmt::If(If::new(condition, then, else_ifs, else_)),
 			Span::new(ast.range(), self.file_id),
 		))
 	}
@@ -330,22 +290,11 @@ impl Database {
 				ast::Expr::IntExpr(ast) => self.lower_int(ast),
 				ast::Expr::FloatExpr(ast) => self.lower_float(ast),
 				ast::Expr::PrefixExpr(ast) => self.lower_unary(ast),
-				ast::Expr::IdentExpr(ast) => Expr::Ident(
-					ast
-						.path()
-						.unwrap()
-						.names()
-						.map(|name| {
-							Spanned::new(
-								SmolStr::from(name.text()),
-								Span::new(name.text_range(), self.file_id),
-							)
-						})
-						.collect(),
-				),
 				ast::Expr::CallExpr(ast) => self.lower_call(ast),
 				ast::Expr::PathExpr(ast) => self.lower_path(ast),
 				ast::Expr::StructExpr(ast) => self.lower_struct_expr(ast),
+				ast::Expr::IfExpr(ast) => self.lower_if_expr(ast),
+				ast::Expr::BlockExpr(ast) => self.lower_block_expr(ast),
 				_ => unreachable!(),
 			};
 			self
@@ -353,6 +302,30 @@ impl Database {
 				.alloc(Spanned::new(expr, Span::new(range, self.file_id)))
 		};
 		idx
+	}
+
+	fn lower_if_expr(&mut self, ast: ast::IfExpr) -> Expr {
+		let condition = self.lower_expr(ast.condition());
+		let then = if let Some(then) = ast.then() {
+			let range = then.range();
+			Spanned::new(self.lower_block_expr(then), Span::new(range, self.file_id))
+		} else {
+			Spanned::new(
+				Expr::Block(Block(vec![])),
+				Span::new(ast.range(), self.file_id),
+			)
+		};
+		let else_ = self.lower_expr(ast.else_());
+		Expr::If(If::new(condition, self.exprs.alloc(then), else_))
+	}
+
+	fn lower_block_expr(&mut self, ast: ast::BlockExpr) -> Expr {
+		let mut block = vec![];
+		let stmts = ast.stmts();
+		for stmt in stmts {
+			block.push(self.lower_stmt(stmt));
+		}
+		Expr::Block(Block(block))
 	}
 
 	fn lower_struct_expr(&mut self, ast: ast::StructExpr) -> Expr {
@@ -467,7 +440,10 @@ impl Database {
 				);
 				return Expr::Missing;
 			} else {
-				return Expr::Float { n: n.unwrap() };
+				return Expr::Float(Float {
+					n: n.unwrap(),
+					ty: Type::F32,
+				});
 			}
 		} else {
 			Expr::Missing
@@ -575,7 +551,7 @@ impl Database {
 		let lhs = self.lower_expr(ast.lhs());
 		let rhs = self.lower_expr(ast.rhs());
 
-		Expr::Binary { op, lhs, rhs }
+		Expr::Binary(Binary { op, lhs, rhs })
 	}
 
 	fn lower_unary(&mut self, ast: ast::PrefixExpr) -> Expr {

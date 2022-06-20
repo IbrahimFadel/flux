@@ -1,5 +1,5 @@
 ---
-source: flux-parser/src/grammar/decl.rs
+source: compiler/flux-parser/src/grammar/decl.rs
 expression: "&parse.debug_tree()"
 ---
 FnDecl@0..33
@@ -23,6 +23,6 @@ FnDecl@0..33
     Ident@25..29 "test"
   RParen@29..30 ")"
   Whitespace@30..31 " "
-  BlockStmt@31..33
+  BlockExpr@31..33
     RBrace@31..32 "{"
     RBrace@32..33 "}"

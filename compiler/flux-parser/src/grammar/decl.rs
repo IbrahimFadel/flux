@@ -1,5 +1,4 @@
 use super::{expr::type_expr, *};
-use crate::grammar::stmt::block;
 use flux_lexer::T;
 
 pub(crate) fn top_level_decl(p: &mut Parser) {
@@ -84,7 +83,7 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 		type_expr(p);
 	}
-	block(p);
+	expr::block_expr(p);
 	m.complete(p, SyntaxKind::FnDecl)
 }
 
