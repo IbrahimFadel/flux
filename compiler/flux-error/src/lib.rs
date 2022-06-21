@@ -18,6 +18,7 @@ pub enum FluxErrorCode {
 	UnexpectedToken,
 	UnresolvedUse,
 	HirParseIntString,
+	TypeMismatch,
 }
 
 impl std::fmt::Display for FluxErrorCode {
@@ -35,6 +36,16 @@ pub struct Span {
 impl Span {
 	pub fn new(range: TextRange, file_id: FileId) -> Span {
 		Span { range, file_id }
+	}
+
+	/// Combine two spans in the same file
+	/// a must come before b
+	pub fn combine(a: &Self, b: &Self) -> Self {
+		assert!(a.range.start() < b.range.end());
+		Span {
+			range: TextRange::new(a.range.start(), b.range.end()),
+			file_id: a.file_id,
+		}
 	}
 }
 

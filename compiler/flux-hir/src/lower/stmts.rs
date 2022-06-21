@@ -21,20 +21,30 @@ impl LoweringCtx {
 
 	fn lower_var_decl(&mut self, var_decl: &ast::VarDecl) -> StmtResult {
 		if let Some(name) = var_decl.name() {
-			let (ty, var_ty_id) = self.lower_type(var_decl.ty())?;
+			let var_ty_id = self.lower_type(var_decl.ty())?;
 			let (expr, expr_id) = self.lower_expr(var_decl.value())?;
-			self.tenv.unify(var_ty_id, expr_id)?;
-			self.tenv.set_path_id(&[name.text().into()], var_ty_id);
+			self.tchecker.unify(
+				var_ty_id.node,
+				expr_id,
+				Span::combine(&var_ty_id.span, &self.exprs[expr].span),
+			)?;
+			self
+				.tchecker
+				.tenv
+				.set_path_id(&[name.text().into()], var_ty_id.node);
 			Ok((
 				Spanned::new(
 					Stmt::VarDecl(VarDecl {
-						ty: Spanned::new(Type::Unknown, ty.span.clone()),
+						ty: Spanned::new(Type::Unknown, var_ty_id.span.clone()),
 						name: name.text().into(),
 						value: expr,
 					}),
 					Span::new(var_decl.range(), self.file_id),
 				),
-				self.tenv.insert(TypeKind::Concrete(Type::Unit)),
+				self.tchecker.tenv.insert(Spanned::new(
+					Type::Unit,
+					Span::new(var_decl.range(), self.file_id),
+				)),
 			))
 		} else {
 			Err(FluxError::default().with_msg(format!(
@@ -43,14 +53,22 @@ impl LoweringCtx {
 		}
 	}
 
-	fn lower_return_stmt(&mut self, ast: &ast::ReturnStmt) -> StmtResult {
-		let (value, _) = self.lower_expr(ast.value())?;
+	fn lower_return_stmt(&mut self, return_stmt: &ast::ReturnStmt) -> StmtResult {
+		let (value, value_id) = self.lower_expr(return_stmt.value())?;
+		self.tchecker.unify(
+			self.tchecker.tenv.return_type_id,
+			value_id,
+			self.exprs[value].span.clone(),
+		)?;
 		Ok((
 			Spanned::new(
 				Stmt::Return(Return { value }),
-				Span::new(ast.range(), self.file_id),
+				Span::new(return_stmt.range(), self.file_id),
 			),
-			self.tenv.insert(TypeKind::Concrete(Type::Unit)),
+			self.tchecker.tenv.insert(Spanned::new(
+				Type::Unit,
+				Span::new(return_stmt.range(), self.file_id),
+			)),
 		))
 	}
 }

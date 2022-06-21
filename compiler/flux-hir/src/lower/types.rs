@@ -2,7 +2,7 @@ use flux_typesystem::TypeId;
 
 use super::*;
 
-type TypeResult = Result<(Spanned<Type>, TypeId), FluxError>;
+type TypeResult = Result<Spanned<TypeId>, FluxError>;
 
 impl LoweringCtx {
 	pub(super) fn lower_type(&mut self, ty: Option<ast::Type>) -> TypeResult {
@@ -15,8 +15,11 @@ impl LoweringCtx {
 				_ => Err(FluxError::default()),
 			}
 		} else {
-			let id = self.tenv.insert(TypeKind::Unknown);
-			Ok((self.default_spanned(Type::Unknown), id))
+			let id = self
+				.tchecker
+				.tenv
+				.insert(self.default_spanned(Type::Unknown));
+			Ok(self.default_spanned(id))
 		}
 	}
 
@@ -51,11 +54,14 @@ impl LoweringCtx {
 			}
 		};
 
-		let id = self.tenv.insert(TypeKind::Concrete(res.clone()));
-		Ok((
-			Spanned::new(res, Span::new(primitive_ty.range(), self.file_id)),
-			id,
-		))
+		let id = self.tchecker.tenv.insert(Spanned::new(
+			res,
+			Span::new(primitive_ty.range(), self.file_id),
+		));
+		Ok(
+			// Spanned::new(res, Span::new(primitive_ty.range(), self.file_id)),
+			Spanned::new(id, Span::new(primitive_ty.range(), self.file_id)),
+		)
 	}
 
 	// fn lower_struct_type(&mut self, struct_ty: ast::StructType) -> TypeResult {
@@ -122,12 +128,13 @@ impl LoweringCtx {
 			);
 			SmolStr::from("missing")
 		};
-		let id = self
-			.tenv
-			.insert(TypeKind::Concrete(Type::Ident(name.clone())));
-		Ok((
-			Spanned::new(Type::Ident(name), Span::new(ident_ty.range(), self.file_id)),
-			id,
-		))
+		let id = self.tchecker.tenv.insert(Spanned::new(
+			Type::Ident(name),
+			Span::new(ident_ty.range(), self.file_id),
+		));
+		Ok(
+			// Spanned::new(Type::Ident(name), Span::new(ident_ty.range(), self.file_id)),
+			Spanned::new(id, Span::new(ident_ty.range(), self.file_id)),
+		)
 	}
 }

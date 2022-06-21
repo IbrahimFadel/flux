@@ -10,7 +10,6 @@ flux-error = { path = "../flux-error" }
 flux-parser = { path = "../flux-parser" }
 flux-hir = { path = "../flux-hir" }
 flux-syntax = { path = "../flux-syntax" }
-flux-typecheck = { path = "../flux-typecheck" }
 tower-lsp = "0.17.0"
 tokio = { version = "1", features = ["full"] }
 dashmap = "5.3.3"

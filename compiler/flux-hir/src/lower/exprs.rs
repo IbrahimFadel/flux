@@ -60,15 +60,24 @@ impl LoweringCtx {
 			)));
 		};
 
-		let binary_ty = self.tenv.insert(TypeKind::Unknown); // let's figure out what type it has
+		let binary_ty = self.tchecker.tenv.insert(Spanned::new(
+			Type::Unknown,
+			Span::new(bin_expr.range(), self.file_id),
+		)); // let's figure out what type it has
 		let (lhs, lhs_id) = self.lower_expr(bin_expr.lhs())?;
-		let lhs_ty = self.tenv.get_type(lhs_id);
-		let lhs_id = self.tenv.insert(lhs_ty);
+		let lhs_ty = self.tchecker.tenv.get_type(lhs_id);
+		let lhs_id = self.tchecker.tenv.insert(lhs_ty);
 		let (rhs, rhs_id) = self.lower_expr(bin_expr.rhs())?;
-		let rhs_ty = self.tenv.get_type(rhs_id);
-		let rhs_id = self.tenv.insert(rhs_ty);
-		self.tenv.unify(lhs_id, rhs_id)?;
-		self.tenv.unify(binary_ty, lhs_id)?; // Now the bin_expr type is dependent on the terms
+		let rhs_ty = self.tchecker.tenv.get_type(rhs_id);
+		let rhs_id = self.tchecker.tenv.insert(rhs_ty);
+		self.tchecker.unify(
+			lhs_id,
+			rhs_id,
+			Span::combine(&self.exprs[lhs].span, &self.exprs[rhs].span),
+		)?;
+		self
+			.tchecker
+			.unify(binary_ty, lhs_id, Span::new(bin_expr.range(), self.file_id))?; // Now the bin_expr type is dependent on the terms
 		Ok((Expr::Binary(Binary { op, lhs, rhs }), binary_ty))
 	}
 
@@ -113,7 +122,10 @@ impl LoweringCtx {
 					n: n.unwrap(),
 					ty: Type::UInt(32),
 				}),
-				self.tenv.insert(TypeKind::Int(None)),
+				self.tchecker.tenv.insert(Spanned::new(
+					Type::Int,
+					Span::new(int_expr.range(), self.file_id),
+				)),
 			));
 		}
 	}
@@ -149,7 +161,10 @@ impl LoweringCtx {
 					n: n.unwrap(),
 					ty: Type::F32,
 				}),
-				self.tenv.insert(TypeKind::Float(None)),
+				self.tchecker.tenv.insert(Spanned::new(
+					Type::Float,
+					Span::new(float_expr.range(), self.file_id),
+				)),
 			));
 		}
 	}
@@ -167,8 +182,13 @@ impl LoweringCtx {
 		};
 
 		let (expr, expr_id) = self.lower_expr(prefix_expr.expr())?;
-		let prefix_id = self.tenv.insert(TypeKind::Unknown);
-		self.tenv.unify(prefix_id, expr_id)?;
+		let prefix_id = self.tchecker.tenv.insert(Spanned::new(
+			Type::Unknown,
+			Span::new(prefix_expr.range(), self.file_id),
+		));
+		self
+			.tchecker
+			.unify(prefix_id, expr_id, self.exprs[expr].span.clone())?;
 		Ok((Expr::Prefix { op, expr }, prefix_id))
 	}
 
@@ -219,10 +239,10 @@ impl LoweringCtx {
 
 		Ok((
 			Expr::Call(Call { callee, args }),
-			self.tenv.insert(TypeKind::Concrete(Type::Func(
-				Box::new(Type::Unknown),
-				Box::new(Type::Unknown),
-			))),
+			self.tchecker.tenv.insert(Spanned::new(
+				Type::Unknown,
+				Span::new(call_expr.range(), self.file_id),
+			)),
 		))
 	}
 
@@ -240,9 +260,10 @@ impl LoweringCtx {
 
 		Ok((
 			Expr::Path(spanned_path),
-			self
-				.tenv
-				.insert(TypeKind::Ref(self.tenv.get_path_id(&path))),
+			self.tchecker.tenv.insert(Spanned::new(
+				Type::Ref(self.tchecker.tenv.get_path_id(&path)),
+				Span::new(path_expr.range(), self.file_id),
+			)),
 		))
 	}
 
@@ -303,9 +324,18 @@ impl LoweringCtx {
 			);
 		};
 		let (else_, else_id) = self.lower_expr(if_expr.else_())?;
-		self.tenv.unify(then_id, else_id)?;
-		let if_id = self.tenv.insert(TypeKind::Unknown);
-		self.tenv.unify(if_id, then_id)?;
+		self.tchecker.unify(
+			then_id,
+			else_id,
+			Span::combine(&then.span, &self.exprs[else_].span),
+		)?;
+		let if_id = self.tchecker.tenv.insert(Spanned::new(
+			Type::Unknown,
+			Span::new(if_expr.range(), self.file_id),
+		));
+		self
+			.tchecker
+			.unify(if_id, then_id, Span::new(if_expr.range(), self.file_id))?;
 		Ok((
 			Expr::If(If::new(condition, self.exprs.alloc(then), else_)),
 			if_id,
@@ -324,7 +354,10 @@ impl LoweringCtx {
 		let type_id = if let Some(id) = block_ids.last() {
 			*id
 		} else {
-			self.tenv.insert(TypeKind::Concrete(Type::Unit))
+			self.tchecker.tenv.insert(Spanned::new(
+				Type::Unit,
+				Span::new(block_expr.range(), self.file_id),
+			))
 		};
 		Ok((Expr::Block(Block(block)), type_id))
 	}

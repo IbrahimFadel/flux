@@ -1,9 +1,28 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
-use flux_syntax::ast::Spanned;
+use flux_error::Span;
 use indexmap::IndexMap;
 use la_arena::Idx;
 use smol_str::SmolStr;
+
+#[derive(Debug, Clone)]
+pub struct Spanned<T> {
+	pub node: T,
+	pub span: Span,
+}
+
+impl<T> Spanned<T> {
+	pub fn new(node: T, span: Span) -> Self {
+		Self { node, span }
+	}
+}
+
+impl<T> Deref for Spanned<T> {
+	type Target = T;
+	fn deref(&self) -> &Self::Target {
+		&self.node
+	}
+}
 
 #[derive(Debug, Clone)]
 pub struct ModDecl {
@@ -34,7 +53,7 @@ pub struct FnDecl {
 	pub return_type: Spanned<Type>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct FnParam {
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
@@ -152,7 +171,7 @@ pub enum PrefixOp {
 
 type BitSize = u32;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Type {
 	SInt(BitSize),
 	UInt(BitSize),
@@ -169,20 +188,20 @@ pub enum Type {
 	Unknown,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct InterfaceType(pub HashMap<SmolStr, InterfaceMethod>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct InterfaceMethod {
 	pub public: bool,
 	pub params: Vec<Spanned<FnParam>>,
 	pub return_ty: Spanned<Type>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct StructTypeField {
 	pub public: bool,
 	pub mutable: bool,

@@ -408,7 +408,6 @@ dependencies = [
  "flux-hir",
  "flux-parser",
  "flux-syntax",
- "flux-typecheck",
  "rowan",
  "smol_str",
  "text-size",
@@ -461,24 +460,6 @@ dependencies = [
  "rowan",
  "smol_str",
  "ungrammar",
-]
-
-[[package]]
-name = "flux-typecheck"
-version = "0.1.0"
-dependencies = [
- "codespan-reporting",
- "flux-depend",
- "flux-driver",
- "flux-error",
- "flux-hir",
- "flux-parser",
- "flux-syntax",
- "insta",
- "la-arena",
- "paste",
- "smol_str",
- "text-size",
 ]
 
 [[package]]

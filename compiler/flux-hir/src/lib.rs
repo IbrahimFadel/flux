@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
-use flux_error::{filesystem::FileId, FluxError, Span};
-use flux_syntax::ast::{self, Spanned};
-use flux_typesystem::{TypeData, TypeKind};
-use hir::{Expr, FnDecl, ModDecl, Type, TypeDecl, UseDecl};
+use flux_error::{filesystem::FileId, FluxError};
+use flux_syntax::ast;
+use flux_typesystem::{ConcreteKind, Insert, TypeEnv, TypeKind};
+use hir::{Expr, FnDecl, ModDecl, Spanned, Type, TypeDecl, UseDecl};
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
@@ -22,7 +22,7 @@ pub struct HirModule {
 }
 
 pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
-	let mut ctx = lower::LoweringCtx::new(file_id);
+	let mut ctx = lower::LoweringCtx::new(lower::error::TypeCheckErrHandler, file_id);
 
 	let mut errors = vec![];
 	let functions = ast
@@ -46,51 +46,70 @@ pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule,
 	)
 }
 
-impl TypeData for Type {}
-
-fn type_system_reconstruction_to_hir_type(ty: &flux_typesystem::Type<Type>) -> Type {
-	match &ty.0 {
-		TypeKind::Concrete(t) => t.clone(),
-		TypeKind::Int(id) => {
-			if let Some(_) = id {
-				unreachable!()
-			} else {
-				Type::UInt(32)
-			}
+impl Insert<Spanned<Type>> for TypeEnv {
+	fn insert(&mut self, ty: Spanned<Type>) -> flux_typesystem::TypeId {
+		match ty.node {
+			Type::Unit => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::Unit),
+				span: ty.span,
+			}),
+			Type::SInt(n) => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::SInt(n)),
+				span: ty.span,
+			}),
+			Type::UInt(n) => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::UInt(n)),
+				span: ty.span,
+			}),
+			Type::Int => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Int(None),
+				span: ty.span,
+			}),
+			Type::F64 => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::F64),
+				span: ty.span,
+			}),
+			Type::F32 => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::F32),
+				span: ty.span,
+			}),
+			Type::Float => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Float(None),
+				span: ty.span,
+			}),
+			Type::Ident(name) => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::Ident(name)),
+				span: ty.span,
+			}),
+			Type::Ref(id) => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Ref(id),
+				span: ty.span,
+			}),
+			Type::Unknown => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Unknown,
+				span: ty.span,
+			}),
+			_ => unreachable!(),
 		}
-		TypeKind::Float(id) => {
-			if let Some(_) = id {
-				unreachable!()
-			} else {
-				Type::F32
-			}
-		}
-		TypeKind::Ref(_) => unreachable!(),
-		TypeKind::Unknown => unreachable!(),
 	}
 }
 
-// fn type_to_type_info(ty: &Type) -> TypeInfo {
-// 	match ty {
-// 		Type::F32 => TypeInfo::F32,
-// 		Type::F64 => TypeInfo::F64,
-// 		Type::SInt(n) => TypeInfo::SInt(*n),
-// 		Type::UInt(n) => TypeInfo::UInt(*n),
-// 		Type::Unit => TypeInfo::Unit,
-// 		Type::Unknown => TypeInfo::Unknown,
-// 		_ => todo!("uimplemented: {:#?}", ty),
-// 	}
-// }
-
-// fn typsys_type_to_type(ty: &flux_typesystem::Type) -> Type {
-// 	match ty {
-// 		flux_typesystem::Type::Bool => todo!(),
-// 		flux_typesystem::Type::F32 => Type::F32,
-// 		flux_typesystem::Type::F64 => Type::F64,
-// 		flux_typesystem::Type::SInt(n) => Type::SInt(*n),
-// 		flux_typesystem::Type::UInt(n) => Type::UInt(*n),
-// 		flux_typesystem::Type::Int => Type::UInt(32),
-// 		flux_typesystem::Type::Unit => Type::Unit,
-// 		flux_typesystem::Type::Func(_, _) => todo!(),
-// 	}
-// }
+impl Into<Spanned<Type>> for flux_typesystem::Spanned<TypeKind> {
+	fn into(self) -> Spanned<Type> {
+		let ty = match self.inner {
+			TypeKind::Concrete(t) => match t {
+				ConcreteKind::SInt(n) => Type::SInt(n),
+				ConcreteKind::UInt(n) => Type::UInt(n),
+				ConcreteKind::F64 => Type::F64,
+				ConcreteKind::F32 => Type::F32,
+				ConcreteKind::Ident(name) => Type::Ident(name),
+				ConcreteKind::Unit => Type::Unit,
+			},
+			TypeKind::Int(_) => Type::Int,
+			TypeKind::Float(_) => Type::Float,
+			TypeKind::Unknown => Type::Unknown,
+			TypeKind::Ref(id) => Type::Ref(id),
+		};
+		Spanned::new(ty, self.span)
+	}
+}

@@ -10,6 +10,8 @@ impl Display for Type {
 		match self {
 			Type::SInt(n) => write!(f, "i{}", *n),
 			Type::UInt(n) => write!(f, "u{}", *n),
+			Type::F32 => write!(f, "f32"),
+			Type::F64 => write!(f, "f64"),
 			Type::Unit => write!(f, "()"),
 			Type::Ident(name) => write!(f, "{}", name),
 			_ => write!(f, "{:?}", self),

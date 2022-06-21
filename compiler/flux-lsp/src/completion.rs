@@ -1,8 +1,7 @@
 use flux_hir::{
-	hir::{FnDecl, FnParam},
+	hir::{FnParam, Spanned},
 	HirModule,
 };
-use flux_syntax::ast::Spanned;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Position};
 
 use crate::position::position_to_offset;

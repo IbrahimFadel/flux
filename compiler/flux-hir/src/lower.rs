@@ -1,3 +1,5 @@
+use self::error::TypeCheckErrHandler;
+
 use super::*;
 use crate::hir::*;
 use flux_error::{FluxErrorCode, Span};
@@ -5,9 +7,10 @@ use flux_syntax::{
 	ast::{self, AstNode},
 	syntax_kind::SyntaxKind,
 };
-use flux_typesystem::{TypeEnv, TypeKind};
+use flux_typesystem::TypeChecker;
 use text_size::{TextRange, TextSize};
 
+pub mod error;
 mod exprs;
 mod stmts;
 #[cfg(test)]
@@ -17,21 +20,23 @@ mod types;
 pub(super) struct LoweringCtx {
 	pub exprs: Arena<Spanned<Expr>>,
 	pub errors: Vec<FluxError>,
-	tenv: TypeEnv<Type>,
+	tchecker: TypeChecker<TypeCheckErrHandler>,
 	file_id: FileId,
 }
 
 impl LoweringCtx {
-	pub fn new(file_id: FileId) -> Self {
+	pub fn new(err_handler: TypeCheckErrHandler, file_id: FileId) -> Self {
 		Self {
 			exprs: Arena::default(),
 			errors: vec![],
-			tenv: TypeEnv::default(),
+			tchecker: TypeChecker::new(err_handler),
 			file_id,
 		}
 	}
 
 	pub fn lower_fn_decl(&mut self, fn_decl: ast::FnDecl) -> Result<FnDecl, FluxError> {
+		self.tchecker.tenv = TypeEnv::new();
+
 		let public = if let Some(p) = fn_decl.public() {
 			Spanned::new(true, Span::new(p.text_range(), self.file_id))
 		} else {
@@ -69,22 +74,38 @@ impl LoweringCtx {
 
 		let (body, body_id) = self.lower_expr(fn_decl.body())?;
 
-		let (mut return_type, return_id) = if let Some(return_type) = fn_decl.return_type() {
+		let return_id = if let Some(return_type) = fn_decl.return_type() {
 			self.lower_type(Some(return_type))?
 		} else {
-			(
-				Spanned::new(
+			Spanned::new(
+				self.tchecker.tenv.insert(Spanned::new(
 					Type::Unit,
 					Span::new(
 						TextRange::new(params_range.end(), params_range.end()),
 						self.file_id,
 					),
+				)),
+				Span::new(
+					TextRange::new(params_range.end(), params_range.end()),
+					self.file_id,
 				),
-				self.tenv.insert(TypeKind::Concrete(Type::Unit)),
 			)
 		};
-		self.tenv.unify(body_id, return_id)?;
-		return_type.node = type_system_reconstruction_to_hir_type(&self.tenv.reconstruct(body_id)?);
+		self.tchecker.tenv.return_type_id = return_id.node;
+
+		let ret_ty_unification_span = if let Expr::Block(block) = &self.exprs[body].node {
+			if block.0.len() > 0 {
+				block.0.last().unwrap().span.clone()
+			} else {
+				self.exprs[body].span.clone()
+			}
+		} else {
+			self.exprs[body].span.clone()
+		};
+		self
+			.tchecker
+			.unify(body_id, return_id.node, ret_ty_unification_span)?;
+		let return_type = self.tchecker.tenv.get_type(body_id).into();
 
 		let name = if let Some(name) = fn_decl.name() {
 			Spanned::new(
@@ -100,8 +121,8 @@ impl LoweringCtx {
 		if let Expr::Block(block) = &mut self.exprs[body].node {
 			for stmt in &mut block.0 {
 				if let Stmt::VarDecl(var) = &mut stmt.node {
-					let id = self.tenv.get_path_id(&[var.name.clone()]);
-					var.ty.node = type_system_reconstruction_to_hir_type(&self.tenv.reconstruct(id)?);
+					let id = self.tchecker.tenv.get_path_id(&[var.name.clone()]);
+					var.ty = self.tchecker.tenv.reconstruct(id)?.into();
 				}
 			}
 		}
@@ -126,10 +147,12 @@ impl LoweringCtx {
 			} else {
 				None
 			};
+			let ty = self.lower_type(param.ty())?;
+			let ty = self.tchecker.tenv.reconstruct(ty.node)?.into();
 			hir_params.push(Spanned::new(
 				FnParam {
 					mutable: param.mutable().is_some(),
-					ty: self.lower_type(param.ty())?.0,
+					ty,
 					name,
 				},
 				Span::new(param.range(), self.file_id),

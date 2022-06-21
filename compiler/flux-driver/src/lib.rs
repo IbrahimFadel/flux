@@ -1,12 +1,9 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
 use flux_error::{filesystem::FileId, FluxError, FluxErrorReporting, Span};
-use flux_hir::HirModule;
+use flux_hir::{hir::Spanned, HirModule};
 use flux_parser::parse;
-use flux_syntax::{
-	ast,
-	ast::{AstNode, Spanned},
-};
+use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 

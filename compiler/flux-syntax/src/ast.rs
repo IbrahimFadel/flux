@@ -125,25 +125,6 @@ impl Root {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Spanned<T> {
-	pub node: T,
-	pub span: Span,
-}
-
-impl<T> Spanned<T> {
-	pub fn new(node: T, span: Span) -> Self {
-		Self { node, span }
-	}
-}
-
-impl<T> Deref for Spanned<T> {
-	type Target = T;
-	fn deref(&self) -> &Self::Target {
-		&self.node
-	}
-}
-
 impl ModDecl {
 	pub fn first_token(&self) -> Option<SyntaxToken> {
 		self.0.first_token()
