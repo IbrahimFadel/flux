@@ -46,6 +46,8 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 		let m = p.start();
 		p.bump();
 		m.complete(p, SyntaxKind::IdentType)
+	} else if p.at(T!(lparen)) {
+		tuple_type(p)
 	} else if p.at(T!(struct)) {
 		struct_type(p)
 	} else if p.at(T!(interface)) {
@@ -56,6 +58,23 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 	};
 
 	Some(result)
+}
+
+fn tuple_type(p: &mut Parser) -> CompletedMarker {
+	println!("{:?}", p.peek());
+	assert!(p.at(T!(lparen)));
+	let m = p.start();
+	p.bump();
+	while p.loop_safe_not_at(T!(rparen)) {
+		println!("{:?}", p.peek());
+		type_expr(p);
+		if p.at(T!(comma)) {
+			p.bump();
+		} else if !p.at(T!(rparen)) {
+			p.error(format!("expected `)` at end of tuple type"));
+		}
+	}
+	m.complete(p, SyntaxKind::TupleType)
 }
 
 fn interface_type(p: &mut Parser) -> CompletedMarker {
@@ -303,8 +322,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
 		prefix_neg(p, allow_struct_expressions)
-	} else if p.at(TokenKind::LParen) {
-		paren_expr(p, allow_struct_expressions)
+	} else if p.at(T!(lparen)) {
+		paren_or_tuple_expr(p, allow_struct_expressions)
 	} else if p.at(T!(if)) {
 		if_expr(p)
 	} else {
@@ -342,14 +361,29 @@ fn prefix_neg(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker
 	m.complete(p, SyntaxKind::PrefixExpr)
 }
 
-fn paren_expr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {
+fn paren_or_tuple_expr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {
 	assert!(p.at(TokenKind::LParen));
 	let m = p.start();
 	p.bump();
-	expr_binding_power(p, 0, allow_struct_expressions);
+	expr(p, allow_struct_expressions);
+	if p.at(T!(comma)) {
+		p.bump();
+
+		while p.loop_safe_not_at(T!(rparen)) {
+			expr(p, true);
+			if p.at(T!(comma)) {
+				p.bump();
+			} else if !p.at(T!(rparen)) {
+				p.error(format!("expected `)` at end of tuple expression"));
+			}
+		}
+
+		p.bump();
+		return m.complete(p, SyntaxKind::TupleExpr);
+	}
 	p.expect(
 		TokenKind::RParen,
-		format!("expected `)` in paren expression"),
+		format!("expected `)` at end of paren expression"),
 	);
 	m.complete(p, SyntaxKind::ParenExpr)
 }
@@ -378,6 +412,22 @@ pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 	}
 	p.expect(T![rbrace], format!("expected `}}` at end of block"));
 	m.complete(p, SyntaxKind::BlockExpr)
+}
+
+fn tuple_expr(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(lparen)));
+	let m = p.start();
+	p.bump();
+	while p.loop_safe_not_at(T!(rparen)) {
+		expr(p, true);
+		if p.at(T!(comma)) {
+			p.bump();
+		} else if !p.at(T!(rparen)) {
+			p.error(format!("expected `)` at end of tuple expression"));
+		}
+	}
+	p.bump();
+	m.complete(p, SyntaxKind::TupleExpr)
 }
 
 #[cfg(test)]

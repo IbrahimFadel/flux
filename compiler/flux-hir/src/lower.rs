@@ -5,7 +5,7 @@ use crate::hir::*;
 use flux_error::{FluxErrorCode, Span};
 use flux_syntax::{
 	ast::{self, AstNode},
-	syntax_kind::SyntaxKind,
+	syntax_kind::{SyntaxKind, SyntaxToken},
 };
 use flux_typesystem::TypeChecker;
 use text_size::{TextRange, TextSize};
@@ -38,11 +38,14 @@ impl LoweringCtx {
 		self.tchecker.tenv = TypeEnv::new();
 
 		let public = if let Some(p) = fn_decl.public() {
-			Spanned::new(true, Span::new(p.text_range(), self.file_id))
+			Spanned::new(true, Span::new(p.text_range(), self.file_id.clone()))
 		} else {
 			Spanned::new(
 				false,
-				Span::new(fn_decl.first_token().unwrap().text_range(), self.file_id),
+				Span::new(
+					fn_decl.first_token().unwrap().text_range(),
+					self.file_id.clone(),
+				),
 			)
 		};
 
@@ -70,7 +73,7 @@ impl LoweringCtx {
 			}
 			_ => fn_decl.range(),
 		};
-		let params = Spanned::new(params, Span::new(params_range, self.file_id));
+		let params = Spanned::new(params, Span::new(params_range, self.file_id.clone()));
 
 		let (body, body_id) = self.lower_expr(fn_decl.body())?;
 
@@ -82,12 +85,12 @@ impl LoweringCtx {
 					Type::Unit,
 					Span::new(
 						TextRange::new(params_range.end(), params_range.end()),
-						self.file_id,
+						self.file_id.clone(),
 					),
 				)),
 				Span::new(
 					TextRange::new(params_range.end(), params_range.end()),
-					self.file_id,
+					self.file_id.clone(),
 				),
 			)
 		};
@@ -110,12 +113,18 @@ impl LoweringCtx {
 		let name = if let Some(name) = fn_decl.name() {
 			Spanned::new(
 				SmolStr::from(name.text()),
-				Span::new(name.text_range(), self.file_id),
+				Span::new(name.text_range(), self.file_id.clone()),
 			)
 		} else {
-			return Err(FluxError::default().with_msg(format!(
-				"could not lower function declaration: missing name"
-			)));
+			return Err(FluxError::build(
+				format!("could not lower function declaration: missing name"),
+				self.span(&fn_decl),
+				FluxErrorCode::CouldNotLowerNode,
+				(
+					format!("could not lower function declaration: missing name"),
+					self.span(&fn_decl),
+				),
+			));
 		};
 
 		if let Expr::Block(block) = &mut self.exprs[body].node {
@@ -155,7 +164,7 @@ impl LoweringCtx {
 					ty,
 					name,
 				},
-				Span::new(param.range(), self.file_id),
+				Span::new(param.range(), self.file_id.clone()),
 			));
 		}
 		Ok(hir_params)
@@ -166,8 +175,16 @@ impl LoweringCtx {
 			node,
 			Span::new(
 				TextRange::new(TextSize::from(0), TextSize::from(0)),
-				self.file_id,
+				self.file_id.clone(),
 			),
 		)
+	}
+
+	fn span(&self, syntax: &dyn AstNode) -> Span {
+		Span::new(syntax.range(), self.file_id.clone())
+	}
+
+	fn default_span(&self) -> Span {
+		Span::new(TextRange::default(), self.file_id.clone())
 	}
 }

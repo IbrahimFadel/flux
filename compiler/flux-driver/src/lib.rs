@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use flux_error::{filesystem::FileId, FluxError, FluxErrorReporting, Span};
+use flux_error::{FileId, FluxError, FluxErrorCode, FluxErrorReporting, Span};
 use flux_hir::{hir::Spanned, HirModule};
 use flux_parser::parse;
 use flux_syntax::{ast, ast::AstNode};
@@ -28,19 +28,22 @@ fn find_path_with_mod_name(
 		let src = fs::read_to_string(&format!("{}/{}/{}.flx", parent_dir, name.node, name.node));
 		if let Some(_) = src.as_ref().err() {
 			Err(
-				FluxError::default()
-					.with_msg(format!("could not find module `{}`", name.node))
-					.with_primary(
+				FluxError::build(
+					format!("could not find module `{}`", name.node),
+					name.span.clone(),
+					FluxErrorCode::CouldNotFindModule,
+					(
 						format!("could not find module `{}`", name.node),
-						Some(name.span.clone()),
-					)
-					.with_label(
-						format!(
-							"no such file `{}/{}.flx` or `{}/{}/{}.flx`",
-							parent_dir, name.node, parent_dir, name.node, name.node
-						),
-						Some(name.span.clone()),
+						name.span.clone(),
 					),
+				)
+				.with_label(
+					format!(
+						"no such file `{}/{}.flx` or `{}/{}/{}.flx`",
+						parent_dir, name.node, parent_dir, name.node, name.node
+					),
+					name.span.clone(),
+				),
 			)
 		} else {
 			Ok((
@@ -86,19 +89,21 @@ fn parse_file_and_submodules<'a>(
 ) {
 	let src = find_path_with_mod_name(parent_dir, name);
 	if let Some(err) = src.as_ref().err() {
-		err_reporting.report(&[err.clone()]);
+		err_reporting.report(err);
 		return;
 	}
 	let (path, src) = src.unwrap();
 
-	let file_id = err_reporting
-		.add_file(format!("{}/{}.flx", parent_dir, name.node), src.clone())
-		.expect("could not add file");
-	let cst = parse(src.as_str(), file_id);
-	err_reporting.report(&cst.errors);
+	let file_id = err_reporting.add_file(
+		format!("{}/{}.flx", parent_dir, name.node).into(),
+		src.clone(),
+	);
+	let cst = parse(src.as_str(), file_id.clone());
+	// println!("{}", cst.debug_tree());
+	cst.errors.iter().for_each(|err| err_reporting.report(err));
 	let root = ast::Root::cast(cst.syntax()).unwrap();
 	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
-	err_reporting.report(&errors);
+	errors.iter().for_each(|err| err_reporting.report(err));
 	if errors.len() + cst.errors.len() > 0 {
 		exit(1);
 	}
@@ -147,26 +152,31 @@ fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut Fl
 		let last = u.path.last().unwrap();
 		if let Some(idx) = unique_uses.iter().position(|u| u.node == last.as_str()) {
 			errors.push(
-				FluxError::default()
-					.with_msg(format!("ambiguous `use` for `{}`", last.to_string()))
-					.with_label(format!("one here"), Some(unique_uses[idx].span.clone()))
-					.with_label(format!("another here"), Some(last.span.clone()))
-					.with_note(format!(
-						"(hint) consider doing `use {} as foo;` to disambiguate",
-						u.path
-							.iter()
-							.map(|s| s.to_string())
-							.collect::<Vec<String>>()
-							.join("::")
-					)),
+				FluxError::build(
+					format!("ambiguous `use` for `{}`", last.to_string()),
+					last.span.clone(),
+					FluxErrorCode::AmbiguousUse,
+					(
+						format!("ambiguous `use` for `{}`", last.to_string()),
+						last.span.clone(),
+					),
+				)
+				.with_label(format!("one here"), unique_uses[idx].span.clone())
+				.with_label(format!("another here"), last.span.clone())
+				.with_note(format!(
+					"(hint) consider doing `use {} as foo;` to disambiguate",
+					u.path
+						.iter()
+						.map(|s| s.to_string())
+						.collect::<Vec<String>>()
+						.join("::")
+				)),
 			);
 		} else {
 			unique_uses.push(last.clone());
 		}
 	}
-	if !errors.is_empty() {
-		err_reporting.report(&errors);
-	}
+	errors.iter().for_each(|err| err_reporting.report(err));
 }
 
 pub fn parse_main_with_dependencies(
@@ -183,7 +193,7 @@ pub fn parse_main_with_dependencies(
 			SmolStr::from("main"),
 			Span::new(
 				TextRange::new(TextSize::from(0), TextSize::from(0)),
-				FileId(0), // this might be problematic... but like, meh it's just error reporting who cares
+				FileId("main.flx".into()), // this might be problematic... but like, meh it's just error reporting who cares
 			),
 		),
 		err_reporting,

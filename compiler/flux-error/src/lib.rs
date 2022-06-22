@@ -1,15 +1,17 @@
-use codespan_reporting::{
-	diagnostic::{Diagnostic, Label},
-	term::{
-		self,
-		termcolor::{ColorChoice, StandardStream},
-		Config,
-	},
-};
-use filesystem::FileId;
+use std::fmt;
+
+use ariadne::{sources, Color, ColorGenerator, Fmt, Label, Report, ReportKind};
+use smol_str::SmolStr;
 use text_size::TextRange;
 
-pub mod filesystem;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FileId(pub SmolStr);
+
+impl fmt::Display for FileId {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FluxErrorCode {
@@ -19,6 +21,10 @@ pub enum FluxErrorCode {
 	UnresolvedUse,
 	HirParseIntString,
 	TypeMismatch,
+	CouldNotInferType,
+	CouldNotLowerNode,
+	CouldNotFindModule,
+	AmbiguousUse,
 }
 
 impl std::fmt::Display for FluxErrorCode {
@@ -44,7 +50,7 @@ impl Span {
 		assert!(a.range.start() < b.range.end());
 		Span {
 			range: TextRange::new(a.range.start(), b.range.end()),
-			file_id: a.file_id,
+			file_id: a.file_id.clone(),
 		}
 	}
 }
@@ -52,25 +58,49 @@ impl Span {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FluxError {
 	pub msg: String,
+	pub span: Span,
 	pub code: FluxErrorCode,
-	pub primary: Option<(String, Option<Span>)>,
-	pub labels: Vec<(String, Option<Span>)>,
+	pub primary: (String, Span),
+	pub labels: Vec<(String, Span)>,
 	pub notes: Vec<String>,
 }
 
-impl Default for FluxError {
-	fn default() -> Self {
-		Self {
-			msg: String::new(),
-			code: FluxErrorCode::NoCode,
-			primary: None,
-			labels: vec![],
-			notes: vec![],
-		}
+impl ariadne::Span for Span {
+	type SourceId = FileId;
+
+	fn start(&self) -> usize {
+		self.range.start().into()
+	}
+
+	fn end(&self) -> usize {
+		self.range.end().into()
+	}
+
+	fn len(&self) -> usize {
+		self.range.len().into()
+	}
+
+	fn source(&self) -> &Self::SourceId {
+		&self.file_id
+	}
+
+	fn contains(&self, offset: usize) -> bool {
+		self.start() <= offset && self.end() > offset
 	}
 }
 
 impl FluxError {
+	pub fn build(msg: String, span: Span, code: FluxErrorCode, primary: (String, Span)) -> Self {
+		Self {
+			msg,
+			span,
+			code,
+			primary,
+			labels: vec![],
+			notes: vec![],
+		}
+	}
+
 	pub fn with_msg(mut self, msg: String) -> FluxError {
 		self.msg = msg;
 		self
@@ -81,17 +111,17 @@ impl FluxError {
 		self
 	}
 
-	pub fn with_primary(mut self, msg: String, span: Option<Span>) -> FluxError {
-		self.primary = Some((msg, span));
+	pub fn with_primary(mut self, msg: String, span: Span) -> FluxError {
+		self.primary = (msg, span);
 		self
 	}
 
-	pub fn with_label(mut self, msg: String, span: Option<Span>) -> FluxError {
+	pub fn with_label(mut self, msg: String, span: Span) -> FluxError {
 		self.labels.push((msg, span));
 		self
 	}
 
-	pub fn with_labels(mut self, labels: &mut Vec<(String, Option<Span>)>) -> FluxError {
+	pub fn with_labels(mut self, labels: &mut Vec<(String, Span)>) -> FluxError {
 		self.labels.append(labels);
 		self
 	}
@@ -106,76 +136,52 @@ impl FluxError {
 		self
 	}
 
-	pub fn to_diagnostic(&self) -> Diagnostic<filesystem::FileId> {
-		let mut labels: Vec<Label<filesystem::FileId>> = vec![];
-		if let Some(ref primary) = self.primary {
-			if let Some(ref span) = primary.1 {
-				labels
-					.push(Label::primary(span.file_id, span.range.clone()).with_message(primary.0.clone()));
-			} else {
-				labels.push(Label::primary(FileId(0), 0..0).with_message(primary.0.clone()));
-			}
-		}
-		for (msg, span) in &self.labels {
-			if let Some(span) = span {
-				labels.push(Label::secondary(span.file_id, span.range.clone()).with_message(msg));
-			} else {
-				labels.push(Label::secondary(FileId(0), 0..0).with_message(msg));
-			}
+	pub(crate) fn to_diagnostic(&self) -> Report<Span> {
+		let primary = Color::Red;
+		let mut report = Report::build(
+			ReportKind::Error,
+			self.span.file_id.clone(),
+			self.span.range.start().into(),
+		)
+		.with_code(self.code)
+		.with_message(&self.msg)
+		.with_label(
+			Label::new(self.primary.1.clone())
+				.with_message(self.primary.0.clone().fg(primary))
+				.with_color(primary),
+		);
+
+		for label in &self.labels {
+			let colour = Color::Blue;
+			report = report.with_label(
+				Label::new(label.1.clone())
+					.with_message(label.0.clone().fg(colour))
+					.with_color(colour),
+			)
 		}
 
-		Diagnostic::error()
-			.with_message(self.msg.clone())
-			.with_code(self.code.to_string())
-			.with_labels(labels)
-			.with_notes(self.notes.clone())
+		for note in &self.notes {
+			report = report.with_note(note)
+		}
+
+		report.finish()
 	}
 }
 
 pub struct FluxErrorReporting {
-	pub files: filesystem::Files,
-	writer: StandardStream,
-	config: Config,
-}
-
-impl Default for FluxErrorReporting {
-	fn default() -> Self {
-		let files = filesystem::Files::default();
-		let writer = StandardStream::stderr(ColorChoice::Always);
-		let config = codespan_reporting::term::Config::default();
-		Self {
-			files,
-			writer,
-			config,
-		}
-	}
+	pub files: Vec<(FileId, String)>,
 }
 
 impl FluxErrorReporting {
-	pub fn add_file(&mut self, name: String, source: String) -> Option<filesystem::FileId> {
-		self.files.add(name, source)
+	pub fn add_file(&mut self, name: SmolStr, src: String) -> FileId {
+		self.files.push((FileId(name.clone()), src));
+		FileId(name)
 	}
 
-	pub fn get_filename(&mut self, file_id: FileId) -> String {
-		match self.files.get(file_id) {
-			Ok(x) => x.name.clone(),
-			_ => "illegal".to_owned(),
-		}
-	}
-
-	pub fn get_file_id(&self, filename: &str) -> FileId {
-		for (i, file) in self.files.files.iter().enumerate() {
-			if file.name == *filename {
-				return FileId(i as u32);
-			}
-		}
-		FileId(0)
-	}
-
-	pub fn report(&self, errs: &[FluxError]) {
-		for err in errs {
-			let writer = &mut self.writer.lock();
-			let _ = term::emit(writer, &self.config, &self.files, &err.to_diagnostic());
-		}
+	pub fn report(&self, err: &FluxError) {
+		err
+			.to_diagnostic()
+			.print(sources(self.files.clone()))
+			.unwrap();
 	}
 }

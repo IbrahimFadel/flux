@@ -1,3 +1,5 @@
+use flux_error::FluxErrorCode;
+
 use super::*;
 
 pub struct TypeEnv {
@@ -33,7 +35,12 @@ impl TypeEnv {
 		use TypeKind::*;
 		let span = self.vars[&id].span.clone();
 		match &self.vars[&id].inner {
-			Unknown => Err(FluxError::default().with_msg(format!("cannot infer"))),
+			Unknown => Err(FluxError::build(
+				format!("could not infer type"),
+				span.clone(),
+				FluxErrorCode::CouldNotInferType,
+				(format!("could not infer type"), span.clone()),
+			)),
 			Ref(id) => self.reconstruct(*id),
 			Int(id) => {
 				if let Some(id) = id {

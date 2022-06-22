@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use flux_error::filesystem::FileId;
+use flux_error::FileId;
 use flux_parser::parse;
 
 const INPUT_FILE: &str = r#"
@@ -20,7 +20,7 @@ fn main(mut u32 argc, i6 test) -> Foo {
 
 fn criterion_benchmark(c: &mut Criterion) {
 	c.bench_function("parse basic function with type decls", |b| {
-		b.iter(|| parse(INPUT_FILE, FileId(0)))
+		b.iter(|| parse(INPUT_FILE, FileId("bench.flx".into())))
 	});
 }
 

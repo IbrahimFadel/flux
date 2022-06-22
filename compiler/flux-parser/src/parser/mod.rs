@@ -74,11 +74,13 @@ impl<'t, 'src> Parser<'t, 'src> {
 			};
 
 			self.events.push(Event::Error(
-				FluxError::default()
-					.with_msg(msg.clone())
-					.with_primary(msg.clone(), Some(Span::new(range, self.source.file_id())))
-					.with_code(FluxErrorCode::UnexpectedToken)
-					.with_label(msg, Some(Span::new(range, self.source.file_id()))),
+				FluxError::build(
+					msg.clone(),
+					Span::new(range, self.source.file_id.clone()),
+					FluxErrorCode::UnexpectedToken,
+					(msg.clone(), Span::new(range, self.source.file_id.clone())),
+				)
+				.with_label(msg, Span::new(range, self.source.file_id.clone())),
 			));
 
 			while !self.at_set(additional_set) {
@@ -97,11 +99,13 @@ impl<'t, 'src> Parser<'t, 'src> {
 		};
 
 		self.events.push(Event::Error(
-			FluxError::default()
-				.with_msg(msg.clone())
-				.with_primary(msg.clone(), Some(Span::new(range, self.source.file_id())))
-				.with_code(FluxErrorCode::UnexpectedToken)
-				.with_label(msg, Some(Span::new(range, self.source.file_id()))),
+			FluxError::build(
+				msg.clone(),
+				Span::new(range, self.source.file_id.clone()),
+				FluxErrorCode::UnexpectedToken,
+				(msg.clone(), Span::new(range, self.source.file_id.clone())),
+			)
+			.with_label(msg, Span::new(range, self.source.file_id.clone())),
 		));
 
 		if !self.at_end() {

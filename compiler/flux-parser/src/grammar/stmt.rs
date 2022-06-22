@@ -9,6 +9,7 @@ pub(crate) fn stmt(p: &mut Parser) -> CompletedMarker {
 		|| p.at(T!(f32))
 		|| p.at(T!(f64))
 		|| (p.at(T!(ident)) && matches!(p.peek_next(), Some(T!(ident)) | Some(T!(eq))))
+		|| p.at(T!(lparen))
 	{
 		var_decl(p)
 	} else if p.at(T!(return)) {

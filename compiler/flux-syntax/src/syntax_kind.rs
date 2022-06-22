@@ -35,6 +35,8 @@ pub enum SyntaxKind {
 	PathExpr,
 	StructExpr,
 	StructExprField,
+	TupleExpr,
+	TupleType,
 
 	Whitespace,
 	Comment,

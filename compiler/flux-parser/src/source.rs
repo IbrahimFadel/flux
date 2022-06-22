@@ -1,11 +1,11 @@
-use flux_error::filesystem::FileId;
+use flux_error::FileId;
 use flux_lexer::{Token, TokenKind};
 use text_size::TextRange;
 
 pub(super) struct Source<'t, 'src> {
 	tokens: &'t [Token<'src>],
 	cursor: usize,
-	file_id: FileId,
+	pub(crate) file_id: FileId,
 }
 
 impl<'t, 'src> Source<'t, 'src> {
@@ -82,9 +82,5 @@ impl<'t, 'src> Source<'t, 'src> {
 
 	pub(crate) fn last_token_range(&self) -> Option<TextRange> {
 		self.tokens.last().map(|Token { range, .. }| *range)
-	}
-
-	pub(crate) fn file_id(&self) -> FileId {
-		self.file_id
 	}
 }

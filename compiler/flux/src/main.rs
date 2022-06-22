@@ -4,7 +4,7 @@ use flux_error::FluxErrorReporting;
 const PROJECT_DIR: &str = ".";
 
 fn main() {
-	let mut err_reporting = FluxErrorReporting::default();
+	let mut err_reporting = FluxErrorReporting { files: vec![] };
 	let mut function_exports = FunctionExportTable::default();
 	let mut type_exports = TypeExportTable::default();
 
@@ -15,18 +15,9 @@ fn main() {
 		&mut err_reporting,
 	);
 
-	println!("{:#?}", modules);
-
-	// let typecheck_result =
-	// 	flux_typecheck::typecheck_hir_modules(&mut modules, &function_exports, &type_exports);
-	// if let Some(err) = typecheck_result.err() {
-	// 	err_reporting.report(&[err]);
-	// 	exit(1);
-	// }
-
 	// for module in &modules {
-	// 	// println!("{:#?}", module);
-	// 	fs::write("ast.txt", format!("{:#?}", module));
+	// 	println!("{:#?}", module);
+	// 	// fs::write("ast.txt", format!("{:#?}", module));
 	// 	flux_mir::lower::lower_module(module);
 	// }
 }

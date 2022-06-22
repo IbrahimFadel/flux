@@ -11,7 +11,10 @@ impl LoweringCtx {
 			ast::Stmt::ExprStmt(ref ast) => {
 				let (expr, expr_id) = self.lower_expr(ast.expr())?;
 				Ok((
-					Spanned::new(Stmt::Expr(expr), Span::new(ast.range(), self.file_id)),
+					Spanned::new(
+						Stmt::Expr(expr),
+						Span::new(ast.range(), self.file_id.clone()),
+					),
 					expr_id,
 				))
 			}
@@ -39,17 +42,23 @@ impl LoweringCtx {
 						name: name.text().into(),
 						value: expr,
 					}),
-					Span::new(var_decl.range(), self.file_id),
+					Span::new(var_decl.range(), self.file_id.clone()),
 				),
 				self.tchecker.tenv.insert(Spanned::new(
 					Type::Unit,
-					Span::new(var_decl.range(), self.file_id),
+					Span::new(var_decl.range(), self.file_id.clone()),
 				)),
 			))
 		} else {
-			Err(FluxError::default().with_msg(format!(
-				"could not lower variable declaration: missing name"
-			)))
+			Err(FluxError::build(
+				format!("could not lower variable declaration: missing name"),
+				self.default_span(),
+				FluxErrorCode::CouldNotLowerNode,
+				(
+					format!("could not lower variable declaration: missing name"),
+					self.default_span(),
+				),
+			))
 		}
 	}
 
@@ -63,11 +72,11 @@ impl LoweringCtx {
 		Ok((
 			Spanned::new(
 				Stmt::Return(Return { value }),
-				Span::new(return_stmt.range(), self.file_id),
+				Span::new(return_stmt.range(), self.file_id.clone()),
 			),
 			self.tchecker.tenv.insert(Spanned::new(
 				Type::Unit,
-				Span::new(return_stmt.range(), self.file_id),
+				Span::new(return_stmt.range(), self.file_id.clone()),
 			)),
 		))
 	}

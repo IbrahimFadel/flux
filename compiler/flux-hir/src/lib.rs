@@ -1,6 +1,6 @@
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 
-use flux_error::{filesystem::FileId, FluxError};
+use flux_error::{FileId, FluxError};
 use flux_syntax::ast;
 use flux_typesystem::{ConcreteKind, Insert, TypeEnv, TypeKind};
 use hir::{Expr, FnDecl, ModDecl, Spanned, Type, TypeDecl, UseDecl};

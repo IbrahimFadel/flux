@@ -53,10 +53,20 @@ impl<E: ErrorHandler> TypeChecker<E> {
 					)
 				}
 			}
-			(Concrete(_), Int(id)) => {
+			(Concrete(t), Int(id)) => {
 				if let Some(id) = id {
 					self.unify(a, *id, unification_span)
 				} else {
+					match t {
+						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
+						_ => {
+							return Err(
+								self
+									.err_handler
+									.type_mismatch(&self.tenv, a, b, unification_span),
+							)
+						}
+					}
 					self.tenv.vars.insert(
 						b,
 						Spanned {
@@ -67,14 +77,72 @@ impl<E: ErrorHandler> TypeChecker<E> {
 					Ok(())
 				}
 			}
-			(Int(id), Concrete(_)) => {
+			(Int(id), Concrete(t)) => {
 				if let Some(id) = id {
 					self.unify(*id, a, unification_span)
 				} else {
+					match t {
+						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
+						_ => {
+							return Err(
+								self
+									.err_handler
+									.type_mismatch(&self.tenv, a, b, unification_span),
+							)
+						}
+					}
 					self.tenv.vars.insert(
 						a,
 						Spanned {
 							inner: TypeKind::Int(Some(b)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+			}
+			(Concrete(t), Float(id)) => {
+				if let Some(id) = id {
+					self.unify(a, *id, unification_span)
+				} else {
+					match t {
+						ConcreteKind::F32 | ConcreteKind::F64 => (),
+						_ => {
+							return Err(
+								self
+									.err_handler
+									.type_mismatch(&self.tenv, a, b, unification_span),
+							)
+						}
+					}
+					self.tenv.vars.insert(
+						b,
+						Spanned {
+							inner: TypeKind::Float(Some(a)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+			}
+			(Float(id), Concrete(t)) => {
+				if let Some(id) = id {
+					self.unify(*id, a, unification_span)
+				} else {
+					match t {
+						ConcreteKind::F32 | ConcreteKind::F64 => (),
+						_ => {
+							return Err(
+								self
+									.err_handler
+									.type_mismatch(&self.tenv, a, b, unification_span),
+							)
+						}
+					}
+					self.tenv.vars.insert(
+						a,
+						Spanned {
+							inner: TypeKind::Float(Some(b)),
 							span: akind.span,
 						},
 					);

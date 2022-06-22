@@ -13,7 +13,7 @@ macro_rules! test_decl_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::filesystem::FileId(0);
+					let file_id = flux_error::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
@@ -37,7 +37,7 @@ macro_rules! test_stmt_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::filesystem::FileId(0);
+					let file_id = flux_error::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
@@ -61,7 +61,7 @@ macro_rules! test_expr_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::filesystem::FileId(0);
+					let file_id = flux_error::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);

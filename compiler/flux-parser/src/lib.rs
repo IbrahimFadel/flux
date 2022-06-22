@@ -1,5 +1,5 @@
 use self::{sink::Sink, source::Source};
-use flux_error::{filesystem::FileId, FluxError};
+use flux_error::{FileId, FluxError};
 use flux_lexer::Lexer;
 use flux_syntax::syntax_kind::SyntaxNode;
 use parser::Parser;

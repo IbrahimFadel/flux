@@ -12,7 +12,12 @@ impl LoweringCtx {
 				// ast::Type::StructType(struct_ty) => self.lower_struct_type(struct_ty),
 				// ast::Type::InterfaceType(interface_ty) => self.lower_interface_type(interface_ty),
 				ast::Type::IdentType(ident_ty) => self.lower_ident_type(ident_ty),
-				_ => Err(FluxError::default()),
+				_ => Err(FluxError::build(
+					format!("could not lower type"),
+					self.span(&ty),
+					FluxErrorCode::CouldNotLowerNode,
+					(format!("could not lower type"), self.span(&ty)),
+				)),
 			}
 		} else {
 			let id = self
@@ -25,7 +30,15 @@ impl LoweringCtx {
 
 	fn lower_primitive_type(&mut self, primitive_ty: ast::PrimitiveType) -> TypeResult {
 		if primitive_ty.ty().is_none() {
-			return Err(FluxError::default().with_msg(format!("could not lower primitive type")));
+			return Err(FluxError::build(
+				format!("could not lower primitive type"),
+				self.default_span(),
+				FluxErrorCode::CouldNotLowerNode,
+				(
+					format!("could not lower primitive type"),
+					self.default_span(),
+				),
+			));
 		}
 		let ty = primitive_ty.ty().unwrap();
 		let first_char = ty.text().chars().nth(0).unwrap();
@@ -40,27 +53,49 @@ impl LoweringCtx {
 				} else if bits == 64 {
 					Type::F64
 				} else {
-					return Err(FluxError::default().with_msg(format!(
-						"could not lower primitive type: no such type as `{}`",
-						ty.text()
-					)));
+					return Err(FluxError::build(
+						format!(
+							"could not lower primitive type: no such type as `{}`",
+							ty.text()
+						),
+						self.span(&primitive_ty),
+						FluxErrorCode::CouldNotLowerNode,
+						(
+							format!(
+								"could not lower primitive type: no such type as `{}`",
+								ty.text()
+							),
+							self.span(&primitive_ty),
+						),
+					));
 				}
 			}
 			_ => {
-				return Err(FluxError::default().with_msg(format!(
-					"could not lower primitive type: no such type as `{}`",
-					ty.text()
-				)));
+				return Err(FluxError::build(
+					format!(
+						"could not lower primitive type: no such type as `{}`",
+						ty.text()
+					),
+					self.span(&primitive_ty),
+					FluxErrorCode::CouldNotLowerNode,
+					(
+						format!(
+							"could not lower primitive type: no such type as `{}`",
+							ty.text()
+						),
+						self.span(&primitive_ty),
+					),
+				));
 			}
 		};
 
-		let id = self.tchecker.tenv.insert(Spanned::new(
-			res,
-			Span::new(primitive_ty.range(), self.file_id),
-		));
+		let id = self
+			.tchecker
+			.tenv
+			.insert(Spanned::new(res, self.span(&primitive_ty)));
 		Ok(
 			// Spanned::new(res, Span::new(primitive_ty.range(), self.file_id)),
-			Spanned::new(id, Span::new(primitive_ty.range(), self.file_id)),
+			Spanned::new(id, self.span(&primitive_ty)),
 		)
 	}
 
@@ -123,18 +158,23 @@ impl LoweringCtx {
 		let name = if let Some(name) = ident_ty.name() {
 			SmolStr::from(name.text())
 		} else {
-			self.errors.push(
-				FluxError::default().with_msg(format!("could not lower identifier type: missing text")),
-			);
-			SmolStr::from("missing")
+			return Err(FluxError::build(
+				format!("could not lower identifier type: missing text"),
+				self.span(&ident_ty),
+				FluxErrorCode::CouldNotLowerNode,
+				(
+					format!("could not lower identifier type: missing text"),
+					self.span(&ident_ty),
+				),
+			));
 		};
 		let id = self.tchecker.tenv.insert(Spanned::new(
 			Type::Ident(name),
-			Span::new(ident_ty.range(), self.file_id),
+			Span::new(ident_ty.range(), self.file_id.clone()),
 		));
-		Ok(
-			// Spanned::new(Type::Ident(name), Span::new(ident_ty.range(), self.file_id)),
-			Spanned::new(id, Span::new(ident_ty.range(), self.file_id)),
-		)
+		Ok(Spanned::new(
+			id,
+			Span::new(ident_ty.range(), self.file_id.clone()),
+		))
 	}
 }
