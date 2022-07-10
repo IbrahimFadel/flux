@@ -89,27 +89,48 @@ impl Insert<Spanned<Type>> for TypeEnv {
 				inner: TypeKind::Unknown,
 				span: ty.span,
 			}),
+			Type::Tuple(types) => self.insert(flux_typesystem::Spanned {
+				inner: TypeKind::Concrete(ConcreteKind::Tuple(types)),
+				span: ty.span,
+			}),
 			_ => unreachable!(),
 		}
 	}
 }
 
-impl Into<Spanned<Type>> for flux_typesystem::Spanned<TypeKind> {
-	fn into(self) -> Spanned<Type> {
-		let ty = match self.inner {
+impl Into<Type> for TypeKind {
+	fn into(self) -> Type {
+		match self {
 			TypeKind::Concrete(t) => match t {
 				ConcreteKind::SInt(n) => Type::SInt(n),
 				ConcreteKind::UInt(n) => Type::UInt(n),
 				ConcreteKind::F64 => Type::F64,
 				ConcreteKind::F32 => Type::F32,
 				ConcreteKind::Ident(name) => Type::Ident(name),
+				ConcreteKind::Tuple(types) => Type::Tuple(types.iter().map(|t| t.clone().into()).collect()),
 				ConcreteKind::Unit => Type::Unit,
 			},
 			TypeKind::Int(_) => Type::Int,
 			TypeKind::Float(_) => Type::Float,
 			TypeKind::Unknown => Type::Unknown,
 			TypeKind::Ref(id) => Type::Ref(id),
-		};
-		Spanned::new(ty, self.span)
+		}
+	}
+}
+
+impl Into<Spanned<Type>> for flux_typesystem::Spanned<TypeKind> {
+	fn into(self) -> Spanned<Type> {
+		Spanned::new(self.inner.into(), self.span)
+	}
+}
+
+impl Into<TypeKind> for Type {
+	fn into(self) -> TypeKind {
+		match self {
+			Type::SInt(n) => TypeKind::Concrete(ConcreteKind::SInt(n)),
+			Type::UInt(n) => TypeKind::Concrete(ConcreteKind::UInt(n)),
+			Type::Int => TypeKind::Int(None),
+			_ => unreachable!("{:?}", self),
+		}
 	}
 }

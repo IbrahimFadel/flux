@@ -80,21 +80,15 @@ impl LoweringCtx {
 		let return_id = if let Some(return_type) = fn_decl.return_type() {
 			self.lower_type(Some(return_type))?
 		} else {
-			Spanned::new(
-				self.tchecker.tenv.insert(Spanned::new(
-					Type::Unit,
-					Span::new(
-						TextRange::new(params_range.end(), params_range.end()),
-						self.file_id.clone(),
-					),
-				)),
+			self.tchecker.tenv.insert(Spanned::new(
+				Type::Unit,
 				Span::new(
 					TextRange::new(params_range.end(), params_range.end()),
 					self.file_id.clone(),
 				),
-			)
+			))
 		};
-		self.tchecker.tenv.return_type_id = return_id.node;
+		self.tchecker.tenv.return_type_id = return_id;
 
 		let ret_ty_unification_span = if let Expr::Block(block) = &self.exprs[body].node {
 			if block.0.len() > 0 {
@@ -107,7 +101,7 @@ impl LoweringCtx {
 		};
 		self
 			.tchecker
-			.unify(body_id, return_id.node, ret_ty_unification_span)?;
+			.unify(body_id, return_id, ret_ty_unification_span)?;
 		let return_type = self.tchecker.tenv.get_type(body_id).into();
 
 		let name = if let Some(name) = fn_decl.name() {
@@ -157,7 +151,7 @@ impl LoweringCtx {
 				None
 			};
 			let ty = self.lower_type(param.ty())?;
-			let ty = self.tchecker.tenv.reconstruct(ty.node)?.into();
+			let ty = self.tchecker.tenv.reconstruct(ty)?.into();
 			hir_params.push(Spanned::new(
 				FnParam {
 					mutable: param.mutable().is_some(),

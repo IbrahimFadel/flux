@@ -1,5 +1,5 @@
 fn main() {
-	(i32, u32) x = (0, 0);
-
-	(foo.bar).foo()
+	let foo = (0, 0, 1.9);
+	let x (i32, u32, f32) = foo; 
+	let y (i32, u31, f32) = x;
 }

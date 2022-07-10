@@ -23,7 +23,7 @@ pub trait Insert<T> {
 
 pub struct Type(pub TypeKind);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeKind {
 	Concrete(ConcreteKind),
 	Int(Option<TypeId>),
@@ -41,6 +41,7 @@ pub enum ConcreteKind {
 	F64,
 	F32,
 	Ident(SmolStr),
+	Tuple(Vec<TypeId>),
 	Unit,
 }
 
@@ -50,42 +51,5 @@ impl Insert<Spanned<TypeKind>> for TypeEnv {
 		self.id_counter += 1;
 		self.vars.insert(id, ty);
 		id
-	}
-}
-
-impl fmt::Display for TypeKind {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Concrete(t) => write!(f, "{}", t),
-			Self::Ref(id) => write!(f, "Ref({})", id),
-			Self::Int(id) => {
-				if let Some(id) = id {
-					write!(f, "Int({})", id)
-				} else {
-					write!(f, "Int")
-				}
-			}
-			Self::Float(id) => {
-				if let Some(id) = id {
-					write!(f, "Float({})", id)
-				} else {
-					write!(f, "Float")
-				}
-			}
-			Self::Unknown => write!(f, "Unknown"),
-		}
-	}
-}
-
-impl fmt::Display for ConcreteKind {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::SInt(n) => write!(f, "i{}", n),
-			Self::UInt(n) => write!(f, "u{}", n),
-			Self::F64 => write!(f, "f64"),
-			Self::F32 => write!(f, "f32"),
-			Self::Ident(name) => write!(f, "{}", name),
-			Self::Unit => write!(f, "()"),
-		}
 	}
 }

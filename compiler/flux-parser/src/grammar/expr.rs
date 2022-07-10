@@ -61,12 +61,10 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 }
 
 fn tuple_type(p: &mut Parser) -> CompletedMarker {
-	println!("{:?}", p.peek());
 	assert!(p.at(T!(lparen)));
 	let m = p.start();
 	p.bump();
 	while p.loop_safe_not_at(T!(rparen)) {
-		println!("{:?}", p.peek());
 		type_expr(p);
 		if p.at(T!(comma)) {
 			p.bump();
@@ -74,6 +72,7 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 			p.error(format!("expected `)` at end of tuple type"));
 		}
 	}
+	p.expect(T!(rparen), format!("expected `)` at end of tuple type"));
 	m.complete(p, SyntaxKind::TupleType)
 }
 

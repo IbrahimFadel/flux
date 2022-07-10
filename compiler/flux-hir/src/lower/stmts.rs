@@ -26,19 +26,20 @@ impl LoweringCtx {
 		if let Some(name) = var_decl.name() {
 			let var_ty_id = self.lower_type(var_decl.ty())?;
 			let (expr, expr_id) = self.lower_expr(var_decl.value())?;
+			let var_ty = self.tchecker.tenv.get_type(var_ty_id);
 			self.tchecker.unify(
-				var_ty_id.node,
+				var_ty_id,
 				expr_id,
-				Span::combine(&var_ty_id.span, &self.exprs[expr].span),
+				Span::combine(&var_ty.span, &self.exprs[expr].span),
 			)?;
 			self
 				.tchecker
 				.tenv
-				.set_path_id(&[name.text().into()], var_ty_id.node);
+				.set_path_id(&[name.text().into()], var_ty_id);
 			Ok((
 				Spanned::new(
 					Stmt::VarDecl(VarDecl {
-						ty: Spanned::new(Type::Unknown, var_ty_id.span.clone()),
+						ty: Spanned::new(Type::Unknown, var_ty.span.clone()),
 						name: name.text().into(),
 						value: expr,
 					}),

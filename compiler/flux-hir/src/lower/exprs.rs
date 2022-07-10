@@ -39,6 +39,7 @@ impl LoweringCtx {
 				// ast::Expr::StructExpr(struct_expr) => self.lower_struct_expr(struct_expr),
 				ast::Expr::IfExpr(if_expr) => self.lower_if_expr(if_expr)?,
 				ast::Expr::BlockExpr(block_expr) => self.lower_block_expr(block_expr)?,
+				ast::Expr::TupleExpr(tuple_expr) => self.lower_tuple_expr(tuple_expr)?,
 				_ => unreachable!(),
 			};
 			(
@@ -400,5 +401,24 @@ impl LoweringCtx {
 				.insert(Spanned::new(Type::Unit, self.span(&block_expr)))
 		};
 		Ok((Expr::Block(Block(block)), type_id))
+	}
+
+	fn lower_tuple_expr(&mut self, tuple_expr: ast::TupleExpr) -> ExprResult {
+		// let res = tuple_expr
+		// 	.values()
+		// 	.map(|e| self.lower_expr(Some(e)))
+		// 	.collect();
+		let mut values = vec![];
+		let mut value_types = vec![];
+		for e in tuple_expr.values() {
+			let (idx, ty_id) = self.lower_expr(Some(e))?;
+			values.push(idx);
+			value_types.push(ty_id);
+		}
+		let type_id = self.tchecker.tenv.insert(Spanned::new(
+			Type::Tuple(value_types),
+			self.span(&tuple_expr),
+		));
+		Ok((Expr::Tuple(Tuple(values)), type_id))
 	}
 }

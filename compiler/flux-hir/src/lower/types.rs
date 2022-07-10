@@ -2,7 +2,7 @@ use flux_typesystem::TypeId;
 
 use super::*;
 
-type TypeResult = Result<Spanned<TypeId>, FluxError>;
+type TypeResult = Result<TypeId, FluxError>;
 
 impl LoweringCtx {
 	pub(super) fn lower_type(&mut self, ty: Option<ast::Type>) -> TypeResult {
@@ -12,6 +12,7 @@ impl LoweringCtx {
 				// ast::Type::StructType(struct_ty) => self.lower_struct_type(struct_ty),
 				// ast::Type::InterfaceType(interface_ty) => self.lower_interface_type(interface_ty),
 				ast::Type::IdentType(ident_ty) => self.lower_ident_type(ident_ty),
+				ast::Type::TupleType(tuple_ty) => self.lower_tuple_type(tuple_ty),
 				_ => Err(FluxError::build(
 					format!("could not lower type"),
 					self.span(&ty),
@@ -24,7 +25,7 @@ impl LoweringCtx {
 				.tchecker
 				.tenv
 				.insert(self.default_spanned(Type::Unknown));
-			Ok(self.default_spanned(id))
+			Ok(id)
 		}
 	}
 
@@ -93,10 +94,7 @@ impl LoweringCtx {
 			.tchecker
 			.tenv
 			.insert(Spanned::new(res, self.span(&primitive_ty)));
-		Ok(
-			// Spanned::new(res, Span::new(primitive_ty.range(), self.file_id)),
-			Spanned::new(id, self.span(&primitive_ty)),
-		)
+		Ok(id)
 	}
 
 	// fn lower_struct_type(&mut self, struct_ty: ast::StructType) -> TypeResult {
@@ -172,9 +170,19 @@ impl LoweringCtx {
 			Type::Ident(name),
 			Span::new(ident_ty.range(), self.file_id.clone()),
 		));
-		Ok(Spanned::new(
-			id,
-			Span::new(ident_ty.range(), self.file_id.clone()),
-		))
+		Ok(id)
+	}
+
+	fn lower_tuple_type(&mut self, tuple_ty: ast::TupleType) -> TypeResult {
+		let mut types = vec![];
+		for ty in tuple_ty.types() {
+			let ty = self.lower_type(Some(ty))?;
+			types.push(ty);
+		}
+		let id = self
+			.tchecker
+			.tenv
+			.insert(Spanned::new(Type::Tuple(types), self.span(&tuple_ty)));
+		Ok(id)
 	}
 }

@@ -70,10 +70,17 @@ macro_rules! enum_node {
 
 enum_node!(
 	Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr, PathExpr,
-	StructExpr, IfExpr, BlockExpr
+	StructExpr, IfExpr, BlockExpr, TupleExpr
 );
 enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
-enum_node!(Type, PrimitiveType, StructType, InterfaceType, IdentType);
+enum_node!(
+	Type,
+	PrimitiveType,
+	StructType,
+	InterfaceType,
+	IdentType,
+	TupleType
+);
 
 basic_node!(Root);
 
@@ -99,6 +106,7 @@ basic_node!(StructExpr);
 basic_node!(StructExprField);
 basic_node!(IfExpr);
 basic_node!(BlockExpr);
+basic_node!(TupleExpr);
 
 basic_node!(StructTypeField);
 basic_node!(InterfaceMethod);
@@ -106,6 +114,7 @@ basic_node!(InterfaceMethod);
 basic_node!(StructType);
 basic_node!(InterfaceType);
 basic_node!(IdentType);
+basic_node!(TupleType);
 
 impl Root {
 	pub fn mods(&self) -> impl Iterator<Item = ModDecl> {
@@ -274,6 +283,12 @@ impl VarDecl {
 impl BlockExpr {
 	pub fn stmts(&self) -> Vec<Stmt> {
 		self.0.children().filter_map(Stmt::cast).collect()
+	}
+}
+
+impl TupleExpr {
+	pub fn values(&self) -> impl Iterator<Item = Expr> {
+		self.0.children().filter_map(Expr::cast)
 	}
 }
 
@@ -570,5 +585,11 @@ impl StructExprField {
 
 	pub fn value(&self) -> Option<Expr> {
 		self.0.children().filter_map(Expr::cast).nth(1)
+	}
+}
+
+impl TupleType {
+	pub fn types(&self) -> impl Iterator<Item = Type> {
+		self.0.children().filter_map(Type::cast)
 	}
 }

@@ -42,17 +42,34 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				);
 				Ok(())
 			}
-			(Concrete(aa), Concrete(bb)) => {
-				if aa == bb {
-					Ok(())
-				} else {
-					Err(
-						self
-							.err_handler
-							.type_mismatch(&self.tenv, a, b, unification_span),
-					)
+			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
+				(ConcreteKind::Tuple(a_types), ConcreteKind::Tuple(b_types)) => {
+					if a_types.len() != b_types.len() {
+						Err(
+							self
+								.err_handler
+								.type_mismatch(&self.tenv, a, b, unification_span),
+						)
+					} else {
+						for (i, a_ty) in a_types.iter().enumerate() {
+							// println!("{:?} {}", self.tenv.get_type(*a_ty), i);
+							self.unify(*a_ty, *b_types.get(i).unwrap(), unification_span.clone())?
+						}
+						Ok(())
+					}
 				}
-			}
+				_ => {
+					if aa == bb {
+						Ok(())
+					} else {
+						Err(
+							self
+								.err_handler
+								.type_mismatch(&self.tenv, a, b, unification_span),
+						)
+					}
+				}
+			},
 			(Concrete(t), Int(id)) => {
 				if let Some(id) = id {
 					self.unify(a, *id, unification_span)

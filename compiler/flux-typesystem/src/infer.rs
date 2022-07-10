@@ -68,6 +68,43 @@ impl TypeEnv {
 			}),
 		}
 	}
+
+	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
+		match ty {
+			TypeKind::Concrete(t) => match t {
+				ConcreteKind::SInt(n) => format!("i{}", n),
+				ConcreteKind::UInt(n) => format!("u{}", n),
+				ConcreteKind::F64 => format!("f64"),
+				ConcreteKind::F32 => format!("f32"),
+				ConcreteKind::Ident(name) => format!("{}", name),
+				ConcreteKind::Tuple(types) => format!(
+					"({})",
+					types
+						.iter()
+						.map(|id| format!("{}", self.fmt_ty(&self.get_type(*id).inner)))
+						.reduce(|s, ty| format!("{}, {}", s, ty))
+						.unwrap()
+				),
+				ConcreteKind::Unit => format!("()"),
+			},
+			TypeKind::Ref(id) => format!("Ref({})", id),
+			TypeKind::Int(id) => {
+				if let Some(id) = id {
+					format!("Int({})", id)
+				} else {
+					format!("Int")
+				}
+			}
+			TypeKind::Float(id) => {
+				if let Some(id) = id {
+					format!("Float({})", id)
+				} else {
+					format!("Float")
+				}
+			}
+			TypeKind::Unknown => format!("Unknown"),
+		}
+	}
 }
 
 impl fmt::Display for TypeEnv {
@@ -78,7 +115,7 @@ impl fmt::Display for TypeEnv {
 		}
 		s += &format!("\n-------------\n");
 		for var in &self.vars {
-			s += &format!("{} -> {}\n", var.0, var.1.inner);
+			s += &format!("{} -> {}\n", var.0, self.fmt_ty(&var.1.inner));
 		}
 		write!(f, "{}", s)
 	}

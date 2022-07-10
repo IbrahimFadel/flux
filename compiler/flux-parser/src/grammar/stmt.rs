@@ -48,16 +48,16 @@ fn return_stmt(p: &mut Parser) -> CompletedMarker {
 // }
 
 fn var_decl(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(T!(let)));
 	let m = p.start();
-	if p.at(T!(let)) {
-		p.bump();
-	} else {
-		type_expr(p);
-	}
+	p.bump();
 	p.expect(
 		TokenKind::Ident,
 		format!("expected identifier in variable declaration"),
 	);
+	if !p.at(T!(eq)) {
+		type_expr(p);
+	}
 	p.expect(
 		TokenKind::Eq,
 		format!("expected `=` in variable declaration"),

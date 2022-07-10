@@ -16,8 +16,6 @@ impl ErrorHandler for TypeCheckErrHandler {
 		let aa = env.get_type(a);
 		let bb = env.get_type(b);
 
-		println!("{:?}", aa);
-
 		FluxError::build(
 			format!("type mismatch"),
 			span.clone(),
@@ -25,14 +23,14 @@ impl ErrorHandler for TypeCheckErrHandler {
 			(
 				format!(
 					"type mismatch between `{}` and `{}`",
-					env.get_type(a).inner,
-					env.get_type(b).inner
+					env.fmt_ty(&env.get_type(a).inner),
+					env.fmt_ty(&env.get_type(b).inner)
 				),
 				span,
 			),
 		)
-		.with_label(format!("`{}`", aa.inner), aa.span)
-		.with_label(format!("`{}`", bb.inner), bb.span)
-		.with_note(format!("consider a type cast or using a different value"))
+		.with_label(format!("`{}`", env.fmt_ty(&aa.inner)), aa.span)
+		.with_label(format!("`{}`", env.fmt_ty(&bb.inner)), bb.span)
+		// .with_note(format!("consider a type cast or using a different value"))
 	}
 }

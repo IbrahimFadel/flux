@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use flux_error::Span;
+use flux_typesystem::TypeId;
 use indexmap::IndexMap;
 use la_arena::Idx;
 use smol_str::SmolStr;
@@ -109,6 +110,7 @@ pub enum Expr {
 	Struct(Struct),
 	If(If),
 	Block(Block),
+	Tuple(Tuple),
 	Missing,
 }
 
@@ -120,6 +122,9 @@ impl Into<Option<Binary>> for Expr {
 		}
 	}
 }
+
+#[derive(Debug, Clone)]
+pub struct Tuple(pub Vec<ExprIdx>);
 
 #[derive(Debug, Clone)]
 pub struct Float {
@@ -183,6 +188,7 @@ pub enum Type {
 	Ident(SmolStr),
 	Struct(StructType),
 	Interface(InterfaceType),
+	Tuple(Vec<TypeId>),
 	Unit,
 	Func(Box<Type>, Box<Type>),
 	Unknown,
