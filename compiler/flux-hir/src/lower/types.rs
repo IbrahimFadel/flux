@@ -1,15 +1,15 @@
-use flux_typesystem::TypeId;
+use indexmap::IndexMap;
 
 use super::*;
 
-type TypeResult = Result<TypeId, FluxError>;
+type TypeResult = Result<Spanned<Type>, FluxError>;
 
 impl LoweringCtx {
 	pub(super) fn lower_type(&mut self, ty: Option<ast::Type>) -> TypeResult {
 		if let Some(ty) = ty {
 			match ty {
 				ast::Type::PrimitiveType(primitive_ty) => self.lower_primitive_type(primitive_ty),
-				// ast::Type::StructType(struct_ty) => self.lower_struct_type(struct_ty),
+				ast::Type::StructType(struct_ty) => self.lower_struct_type(struct_ty),
 				// ast::Type::InterfaceType(interface_ty) => self.lower_interface_type(interface_ty),
 				ast::Type::IdentType(ident_ty) => self.lower_ident_type(ident_ty),
 				ast::Type::TupleType(tuple_ty) => self.lower_tuple_type(tuple_ty),
@@ -21,11 +21,12 @@ impl LoweringCtx {
 				)),
 			}
 		} else {
-			let id = self
-				.tchecker
-				.tenv
-				.insert(self.default_spanned(Type::Unknown));
-			Ok(id)
+			Ok(self.default_spanned(Type::Unknown))
+			// let id = self
+			// .tchecker
+			// .tenv
+			// .insert(self.default_spanned(Type::Unknown));
+			// Ok(id)
 		}
 	}
 
@@ -90,67 +91,45 @@ impl LoweringCtx {
 			}
 		};
 
-		let id = self
-			.tchecker
-			.tenv
-			.insert(Spanned::new(res, self.span(&primitive_ty)));
-		Ok(id)
+		// let id = self
+		// 	.tchecker
+		// 	.tenv
+		// 	.insert(Spanned::new(res, self.span(&primitive_ty)));
+		// Ok(id)
+		Spanned::new(res, self.span(&primitive_ty))
 	}
 
-	// fn lower_struct_type(&mut self, struct_ty: ast::StructType) -> TypeResult {
-	// 	let mut hir_fields = IndexMap::new();
-	// 	for field in struct_ty.fields() {
-	// 		let name = if let Some(name) = field.name() {
-	// 			SmolStr::from(name.text())
-	// 		} else {
-	// 			self.errors.push(
-	// 				FluxError::default().with_msg(format!("could not lower struct type: field has no name")),
-	// 			);
-	// 			SmolStr::from("missing")
-	// 		};
-	// 		hir_fields.insert(
-	// 			name,
-	// 			StructTypeField {
-	// 				public: field.public().is_some(),
-	// 				mutable: field.mutable().is_some(),
-	// 				ty: self.lower_type(field.type_())?,
-	// 			},
-	// 		);
-	// 	}
-	// 	Spanned::new(
-	// 		Type::Struct(StructType(Spanned::new(
-	// 			hir_fields,
-	// 			Span::new(struct_ty.range(), self.file_id),
-	// 		))),
-	// 		Span::new(struct_ty.range(), self.file_id),
-	// 	)
-	// }
-
-	// fn lower_interface_type(&mut self, interface_ty: ast::InterfaceType) -> Spanned<Type> {
-	// 	let mut hir_methods = HashMap::new();
-	// 	for method in interface_ty.methods() {
-	// 		let name = if let Some(name) = method.name() {
-	// 			SmolStr::from(name.text())
-	// 		} else {
-	// 			self.errors.push(FluxError::default().with_msg(format!(
-	// 				"could not lower interface type: method has no name"
-	// 			)));
-	// 			SmolStr::from("missing")
-	// 		};
-	// 		hir_methods.insert(
-	// 			name,
-	// 			InterfaceMethod {
-	// 				public: method.public().is_some(),
-	// 				params: self.lower_params(method.params()),
-	// 				return_ty: self.lower_type(method.return_ty()),
-	// 			},
-	// 		);
-	// 	}
-	// 	Spanned::new(
-	// 		Type::Interface(InterfaceType(hir_methods)),
-	// 		Span::new(interface_ty.range(), self.file_id),
-	// 	)
-	// }
+	fn lower_struct_type(&mut self, struct_ty: ast::StructType) -> TypeResult {
+		let mut hir_fields = IndexMap::new();
+		for field in struct_ty.fields() {
+			let visibility = if field.public().is_some() {
+				Visibility::Public
+			} else {
+				Visibility::Private
+			};
+			let name = self.unwrap_ident(
+				field.name(),
+				struct_ty.range(),
+				format!("missing name in struct type field"),
+			)?;
+			let type_id = self.lower_type(field.type_())?;
+			let ty = self.tchecker.tenv.get_type(type_id).into();
+			hir_fields.insert(
+				name,
+				StructTypeField {
+					visibility,
+					mutable: field.mutable().is_some(),
+					ty,
+				},
+			);
+		}
+		let hir_fields = Spanned::new(hir_fields, self.span(&struct_ty));
+		let id = self.tchecker.tenv.insert(Spanned::new(
+			Type::Struct(StructType(hir_fields)),
+			self.span(&struct_ty),
+		));
+		Ok(id)
+	}
 
 	fn lower_ident_type(&mut self, ident_ty: ast::IdentType) -> TypeResult {
 		let name = if let Some(name) = ident_ty.name() {

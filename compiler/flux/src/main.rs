@@ -15,9 +15,9 @@ fn main() {
 		&mut err_reporting,
 	);
 
-	// for module in &modules {
-	// 	println!("{:#?}", module);
-	// 	// fs::write("ast.txt", format!("{:#?}", module));
-	// 	flux_mir::lower::lower_module(module);
-	// }
+	for module in &modules {
+		println!("{:#?}", module);
+		// fs::write("ast.txt", format!("{:#?}", module));
+		// flux_mir::lower::lower_module(module);
+	}
 }

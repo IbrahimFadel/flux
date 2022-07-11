@@ -1,6 +1,3 @@
-use std::ops::Deref;
-
-use flux_error::Span;
 use rowan::TextRange;
 
 use crate::syntax_kind::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
@@ -73,14 +70,7 @@ enum_node!(
 	StructExpr, IfExpr, BlockExpr, TupleExpr
 );
 enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
-enum_node!(
-	Type,
-	PrimitiveType,
-	StructType,
-	InterfaceType,
-	IdentType,
-	TupleType
-);
+enum_node!(Type, PrimitiveType, StructType, IdentType, TupleType);
 
 basic_node!(Root);
 
@@ -90,6 +80,7 @@ basic_node!(TypeDecl);
 basic_node!(FnDecl);
 basic_node!(FnParam);
 basic_node!(VarDecl);
+basic_node!(ApplyDecl);
 
 basic_node!(ReturnStmt);
 basic_node!(ExprStmt);
@@ -109,10 +100,10 @@ basic_node!(BlockExpr);
 basic_node!(TupleExpr);
 
 basic_node!(StructTypeField);
-basic_node!(InterfaceMethod);
+basic_node!(TraitMethod);
 
 basic_node!(StructType);
-basic_node!(InterfaceType);
+basic_node!(TraitDecl);
 basic_node!(IdentType);
 basic_node!(TupleType);
 
@@ -131,6 +122,14 @@ impl Root {
 
 	pub fn types(&self) -> impl Iterator<Item = TypeDecl> {
 		self.0.children().filter_map(TypeDecl::cast)
+	}
+
+	pub fn applies(&self) -> impl Iterator<Item = ApplyDecl> {
+		self.0.children().filter_map(ApplyDecl::cast)
+	}
+
+	pub fn traits(&self) -> impl Iterator<Item = TraitDecl> {
+		self.0.children().filter_map(TraitDecl::cast)
 	}
 }
 
@@ -234,6 +233,35 @@ impl FnDecl {
 	}
 }
 
+impl ApplyDecl {
+	pub fn trait_(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
+	}
+
+	pub fn struct_(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.filter_map(|token| {
+				if token.kind() == SyntaxKind::Ident {
+					Some(token)
+				} else {
+					None
+				}
+			})
+			.nth(1)
+	}
+
+	pub fn methods(&self) -> impl Iterator<Item = FnDecl> {
+		self.0.children().filter_map(FnDecl::cast)
+	}
+}
+
 impl ReturnStmt {
 	pub fn value(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
@@ -243,6 +271,14 @@ impl ReturnStmt {
 impl ExprStmt {
 	pub fn expr(&self) -> Option<Expr> {
 		self.0.children().find_map(Expr::cast)
+	}
+
+	pub fn semicolon(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::SemiColon)
 	}
 }
 
@@ -342,21 +378,21 @@ impl IdentType {
 	}
 }
 
-impl InterfaceType {
-	pub fn methods(&self) -> impl Iterator<Item = InterfaceMethod> {
-		self.0.children().filter_map(InterfaceMethod::cast)
-	}
-}
-
-impl InterfaceMethod {
-	pub fn public(&self) -> Option<SyntaxToken> {
+impl TraitDecl {
+	pub fn name(&self) -> Option<SyntaxToken> {
 		self
 			.0
 			.children_with_tokens()
 			.filter_map(SyntaxElement::into_token)
-			.find(|token| token.kind() == SyntaxKind::PubKw)
+			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
+	pub fn methods(&self) -> impl Iterator<Item = TraitMethod> {
+		self.0.children().filter_map(TraitMethod::cast)
+	}
+}
+
+impl TraitMethod {
 	pub fn name(&self) -> Option<SyntaxToken> {
 		self
 			.0

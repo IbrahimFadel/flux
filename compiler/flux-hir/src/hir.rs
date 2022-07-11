@@ -25,6 +25,12 @@ impl<T> Deref for Spanned<T> {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Visibility {
+	Private,
+	Public,
+}
+
 #[derive(Debug, Clone)]
 pub struct ModDecl {
 	pub name: Spanned<SmolStr>,
@@ -37,7 +43,7 @@ pub struct UseDecl {
 
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
-	pub public: Spanned<bool>,
+	pub visibility: Spanned<Visibility>,
 	pub name: Spanned<SmolStr>,
 	pub ty: Spanned<Type>,
 }
@@ -47,7 +53,7 @@ pub struct Block(pub Vec<Spanned<Stmt>>);
 
 #[derive(Debug, Clone)]
 pub struct FnDecl {
-	pub public: Spanned<bool>,
+	pub visibility: Spanned<Visibility>,
 	pub name: Spanned<SmolStr>,
 	pub params: Spanned<Vec<Spanned<FnParam>>>,
 	pub body: ExprIdx,
@@ -59,6 +65,13 @@ pub struct FnParam {
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
 	pub name: Option<SmolStr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApplyDecl {
+	pub trait_: Option<SmolStr>,
+	pub struct_: SmolStr,
+	pub methods: Vec<FnDecl>,
 }
 
 #[derive(Debug, Clone)]
@@ -187,19 +200,19 @@ pub enum Type {
 	Ref(usize),
 	Ident(SmolStr),
 	Struct(StructType),
-	Interface(InterfaceType),
 	Tuple(Vec<TypeId>),
-	Unit,
 	Func(Box<Type>, Box<Type>),
 	Unknown,
 }
 
 #[derive(Debug, Clone)]
-pub struct InterfaceType(pub HashMap<SmolStr, InterfaceMethod>);
+pub struct TraitDecl {
+	pub name: SmolStr,
+	pub methods: HashMap<SmolStr, TraitMethod>,
+}
 
 #[derive(Debug, Clone)]
-pub struct InterfaceMethod {
-	pub public: bool,
+pub struct TraitMethod {
 	pub params: Vec<Spanned<FnParam>>,
 	pub return_ty: Spanned<Type>,
 }
@@ -209,7 +222,7 @@ pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
 
 #[derive(Debug, Clone)]
 pub struct StructTypeField {
-	pub public: bool,
+	pub visibility: Visibility,
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
 }

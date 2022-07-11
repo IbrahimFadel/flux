@@ -226,7 +226,7 @@ impl LoweringCtx {
 	}
 
 	fn lower_call(&mut self, call_expr: CallExpr) -> ExprResult {
-		let (callee, callee_id) = self.lower_expr(call_expr.callee())?;
+		let (callee, _) = self.lower_expr(call_expr.callee())?;
 		let mut args = vec![];
 		let mut arg_ids = vec![];
 		for arg in call_expr.args() {
@@ -343,7 +343,7 @@ impl LoweringCtx {
 	// }
 
 	fn lower_if_expr(&mut self, if_expr: ast::IfExpr) -> ExprResult {
-		let (condition, condition_id) = self.lower_expr(if_expr.condition())?; // TODO: verify condition_id is a boolean?
+		let (condition, _) = self.lower_expr(if_expr.condition())?; // TODO: verify condition_id is a boolean?
 		let (then, then_id) = if let Some(then) = if_expr.then() {
 			let range = then.range();
 			let (block, block_id) = self.lower_block_expr(then)?;
@@ -362,12 +362,34 @@ impl LoweringCtx {
 				),
 			));
 		};
-		let (else_, else_id) = self.lower_expr(if_expr.else_())?;
-		self.tchecker.unify(
-			then_id,
-			else_id,
-			Span::combine(&then.span, &self.exprs[else_].span),
-		)?;
+		let else_ = if if_expr.else_().is_some() {
+			let (else_, else_id) = self.lower_expr(if_expr.else_())?;
+			self.tchecker.unify(
+				then_id,
+				else_id,
+				Span::combine(&then.span, &self.exprs[else_].span),
+			)?;
+			else_
+		} else {
+			let else_id = self
+				.tchecker
+				.tenv
+				.insert(Spanned::new(Type::Tuple(vec![]), self.span(&if_expr)));
+			self.tchecker.unify(
+				then_id,
+				else_id,
+				self.span(&if_expr), // Span::combine(&then.span, &self.exprs[else_].span),
+			)?;
+			self
+				.exprs
+				.alloc(Spanned::new(Expr::Missing, self.span(&if_expr)))
+		};
+		// let (else_, else_id) = self.lower_expr(if_expr.else_())?;
+		// self.tchecker.unify(
+		// 	then_id,
+		// 	else_id,
+		// 	Span::combine(&then.span, &self.exprs[else_].span),
+		// )?;
 		let if_id = self.tchecker.tenv.insert(Spanned::new(
 			Type::Unknown,
 			Span::new(if_expr.range(), self.file_id.clone()),
@@ -387,27 +409,41 @@ impl LoweringCtx {
 		let mut block = vec![];
 		let mut block_ids = vec![];
 		let stmts = block_expr.stmts();
+		let mut stmt_that_determines_type: Option<(Spanned<Stmt>, usize)> = None;
 		for stmt in stmts {
-			let (stmt, stmt_id) = self.lower_stmt(stmt)?;
-			block.push(stmt);
+			if let Some((s, _)) = stmt_that_determines_type {
+				return Err(
+					FluxError::build(
+						format!("cannot put statements after block value statement"),
+						self.span(&stmt),
+						FluxErrorCode::StmtAfterBlockValStmt,
+						(
+							format!("cannot put statements after block value statement"),
+							self.span(&stmt),
+						),
+					)
+					.with_label(format!("block value statement"), s.span),
+				);
+			}
+			let ((stmt, stmt_id), has_semi) = self.lower_stmt(stmt)?;
+			block.push(stmt.clone());
 			block_ids.push(stmt_id);
+			if !has_semi {
+				stmt_that_determines_type = Some((stmt, stmt_id));
+			}
 		}
-		let type_id = if let Some(id) = block_ids.last() {
-			*id
+		let type_id = if let Some((_, id)) = stmt_that_determines_type {
+			id
 		} else {
 			self
 				.tchecker
 				.tenv
-				.insert(Spanned::new(Type::Unit, self.span(&block_expr)))
+				.insert(Spanned::new(Type::Tuple(vec![]), self.span(&block_expr)))
 		};
 		Ok((Expr::Block(Block(block)), type_id))
 	}
 
 	fn lower_tuple_expr(&mut self, tuple_expr: ast::TupleExpr) -> ExprResult {
-		// let res = tuple_expr
-		// 	.values()
-		// 	.map(|e| self.lower_expr(Some(e)))
-		// 	.collect();
 		let mut values = vec![];
 		let mut value_types = vec![];
 		for e in tuple_expr.values() {

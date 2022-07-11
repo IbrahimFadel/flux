@@ -166,6 +166,30 @@ impl<E: ErrorHandler> TypeChecker<E> {
 					Ok(())
 				}
 			}
+			(Int(aa), Int(bb)) => match (aa, bb) {
+				(Some(aa), Some(bb)) => self.unify(*aa, *bb, unification_span),
+				(Some(_), None) => {
+					self.tenv.vars.insert(
+						b,
+						Spanned {
+							inner: TypeKind::Int(Some(a)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+				(None, Some(_)) => {
+					self.tenv.vars.insert(
+						a,
+						Spanned {
+							inner: TypeKind::Int(Some(b)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+				(None, None) => Ok(()),
+			},
 			_ => Err(
 				self
 					.err_handler

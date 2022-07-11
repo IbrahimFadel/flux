@@ -83,9 +83,21 @@ impl TypeEnv {
 						.iter()
 						.map(|id| format!("{}", self.fmt_ty(&self.get_type(*id).inner)))
 						.reduce(|s, ty| format!("{}, {}", s, ty))
-						.unwrap()
+						.map_or(String::new(), |s| s)
 				),
-				ConcreteKind::Unit => format!("()"),
+				ConcreteKind::Func(i, o) => format!(
+					"{} -> {}",
+					if let Some(s) = i
+						.iter()
+						.map(|ty| self.fmt_ty(&ty))
+						.reduce(|s, ty| format!("{}, {}", s, ty))
+					{
+						s
+					} else {
+						String::from("()")
+					},
+					self.fmt_ty(o)
+				),
 			},
 			TypeKind::Ref(id) => format!("Ref({})", id),
 			TypeKind::Int(id) => {

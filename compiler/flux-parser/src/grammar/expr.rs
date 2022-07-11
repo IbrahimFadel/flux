@@ -50,8 +50,6 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 		tuple_type(p)
 	} else if p.at(T!(struct)) {
 		struct_type(p)
-	} else if p.at(T!(interface)) {
-		interface_type(p)
 	} else {
 		p.error(format!("expected type expression"));
 		return None;
@@ -76,76 +74,13 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::TupleType)
 }
 
-fn interface_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(interface)));
-	let m = p.start();
-	p.bump();
-	p.expect(T!(lbrace), format!("expected `{{` in interface type"));
-	while !p.at(T!(rbrace)) && !p.at_end() {
-		interface_type_method(p);
-	}
-	p.expect(
-		T!(rbrace),
-		format!("expected `}}` at end of interface type"),
-	);
-	m.complete(p, SyntaxKind::InterfaceType)
-}
-
-fn interface_type_method(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	if p.at(T!(pub)) {
-		p.bump();
-	}
-	p.expect(T!(fn), format!("expected `fn` in interface type method"));
-	p.expect(
-		T!(ident),
-		format!("expected identifier for interface type method name"),
-	);
-	p.expect(
-		T!(lparen),
-		format!("expected `(` at beginning of interface type method parameter list"),
-	);
-	while !p.at(T!(rparen)) && !p.at_end() {
-		interface_type_method_param(p);
-		if !p.at(T!(rparen)) {
-			p.expect(
-				T!(comma),
-				format!("expected either `}}` or `,` in interface type method parameter list"),
-			);
-		}
-	}
-	p.expect(
-		T!(rparen),
-		format!("expected `)` at end of interface type method parameter list"),
-	);
-	if p.at(T!(->)) {
-		p.bump();
-		type_expr(p);
-	}
-	p.expect(
-		TokenKind::SemiColon,
-		format!("expected `;` at end of interface type method"),
-	);
-	m.complete(p, SyntaxKind::InterfaceMethod)
-}
-
-fn interface_type_method_param(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	if p.at(T![mut]) {
-		p.bump();
-	}
-	type_expr(p);
-	p.expect(
-		T![ident],
-		format!("expected identifier in interface type method parameter"),
-	);
-	m.complete(p, SyntaxKind::FnParam)
-}
-
 fn struct_type(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(T!(struct)));
 	let m = p.start();
 	p.bump();
+	if p.at(T!(<)) {
+		decl::generic_list(p);
+	}
 	p.expect(T!(lbrace), format!("expected `{{` in struct type"));
 	while !p.at(T!(rbrace)) && !p.at_end() {
 		struct_type_field(p);
@@ -162,14 +97,14 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 	if p.at(T!(mut)) {
 		p.bump();
 	}
-	type_expr(p);
 	p.expect(
 		TokenKind::Ident,
 		format!("expected identifier for struct type field name"),
 	);
+	type_expr(p);
 	p.expect(
-		TokenKind::SemiColon,
-		format!("expepcted `;` after struct type field"),
+		TokenKind::Comma,
+		format!("expepcted `,` after struct type field"),
 	);
 	m.complete(p, SyntaxKind::StructTypeField)
 }
@@ -325,6 +260,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		paren_or_tuple_expr(p, allow_struct_expressions)
 	} else if p.at(T!(if)) {
 		if_expr(p)
+	} else if p.at(T!(lbrace)) {
+		block_expr(p)
 	} else {
 		p.error(format!("expected expression lhs"));
 		return None;
@@ -411,22 +348,6 @@ pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 	}
 	p.expect(T![rbrace], format!("expected `}}` at end of block"));
 	m.complete(p, SyntaxKind::BlockExpr)
-}
-
-fn tuple_expr(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(lparen)));
-	let m = p.start();
-	p.bump();
-	while p.loop_safe_not_at(T!(rparen)) {
-		expr(p, true);
-		if p.at(T!(comma)) {
-			p.bump();
-		} else if !p.at(T!(rparen)) {
-			p.error(format!("expected `)` at end of tuple expression"));
-		}
-	}
-	p.bump();
-	m.complete(p, SyntaxKind::TupleExpr)
 }
 
 #[cfg(test)]

@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 use flux_error::{FileId, FluxError};
 use flux_syntax::ast;
 use flux_typesystem::{ConcreteKind, Insert, TypeEnv, TypeKind};
-use hir::{Expr, FnDecl, ModDecl, Spanned, Type, TypeDecl, UseDecl};
+use hir::{ApplyDecl, Expr, FnDecl, ModDecl, Spanned, TraitDecl, Type, TypeDecl, UseDecl};
 use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
@@ -19,17 +19,40 @@ pub struct HirModule {
 	pub uses: Vec<UseDecl>,
 	pub functions: Vec<FnDecl>,
 	pub types: Vec<TypeDecl>,
+	pub applies: Vec<ApplyDecl>,
+	pub traits: Vec<TraitDecl>,
 }
 
-pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
+pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule, Vec<FluxError>) {
 	let mut ctx = lower::LoweringCtx::new(lower::error::TypeCheckErrHandler, file_id);
 
 	let mut errors = vec![];
-	let functions = ast
-		.functions()
-		.map(|f| ctx.lower_fn_decl(f))
+
+	let traits = root
+		.traits()
+		.map(|trt| ctx.lower_trait_decl(trt))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+
+	let functions = vec![];
+	let applies = vec![];
+	let types = root
+		.types()
+		.map(|ty| ctx.lower_type_decl(ty))
+		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+		.collect();
+
+	// let functions = root
+	// 	.functions()
+	// 	.map(|f| ctx.lower_fn_decl(f))
+	// 	.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+	// 	.collect();
+
+	// let applies = root
+	// 	.applies()
+	// 	.map(|apply| ctx.lower_apply_decl(apply))
+	// 	.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+	// 	.collect();
 
 	errors.append(&mut ctx.errors);
 
@@ -40,7 +63,9 @@ pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule,
 			mods: vec![],
 			uses: vec![],
 			functions,
-			types: vec![],
+			types,
+			applies,
+			traits,
 		},
 		errors,
 	)
@@ -49,10 +74,6 @@ pub fn lower(path: Vec<SmolStr>, ast: ast::Root, file_id: FileId) -> (HirModule,
 impl Insert<Spanned<Type>> for TypeEnv {
 	fn insert(&mut self, ty: Spanned<Type>) -> flux_typesystem::TypeId {
 		match ty.node {
-			Type::Unit => self.insert(flux_typesystem::Spanned {
-				inner: TypeKind::Concrete(ConcreteKind::Unit),
-				span: ty.span,
-			}),
 			Type::SInt(n) => self.insert(flux_typesystem::Spanned {
 				inner: TypeKind::Concrete(ConcreteKind::SInt(n)),
 				span: ty.span,
@@ -108,7 +129,7 @@ impl Into<Type> for TypeKind {
 				ConcreteKind::F32 => Type::F32,
 				ConcreteKind::Ident(name) => Type::Ident(name),
 				ConcreteKind::Tuple(types) => Type::Tuple(types.iter().map(|t| t.clone().into()).collect()),
-				ConcreteKind::Unit => Type::Unit,
+				ConcreteKind::Func(i, o) => panic!(),
 			},
 			TypeKind::Int(_) => Type::Int,
 			TypeKind::Float(_) => Type::Float,

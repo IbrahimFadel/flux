@@ -3,7 +3,7 @@ use std::{
 	fmt::{Display, Formatter},
 };
 
-use crate::hir::{Block, FnDecl, FnParam, Stmt, Type};
+use crate::hir::{Block, FnDecl, FnParam, Stmt, Type, Visibility};
 
 impl Display for Type {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -12,7 +12,6 @@ impl Display for Type {
 			Type::UInt(n) => write!(f, "u{}", *n),
 			Type::F32 => write!(f, "f32"),
 			Type::F64 => write!(f, "f64"),
-			Type::Unit => write!(f, "()"),
 			Type::Ident(name) => write!(f, "{}", name),
 			_ => write!(f, "{:?}", self),
 		}
@@ -48,7 +47,11 @@ impl fmt::Display for FnDecl {
 		write!(
 			f,
 			"{}fn {}({}) -> {}",
-			if self.public.node { "pub " } else { "" },
+			if self.visibility.node == Visibility::Public {
+				"pub "
+			} else {
+				""
+			},
 			self.name.node,
 			self
 				.params

@@ -42,7 +42,7 @@ pub enum ConcreteKind {
 	F32,
 	Ident(SmolStr),
 	Tuple(Vec<TypeId>),
-	Unit,
+	Func(Vec<TypeKind>, Box<TypeKind>),
 }
 
 impl Insert<Spanned<TypeKind>> for TypeEnv {

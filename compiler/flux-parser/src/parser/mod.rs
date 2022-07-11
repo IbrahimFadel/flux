@@ -8,18 +8,6 @@ use self::marker::Marker;
 
 pub(crate) mod marker;
 
-const RECOVERY_SET: [TokenKind; 7] = [
-	TokenKind::INKw,
-	TokenKind::UNKw,
-	TokenKind::FnKw,
-	// TokenKind::LBrace,
-	// TokenKind::RBrace,
-	TokenKind::LParen,
-	TokenKind::RParen,
-	TokenKind::SemiColon,
-	TokenKind::UseKw,
-];
-
 pub(crate) struct Parser<'t, 'src> {
 	source: Source<'t, 'src>,
 	pub(crate) events: Vec<Event>,
@@ -58,36 +46,36 @@ impl<'t, 'src> Parser<'t, 'src> {
 		}
 	}
 
-	pub(crate) fn test_and_skip(
-		&mut self,
-		valid_set: &[TokenKind],
-		additional_set: &[TokenKind],
-		msg: String,
-	) {
-		if !self.at_set(valid_set) {
-			let current_token = self.source.peek_token();
+	// pub(crate) fn test_and_skip(
+	// 	&mut self,
+	// 	valid_set: &[TokenKind],
+	// 	additional_set: &[TokenKind],
+	// 	msg: String,
+	// ) {
+	// 	if !self.at_set(valid_set) {
+	// 		let current_token = self.source.peek_token();
 
-			let range = if let Some(Token { range, .. }) = current_token {
-				*range
-			} else {
-				self.source.last_token_range().unwrap()
-			};
+	// 		let range = if let Some(Token { range, .. }) = current_token {
+	// 			*range
+	// 		} else {
+	// 			self.source.last_token_range().unwrap()
+	// 		};
 
-			self.events.push(Event::Error(
-				FluxError::build(
-					msg.clone(),
-					Span::new(range, self.source.file_id.clone()),
-					FluxErrorCode::UnexpectedToken,
-					(msg.clone(), Span::new(range, self.source.file_id.clone())),
-				)
-				.with_label(msg, Span::new(range, self.source.file_id.clone())),
-			));
+	// 		self.events.push(Event::Error(
+	// 			FluxError::build(
+	// 				msg.clone(),
+	// 				Span::new(range, self.source.file_id.clone()),
+	// 				FluxErrorCode::UnexpectedToken,
+	// 				(msg.clone(), Span::new(range, self.source.file_id.clone())),
+	// 			)
+	// 			.with_label(msg, Span::new(range, self.source.file_id.clone())),
+	// 		));
 
-			while !self.at_set(additional_set) {
-				self.bump();
-			}
-		}
-	}
+	// 		while !self.at_set(additional_set) {
+	// 			self.bump();
+	// 		}
+	// 	}
+	// }
 
 	pub(crate) fn error(&mut self, msg: String) {
 		let current_token = self.source.peek_token();
@@ -136,9 +124,9 @@ impl<'t, 'src> Parser<'t, 'src> {
 		self.peek_next() == Some(kind)
 	}
 
-	pub(crate) fn at_set(&mut self, set: &[TokenKind]) -> bool {
-		self.peek().map_or(false, |k| set.contains(&k))
-	}
+	// pub(crate) fn at_set(&mut self, set: &[TokenKind]) -> bool {
+	// 	self.peek().map_or(false, |k| set.contains(&k))
+	// }
 
 	pub(crate) fn at_end(&mut self) -> bool {
 		self.peek().is_none()

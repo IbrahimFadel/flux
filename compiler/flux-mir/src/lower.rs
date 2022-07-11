@@ -226,7 +226,7 @@ impl<'a> MirLoweringCtx<'a> {
 fn hir_ty_to_mir_ty(ty: &hir::Type) -> Type {
 	match ty {
 		hir::Type::UInt(n) => Type::Int(*n),
-		hir::Type::Unit => Type::Void,
+		// hir::Type::Unit => Type::Void,
 		hir::Type::Unknown => Type::Void,
 		_ => todo!("unimplemented hir ty: {:#?}", ty),
 	}

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ariadne::{sources, Color, ColorGenerator, Fmt, Label, Report, ReportKind};
+use ariadne::{sources, Color, Fmt, Label, Report, ReportKind};
 use smol_str::SmolStr;
 use text_size::TextRange;
 
@@ -25,6 +25,10 @@ pub enum FluxErrorCode {
 	CouldNotLowerNode,
 	CouldNotFindModule,
 	AmbiguousUse,
+	StmtAfterBlockValStmt,
+	MissingStructToApplyMethodsTo,
+	MissingNameTyDecl,
+	TraitMethodMissingName,
 }
 
 impl std::fmt::Display for FluxErrorCode {

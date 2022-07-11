@@ -128,7 +128,7 @@ impl<'a> SemanticTokenBuilder<'a> {
 			| SyntaxKind::IfKw
 			| SyntaxKind::ElseKw
 			| SyntaxKind::StructKw
-			| SyntaxKind::InterfaceKw
+			| SyntaxKind::TraitKw
 			| SyntaxKind::LetKw
 			| SyntaxKind::ReturnKw => SemanticTokenType::KEYWORD,
 			// SyntaxKind::LParen | SyntaxKind::RParen => SemanticTokenType::REGEXP,

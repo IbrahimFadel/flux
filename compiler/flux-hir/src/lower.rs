@@ -34,14 +34,134 @@ impl LoweringCtx {
 		}
 	}
 
+	fn unwrap_ident(
+		&self,
+		ident: Option<SyntaxToken>,
+		range: TextRange,
+		msg: String,
+	) -> Result<SmolStr, FluxError> {
+		if let Some(ident) = ident {
+			Ok(ident.text().into())
+		} else {
+			Err(FluxError::build(
+				format!("trait method missing name"),
+				Span::new(range, self.file_id.clone()),
+				FluxErrorCode::TraitMethodMissingName,
+				(
+					format!("trait method missing name"),
+					Span::new(range, self.file_id.clone()),
+				),
+			))
+		}
+	}
+
+	pub fn lower_trait_decl(&mut self, trait_decl: ast::TraitDecl) -> Result<TraitDecl, FluxError> {
+		let name = self.unwrap_ident(
+			trait_decl.name(),
+			trait_decl.range(),
+			format!("trait declaration missing name"),
+		)?;
+
+		let mut methods = HashMap::new();
+		for method in trait_decl.methods() {
+			let name = if let Some(name) = method.name() {
+				name.text().into()
+			} else {
+				return Err(FluxError::build(
+					format!("trait method missing name"),
+					Span::new(method.range(), self.file_id.clone()),
+					FluxErrorCode::TraitMethodMissingName,
+					(
+						format!("trait method missing name"),
+						Span::new(method.range(), self.file_id.clone()),
+					),
+				));
+			};
+			let params = self.lower_params(method.params())?;
+			let return_ty_id = self.lower_type(method.return_ty())?;
+			let return_ty = self.tchecker.tenv.get_type(return_ty_id).into();
+			let method = TraitMethod { params, return_ty };
+			methods.insert(name, method);
+		}
+		Ok(TraitDecl { name, methods })
+	}
+
+	pub fn lower_apply_decl(&mut self, apply_block: ast::ApplyDecl) -> Result<ApplyDecl, FluxError> {
+		let (trait_, struct_) = match (apply_block.trait_(), apply_block.struct_()) {
+			(None, None) => {
+				return Err(FluxError::build(
+					format!("missing struct to `apply` methods to"),
+					self.span(&apply_block),
+					FluxErrorCode::MissingStructToApplyMethodsTo,
+					(
+						format!("missing struct to `apply` methods to"),
+						self.span(&apply_block),
+					),
+				))
+			}
+			(Some(struct_), None) => (None, struct_.text().into()),
+			(Some(trait_), Some(struct_)) => (Some(trait_.text().into()), struct_.text().into()),
+			_ => unreachable!(),
+		};
+
+		Ok(ApplyDecl {
+			trait_,
+			struct_,
+			methods: vec![],
+		})
+	}
+
+	pub fn lower_type_decl(&mut self, ty_decl: ast::TypeDecl) -> Result<TypeDecl, FluxError> {
+		let visibility = if let Some(public) = ty_decl.public() {
+			Spanned::new(
+				Visibility::Public,
+				Span::new(public.text_range(), self.file_id.clone()),
+			)
+		} else {
+			Spanned::new(
+				Visibility::Private,
+				Span::new(
+					ty_decl.first_token().unwrap().text_range(),
+					self.file_id.clone(),
+				),
+			)
+		};
+		let name = if let Some(name) = ty_decl.name() {
+			Spanned::new(
+				name.text().into(),
+				Span::new(name.text_range(), self.file_id.clone()),
+			)
+		} else {
+			return Err(FluxError::build(
+				format!("missing name in type declaration"),
+				self.span(&ty_decl),
+				FluxErrorCode::MissingNameTyDecl,
+				(
+					format!("missing name in type declaration"),
+					self.span(&ty_decl),
+				),
+			));
+		};
+		let ty = self.lower_type(ty_decl.ty())?;
+		let ty = self.tchecker.tenv.get_type(ty).into();
+		Ok(TypeDecl {
+			visibility,
+			name,
+			ty,
+		})
+	}
+
 	pub fn lower_fn_decl(&mut self, fn_decl: ast::FnDecl) -> Result<FnDecl, FluxError> {
 		self.tchecker.tenv = TypeEnv::new();
 
-		let public = if let Some(p) = fn_decl.public() {
-			Spanned::new(true, Span::new(p.text_range(), self.file_id.clone()))
+		let visibility = if let Some(p) = fn_decl.public() {
+			Spanned::new(
+				Visibility::Public,
+				Span::new(p.text_range(), self.file_id.clone()),
+			)
 		} else {
 			Spanned::new(
-				false,
+				Visibility::Private,
 				Span::new(
 					fn_decl.first_token().unwrap().text_range(),
 					self.file_id.clone(),
@@ -81,7 +201,7 @@ impl LoweringCtx {
 			self.lower_type(Some(return_type))?
 		} else {
 			self.tchecker.tenv.insert(Spanned::new(
-				Type::Unit,
+				Type::Tuple(vec![]),
 				Span::new(
 					TextRange::new(params_range.end(), params_range.end()),
 					self.file_id.clone(),
@@ -131,7 +251,7 @@ impl LoweringCtx {
 		}
 
 		Ok(FnDecl {
-			public,
+			visibility,
 			name,
 			params,
 			body,

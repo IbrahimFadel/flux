@@ -33,6 +33,10 @@ pub enum TokenKind {
 	FnKw,
 	#[token("type")]
 	TypeKw,
+	#[token("apply")]
+	ApplyKw,
+	#[token("to")]
+	ToKw,
 	#[token("mut")]
 	MutKw,
 	#[token("if")]
@@ -41,8 +45,8 @@ pub enum TokenKind {
 	ElseKw,
 	#[token("struct")]
 	StructKw,
-	#[token("interface")]
-	InterfaceKw,
+	#[token("trait")]
+	TraitKw,
 	#[regex("let")]
 	LetKw,
 	#[regex("return")]
@@ -70,6 +74,8 @@ pub enum TokenKind {
 	Slash,
 	#[token("->")]
 	Arrow,
+	#[token("=>")]
+	FatArrow,
 	#[token(":")]
 	Colon,
 	#[token("(")]
@@ -122,11 +128,13 @@ macro_rules! T {
 	[pub] => { $crate::TokenKind::PubKw };
 	[fn] => { $crate::TokenKind::FnKw };
 	[type] => { $crate::TokenKind::TypeKw };
+	[apply] => { $crate::TokenKind::ApplyKw };
+	[to] => { $crate::TokenKind::ToKw };
 	[mut] => { $crate::TokenKind::MutKw };
 	[if] => { $crate::TokenKind::IfKw };
 	[else] => { $crate::TokenKind::ElseKw };
 	[struct] => { $crate::TokenKind::StructKw };
-	[interface] => { $crate::TokenKind::InterfaceKw };
+	[trait] => { $crate::TokenKind::TraitKw };
 	[let] => { $crate::TokenKind::LetKw };
 	[return] => { $crate::TokenKind::ReturnKw };
 	[iN] => { $crate::TokenKind::INKw };
@@ -139,6 +147,7 @@ macro_rules! T {
 	[*] => { $crate::TokenKind::Star };
 	[/] => { $crate::TokenKind::Slash };
 	[->] => { $crate::TokenKind::Arrow };
+	[=>] => { $crate::TokenKind::FatArrow };
 	[==] => { $crate::TokenKind::CmpEq };
 	[!=] => { $crate::TokenKind::CmpNeq };
 	[<] => { $crate::TokenKind::CmpLt };

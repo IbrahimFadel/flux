@@ -1,5 +1,13 @@
-fn main() {
-	let foo = (0, 0, 1.9);
-	let x (i32, u32, f32) = foo; 
-	let y (i32, u31, f32) = x;
+trait ToI32 {
+	fn to_i32(u6 x) -> i32;
+}
+
+type Foo struct {
+	x i32,
+}
+
+apply ToI32 to Foo {
+	fn to_i32() -> i32 => {
+		0
+	}
 }

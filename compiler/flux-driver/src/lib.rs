@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
 use flux_error::{FileId, FluxError, FluxErrorCode, FluxErrorReporting, Span};
-use flux_hir::{hir::Spanned, HirModule};
+use flux_hir::{
+	hir::{Spanned, Visibility},
+	HirModule,
+};
 use flux_parser::parse;
 use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
@@ -63,14 +66,14 @@ fn populate_export_table(
 	type_exports: &mut TypeExportTable,
 ) {
 	for f in &module.functions {
-		if f.public.node {
+		if f.visibility.node == Visibility::Public {
 			let mut path = module_path.clone();
 			path.push(f.name.node.clone());
 			function_exports.insert(path, generate_function_signature(f));
 		}
 	}
 	for ty in &module.types {
-		if ty.public.node {
+		if ty.visibility.node == Visibility::Public {
 			let mut path = module_path.clone();
 			path.push(ty.name.node.clone());
 			type_exports.insert(path, ty.ty.clone());
