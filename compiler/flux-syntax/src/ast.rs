@@ -81,6 +81,7 @@ basic_node!(FnDecl);
 basic_node!(FnParam);
 basic_node!(VarDecl);
 basic_node!(ApplyDecl);
+basic_node!(ApplyBlock);
 
 basic_node!(ReturnStmt);
 basic_node!(ExprStmt);
@@ -257,6 +258,12 @@ impl ApplyDecl {
 			.nth(1)
 	}
 
+	pub fn block(&self) -> Option<ApplyBlock> {
+		self.0.children().find_map(ApplyBlock::cast)
+	}
+}
+
+impl ApplyBlock {
 	pub fn methods(&self) -> impl Iterator<Item = FnDecl> {
 		self.0.children().filter_map(FnDecl::cast)
 	}
@@ -401,8 +408,24 @@ impl TraitMethod {
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
+	pub fn lparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::LParen)
+	}
+
 	pub fn params(&self) -> impl Iterator<Item = FnParam> {
 		self.0.children().filter_map(FnParam::cast)
+	}
+
+	pub fn rparen(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::RParen)
 	}
 
 	pub fn return_ty(&self) -> Option<Type> {

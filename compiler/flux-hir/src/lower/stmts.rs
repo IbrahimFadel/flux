@@ -4,7 +4,7 @@ use super::*;
 
 type StmtResult = Result<((Spanned<Stmt>, TypeId), bool), FluxError>;
 
-impl LoweringCtx {
+impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_stmt(&mut self, ast: ast::Stmt) -> StmtResult {
 		match &ast {
 			ast::Stmt::VarDecl(ast) => self.lower_var_decl(ast),
@@ -28,7 +28,7 @@ impl LoweringCtx {
 	fn lower_var_decl(&mut self, var_decl: &ast::VarDecl) -> StmtResult {
 		if let Some(name) = var_decl.name() {
 			let var_ty = self.lower_type(var_decl.ty())?;
-			let var_ty_id = self.tchecker.tenv.insert(var_ty);
+			let var_ty_id = self.tchecker.tenv.insert(var_ty.clone());
 			let (expr, expr_id) = self.lower_expr(var_decl.value())?;
 			self.tchecker.unify(
 				var_ty_id,

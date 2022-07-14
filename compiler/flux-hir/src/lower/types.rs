@@ -4,7 +4,7 @@ use super::*;
 
 type TypeResult = Result<Spanned<Type>, FluxError>;
 
-impl LoweringCtx {
+impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_type(&mut self, ty: Option<ast::Type>) -> TypeResult {
 		if let Some(ty) = ty {
 			match ty {
@@ -96,7 +96,7 @@ impl LoweringCtx {
 		// 	.tenv
 		// 	.insert(Spanned::new(res, self.span(&primitive_ty)));
 		// Ok(id)
-		Spanned::new(res, self.span(&primitive_ty))
+		Ok(Spanned::new(res, self.span(&primitive_ty)))
 	}
 
 	fn lower_struct_type(&mut self, struct_ty: ast::StructType) -> TypeResult {
@@ -112,8 +112,7 @@ impl LoweringCtx {
 				struct_ty.range(),
 				format!("missing name in struct type field"),
 			)?;
-			let type_id = self.lower_type(field.type_())?;
-			let ty = self.tchecker.tenv.get_type(type_id).into();
+			let ty = self.lower_type(field.type_())?;
 			hir_fields.insert(
 				name,
 				StructTypeField {
@@ -124,11 +123,10 @@ impl LoweringCtx {
 			);
 		}
 		let hir_fields = Spanned::new(hir_fields, self.span(&struct_ty));
-		let id = self.tchecker.tenv.insert(Spanned::new(
+		Ok(Spanned::new(
 			Type::Struct(StructType(hir_fields)),
 			self.span(&struct_ty),
-		));
-		Ok(id)
+		))
 	}
 
 	fn lower_ident_type(&mut self, ident_ty: ast::IdentType) -> TypeResult {
@@ -145,23 +143,18 @@ impl LoweringCtx {
 				),
 			));
 		};
-		let id = self.tchecker.tenv.insert(Spanned::new(
+		Ok(Spanned::new(
 			Type::Ident(name),
 			Span::new(ident_ty.range(), self.file_id.clone()),
-		));
-		Ok(id)
+		))
 	}
 
 	fn lower_tuple_type(&mut self, tuple_ty: ast::TupleType) -> TypeResult {
 		let mut types = vec![];
 		for ty in tuple_ty.types() {
 			let ty = self.lower_type(Some(ty))?;
-			types.push(ty);
+			types.push(self.tchecker.tenv.insert(ty));
 		}
-		let id = self
-			.tchecker
-			.tenv
-			.insert(Spanned::new(Type::Tuple(types), self.span(&tuple_ty)));
-		Ok(id)
+		Ok(Spanned::new(Type::Tuple(types), self.span(&tuple_ty)))
 	}
 }

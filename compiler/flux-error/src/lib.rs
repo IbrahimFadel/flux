@@ -29,6 +29,10 @@ pub enum FluxErrorCode {
 	MissingStructToApplyMethodsTo,
 	MissingNameTyDecl,
 	TraitMethodMissingName,
+	AppliedUnknownTrait,
+	UnknownTraitMethod,
+	IncorrectNumberParamsInMethodImpl,
+	UnimplementedTraitMethods,
 }
 
 impl std::fmt::Display for FluxErrorCode {
@@ -161,7 +165,7 @@ impl FluxError {
 				Label::new(label.1.clone())
 					.with_message(label.0.clone().fg(colour))
 					.with_color(colour),
-			)
+			);
 		}
 
 		for note in &self.notes {

@@ -5,7 +5,7 @@ use super::*;
 
 type ExprResult = Result<(Expr, TypeId), FluxError>;
 
-impl LoweringCtx {
+impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_expr(
 		&mut self,
 		expr: Option<ast::Expr>,

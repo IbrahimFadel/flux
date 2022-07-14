@@ -28,19 +28,30 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 
 	let mut errors = vec![];
 
-	let traits = root
+	// We need to populate LoweringCtx::traits before we can lower the applies, so it is necessary to lower these first
+	let traits: Vec<TraitDecl> = root
 		.traits()
 		.map(|trt| ctx.lower_trait_decl(trt))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 
-	let functions = vec![];
-	let applies = vec![];
+	traits.iter().for_each(|trt| {
+		ctx.traits.insert(trt.name.node.clone(), trt);
+	});
+
 	let types = root
 		.types()
 		.map(|ty| ctx.lower_type_decl(ty))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+
+	let applies = root
+		.applies()
+		.map(|apply| ctx.lower_apply_decl(apply))
+		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+		.collect();
+
+	let functions = vec![];
 
 	// let functions = root
 	// 	.functions()

@@ -81,7 +81,7 @@ impl TypeEnv {
 					"({})",
 					types
 						.iter()
-						.map(|id| format!("{}", self.fmt_ty(&self.get_type(*id).inner)))
+						.map(|id| self.fmt_ty(&self.get_type(*id).inner))
 						.reduce(|s, ty| format!("{}, {}", s, ty))
 						.map_or(String::new(), |s| s)
 				),

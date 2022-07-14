@@ -1,5 +1,5 @@
 trait ToI32 {
-	fn to_i32(u6 x) -> i32;
+	fn to_i32(u8 x, i32 y) -> i32;
 }
 
 type Foo struct {
@@ -7,7 +7,7 @@ type Foo struct {
 }
 
 apply ToI32 to Foo {
-	fn to_i32() -> i32 => {
+	fn to_i32(u8 x, i32 x) -> i32 => {
 		0
 	}
 }

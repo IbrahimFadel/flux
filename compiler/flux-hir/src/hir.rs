@@ -69,7 +69,7 @@ pub struct FnParam {
 
 #[derive(Debug, Clone)]
 pub struct ApplyDecl {
-	pub trait_: Option<SmolStr>,
+	pub trait_: Option<Spanned<SmolStr>>,
 	pub struct_: SmolStr,
 	pub methods: Vec<FnDecl>,
 }
@@ -207,14 +207,15 @@ pub enum Type {
 
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
-	pub name: SmolStr,
+	pub name: Spanned<SmolStr>,
 	pub methods: HashMap<SmolStr, TraitMethod>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TraitMethod {
-	pub params: Vec<Spanned<FnParam>>,
-	pub return_ty: Spanned<Type>,
+	pub name: Spanned<SmolStr>,
+	pub params: Spanned<Vec<Spanned<FnParam>>>,
+	pub return_type: Spanned<Type>,
 }
 
 #[derive(Debug, Clone)]

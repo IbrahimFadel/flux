@@ -16,7 +16,7 @@ fn main() {
 	);
 
 	for module in &modules {
-		println!("{:#?}", module);
+		// println!("{:#?}", module);
 		// fs::write("ast.txt", format!("{:#?}", module));
 		// flux_mir::lower::lower_module(module);
 	}

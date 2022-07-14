@@ -370,6 +370,7 @@ dependencies = [
  "flux-syntax",
  "flux-typesystem",
  "indexmap",
+ "itertools",
  "la-arena",
  "smol_str",
  "text-size",
