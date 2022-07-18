@@ -1,8 +1,3 @@
-use flux_lexer::T;
-use flux_span::Spanned;
-
-use crate::errors::ParseError;
-
 use super::*;
 
 enum InfixOp {
@@ -43,15 +38,19 @@ impl PrefixOp {
 }
 
 pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
-	let result = if p.at(T![iN]) || p.at(T!(uN)) || p.at(T!(f32)) || p.at(T!(f64)) {
+	let result = if p.at(TokenKind::INKw)
+		|| p.at(TokenKind::UNKw)
+		|| p.at(TokenKind::F32Kw)
+		|| p.at(TokenKind::F64Kw)
+	{
 		primitive_type(p)
-	} else if p.at(T!(ident)) {
+	} else if p.at(TokenKind::Ident) {
 		let m = p.start();
 		p.bump();
 		m.complete(p, SyntaxKind::IdentType)
-	} else if p.at(T!(lparen)) {
+	} else if p.at(TokenKind::LParen) {
 		tuple_type(p)
-	} else if p.at(T!(struct)) {
+	} else if p.at(TokenKind::StructKw) {
 		struct_type(p)
 	} else {
 		p.expected(format!("type"));
@@ -62,43 +61,43 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 }
 
 fn tuple_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(lparen)));
+	assert!(p.at(TokenKind::LParen));
 	let m = p.start();
 	p.bump();
-	while p.loop_safe_not_at(T!(rparen)) {
+	while p.loop_safe_not_at(TokenKind::RParen) {
 		type_expr(p);
-		if p.at(T!(comma)) {
+		if p.at(TokenKind::Comma) {
 			p.bump();
-		} else if !p.at(T!(rparen)) {
+		} else if !p.at(TokenKind::RParen) {
 			p.expected(format!("`)` at end of tuple type"));
 		}
 	}
-	p.expect(T!(rparen));
+	p.expect(TokenKind::RParen);
 	m.complete(p, SyntaxKind::TupleType)
 }
 
 fn struct_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(struct)));
+	assert!(p.at(TokenKind::StructKw));
 	let m = p.start();
 	p.bump();
-	if p.at(T!(<)) {
+	if p.at(TokenKind::CmpLt) {
 		decl::generic_list(p);
 		// parse where clause
 	}
-	p.expect(T!(lbrace));
-	while !p.at(T!(rbrace)) && !p.at_end() {
+	p.expect(TokenKind::LBrace);
+	while !p.at(TokenKind::RBrace) && !p.at_end() {
 		struct_type_field(p);
 	}
-	p.expect(T!(rbrace));
+	p.expect(TokenKind::RBrace);
 	m.complete(p, SyntaxKind::StructType)
 }
 
 fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	if p.at(T!(pub)) {
+	if p.at(TokenKind::PubKw) {
 		p.bump();
 	}
-	if p.at(T!(mut)) {
+	if p.at(TokenKind::MutKw) {
 		p.bump();
 	}
 	p.expect(TokenKind::Ident);
@@ -108,7 +107,12 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 }
 
 fn primitive_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![iN]) || p.at(T![uN]) || p.at(T![f32]) || p.at(T![f64]));
+	assert!(
+		p.at(TokenKind::INKw)
+			|| p.at(TokenKind::UNKw)
+			|| p.at(TokenKind::F32Kw)
+			|| p.at(TokenKind::F64Kw)
+	);
 	let m = p.start();
 	p.bump();
 	m.complete(p, SyntaxKind::PrimitiveType)
@@ -125,25 +129,25 @@ fn expr_binding_power(
 ) -> Option<CompletedMarker> {
 	let mut lhs = lhs(p, allow_struct_expressions)?;
 	loop {
-		let op = if p.at(T!(+)) {
+		let op = if p.at(TokenKind::Plus) {
 			InfixOp::Add
-		} else if p.at(T!(-)) {
+		} else if p.at(TokenKind::Minus) {
 			InfixOp::Sub
-		} else if p.at(T!(*)) {
+		} else if p.at(TokenKind::Star) {
 			InfixOp::Mul
-		} else if p.at(T!(/)) {
+		} else if p.at(TokenKind::Slash) {
 			InfixOp::Div
-		} else if p.at(T!(==)) {
+		} else if p.at(TokenKind::CmpEq) {
 			InfixOp::CmpEq
-		} else if p.at(T!(!=)) {
+		} else if p.at(TokenKind::CmpNeq) {
 			InfixOp::CmpNeq
-		} else if p.at(T!(<)) {
+		} else if p.at(TokenKind::CmpLt) {
 			InfixOp::CmpLt
-		} else if p.at(T!(>)) {
+		} else if p.at(TokenKind::CmpGt) {
 			InfixOp::CmpGt
-		} else if p.at(T!(<=)) {
+		} else if p.at(TokenKind::CmpLte) {
 			InfixOp::CmpLte
-		} else if p.at(T!(>=)) {
+		} else if p.at(TokenKind::CmpGte) {
 			InfixOp::CmpGte
 		} else {
 			break;
@@ -172,18 +176,18 @@ fn expr_binding_power(
 
 pub(crate) fn path(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T!(ident));
-	while p.at(T!(::)) && !p.at_end() {
+	p.expect(TokenKind::Ident);
+	while p.at(TokenKind::DoubleColon) && !p.at_end() {
 		p.bump();
-		p.expect(T!(ident));
+		p.expect(TokenKind::Ident);
 	}
 	m.complete(p, SyntaxKind::PathExpr)
 }
 
 fn postfix(p: &mut Parser, e: CompletedMarker, allow_struct_expressions: bool) -> CompletedMarker {
-	if p.at(T!(lparen)) {
+	if p.at(TokenKind::LParen) {
 		call(p, e)
-	} else if allow_struct_expressions && p.at(T!(lbrace)) {
+	} else if allow_struct_expressions && p.at(TokenKind::LBrace) {
 		struct_initialization(p, e)
 	} else {
 		e
@@ -191,26 +195,26 @@ fn postfix(p: &mut Parser, e: CompletedMarker, allow_struct_expressions: bool) -
 }
 
 fn struct_initialization(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
-	assert!(p.at(T!(lbrace)));
+	assert!(p.at(TokenKind::LBrace));
 	let m = e.precede(p);
 	p.bump();
 
-	while !p.at(T!(rbrace)) && !p.at_end() {
+	while !p.at(TokenKind::RBrace) && !p.at_end() {
 		let m = p.start();
 		ident_expr(p);
-		if p.at(T!(comma)) {
+		if p.at(TokenKind::Comma) {
 			p.bump();
 		} else {
-			p.expect(T!(:));
+			p.expect(TokenKind::Colon);
 			expr(p, true);
-			if !p.at(T!(rbrace)) {
-				p.expect(T!(comma));
+			if !p.at(TokenKind::RBrace) {
+				p.expect(TokenKind::Comma);
 			}
 		}
 		m.complete(p, SyntaxKind::StructExprField);
 	}
 
-	p.expect(T!(rbrace));
+	p.expect(TokenKind::RBrace);
 
 	m.complete(p, SyntaxKind::StructExpr)
 }
@@ -220,10 +224,10 @@ fn call(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
 
 	p.bump();
 
-	while !p.at(T!(rparen)) && !p.at_end() {
+	while !p.at(TokenKind::RParen) && !p.at_end() {
 		expr(p, true);
-		if !p.at(T!(rparen)) {
-			if !p.at(T!(comma)) {
+		if !p.at(TokenKind::RParen) {
+			if !p.at(TokenKind::Comma) {
 				p.expected(format!("either `,` or `)` in call expression"));
 				break;
 			} else {
@@ -231,25 +235,25 @@ fn call(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
 			}
 		}
 	}
-	p.expect(T!(rparen));
+	p.expect(TokenKind::RParen);
 
 	m.complete(p, SyntaxKind::CallExpr)
 }
 
 fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker> {
-	let cm = if p.at(T!(intlit)) {
+	let cm = if p.at(TokenKind::IntLit) {
 		int_lit(p)
-	} else if p.at(T!(floatlit)) {
+	} else if p.at(TokenKind::FloatLit) {
 		float_lit(p)
-	} else if p.at(T!(ident)) {
+	} else if p.at(TokenKind::Ident) {
 		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
 		prefix_neg(p, allow_struct_expressions)
-	} else if p.at(T!(lparen)) {
+	} else if p.at(TokenKind::LParen) {
 		paren_or_tuple_expr(p, allow_struct_expressions)
-	} else if p.at(T!(if)) {
+	} else if p.at(TokenKind::IfKw) {
 		if_expr(p)
-	} else if p.at(T!(lbrace)) {
+	} else if p.at(TokenKind::LBrace) {
 		block_expr(p)
 	} else {
 		p.expected(format!("expression lhs"));
@@ -291,14 +295,14 @@ fn paren_or_tuple_expr(p: &mut Parser, allow_struct_expressions: bool) -> Comple
 	let m = p.start();
 	p.bump();
 	expr(p, allow_struct_expressions);
-	if p.at(T!(comma)) {
+	if p.at(TokenKind::Comma) {
 		p.bump();
 
-		while p.loop_safe_not_at(T!(rparen)) {
+		while p.loop_safe_not_at(TokenKind::RParen) {
 			expr(p, true);
-			if p.at(T!(comma)) {
+			if p.at(TokenKind::Comma) {
 				p.bump();
-			} else if !p.at(T!(rparen)) {
+			} else if !p.at(TokenKind::RParen) {
 				p.expected(format!("`)` at end of tuple expression"));
 			}
 		}
@@ -312,12 +316,12 @@ fn paren_or_tuple_expr(p: &mut Parser, allow_struct_expressions: bool) -> Comple
 
 fn if_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T!(if));
+	p.expect(TokenKind::IfKw);
 	expr::expr(p, false);
 	expr::block_expr(p);
-	if p.at(T!(else)) {
+	if p.at(TokenKind::ElseKw) {
 		p.bump();
-		if p.at(T!(if)) {
+		if p.at(TokenKind::IfKw) {
 			if_expr(p);
 		} else {
 			expr::block_expr(p);
@@ -328,11 +332,11 @@ fn if_expr(p: &mut Parser) -> CompletedMarker {
 
 pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T![lbrace]);
-	while p.loop_safe_not_at(T![rbrace]) {
+	p.expect(TokenKind::LBrace);
+	while p.loop_safe_not_at(TokenKind::RBrace) {
 		stmt::stmt(p);
 	}
-	p.expect(T![rbrace]);
+	p.expect(TokenKind::RBrace);
 	m.complete(p, SyntaxKind::BlockExpr)
 }
 

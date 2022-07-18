@@ -1,66 +1,65 @@
 use super::{expr::type_expr, *};
-use flux_lexer::T;
 
 pub fn top_level_decl(p: &mut Parser) {
-	if p.at(T!(pub)) {
+	if p.at(TokenKind::PubKw) {
 		pub_top_level_decl(p);
-	} else if p.at(T!(mod)) {
+	} else if p.at(TokenKind::ModKw) {
 		mod_decl(p);
-	} else if p.at(T!(use)) {
+	} else if p.at(TokenKind::UseKw) {
 		use_decl(p);
-	} else if p.at(T!(fn)) {
+	} else if p.at(TokenKind::FnKw) {
 		fn_decl(p);
-	} else if p.at(T!(type)) {
+	} else if p.at(TokenKind::TypeKw) {
 		type_decl(p);
-	} else if p.at(T!(trait)) {
+	} else if p.at(TokenKind::TraitKw) {
 		trait_decl(p);
-	} else if p.at(T!(apply)) {
+	} else if p.at(TokenKind::ApplyKw) {
 		apply_decl(p);
 	} else {
-		if !p.at(T!(comment)) {
+		if !p.at(TokenKind::Comment) {
 			p.expected(format!("top level declaration"));
 		}
 	}
 }
 
 fn pub_top_level_decl(p: &mut Parser) {
-	if p.next_at(T!(fn)) {
+	if p.next_at(TokenKind::FnKw) {
 		fn_decl(p);
-	} else if p.next_at(T!(type)) {
+	} else if p.next_at(TokenKind::TypeKw) {
 		type_decl(p);
 	} else {
-		if !p.at(T!(comment)) {
+		if !p.at(TokenKind::Comment) {
 			p.expected(format!("top level declaration"));
 		}
 	}
 }
 
 fn trait_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(trait)));
+	assert!(p.at(TokenKind::TraitKw));
 	let m = p.start();
 	p.bump();
-	p.expect(T!(ident));
-	p.expect(T!(lbrace));
-	while p.loop_safe_not_at(T!(rbrace)) {
+	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::LBrace);
+	while p.loop_safe_not_at(TokenKind::RBrace) {
 		trait_method(p);
 	}
-	p.expect(T!(rbrace));
+	p.expect(TokenKind::RBrace);
 	m.complete(p, SyntaxKind::TraitDecl)
 }
 
 fn trait_method(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T!(fn));
-	p.expect(T!(ident));
-	p.expect(T!(lparen));
-	while !p.at(T!(rparen)) && !p.at_end() {
+	p.expect(TokenKind::FnKw);
+	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::LParen);
+	while !p.at(TokenKind::RParen) && !p.at_end() {
 		trait_method_param(p);
-		if !p.at(T!(rparen)) {
-			p.expect(T!(comma));
+		if !p.at(TokenKind::RParen) {
+			p.expect(TokenKind::Comma);
 		}
 	}
-	p.expect(T!(rparen));
-	if p.at(T!(->)) {
+	p.expect(TokenKind::RParen);
+	if p.at(TokenKind::Arrow) {
 		p.bump();
 		type_expr(p);
 	}
@@ -70,24 +69,24 @@ fn trait_method(p: &mut Parser) -> CompletedMarker {
 
 fn trait_method_param(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	if p.at(T![mut]) {
+	if p.at(TokenKind::MutKw) {
 		p.bump();
 	}
 	type_expr(p);
-	p.expect(T![ident]);
+	p.expect(TokenKind::Ident);
 	m.complete(p, SyntaxKind::FnParam)
 }
 
 fn apply_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(apply)));
+	assert!(p.at(TokenKind::ApplyKw));
 	let m = p.start();
 	p.bump();
-	if p.at(T!(to)) {
+	if p.at(TokenKind::ToKw) {
 		p.bump();
 	} else {
-		p.expect(T!(ident));
-		p.expect(T!(to));
-		p.expect(T!(ident));
+		p.expect(TokenKind::Ident);
+		p.expect(TokenKind::ToKw);
+		p.expect(TokenKind::Ident);
 	}
 	apply_block(p);
 	m.complete(p, SyntaxKind::ApplyDecl)
@@ -95,75 +94,75 @@ fn apply_decl(p: &mut Parser) -> CompletedMarker {
 
 fn apply_block(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(T!(lbrace));
+	p.expect(TokenKind::LBrace);
 
-	while p.loop_safe_not_at(T!(rbrace)) {
+	while p.loop_safe_not_at(TokenKind::RBrace) {
 		fn_decl(p);
 	}
 
-	p.expect(T!(rbrace));
+	p.expect(TokenKind::RBrace);
 	m.complete(p, SyntaxKind::ApplyBlock)
 }
 
 fn mod_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(mod)));
+	assert!(p.at(TokenKind::ModKw));
 	let m = p.start();
 	p.bump();
-	p.expect(T!(ident));
-	p.expect(T!(semicolon));
+	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::SemiColon);
 	m.complete(p, SyntaxKind::ModDecl)
 }
 
 fn use_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(use)));
+	assert!(p.at(TokenKind::UseKw));
 	let m = p.start();
 	p.bump();
 	expr::path(p);
-	p.expect(T!(semicolon));
+	p.expect(TokenKind::SemiColon);
 	m.complete(p, SyntaxKind::UseDecl)
 }
 
 fn type_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(type)) || p.at(T!(pub)));
+	assert!(p.at(TokenKind::TypeKw) || p.at(TokenKind::PubKw));
 	let m = p.start();
-	if p.at(T!(pub)) {
+	if p.at(TokenKind::PubKw) {
 		p.bump()
 	}
-	p.expect(T!(type));
-	p.expect(T!(ident));
+	p.expect(TokenKind::TypeKw);
+	p.expect(TokenKind::Ident);
 	type_expr(p);
 	m.complete(p, SyntaxKind::TypeDecl)
 }
 
 fn fn_decl(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!(fn)) || p.at(T!(pub)));
+	assert!(p.at(TokenKind::FnKw) || p.at(TokenKind::PubKw));
 	let m = p.start();
-	if p.at(T!(pub)) {
+	if p.at(TokenKind::PubKw) {
 		p.bump()
 	}
-	p.expect(T!(fn));
-	p.expect(T![ident]);
-	if p.at(T![<]) {
+	p.expect(TokenKind::FnKw);
+	p.expect(TokenKind::Ident);
+	if p.at(TokenKind::CmpLt) {
 		generic_list(p);
 	}
 	fn_params(p);
-	if p.at(T!(->)) {
+	if p.at(TokenKind::Arrow) {
 		p.bump();
 		type_expr(p);
 	}
-	p.expect(T!(=>));
+	p.expect(TokenKind::FatArrow);
 	expr::expr(p, true);
 	m.complete(p, SyntaxKind::FnDecl)
 }
 
 pub(crate) fn generic_list(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T![<]));
+	assert!(p.at(TokenKind::CmpLt));
 	let m = p.start();
 	p.bump();
-	while p.loop_safe_not_at(T!(>)) {
-		p.expect(T![ident]);
-		if !p.at(T!(comma)) {
-			if !p.at(T!(>)) {
+	while p.loop_safe_not_at(TokenKind::CmpGt) {
+		p.expect(TokenKind::Ident);
+		if !p.at(TokenKind::Comma) {
+			if !p.at(TokenKind::CmpGt) {
 				p.expected(format!("`>` at end of generic list"));
 			}
 			break;
@@ -171,16 +170,16 @@ pub(crate) fn generic_list(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 		}
 	}
-	p.expect(T!(>));
+	p.expect(TokenKind::CmpGt);
 	m.complete(p, SyntaxKind::GenericList)
 }
 
 fn fn_params(p: &mut Parser) {
-	p.expect(T![lparen]);
-	while !p.at(T![rparen]) && !p.at_end() {
+	p.expect(TokenKind::LParen);
+	while !p.at(TokenKind::RParen) && !p.at_end() {
 		fn_param(p);
-		if !p.at(T![rparen]) {
-			if !p.at(T![comma]) {
+		if !p.at(TokenKind::RParen) {
+			if !p.at(TokenKind::Comma) {
 				p.expected(format!("either `,` or `)` in function parameter list"));
 				break;
 			} else {
@@ -188,16 +187,16 @@ fn fn_params(p: &mut Parser) {
 			}
 		}
 	}
-	p.expect(T![rparen]);
+	p.expect(TokenKind::RParen);
 }
 
 fn fn_param(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	if p.at(T![mut]) {
+	if p.at(TokenKind::MutKw) {
 		p.bump();
 	}
 	type_expr(p);
-	p.expect(T![ident]);
+	p.expect(TokenKind::Ident);
 	m.complete(p, SyntaxKind::FnParam)
 }
 

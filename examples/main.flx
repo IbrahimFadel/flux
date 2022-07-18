@@ -8,7 +8,7 @@ type Foo struct {
 
 apply ToI32 to Foo {
 	fn to_i32(u8 x, i32 x) -> i32 => {
-		
+		0
 	}
 }
 
