@@ -39,15 +39,27 @@ impl<'t, 'src> Parser<'t, 'src> {
 		Marker::new(pos)
 	}
 
-	pub(crate) fn expect(&mut self, kind: TokenKind) {
+	pub(crate) fn expect(&mut self, kind: TokenKind, recovery_set: &[TokenKind]) {
 		if self.at(kind) {
 			self.bump();
 		} else {
 			let range = self.peek_range();
-			self.error(ParseError::ExpectedToken {
+			let got = if let Some(tok) = self.peek() {
+				tok
+			} else {
+				TokenKind::Error
+			};
+			self.error(ParseError::UnexpectedToken {
 				expected: self.expected_kinds.clone(),
-				got: Spanned::new(kind, Span::new(range, self.source.file_id.clone())),
+				got: Spanned::new(
+					got,
+					Span::new(range, self.source.file_id.clone()),
+				),
 			});
+
+			while !self.at_set(recovery_set) && !self.at_end() {
+				self.bump();
+			}
 		}
 	}
 
@@ -75,7 +87,7 @@ impl<'t, 'src> Parser<'t, 'src> {
 
 	pub(crate) fn expected(&mut self, expected: String) {
 		let span = self.cur_span();
-		self.error(ParseError::Expected {
+		self.error(ParseError::Unxpected {
 			expected: Spanned::new(expected, span),
 		});
 	}
@@ -95,9 +107,9 @@ impl<'t, 'src> Parser<'t, 'src> {
 		self.peek_next() == Some(kind)
 	}
 
-	// pub(crate) fn at_set(&mut self, set: &[TokenKind]) -> bool {
-	// 	self.peek().map_or(false, |k| set.contains(&k))
-	// }
+	pub(crate) fn at_set(&mut self, set: &[TokenKind]) -> bool {
+		self.peek().map_or(false, |k| set.contains(&k))
+	}
 
 	pub(crate) fn at_end(&mut self) -> bool {
 		self.peek().is_none()

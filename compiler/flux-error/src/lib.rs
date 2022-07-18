@@ -8,6 +8,7 @@ pub trait Error {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FluxErrorCode {
+	UnexpectedToken,
 	TypeMismatch,
 	AppliedUnknownTrait,
 	AppliedUnknownMethodToTrait,

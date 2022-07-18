@@ -17,3 +17,6 @@ type Bar struct<T>
 {
 	x T,
 }
+
+fn ) => {
+}

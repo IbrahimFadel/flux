@@ -1,3 +1,5 @@
+use crate::{recovery, EXPR_RECOVERY_SET, TYPE_RECOVERY_SET};
+
 use super::{expr::type_expr, *};
 
 pub fn top_level_decl(p: &mut Parser) {
@@ -38,32 +40,35 @@ fn trait_decl(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(TokenKind::TraitKw));
 	let m = p.start();
 	p.bump();
-	p.expect(TokenKind::Ident);
-	p.expect(TokenKind::LBrace);
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::LBrace]));
+	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 	while p.loop_safe_not_at(TokenKind::RBrace) {
 		trait_method(p);
 	}
-	p.expect(TokenKind::RBrace);
+	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::TraitDecl)
 }
 
 fn trait_method(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::FnKw);
-	p.expect(TokenKind::Ident);
-	p.expect(TokenKind::LParen);
+	p.expect(TokenKind::FnKw, &recovery(&[TokenKind::Ident]));
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::LParen]));
+	p.expect(TokenKind::LParen, &recovery(&[TokenKind::RBrace]));
 	while !p.at(TokenKind::RParen) && !p.at_end() {
 		trait_method_param(p);
 		if !p.at(TokenKind::RParen) {
-			p.expect(TokenKind::Comma);
+			p.expect(TokenKind::Comma, &recovery(&[TokenKind::RBrace]));
 		}
 	}
-	p.expect(TokenKind::RParen);
+	p.expect(
+		TokenKind::RParen,
+		&recovery(&[&[TokenKind::Arrow], TYPE_RECOVERY_SET].concat()),
+	);
 	if p.at(TokenKind::Arrow) {
 		p.bump();
 		type_expr(p);
 	}
-	p.expect(TokenKind::SemiColon);
+	p.expect(TokenKind::SemiColon, &recovery(&[]));
 	m.complete(p, SyntaxKind::TraitMethod)
 }
 
@@ -73,7 +78,7 @@ fn trait_method_param(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 	}
 	type_expr(p);
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::Ident, &recovery(&[]));
 	m.complete(p, SyntaxKind::FnParam)
 }
 
@@ -84,9 +89,9 @@ fn apply_decl(p: &mut Parser) -> CompletedMarker {
 	if p.at(TokenKind::ToKw) {
 		p.bump();
 	} else {
-		p.expect(TokenKind::Ident);
-		p.expect(TokenKind::ToKw);
-		p.expect(TokenKind::Ident);
+		p.expect(TokenKind::Ident, &recovery(&[TokenKind::ToKw]));
+		p.expect(TokenKind::ToKw, &recovery(&[TokenKind::Ident]));
+		p.expect(TokenKind::Ident, &recovery(&[TokenKind::LBrace]));
 	}
 	apply_block(p);
 	m.complete(p, SyntaxKind::ApplyDecl)
@@ -94,13 +99,13 @@ fn apply_decl(p: &mut Parser) -> CompletedMarker {
 
 fn apply_block(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::LBrace);
+	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 
 	while p.loop_safe_not_at(TokenKind::RBrace) {
 		fn_decl(p);
 	}
 
-	p.expect(TokenKind::RBrace);
+	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::ApplyBlock)
 }
 
@@ -108,8 +113,8 @@ fn mod_decl(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(TokenKind::ModKw));
 	let m = p.start();
 	p.bump();
-	p.expect(TokenKind::Ident);
-	p.expect(TokenKind::SemiColon);
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::SemiColon]));
+	p.expect(TokenKind::SemiColon, &recovery(&[]));
 	m.complete(p, SyntaxKind::ModDecl)
 }
 
@@ -118,7 +123,7 @@ fn use_decl(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump();
 	expr::path(p);
-	p.expect(TokenKind::SemiColon);
+	p.expect(TokenKind::SemiColon, &recovery(&[]));
 	m.complete(p, SyntaxKind::UseDecl)
 }
 
@@ -128,8 +133,8 @@ fn type_decl(p: &mut Parser) -> CompletedMarker {
 	if p.at(TokenKind::PubKw) {
 		p.bump()
 	}
-	p.expect(TokenKind::TypeKw);
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::TypeKw, &recovery(&[TokenKind::Ident]));
+	p.expect(TokenKind::Ident, &recovery(TYPE_RECOVERY_SET));
 	type_expr(p);
 	m.complete(p, SyntaxKind::TypeDecl)
 }
@@ -140,8 +145,11 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 	if p.at(TokenKind::PubKw) {
 		p.bump()
 	}
-	p.expect(TokenKind::FnKw);
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::FnKw, &recovery(&[TokenKind::Ident]));
+	p.expect(
+		TokenKind::Ident,
+		&recovery(&[TokenKind::CmpLt, TokenKind::LParen]),
+	);
 	if p.at(TokenKind::CmpLt) {
 		generic_list(p);
 	}
@@ -150,7 +158,7 @@ fn fn_decl(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 		type_expr(p);
 	}
-	p.expect(TokenKind::FatArrow);
+	p.expect(TokenKind::FatArrow, &recovery(EXPR_RECOVERY_SET));
 	expr::expr(p, true);
 	m.complete(p, SyntaxKind::FnDecl)
 }
@@ -160,7 +168,7 @@ pub(crate) fn generic_list(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump();
 	while p.loop_safe_not_at(TokenKind::CmpGt) {
-		p.expect(TokenKind::Ident);
+		p.expect(TokenKind::Ident, &recovery(&[TokenKind::Comma]));
 		if !p.at(TokenKind::Comma) {
 			if !p.at(TokenKind::CmpGt) {
 				p.expected(format!("`>` at end of generic list"));
@@ -170,12 +178,12 @@ pub(crate) fn generic_list(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 		}
 	}
-	p.expect(TokenKind::CmpGt);
+	p.expect(TokenKind::CmpGt, &recovery(&[]));
 	m.complete(p, SyntaxKind::GenericList)
 }
 
 fn fn_params(p: &mut Parser) {
-	p.expect(TokenKind::LParen);
+	p.expect(TokenKind::LParen, &recovery(&[TokenKind::RParen]));
 	while !p.at(TokenKind::RParen) && !p.at_end() {
 		fn_param(p);
 		if !p.at(TokenKind::RParen) {
@@ -187,7 +195,7 @@ fn fn_params(p: &mut Parser) {
 			}
 		}
 	}
-	p.expect(TokenKind::RParen);
+	p.expect(TokenKind::RParen, &recovery(&[]));
 }
 
 fn fn_param(p: &mut Parser) -> CompletedMarker {
@@ -196,7 +204,7 @@ fn fn_param(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 	}
 	type_expr(p);
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::Ident, &recovery(&[]));
 	m.complete(p, SyntaxKind::FnParam)
 }
 

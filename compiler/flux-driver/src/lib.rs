@@ -114,7 +114,7 @@ fn parse_file_and_submodules<'a>(
 	cst
 		.errors
 		.iter()
-		.for_each(|err| err_reporting.report(err.into()));
+		.for_each(|err| err_reporting.report(&err.to_report()));
 	let root = ast::Root::cast(cst.syntax()).unwrap();
 	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
 	errors

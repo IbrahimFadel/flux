@@ -1,3 +1,5 @@
+use crate::{recovery, EXPR_RECOVERY_SET, TYPE_RECOVERY_SET};
+
 use super::*;
 
 enum InfixOp {
@@ -72,7 +74,7 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 			p.expected(format!("`)` at end of tuple type"));
 		}
 	}
-	p.expect(TokenKind::RParen);
+	p.expect(TokenKind::RParen, &recovery(&[TokenKind::RBrace]));
 	m.complete(p, SyntaxKind::TupleType)
 }
 
@@ -84,11 +86,14 @@ fn struct_type(p: &mut Parser) -> CompletedMarker {
 		decl::generic_list(p);
 		// parse where clause
 	}
-	p.expect(TokenKind::LBrace);
+	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 	while !p.at(TokenKind::RBrace) && !p.at_end() {
 		struct_type_field(p);
+		if !p.at(TokenKind::RBrace) {
+			p.expect(TokenKind::Comma, &recovery(&[TokenKind::RBrace]));
+		}
 	}
-	p.expect(TokenKind::RBrace);
+	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::StructType)
 }
 
@@ -100,9 +105,8 @@ fn struct_type_field(p: &mut Parser) -> CompletedMarker {
 	if p.at(TokenKind::MutKw) {
 		p.bump();
 	}
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::Ident, &recovery(TYPE_RECOVERY_SET));
 	type_expr(p);
-	p.expect(TokenKind::Comma);
 	m.complete(p, SyntaxKind::StructTypeField)
 }
 
@@ -176,10 +180,10 @@ fn expr_binding_power(
 
 pub(crate) fn path(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::DoubleColon]));
 	while p.at(TokenKind::DoubleColon) && !p.at_end() {
 		p.bump();
-		p.expect(TokenKind::Ident);
+		p.expect(TokenKind::Ident, &recovery(&[TokenKind::DoubleColon]));
 	}
 	m.complete(p, SyntaxKind::PathExpr)
 }
@@ -205,17 +209,16 @@ fn struct_initialization(p: &mut Parser, e: CompletedMarker) -> CompletedMarker 
 		if p.at(TokenKind::Comma) {
 			p.bump();
 		} else {
-			p.expect(TokenKind::Colon);
+			p.expect(TokenKind::Colon, &recovery(EXPR_RECOVERY_SET));
 			expr(p, true);
 			if !p.at(TokenKind::RBrace) {
-				p.expect(TokenKind::Comma);
+				p.expect(TokenKind::Comma, &recovery(&[TokenKind::Ident]));
 			}
 		}
 		m.complete(p, SyntaxKind::StructExprField);
 	}
 
-	p.expect(TokenKind::RBrace);
-
+	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::StructExpr)
 }
 
@@ -235,7 +238,7 @@ fn call(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
 			}
 		}
 	}
-	p.expect(TokenKind::RParen);
+	p.expect(TokenKind::RParen, &recovery(&[]));
 
 	m.complete(p, SyntaxKind::CallExpr)
 }
@@ -265,13 +268,13 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 
 fn int_lit(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::IntLit);
+	p.expect(TokenKind::IntLit, &recovery(&[]));
 	m.complete(p, SyntaxKind::IntExpr)
 }
 
 fn float_lit(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::FloatLit);
+	p.expect(TokenKind::FloatLit, &recovery(&[]));
 	m.complete(p, SyntaxKind::FloatExpr)
 }
 
@@ -310,13 +313,13 @@ fn paren_or_tuple_expr(p: &mut Parser, allow_struct_expressions: bool) -> Comple
 		p.bump();
 		return m.complete(p, SyntaxKind::TupleExpr);
 	}
-	p.expect(TokenKind::RParen);
+	p.expect(TokenKind::RParen, &recovery(&[]));
 	m.complete(p, SyntaxKind::ParenExpr)
 }
 
 fn if_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::IfKw);
+	p.expect(TokenKind::IfKw, &recovery(&[]));
 	expr::expr(p, false);
 	expr::block_expr(p);
 	if p.at(TokenKind::ElseKw) {
@@ -332,11 +335,11 @@ fn if_expr(p: &mut Parser) -> CompletedMarker {
 
 pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
-	p.expect(TokenKind::LBrace);
+	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 	while p.loop_safe_not_at(TokenKind::RBrace) {
 		stmt::stmt(p);
 	}
-	p.expect(TokenKind::RBrace);
+	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::BlockExpr)
 }
 

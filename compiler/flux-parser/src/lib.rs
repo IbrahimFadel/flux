@@ -1,6 +1,6 @@
 use self::{sink::Sink, source::Source};
 use errors::ParseError;
-use flux_lexer::Lexer;
+use flux_lexer::{Lexer, TokenKind};
 use flux_span::FileId;
 use flux_syntax::syntax_kind::SyntaxNode;
 use parser::Parser;
@@ -12,6 +12,34 @@ pub mod grammar;
 pub mod parser;
 pub mod sink;
 pub mod source;
+
+const GLOBAL_RECOVERY_SET: &[TokenKind] = &[
+	TokenKind::PubKw,
+	TokenKind::FnKw,
+	TokenKind::TypeKw,
+	TokenKind::TraitKw,
+	TokenKind::ApplyKw,
+];
+
+const TYPE_RECOVERY_SET: &[TokenKind] = &[
+	TokenKind::INKw,
+	TokenKind::UNKw,
+	TokenKind::F64Kw,
+	TokenKind::F32Kw,
+	TokenKind::Ident,
+	TokenKind::LParen,
+];
+
+const EXPR_RECOVERY_SET: &[TokenKind] = &[
+	TokenKind::IntLit,
+	TokenKind::FloatLit,
+	TokenKind::Ident,
+	TokenKind::LParen,
+];
+
+fn recovery<'a>(set: &'a [TokenKind]) -> Vec<TokenKind> {
+	[set, GLOBAL_RECOVERY_SET].concat()
+}
 
 pub fn parse(src: &str, file_id: FileId) -> Parse {
 	let tokens: Vec<_> = Lexer::new(src).collect();

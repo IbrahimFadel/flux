@@ -1,3 +1,5 @@
+use crate::{recovery, EXPR_RECOVERY_SET};
+
 use super::{expr::type_expr, *};
 
 pub(crate) fn stmt(p: &mut Parser) -> CompletedMarker {
@@ -30,7 +32,7 @@ fn return_stmt(p: &mut Parser) -> CompletedMarker {
 		return m.complete(p, SyntaxKind::ReturnStmt);
 	}
 	expr::expr(p, true);
-	p.expect(TokenKind::SemiColon);
+	p.expect(TokenKind::SemiColon, &recovery(&[]));
 	m.complete(p, SyntaxKind::ReturnStmt)
 }
 
@@ -38,13 +40,13 @@ fn var_decl(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(TokenKind::LetKw));
 	let m = p.start();
 	p.bump();
-	p.expect(TokenKind::Ident);
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::Eq]));
 	if !p.at(TokenKind::Eq) {
 		type_expr(p);
 	}
-	p.expect(TokenKind::Eq);
+	p.expect(TokenKind::Eq, &recovery(EXPR_RECOVERY_SET));
 	expr::expr(p, true);
-	p.expect(TokenKind::SemiColon);
+	p.expect(TokenKind::SemiColon, &recovery(&[]));
 	m.complete(p, SyntaxKind::VarDecl)
 }
 
