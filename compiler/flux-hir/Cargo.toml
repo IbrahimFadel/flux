@@ -9,8 +9,16 @@ edition = "2021"
 flux-syntax = { path = "../flux-syntax" }
 flux-typesystem = { path = "../flux-typesystem" }
 flux-error = { path = "../flux-error" }
+flux-span = { path = "../flux-span" }
 smol_str = "0.1.21"
 la-arena = "0.2.0"
 indexmap = "1.7.0"
 text-size = "1.0.0"
 itertools = "0.10.3"
+ariadne = "0.1.5"
+
+[dev-dependencies]
+insta = "1.15.0"
+paste = "1.0.7"
+flux-lexer = { path = "../flux-lexer" }
+flux-parser = { path = "../flux-parser" }

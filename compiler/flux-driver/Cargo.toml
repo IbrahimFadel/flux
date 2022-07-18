@@ -11,5 +11,7 @@ flux-syntax = { path = "../flux-syntax" }
 flux-parser = { path = "../flux-parser" }
 flux-hir = { path = "../flux-hir" }
 flux-depend = { path = "../flux-depend" }
+flux-span = { path = "../flux-span" }
 text-size = "1.0.0"
 smol_str = "0.1.23"
+ariadne = "0.1.5"

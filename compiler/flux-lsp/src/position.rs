@@ -66,10 +66,10 @@ pub fn flux_range_to_position(range: TextRange, src: &str) -> Range {
 	}
 }
 
-pub fn flux_span_to_location(uri: &Url, span: &flux_error::Span, src: &str) -> Location {
-	let range = flux_range_to_position(span.range, src);
-	Location {
-		uri: uri.clone(),
-		range,
-	}
-}
+// pub fn flux_span_to_location(uri: &Url, span: &flux_error::Span, src: &str) -> Location {
+// 	let range = flux_range_to_position(span.range, src);
+// 	Location {
+// 		uri: uri.clone(),
+// 		range,
+// 	}
+// }

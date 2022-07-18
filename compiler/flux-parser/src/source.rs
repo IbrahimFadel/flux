@@ -1,15 +1,15 @@
-use flux_error::FileId;
 use flux_lexer::{Token, TokenKind};
+use flux_span::FileId;
 use text_size::TextRange;
 
-pub(super) struct Source<'t, 'src> {
+pub struct Source<'t, 'src> {
 	tokens: &'t [Token<'src>],
 	cursor: usize,
 	pub(crate) file_id: FileId,
 }
 
 impl<'t, 'src> Source<'t, 'src> {
-	pub(super) fn new(tokens: &'t [Token<'src>], file_id: FileId) -> Self {
+	pub fn new(tokens: &'t [Token<'src>], file_id: FileId) -> Self {
 		Self {
 			tokens,
 			cursor: 0,

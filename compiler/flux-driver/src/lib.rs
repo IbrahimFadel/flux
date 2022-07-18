@@ -1,14 +1,22 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use flux_error::{FileId, FluxError, FluxErrorCode, FluxErrorReporting, Span};
-use flux_hir::{
-	hir::{Spanned, Visibility},
-	HirModule,
-};
+use ariadne::Report;
+use flux_error::{Error, FluxErrorReporting};
+use flux_hir::{hir::Visibility, HirModule};
 use flux_parser::parse;
+use flux_span::{FileId, Span, Spanned};
 use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
+
+#[derive(Debug)]
+enum DriverError {}
+
+impl<'a> Into<&'a Report<Span>> for &'a DriverError {
+	fn into(self) -> &'a Report<Span> {
+		todo!()
+	}
+}
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
@@ -25,37 +33,38 @@ pub type TypeExportTable = HashMap<Vec<SmolStr>, Spanned<flux_hir::hir::Type>>;
 fn find_path_with_mod_name(
 	parent_dir: &str,
 	name: &Spanned<SmolStr>,
-) -> Result<(String, String), FluxError> {
-	let src = fs::read_to_string(&format!("{}/{}.flx", parent_dir, name.node));
+) -> Result<(String, String), DriverError> {
+	let src = fs::read_to_string(&format!("{}/{}.flx", parent_dir, name.inner));
 	if let Some(_) = src.as_ref().err() {
-		let src = fs::read_to_string(&format!("{}/{}/{}.flx", parent_dir, name.node, name.node));
+		let src = fs::read_to_string(&format!("{}/{}/{}.flx", parent_dir, name.inner, name.inner));
 		if let Some(_) = src.as_ref().err() {
-			Err(
-				FluxError::build(
-					format!("could not find module `{}`", name.node),
-					name.span.clone(),
-					FluxErrorCode::CouldNotFindModule,
-					(
-						format!("could not find module `{}`", name.node),
-						name.span.clone(),
-					),
-				)
-				.with_label(
-					format!(
-						"no such file `{}/{}.flx` or `{}/{}/{}.flx`",
-						parent_dir, name.node, parent_dir, name.node, name.node
-					),
-					name.span.clone(),
-				),
-			)
+			todo!()
+		// Err(
+		// 	FluxError::build(
+		// 		format!("could not find module `{}`", name.inner),
+		// 		name.span.clone(),
+		// 		FluxErrorCode::CouldNotFindModule,
+		// 		(
+		// 			format!("could not find module `{}`", name.inner),
+		// 			name.span.clone(),
+		// 		),
+		// 	)
+		// 	.with_label(
+		// 		format!(
+		// 			"no such file `{}/{}.flx` or `{}/{}/{}.flx`",
+		// 			parent_dir, name.inner, parent_dir, name.inner, name.inner
+		// 		),
+		// 		name.span.clone(),
+		// 	),
+		// )
 		} else {
 			Ok((
-				format!("{}/{}/{}.flx", parent_dir, name.node, name.node),
+				format!("{}/{}/{}.flx", parent_dir, name.inner, name.inner),
 				src.unwrap(),
 			))
 		}
 	} else {
-		Ok((format!("{}/{}.flx", parent_dir, name.node), src.unwrap()))
+		Ok((format!("{}/{}.flx", parent_dir, name.inner), src.unwrap()))
 	}
 }
 
@@ -66,16 +75,16 @@ fn populate_export_table(
 	type_exports: &mut TypeExportTable,
 ) {
 	for f in &module.functions {
-		if f.visibility.node == Visibility::Public {
+		if f.visibility.inner == Visibility::Public {
 			let mut path = module_path.clone();
-			path.push(f.name.node.clone());
+			path.push(f.name.inner.clone());
 			function_exports.insert(path, generate_function_signature(f));
 		}
 	}
 	for ty in &module.types {
-		if ty.visibility.node == Visibility::Public {
+		if ty.visibility.inner == Visibility::Public {
 			let mut path = module_path.clone();
-			path.push(ty.name.node.clone());
+			path.push(ty.name.inner.clone());
 			type_exports.insert(path, ty.ty.clone());
 		}
 	}
@@ -92,21 +101,25 @@ fn parse_file_and_submodules<'a>(
 ) {
 	let src = find_path_with_mod_name(parent_dir, name);
 	if let Some(err) = src.as_ref().err() {
-		err_reporting.report(err);
+		err_reporting.report(err.into());
 		return;
 	}
 	let (path, src) = src.unwrap();
 
 	let file_id = err_reporting.add_file(
-		format!("{}/{}.flx", parent_dir, name.node).into(),
+		format!("{}/{}.flx", parent_dir, name.inner).into(),
 		src.clone(),
 	);
 	let cst = parse(src.as_str(), file_id.clone());
-	// println!("{}", cst.debug_tree());
-	cst.errors.iter().for_each(|err| err_reporting.report(err));
+	cst
+		.errors
+		.iter()
+		.for_each(|err| err_reporting.report(err.into()));
 	let root = ast::Root::cast(cst.syntax()).unwrap();
 	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
-	errors.iter().for_each(|err| err_reporting.report(err));
+	errors
+		.iter()
+		.for_each(|err| err_reporting.report(&err.to_report()));
 	if errors.len() + cst.errors.len() > 0 {
 		exit(1);
 	}
@@ -123,7 +136,7 @@ fn parse_file_and_submodules<'a>(
 	for m in &hir_module.mods {
 		let parent_dir = Path::new(&path).parent().unwrap();
 		let mut module_path = module_path.clone();
-		module_path.push(m.name.node.clone());
+		module_path.push(m.name.inner.clone());
 		parse_file_and_submodules(
 			parent_dir.to_str().unwrap(),
 			module_path,
@@ -149,37 +162,40 @@ fn generate_function_signature(f: &flux_hir::hir::FnDecl) -> FunctionSignature {
 }
 
 fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut FluxErrorReporting) {
-	let mut errors = vec![];
+	let mut errors: Vec<DriverError> = vec![];
 	let mut unique_uses: Vec<Spanned<SmolStr>> = vec![]; // hash set
 	for u in uses {
 		let last = u.path.last().unwrap();
-		if let Some(idx) = unique_uses.iter().position(|u| u.node == last.as_str()) {
-			errors.push(
-				FluxError::build(
-					format!("ambiguous `use` for `{}`", last.to_string()),
-					last.span.clone(),
-					FluxErrorCode::AmbiguousUse,
-					(
-						format!("ambiguous `use` for `{}`", last.to_string()),
-						last.span.clone(),
-					),
-				)
-				.with_label(format!("one here"), unique_uses[idx].span.clone())
-				.with_label(format!("another here"), last.span.clone())
-				.with_note(format!(
-					"(hint) consider doing `use {} as foo;` to disambiguate",
-					u.path
-						.iter()
-						.map(|s| s.to_string())
-						.collect::<Vec<String>>()
-						.join("::")
-				)),
-			);
+		if let Some(idx) = unique_uses.iter().position(|u| u.inner == last.as_str()) {
+			todo!()
+		// errors.push(
+		// 	FluxError::build(
+		// 		format!("ambiguous `use` for `{}`", last.to_string()),
+		// 		last.span.clone(),
+		// 		FluxErrorCode::AmbiguousUse,
+		// 		(
+		// 			format!("ambiguous `use` for `{}`", last.to_string()),
+		// 			last.span.clone(),
+		// 		),
+		// 	)
+		// 	.with_label(format!("one here"), unique_uses[idx].span.clone())
+		// 	.with_label(format!("another here"), last.span.clone())
+		// 	.with_note(format!(
+		// 		"(hint) consider doing `use {} as foo;` to disambiguate",
+		// 		u.path
+		// 			.iter()
+		// 			.map(|s| s.to_string())
+		// 			.collect::<Vec<String>>()
+		// 			.join("::")
+		// 	)),
+		// );
 		} else {
 			unique_uses.push(last.clone());
 		}
 	}
-	errors.iter().for_each(|err| err_reporting.report(err));
+	errors
+		.iter()
+		.for_each(|err| err_reporting.report(err.into()));
 }
 
 pub fn parse_main_with_dependencies(

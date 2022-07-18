@@ -1,7 +1,8 @@
 use std::cell::{Ref, RefMut};
 
 use crate::mir::{builder::Builder, *};
-use flux_hir::hir::{self as hir, Spanned};
+use flux_hir::hir::{self as hir};
+use flux_span::Spanned;
 use hir::ExprIdx;
 use la_arena::Arena;
 use smol_str::SmolStr;
@@ -32,15 +33,14 @@ impl<'a> MirLoweringCtx<'a> {
 	pub fn lower_function(&mut self, hir_fn: &hir::FnDecl) {
 		let params: Vec<_> = hir_fn
 			.params
-			.node
 			.iter()
 			.map(|p| FnParam {
-				ty: hir_ty_to_mir_ty(&p.ty.node),
+				ty: hir_ty_to_mir_ty(&p.ty.inner),
 				name: p.name.as_ref().unwrap().clone(),
 			})
 			.collect();
 		let mir_function = self.module.new_function(
-			hir_fn.name.node.clone(),
+			hir_fn.name.inner.clone(),
 			params,
 			hir_ty_to_mir_ty(&hir_fn.return_type),
 		);
@@ -73,7 +73,7 @@ impl<'a> MirLoweringCtx<'a> {
 	}
 
 	fn lower_ret_stmt(&mut self, ret: &hir::Return) {
-		let v = match &self.exprs[ret.value].node {
+		let v = match &self.exprs[ret.value].inner {
 			hir::Expr::Missing => None,
 			_ => Some(self.lower_expr(ret.value)),
 		};
@@ -85,7 +85,7 @@ impl<'a> MirLoweringCtx<'a> {
 		let cond = self.lower_expr(if_stmt.condition);
 		let then = self.builder.append_new_block();
 		let else_ = self.builder.new_block();
-		let merge = if let hir::Expr::Missing = &self.exprs[if_stmt.else_].node {
+		let merge = if let hir::Expr::Missing = &self.exprs[if_stmt.else_].inner {
 			else_.clone()
 		} else {
 			self.builder.new_block()
@@ -96,13 +96,13 @@ impl<'a> MirLoweringCtx<'a> {
 			.new_brnz(cond, then.borrow().id, else_.borrow().id);
 
 		self.builder.cur_block = Some(then.clone());
-		if let hir::Expr::Block(block) = &self.exprs[if_stmt.then].node {
+		if let hir::Expr::Block(block) = &self.exprs[if_stmt.then].inner {
 			for stmt in &block.0 {
 				self.lower_stmt(&stmt);
 			}
 		}
 
-		if let hir::Expr::Missing = &self.exprs[if_stmt.else_].node {
+		if let hir::Expr::Missing = &self.exprs[if_stmt.else_].inner {
 			if then.borrow().terminator.is_none() {
 				self.builder.new_br(else_.borrow().id);
 			}
@@ -111,7 +111,7 @@ impl<'a> MirLoweringCtx<'a> {
 		}
 
 		self.builder.cur_block = Some(else_.clone());
-		match &self.exprs[if_stmt.else_].node {
+		match &self.exprs[if_stmt.else_].inner {
 			hir::Expr::Missing => {
 				self.builder.append_existing_block(else_);
 				RValue::Unit
@@ -149,7 +149,7 @@ impl<'a> MirLoweringCtx<'a> {
 	}
 
 	fn lower_expr(&mut self, expr: ExprIdx) -> RValue {
-		match &self.exprs[expr].node {
+		match &self.exprs[expr].inner {
 			hir::Expr::Int(int) => self.lower_int_expr(int),
 			hir::Expr::Float(float) => self.lower_float_expr(float),
 			hir::Expr::Binary(binary) => self.lower_binary_expr(binary),
@@ -157,7 +157,7 @@ impl<'a> MirLoweringCtx<'a> {
 			hir::Expr::Block(block) => self.lower_block(block),
 			hir::Expr::If(if_) => self.lower_if_expr(if_),
 			hir::Expr::Missing => RValue::Unit,
-			_ => todo!("unimplemented expr: {:#?}", self.exprs[expr].node),
+			_ => todo!("unimplemented expr: {:#?}", self.exprs[expr].inner),
 		}
 	}
 
@@ -165,7 +165,7 @@ impl<'a> MirLoweringCtx<'a> {
 		let name: SmolStr = SmolStr::from(
 			ident
 				.iter()
-				.map(|s| s.node.clone())
+				.map(|s| s.inner.clone())
 				.collect::<Vec<_>>()
 				.join("::"),
 		);

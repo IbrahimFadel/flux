@@ -37,6 +37,8 @@ pub enum TokenKind {
 	ApplyKw,
 	#[token("to")]
 	ToKw,
+	#[token("where")]
+	WhereKw,
 	#[token("mut")]
 	MutKw,
 	#[token("if")]
@@ -130,6 +132,7 @@ macro_rules! T {
 	[type] => { $crate::TokenKind::TypeKw };
 	[apply] => { $crate::TokenKind::ApplyKw };
 	[to] => { $crate::TokenKind::ToKw };
+	[where] => { $crate::TokenKind::WhereKw };
 	[mut] => { $crate::TokenKind::MutKw };
 	[if] => { $crate::TokenKind::IfKw };
 	[else] => { $crate::TokenKind::ElseKw };

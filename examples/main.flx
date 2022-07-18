@@ -8,6 +8,12 @@ type Foo struct {
 
 apply ToI32 to Foo {
 	fn to_i32(u8 x, i32 x) -> i32 => {
-		0
+		
 	}
+}
+
+// TODO: parse where clauses, start typechecking generics
+type Bar struct<T>
+{
+	x T,
 }

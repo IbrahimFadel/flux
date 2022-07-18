@@ -9,6 +9,7 @@ edition = "2021"
 flux-error = { path = "../flux-error" }
 flux-lexer = { path = "../flux-lexer" }
 flux-syntax = { path = "../flux-syntax" }
+flux-span = { path = "../flux-span" }
 smol_str = "0.1.21"
 indexmap = "1.7.0"
 rowan = "0.15.4"
@@ -17,6 +18,7 @@ num-derive = "0.3.3"
 num-traits = "0.2.14"
 drop_bomb = "0.1.5"
 text-size = "1.0.0"
+ariadne = "0.1.5"
 
 [dev-dependencies]
 insta = "1.14.0"

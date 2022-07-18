@@ -1,14 +1,15 @@
-use flux_error::FluxError;
 use flux_syntax::syntax_kind::SyntaxKind;
 
+use crate::errors::ParseError;
+
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Event {
+pub enum Event {
 	StartNode {
 		kind: SyntaxKind,
 		forward_parent: Option<usize>,
 	},
 	AddToken,
 	FinishNode,
-	Error(FluxError),
+	Error(ParseError),
 	Placeholder,
 }

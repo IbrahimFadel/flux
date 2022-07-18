@@ -1,10 +1,16 @@
-use flux_error::FluxErrorCode;
+use std::{collections::HashMap, fmt};
 
-use super::*;
+use flux_span::{Span, Spanned};
+use smol_str::SmolStr;
+
+use crate::r#type::{ConcreteKind, TypeId, TypeKind};
+
+pub enum InferenceError {
+	CouldNotInfer { ty_span: Span },
+}
 
 pub struct TypeEnv {
-	pub id_counter: usize,
-	pub vars: HashMap<TypeId, Spanned<TypeKind>>,
+	pub vars: Vec<Spanned<TypeKind>>,
 	pub var_ids: HashMap<SmolStr, TypeId>,
 	pub return_type_id: TypeId,
 }
@@ -12,15 +18,20 @@ pub struct TypeEnv {
 impl TypeEnv {
 	pub fn new() -> Self {
 		Self {
-			id_counter: 0,
-			vars: HashMap::new(),
+			vars: vec![],
 			var_ids: HashMap::new(),
 			return_type_id: 0,
 		}
 	}
 
+	pub fn insert(&mut self, ty: Spanned<TypeKind>) -> TypeId {
+		let id = self.vars.len();
+		self.vars.push(ty);
+		id
+	}
+
 	pub fn get_type(&self, id: TypeId) -> Spanned<TypeKind> {
-		self.vars[&id].clone()
+		self.vars.get(id).cloned().unwrap()
 	}
 
 	pub fn get_path_id(&self, path: &[SmolStr]) -> TypeId {
@@ -31,42 +42,38 @@ impl TypeEnv {
 		self.var_ids.insert(SmolStr::from(path.join("::")), id);
 	}
 
-	pub fn reconstruct(&self, id: TypeId) -> Result<Spanned<TypeKind>, FluxError> {
-		use TypeKind::*;
-		let span = self.vars[&id].span.clone();
-		match &self.vars[&id].inner {
-			Unknown => Err(FluxError::build(
-				format!("could not infer type"),
-				span.clone(),
-				FluxErrorCode::CouldNotInferType,
-				(format!("could not infer type"), span.clone()),
-			)),
-			Ref(id) => self.reconstruct(*id),
-			Int(id) => {
-				if let Some(id) = id {
-					self.reconstruct(*id)
-				} else {
-					Ok(Spanned {
-						inner: TypeKind::Int(None),
-						span,
-					})
-				}
-			}
-			Float(id) => {
-				if let Some(id) = id {
-					self.reconstruct(*id)
-				} else {
-					Ok(Spanned {
-						inner: TypeKind::Float(None),
-						span,
-					})
-				}
-			}
-			Concrete(t) => Ok(Spanned {
-				inner: TypeKind::Concrete(t.clone()),
-				span,
-			}),
-		}
+	pub fn reconstruct(&self, id: TypeId) -> Result<Spanned<TypeKind>, InferenceError> {
+		todo!()
+		// use TypeKind::*;
+		// let span = self.vars[&id].span.clone();
+		// match &self.vars[&id].inner {
+		// 	Unknown => Err(InferenceError::CouldNotInfer { ty_span: span }),
+		// 	Ref(id) => self.reconstruct(*id),
+		// 	Int(id) => {
+		// 		if let Some(id) = id {
+		// 			self.reconstruct(*id)
+		// 		} else {
+		// 			Ok(Spanned {
+		// 				inner: TypeKind::Int(None),
+		// 				span,
+		// 			})
+		// 		}
+		// 	}
+		// 	Float(id) => {
+		// 		if let Some(id) = id {
+		// 			self.reconstruct(*id)
+		// 		} else {
+		// 			Ok(Spanned {
+		// 				inner: TypeKind::Float(None),
+		// 				span,
+		// 			})
+		// 		}
+		// 	}
+		// 	Concrete(t) => Ok(Spanned {
+		// 		inner: TypeKind::Concrete(t.clone()),
+		// 		span,
+		// 	}),
+		// }
 	}
 
 	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
@@ -89,14 +96,14 @@ impl TypeEnv {
 					"{} -> {}",
 					if let Some(s) = i
 						.iter()
-						.map(|ty| self.fmt_ty(&ty))
+						.map(|ty| self.fmt_ty(&self.get_type(*ty).inner))
 						.reduce(|s, ty| format!("{}, {}", s, ty))
 					{
 						s
 					} else {
 						String::from("()")
 					},
-					self.fmt_ty(o)
+					self.fmt_ty(&self.get_type(**o))
 				),
 			},
 			TypeKind::Ref(id) => format!("Ref({})", id),
@@ -126,9 +133,9 @@ impl fmt::Display for TypeEnv {
 			s += &format!("{} -> {:?}\n", var.0, var.1);
 		}
 		s += &format!("\n-------------\n");
-		for var in &self.vars {
-			s += &format!("{} -> {}\n", var.0, self.fmt_ty(&var.1.inner));
-		}
+		// for var in &self.vars {
+		// 	s += &format!("{} -> {}\n", var.0, self.fmt_ty(&var.1.inner));
+		// }
 		write!(f, "{}", s)
 	}
 }

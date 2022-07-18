@@ -6,8 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# codespan = "0.11.1"
-# codespan-reporting = "0.11.1"
 text-size = "1.0.0"
 ariadne = "0.1.5"
 smol_str = "0.1.23"
+flux-span = { path = "../flux-span" }

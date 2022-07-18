@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use flux_error::FileId;
 use flux_parser::parse;
+use flux_span::FileId;
 
 const INPUT_FILE: &str = r#"
 type Bar u16

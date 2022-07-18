@@ -1,8 +1,8 @@
-use flux_typesystem::TypeId;
+use flux_typesystem::r#type::ConcreteKind;
 
 use super::*;
 
-type StmtResult = Result<((Spanned<Stmt>, TypeId), bool), FluxError>;
+type StmtResult = Result<((Spanned<Stmt>, TypeId), bool), LowerError>;
 
 impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_stmt(&mut self, ast: ast::Stmt) -> StmtResult {
@@ -28,13 +28,16 @@ impl<'a> LoweringCtx<'a> {
 	fn lower_var_decl(&mut self, var_decl: &ast::VarDecl) -> StmtResult {
 		if let Some(name) = var_decl.name() {
 			let var_ty = self.lower_type(var_decl.ty())?;
-			let var_ty_id = self.tchecker.tenv.insert(var_ty.clone());
+			let var_ty_id = self.tchecker.tenv.insert(to_ty_kind(&var_ty));
 			let (expr, expr_id) = self.lower_expr(var_decl.value())?;
-			self.tchecker.unify(
-				var_ty_id,
-				expr_id,
-				Span::combine(&var_ty.span, &self.exprs[expr].span),
-			)?;
+			self
+				.tchecker
+				.unify(
+					var_ty_id,
+					expr_id,
+					Span::combine(&var_ty.span, &self.exprs[expr].span),
+				)
+				.map_err(LowerError::TypeError)?;
 			self
 				.tchecker
 				.tenv
@@ -50,32 +53,36 @@ impl<'a> LoweringCtx<'a> {
 						Span::new(var_decl.range(), self.file_id.clone()),
 					),
 					self.tchecker.tenv.insert(Spanned::new(
-						Type::Tuple(vec![]),
+						TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
 						Span::new(var_decl.range(), self.file_id.clone()),
 					)),
 				),
 				true,
 			))
 		} else {
-			Err(FluxError::build(
-				format!("could not lower variable declaration: missing name"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower variable declaration: missing name"),
-					self.default_span(),
-				),
-			))
+			todo!()
+			// Err(FluxError::build(
+			// 	format!("could not lower variable declaration: missing name"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower variable declaration: missing name"),
+			// 		self.default_span(),
+			// 	),
+			// ))
 		}
 	}
 
 	fn lower_return_stmt(&mut self, return_stmt: &ast::ReturnStmt) -> StmtResult {
 		let (value, value_id) = self.lower_expr(return_stmt.value())?;
-		self.tchecker.unify(
-			self.tchecker.tenv.return_type_id,
-			value_id,
-			self.exprs[value].span.clone(),
-		)?;
+		self
+			.tchecker
+			.unify(
+				self.tchecker.tenv.return_type_id,
+				value_id,
+				self.exprs[value].span.clone(),
+			)
+			.map_err(LowerError::TypeError)?;
 		Ok((
 			(
 				Spanned::new(
@@ -83,7 +90,7 @@ impl<'a> LoweringCtx<'a> {
 					Span::new(return_stmt.range(), self.file_id.clone()),
 				),
 				self.tchecker.tenv.insert(Spanned::new(
-					Type::Tuple(vec![]),
+					TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
 					Span::new(return_stmt.range(), self.file_id.clone()),
 				)),
 			),

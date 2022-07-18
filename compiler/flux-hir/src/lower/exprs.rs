@@ -1,27 +1,28 @@
 use flux_syntax::ast::{CallExpr, FloatExpr, IntExpr, PathExpr};
-use flux_typesystem::TypeId;
+use flux_typesystem::r#type::{ConcreteKind, TypeId};
 
 use super::*;
 
-type ExprResult = Result<(Expr, TypeId), FluxError>;
+type ExprResult = Result<(Expr, TypeId), LowerError>;
 
 impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_expr(
 		&mut self,
 		expr: Option<ast::Expr>,
-	) -> Result<(Idx<Spanned<Expr>>, TypeId), FluxError> {
+	) -> Result<(Idx<Spanned<Expr>>, TypeId), LowerError> {
 		let expr = if let Some(expr) = expr {
 			expr
 		} else {
-			return Err(FluxError::build(
-				format!("could not lower expression: missing"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower expression: missing"),
-					self.default_span(),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower expression: missing"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower expression: missing"),
+			// 		self.default_span(),
+			// 	),
+			// ));
 		};
 		let range = expr.range();
 		let idx = if let ast::Expr::ParenExpr(paren_e) = expr {
@@ -64,19 +65,20 @@ impl<'a> LoweringCtx<'a> {
 				_ => unreachable!(),
 			}
 		} else {
-			return Err(FluxError::build(
-				format!("could not lower binary expression: missing operator"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower binary expression: missing operator"),
-					self.default_span(),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower binary expression: missing operator"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower binary expression: missing operator"),
+			// 		self.default_span(),
+			// 	),
+			// ));
 		};
 
 		let binary_ty = self.tchecker.tenv.insert(Spanned::new(
-			Type::Unknown,
+			TypeKind::Unknown,
 			Span::new(bin_expr.range(), self.file_id.clone()),
 		)); // let's figure out what type it has
 		let (lhs, lhs_id) = self.lower_expr(bin_expr.lhs())?;
@@ -85,30 +87,37 @@ impl<'a> LoweringCtx<'a> {
 		let (rhs, rhs_id) = self.lower_expr(bin_expr.rhs())?;
 		let rhs_ty = self.tchecker.tenv.get_type(rhs_id);
 		let rhs_id = self.tchecker.tenv.insert(rhs_ty);
-		self.tchecker.unify(
-			lhs_id,
-			rhs_id,
-			Span::combine(&self.exprs[lhs].span, &self.exprs[rhs].span),
-		)?;
-		self.tchecker.unify(
-			binary_ty,
-			lhs_id,
-			Span::new(bin_expr.range(), self.file_id.clone()),
-		)?; // Now the bin_expr type is dependent on the terms
+		self
+			.tchecker
+			.unify(
+				lhs_id,
+				rhs_id,
+				Span::combine(&self.exprs[lhs].span, &self.exprs[rhs].span),
+			)
+			.map_err(LowerError::TypeError)?;
+		self
+			.tchecker
+			.unify(
+				binary_ty,
+				lhs_id,
+				Span::new(bin_expr.range(), self.file_id.clone()),
+			)
+			.map_err(LowerError::TypeError)?;
 		Ok((Expr::Binary(Binary { op, lhs, rhs }), binary_ty))
 	}
 
 	fn lower_int(&mut self, int_expr: IntExpr) -> ExprResult {
 		if int_expr.tok().is_none() {
-			return Err(FluxError::build(
-				format!("could not lower int expression: missing value"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower int expression: missing value"),
-					self.default_span(),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower int expression: missing value"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower int expression: missing value"),
+			// 		self.default_span(),
+			// 	),
+			// ));
 		}
 		let int = int_expr.tok().unwrap().text().replace("_", "");
 		let radix: u32 = if let Some(prefix) = int.get(0..1) {
@@ -123,21 +132,22 @@ impl<'a> LoweringCtx<'a> {
 
 		let n = u64::from_str_radix(int.as_str(), radix);
 		if let Some(err) = n.as_ref().err() {
-			return Err(
-				FluxError::build(
-					format!("could not lower int expression: {}", err.to_string()),
-					self.span(&int_expr),
-					FluxErrorCode::HirParseIntString,
-					(
-						format!("could not lower int expression: {}", err.to_string()),
-						self.span(&int_expr),
-					),
-				)
-				.with_label(
-					format!("could not lower int expression"),
-					self.span(&int_expr),
-				),
-			);
+			todo!()
+		// return Err(
+		// 	FluxError::build(
+		// 		format!("could not lower int expression: {}", err.to_string()),
+		// 		self.span(&int_expr),
+		// 		FluxErrorCode::HirParseIntString,
+		// 		(
+		// 			format!("could not lower int expression: {}", err.to_string()),
+		// 			self.span(&int_expr),
+		// 		),
+		// 	)
+		// 	.with_label(
+		// 		format!("could not lower int expression"),
+		// 		self.span(&int_expr),
+		// 	),
+		// );
 		} else {
 			return Ok((
 				Expr::Int(Int {
@@ -145,7 +155,7 @@ impl<'a> LoweringCtx<'a> {
 					ty: Type::UInt(32),
 				}),
 				self.tchecker.tenv.insert(Spanned::new(
-					Type::Int,
+					TypeKind::Int(None),
 					Span::new(int_expr.range(), self.file_id.clone()),
 				)),
 			));
@@ -154,34 +164,36 @@ impl<'a> LoweringCtx<'a> {
 
 	fn lower_float(&mut self, float_expr: FloatExpr) -> ExprResult {
 		if float_expr.tok().is_none() {
-			return Err(FluxError::build(
-				format!("could not lower float expression: missing value"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower float expression: missing value"),
-					self.default_span(),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower float expression: missing value"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower float expression: missing value"),
+			// 		self.default_span(),
+			// 	),
+			// ));
 		}
 
 		let n = float_expr.tok().unwrap().text().parse::<f64>();
 		if let Some(err) = n.as_ref().err() {
-			return Err(
-				FluxError::build(
-					format!("could not lower float expression: {}", err.to_string()),
-					self.span(&float_expr),
-					FluxErrorCode::CouldNotLowerNode,
-					(
-						format!("could not lower float expression: {}", err.to_string()),
-						self.span(&float_expr),
-					),
-				)
-				.with_label(
-					format!("could not lower float expression"),
-					self.span(&float_expr),
-				),
-			);
+			todo!()
+		// return Err(
+		// 	FluxError::build(
+		// 		format!("could not lower float expression: {}", err.to_string()),
+		// 		self.span(&float_expr),
+		// 		FluxErrorCode::CouldNotLowerNode,
+		// 		(
+		// 			format!("could not lower float expression: {}", err.to_string()),
+		// 			self.span(&float_expr),
+		// 		),
+		// 	)
+		// 	.with_label(
+		// 		format!("could not lower float expression"),
+		// 		self.span(&float_expr),
+		// 	),
+		// );
 		} else {
 			return Ok((
 				Expr::Float(Float {
@@ -189,7 +201,7 @@ impl<'a> LoweringCtx<'a> {
 					ty: Type::F32,
 				}),
 				self.tchecker.tenv.insert(Spanned::new(
-					Type::Float,
+					TypeKind::Float(None),
 					Span::new(float_expr.range(), self.file_id.clone()),
 				)),
 			));
@@ -203,25 +215,27 @@ impl<'a> LoweringCtx<'a> {
 				_ => unreachable!(),
 			}
 		} else {
-			return Err(FluxError::build(
-				format!("could not lower prefix expression: missing operator"),
-				self.default_span(),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower prefix expression: missing operator"),
-					self.default_span(),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower prefix expression: missing operator"),
+			// 	self.default_span(),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower prefix expression: missing operator"),
+			// 		self.default_span(),
+			// 	),
+			// ));
 		};
 
 		let (expr, expr_id) = self.lower_expr(prefix_expr.expr())?;
 		let prefix_id = self.tchecker.tenv.insert(Spanned::new(
-			Type::Unknown,
+			TypeKind::Unknown,
 			Span::new(prefix_expr.range(), self.file_id.clone()),
 		));
 		self
 			.tchecker
-			.unify(prefix_id, expr_id, self.exprs[expr].span.clone())?;
+			.unify(prefix_id, expr_id, self.exprs[expr].span.clone())
+			.map_err(LowerError::TypeError)?;
 		Ok((Expr::Prefix { op, expr }, prefix_id))
 	}
 
@@ -275,7 +289,7 @@ impl<'a> LoweringCtx<'a> {
 			self
 				.tchecker
 				.tenv
-				.insert(Spanned::new(Type::Unknown, self.span(&call_expr))),
+				.insert(Spanned::new(TypeKind::Unknown, self.span(&call_expr))),
 		))
 	}
 
@@ -294,7 +308,7 @@ impl<'a> LoweringCtx<'a> {
 		Ok((
 			Expr::Path(spanned_path),
 			self.tchecker.tenv.insert(Spanned::new(
-				Type::Ref(self.tchecker.tenv.get_path_id(&path)),
+				TypeKind::Ref(self.tchecker.tenv.get_path_id(&path)),
 				self.span(&path_expr),
 			)),
 		))
@@ -343,7 +357,7 @@ impl<'a> LoweringCtx<'a> {
 	// }
 
 	fn lower_if_expr(&mut self, if_expr: ast::IfExpr) -> ExprResult {
-		let (condition, _) = self.lower_expr(if_expr.condition())?; // TODO: verify condition_id is a boolean?
+		let (condition, _) = self.lower_expr(if_expr.condition())?; // TODO: verify condition_id is a boolean
 		let (then, then_id) = if let Some(then) = if_expr.then() {
 			let range = then.range();
 			let (block, block_id) = self.lower_block_expr(then)?;
@@ -352,53 +366,63 @@ impl<'a> LoweringCtx<'a> {
 				block_id,
 			)
 		} else {
-			return Err(FluxError::build(
-				format!("could not lower if expression: missing then block"),
-				Span::new(TextRange::default(), self.file_id.clone()),
-				FluxErrorCode::CouldNotLowerNode,
-				(
-					format!("could not lower if expression: missing then block"),
-					Span::new(TextRange::default(), self.file_id.clone()),
-				),
-			));
+			todo!()
+			// return Err(FluxError::build(
+			// 	format!("could not lower if expression: missing then block"),
+			// 	Span::new(TextRange::default(), self.file_id.clone()),
+			// 	FluxErrorCode::CouldNotLowerNode,
+			// 	(
+			// 		format!("could not lower if expression: missing then block"),
+			// 		Span::new(TextRange::default(), self.file_id.clone()),
+			// 	),
+			// ));
 		};
 		let else_ = if if_expr.else_().is_some() {
 			let (else_, else_id) = self.lower_expr(if_expr.else_())?;
-			self.tchecker.unify(
-				then_id,
-				else_id,
-				Span::combine(&then.span, &self.exprs[else_].span),
-			)?;
+			self
+				.tchecker
+				.unify(
+					then_id,
+					else_id,
+					Span::combine(&then.span, &self.exprs[else_].span),
+				)
+				.map_err(LowerError::TypeError)?;
 			else_
 		} else {
-			let else_id = self
+			let else_id = self.tchecker.tenv.insert(Spanned::new(
+				TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+				self.span(&if_expr),
+			));
+			self
 				.tchecker
-				.tenv
-				.insert(Spanned::new(Type::Tuple(vec![]), self.span(&if_expr)));
-			self.tchecker.unify(
-				then_id,
-				else_id,
-				self.span(&if_expr), // Span::combine(&then.span, &self.exprs[else_].span),
-			)?;
+				.unify(
+					then_id,
+					else_id,
+					self.span(&if_expr), // Span::combine(&then.span, &self.exprs[else_].span),
+				)
+				.map_err(LowerError::TypeError)?;
 			self
 				.exprs
 				.alloc(Spanned::new(Expr::Missing, self.span(&if_expr)))
 		};
-		// let (else_, else_id) = self.lower_expr(if_expr.else_())?;
+		// let (else_, else_id) = self.lower_expr(if_expr.else_()).map_err(LowerError::TypeError)?;
 		// self.tchecker.unify(
 		// 	then_id,
 		// 	else_id,
 		// 	Span::combine(&then.span, &self.exprs[else_].span),
-		// )?;
+		// ).map_err(LowerError::TypeError)?;
 		let if_id = self.tchecker.tenv.insert(Spanned::new(
-			Type::Unknown,
+			TypeKind::Unknown,
 			Span::new(if_expr.range(), self.file_id.clone()),
 		));
-		self.tchecker.unify(
-			if_id,
-			then_id,
-			Span::new(if_expr.range(), self.file_id.clone()),
-		)?;
+		self
+			.tchecker
+			.unify(
+				if_id,
+				then_id,
+				Span::new(if_expr.range(), self.file_id.clone()),
+			)
+			.map_err(LowerError::TypeError)?;
 		Ok((
 			Expr::If(If::new(condition, self.exprs.alloc(then), else_)),
 			if_id,
@@ -412,18 +436,19 @@ impl<'a> LoweringCtx<'a> {
 		let mut stmt_that_determines_type: Option<(Spanned<Stmt>, usize)> = None;
 		for stmt in stmts {
 			if let Some((s, _)) = stmt_that_determines_type {
-				return Err(
-					FluxError::build(
-						format!("cannot put statements after block value statement"),
-						self.span(&stmt),
-						FluxErrorCode::StmtAfterBlockValStmt,
-						(
-							format!("cannot put statements after block value statement"),
-							self.span(&stmt),
-						),
-					)
-					.with_label(format!("block value statement"), s.span),
-				);
+				todo!()
+				// return Err(
+				// 		FluxError::build(
+				// 			format!("cannot put statements after block value statement"),
+				// 			self.span(&stmt),
+				// 			FluxErrorCode::StmtAfterBlockValStmt,
+				// 			(
+				// 				format!("cannot put statements after block value statement"),
+				// 				self.span(&stmt),
+				// 			),
+				// 		)
+				// 		.with_label(format!("block value statement"), s.span),
+				// 	);
 			}
 			let ((stmt, stmt_id), has_semi) = self.lower_stmt(stmt)?;
 			block.push(stmt.clone());
@@ -435,10 +460,10 @@ impl<'a> LoweringCtx<'a> {
 		let type_id = if let Some((_, id)) = stmt_that_determines_type {
 			id
 		} else {
-			self
-				.tchecker
-				.tenv
-				.insert(Spanned::new(Type::Tuple(vec![]), self.span(&block_expr)))
+			self.tchecker.tenv.insert(Spanned::new(
+				TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+				self.span(&block_expr),
+			))
 		};
 		Ok((Expr::Block(Block(block)), type_id))
 	}
@@ -452,7 +477,7 @@ impl<'a> LoweringCtx<'a> {
 			value_types.push(ty_id);
 		}
 		let type_id = self.tchecker.tenv.insert(Spanned::new(
-			Type::Tuple(value_types),
+			TypeKind::Concrete(ConcreteKind::Tuple(value_types)),
 			self.span(&tuple_expr),
 		));
 		Ok((Expr::Tuple(Tuple(values)), type_id))

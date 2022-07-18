@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 flux-cfg = { path = "../flux-cfg" }
 flux-mir = { path = "../flux-mir" }
-llvm-sys = "130.0.1"
 smol_str = "0.1.21"
 uuid = { version = "1.0.0", features = ["v4", "fast-rng", "macro-diagnostics"] }
 indexmap = "1.7.0"

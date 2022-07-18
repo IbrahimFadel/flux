@@ -1,29 +1,10 @@
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
-use flux_error::Span;
-use flux_typesystem::TypeId;
+use flux_span::Spanned;
+use flux_typesystem::r#type::TypeId;
 use indexmap::IndexMap;
 use la_arena::Idx;
 use smol_str::SmolStr;
-
-#[derive(Debug, Clone)]
-pub struct Spanned<T> {
-	pub node: T,
-	pub span: Span,
-}
-
-impl<T> Spanned<T> {
-	pub fn new(node: T, span: Span) -> Self {
-		Self { node, span }
-	}
-}
-
-impl<T> Deref for Spanned<T> {
-	type Target = T;
-	fn deref(&self) -> &Self::Target {
-		&self.node
-	}
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Visibility {
@@ -70,7 +51,7 @@ pub struct FnParam {
 #[derive(Debug, Clone)]
 pub struct ApplyDecl {
 	pub trait_: Option<Spanned<SmolStr>>,
-	pub struct_: SmolStr,
+	pub struct_: Spanned<SmolStr>,
 	pub methods: Vec<FnDecl>,
 }
 
@@ -200,7 +181,7 @@ pub enum Type {
 	Ref(usize),
 	Ident(SmolStr),
 	Struct(StructType),
-	Tuple(Vec<TypeId>),
+	Tuple(Vec<Type>),
 	Func(Box<Type>, Box<Type>),
 	Unknown,
 }

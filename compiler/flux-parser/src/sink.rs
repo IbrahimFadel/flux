@@ -1,22 +1,21 @@
-use crate::Parse;
+use crate::{errors::ParseError, Parse};
 
 use super::event::Event;
-use flux_error::FluxError;
 use flux_lexer::{Token, TokenKind};
 use flux_syntax::syntax_kind::PILanguage;
 use rowan::{GreenNodeBuilder, Language};
 use std::mem;
 
-pub(super) struct Sink<'t, 'src> {
+pub struct Sink<'t, 'src> {
 	builder: GreenNodeBuilder<'static>,
 	tokens: &'t [Token<'src>],
 	cursor: usize,
 	events: Vec<Event>,
-	errors: Vec<FluxError>,
+	errors: Vec<ParseError>,
 }
 
 impl<'t, 'src> Sink<'t, 'src> {
-	pub(super) fn new(tokens: &'t [Token<'src>], events: Vec<Event>) -> Self {
+	pub fn new(tokens: &'t [Token<'src>], events: Vec<Event>) -> Self {
 		Self {
 			builder: GreenNodeBuilder::new(),
 			tokens,
@@ -26,7 +25,7 @@ impl<'t, 'src> Sink<'t, 'src> {
 		}
 	}
 
-	pub(super) fn finish(mut self) -> Parse {
+	pub fn finish(mut self) -> Parse {
 		for idx in 0..self.events.len() {
 			match mem::replace(&mut self.events[idx], Event::Placeholder) {
 				Event::StartNode {

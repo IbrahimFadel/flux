@@ -1,8 +1,8 @@
-mod decl;
+pub mod decl;
 mod expr;
 mod stmt;
 use crate::parser::{marker::CompletedMarker, Parser};
-pub(crate) use decl::top_level_decl;
+pub use decl::top_level_decl;
 use flux_lexer::TokenKind;
 use flux_syntax::syntax_kind::SyntaxKind;
 
@@ -13,7 +13,7 @@ macro_rules! test_decl_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::FileId("main.flx".into());
+					let file_id = flux_span::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
@@ -23,7 +23,7 @@ macro_rules! test_decl_str {
 					let mut settings = insta::Settings::clone_current();
 					settings.set_snapshot_path("./snapshots");
 					settings.bind(|| {
-						insta::assert_snapshot!(&parse.debug_tree());
+						insta::assert_snapshot!(parse.to_string());
 					});
 				}
 		}
@@ -37,7 +37,7 @@ macro_rules! test_stmt_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::FileId("main.flx".into());
+					let file_id = flux_span::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
@@ -47,7 +47,7 @@ macro_rules! test_stmt_str {
 					let mut settings = insta::Settings::clone_current();
 					settings.set_snapshot_path("./snapshots");
 					settings.bind(|| {
-						insta::assert_snapshot!(&parse.debug_tree());
+						insta::assert_snapshot!(parse.to_string());
 					});
 				}
 		}
@@ -61,7 +61,7 @@ macro_rules! test_expr_str {
 		paste::paste! {
 				#[test]
 				fn [<test_parse_ $name>]() {
-					let file_id = flux_error::FileId("main.flx".into());
+					let file_id = flux_span::FileId("main.flx".into());
 					let tokens: Vec<_> = flux_lexer::Lexer::new($src).collect();
 					let source = crate::Source::new(&tokens, file_id);
 					let mut parser = crate::Parser::new(source);
@@ -71,7 +71,7 @@ macro_rules! test_expr_str {
 					let mut settings = insta::Settings::clone_current();
 					settings.set_snapshot_path("./snapshots");
 					settings.bind(|| {
-						insta::assert_snapshot!(&parse.debug_tree());
+						insta::assert_snapshot!(parse.to_string());
 					});
 				}
 		}

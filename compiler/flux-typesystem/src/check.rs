@@ -1,24 +1,61 @@
-use crate::infer::TypeEnv;
+use ariadne::{Color, Label, Report, ReportKind};
+use flux_error::{Error, FluxErrorCode};
+use flux_span::{Span, Spanned};
 
-use super::*;
+use crate::r#type::TypeKind;
+use crate::{
+	infer::TypeEnv,
+	r#type::{ConcreteKind, TypeId},
+};
 
-pub struct TypeChecker<E: ErrorHandler> {
+pub struct TypeChecker {
 	pub tenv: TypeEnv,
-	err_handler: E,
 }
 
-impl<E: ErrorHandler> TypeChecker<E> {
-	pub fn new(err_handler: E) -> Self {
+impl Error for TypeError {
+	fn to_report(&self) -> Report<Span> {
+		let report = match self {
+			TypeError::TypeMismatch { a, b, span } => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TypeMismatch)
+			.with_message(format!("type mismatch"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"type mismatch between `{}` and `{}`",
+						a.inner, b.inner
+					)),
+			)
+			.with_label(
+				Label::new(a.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("`{}`", a.inner)),
+			)
+			.with_label(
+				Label::new(b.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("`{}`", b.inner)),
+			),
+		};
+		report.finish()
+	}
+}
+
+impl TypeChecker {
+	pub fn new() -> Self {
 		Self {
 			tenv: TypeEnv::new(),
-			err_handler,
 		}
 	}
 
-	pub fn unify(&mut self, a: TypeId, b: TypeId, unification_span: Span) -> Result<(), E::Error> {
-		use TypeKind::*;
-		let akind = self.tenv.vars[&a].clone();
-		let bkind = self.tenv.vars[&b].clone();
+	pub fn unify(&mut self, a: TypeId, b: TypeId, unification_span: Span) -> Result<(), TypeError> {
+		use crate::r#type::TypeKind::*;
+		let akind = self.tenv.vars[a].clone();
+		let bkind = self.tenv.vars[b].clone();
 		match (&akind.inner, &bkind.inner) {
 			(Ref(a), _) => self.unify(*a, b, unification_span),
 			(_, Ref(b)) => self.unify(a, *b, unification_span),
@@ -45,11 +82,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
 				(ConcreteKind::Tuple(a_types), ConcreteKind::Tuple(b_types)) => {
 					if a_types.len() != b_types.len() {
-						Err(
-							self
-								.err_handler
-								.type_mismatch(&self.tenv, a, b, unification_span),
-						)
+						Err(self.type_mismatch(a, b, unification_span))
 					} else {
 						for (i, a_ty) in a_types.iter().enumerate() {
 							// println!("{:?} {}", self.tenv.get_type(*a_ty), i);
@@ -62,11 +95,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 					if aa == bb {
 						Ok(())
 					} else {
-						Err(
-							self
-								.err_handler
-								.type_mismatch(&self.tenv, a, b, unification_span),
-						)
+						Err(self.type_mismatch(a, b, unification_span))
 					}
 				}
 			},
@@ -76,13 +105,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				} else {
 					match t {
 						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
-						_ => {
-							return Err(
-								self
-									.err_handler
-									.type_mismatch(&self.tenv, a, b, unification_span),
-							)
-						}
+						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
 					self.tenv.vars.insert(
 						b,
@@ -100,13 +123,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				} else {
 					match t {
 						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
-						_ => {
-							return Err(
-								self
-									.err_handler
-									.type_mismatch(&self.tenv, a, b, unification_span),
-							)
-						}
+						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
 					self.tenv.vars.insert(
 						a,
@@ -124,13 +141,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				} else {
 					match t {
 						ConcreteKind::F32 | ConcreteKind::F64 => (),
-						_ => {
-							return Err(
-								self
-									.err_handler
-									.type_mismatch(&self.tenv, a, b, unification_span),
-							)
-						}
+						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
 					self.tenv.vars.insert(
 						b,
@@ -148,13 +159,7 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				} else {
 					match t {
 						ConcreteKind::F32 | ConcreteKind::F64 => (),
-						_ => {
-							return Err(
-								self
-									.err_handler
-									.type_mismatch(&self.tenv, a, b, unification_span),
-							)
-						}
+						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
 					self.tenv.vars.insert(
 						a,
@@ -190,17 +195,27 @@ impl<E: ErrorHandler> TypeChecker<E> {
 				}
 				(None, None) => Ok(()),
 			},
-			_ => Err(
-				self
-					.err_handler
-					.type_mismatch(&self.tenv, a, b, unification_span),
-			),
+			_ => Err(self.type_mismatch(a, b, unification_span)),
+		}
+	}
+
+	fn type_mismatch(&self, a: TypeId, b: TypeId, span: Span) -> TypeError {
+		let aa = self.tenv.get_type(a);
+		let bb = self.tenv.get_type(b);
+		TypeError::TypeMismatch {
+			a: aa.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
+			b: bb.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
+			span,
 		}
 	}
 }
 
-pub trait ErrorHandler {
-	type Error;
-
-	fn type_mismatch(&self, env: &TypeEnv, a: TypeId, b: TypeId, span: Span) -> Self::Error;
+#[derive(Debug)]
+pub enum TypeError {
+	TypeMismatch {
+		/// Since we can't format TypeKind without a typeenv, we need to pass them after they've been formatted
+		a: Spanned<String>,
+		b: Spanned<String>,
+		span: Span,
+	},
 }

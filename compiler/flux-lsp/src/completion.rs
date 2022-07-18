@@ -1,7 +1,4 @@
-use flux_hir::{
-	hir::{FnParam, Spanned},
-	HirModule,
-};
+use flux_hir::{hir::FnParam, HirModule};
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Position};
 
 use crate::position::position_to_offset;
@@ -58,21 +55,21 @@ pub fn get_completion_items(
 	names
 }
 
-fn function_to_detail(f: &flux_hir::hir::FnDecl) -> String {
-	format!(
-		"{}({}) -> {}",
-		f.name.as_str(),
-		function_params_to_string(&f.params),
-		f.return_type.node
-	)
-}
+// fn function_to_detail(f: &flux_hir::hir::FnDecl) -> String {
+// 	format!(
+// 		"{}({}) -> {}",
+// 		f.name.as_str(),
+// 		function_params_to_string(&f.params),
+// 		f.return_type.node
+// 	)
+// }
 
-fn function_params_to_string(params: &[Spanned<FnParam>]) -> String {
-	let mut s = vec![];
-	for param in params {
-		if let Some(name) = &param.name {
-			s.push(format!("{} {}", param.ty.node, name));
-		}
-	}
-	s.join(", ")
-}
+// fn function_params_to_string(params: &[Spanned<FnParam>]) -> String {
+// 	let mut s = vec![];
+// 	for param in params {
+// 		if let Some(name) = &param.name {
+// 			s.push(format!("{} {}", param.ty.node, name));
+// 		}
+// 	}
+// 	s.join(", ")
+// }

@@ -1,65 +1,22 @@
-use std::fmt;
-
 use ariadne::{sources, Color, Fmt, Label, Report, ReportKind};
+use flux_span::{FileId, Span};
 use smol_str::SmolStr;
-use text_size::TextRange;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FileId(pub SmolStr);
-
-impl fmt::Display for FileId {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
+pub trait Error {
+	fn to_report(&self) -> Report<Span>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FluxErrorCode {
-	NoCode,
-	UnexpectedEOF,
-	UnexpectedToken,
-	UnresolvedUse,
-	HirParseIntString,
 	TypeMismatch,
-	CouldNotInferType,
-	CouldNotLowerNode,
-	CouldNotFindModule,
-	AmbiguousUse,
-	StmtAfterBlockValStmt,
-	MissingStructToApplyMethodsTo,
-	MissingNameTyDecl,
-	TraitMethodMissingName,
 	AppliedUnknownTrait,
-	UnknownTraitMethod,
-	IncorrectNumberParamsInMethodImpl,
+	AppliedUnknownMethodToTrait,
 	UnimplementedTraitMethods,
 }
 
 impl std::fmt::Display for FluxErrorCode {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "E{:04}", *self as u8)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Span {
-	pub range: TextRange,
-	pub file_id: FileId,
-}
-
-impl Span {
-	pub fn new(range: TextRange, file_id: FileId) -> Span {
-		Span { range, file_id }
-	}
-
-	/// Combine two spans in the same file
-	/// a must come before b
-	pub fn combine(a: &Self, b: &Self) -> Self {
-		assert!(a.range.start() < b.range.end());
-		Span {
-			range: TextRange::new(a.range.start(), b.range.end()),
-			file_id: a.file_id.clone(),
-		}
 	}
 }
 
@@ -71,30 +28,6 @@ pub struct FluxError {
 	pub primary: (String, Span),
 	pub labels: Vec<(String, Span)>,
 	pub notes: Vec<String>,
-}
-
-impl ariadne::Span for Span {
-	type SourceId = FileId;
-
-	fn start(&self) -> usize {
-		self.range.start().into()
-	}
-
-	fn end(&self) -> usize {
-		self.range.end().into()
-	}
-
-	fn len(&self) -> usize {
-		self.range.len().into()
-	}
-
-	fn source(&self) -> &Self::SourceId {
-		&self.file_id
-	}
-
-	fn contains(&self, offset: usize) -> bool {
-		self.start() <= offset && self.end() > offset
-	}
 }
 
 impl FluxError {
@@ -186,10 +119,7 @@ impl FluxErrorReporting {
 		FileId(name)
 	}
 
-	pub fn report(&self, err: &FluxError) {
-		err
-			.to_diagnostic()
-			.print(sources(self.files.clone()))
-			.unwrap();
+	pub fn report(&self, err: &Report<Span>) {
+		err.print(sources(self.files.clone())).unwrap();
 	}
 }

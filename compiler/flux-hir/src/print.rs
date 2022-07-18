@@ -3,6 +3,8 @@ use std::{
 	fmt::{Display, Formatter},
 };
 
+use itertools::Itertools;
+
 use crate::hir::{Block, FnDecl, FnParam, Stmt, Type, Visibility};
 
 impl Display for Type {
@@ -13,6 +15,11 @@ impl Display for Type {
 			Type::F32 => write!(f, "f32"),
 			Type::F64 => write!(f, "f64"),
 			Type::Ident(name) => write!(f, "{}", name),
+			Type::Tuple(types) => write!(
+				f,
+				"({})",
+				types.iter().map(|ty| format!("{}", ty)).join(", ")
+			),
 			_ => write!(f, "{:?}", self),
 		}
 	}
@@ -26,7 +33,7 @@ impl Display for Block {
 			self
 				.0
 				.iter()
-				.map(|stmt| format!("{}", stmt.node))
+				.map(|stmt| format!("{}", stmt.inner))
 				.collect::<Vec<_>>()
 				.join("\n")
 		)
@@ -36,7 +43,7 @@ impl Display for Block {
 impl Display for Stmt {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		match self {
-			Stmt::VarDecl(var) => write!(f, "{} {}", var.ty.node, var.name),
+			Stmt::VarDecl(var) => write!(f, "{} {}", var.ty.inner, var.name),
 			_ => write!(f, ""),
 		}
 	}
@@ -47,20 +54,20 @@ impl fmt::Display for FnDecl {
 		write!(
 			f,
 			"{}fn {}({}) -> {}",
-			if self.visibility.node == Visibility::Public {
+			if self.visibility.inner == Visibility::Public {
 				"pub "
 			} else {
 				""
 			},
-			self.name.node,
+			self.name.inner,
 			self
 				.params
-				.node
+				.inner
 				.iter()
-				.map(|p| format!("{}", p.node))
+				.map(|p| format!("{}", p.inner))
 				.collect::<Vec<_>>()
 				.join(", "),
-			self.return_type.node,
+			self.return_type.inner,
 		)
 	}
 }
@@ -71,7 +78,7 @@ impl Display for FnParam {
 			f,
 			"{}{} {}",
 			if self.mutable { "mut " } else { "" },
-			self.ty.node,
+			self.ty.inner,
 			if let Some(name) = &self.name {
 				name
 			} else {
