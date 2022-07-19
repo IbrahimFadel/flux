@@ -26,51 +26,44 @@ impl<'a> LoweringCtx<'a> {
 	}
 
 	fn lower_var_decl(&mut self, var_decl: &ast::VarDecl) -> StmtResult {
-		if let Some(name) = var_decl.name() {
-			let var_ty = self.lower_type(var_decl.ty())?;
-			let var_ty_id = self.tchecker.tenv.insert(to_ty_kind(&var_ty));
-			let (expr, expr_id) = self.lower_expr(var_decl.value())?;
-			self
-				.tchecker
-				.unify(
-					var_ty_id,
-					expr_id,
-					Span::combine(&var_ty.span, &self.exprs[expr].span),
-				)
-				.map_err(LowerError::TypeError)?;
-			self
-				.tchecker
-				.tenv
-				.set_path_id(&[name.text().into()], var_ty_id);
-			Ok((
-				(
-					Spanned::new(
-						Stmt::VarDecl(VarDecl {
-							ty: Spanned::new(Type::Unknown, var_ty.span.clone()),
-							name: name.text().into(),
-							value: expr,
-						}),
-						Span::new(var_decl.range(), self.file_id.clone()),
-					),
-					self.tchecker.tenv.insert(Spanned::new(
-						TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
-						Span::new(var_decl.range(), self.file_id.clone()),
-					)),
+		let name = self.unwrap_ident(
+			var_decl.name(),
+			var_decl.range(),
+			format!("variable declaration name"),
+		)?;
+		let var_ty = self.lower_type(var_decl.ty(), &HashMap::new())?;
+		let var_ty_id = self.tchecker.tenv.insert(self.to_ty_kind(&var_ty));
+		let (expr, expr_id) = self.lower_expr(var_decl.value())?;
+
+		self
+			.tchecker
+			.unify(
+				var_ty_id,
+				expr_id,
+				Span::combine(&var_ty.span, &self.exprs[expr].span),
+			)
+			.map_err(LowerError::TypeError)?;
+		self
+			.tchecker
+			.tenv
+			.set_path_id(&[name.inner.clone()], var_ty_id);
+		Ok((
+			(
+				Spanned::new(
+					Stmt::VarDecl(VarDecl {
+						ty: Spanned::new(Type::Unknown, var_ty.span.clone()),
+						name: name.inner,
+						value: expr,
+					}),
+					Span::new(var_decl.range(), self.file_id.clone()),
 				),
-				true,
-			))
-		} else {
-			todo!()
-			// Err(FluxError::build(
-			// 	format!("could not lower variable declaration: missing name"),
-			// 	self.default_span(),
-			// 	FluxErrorCode::CouldNotLowerNode,
-			// 	(
-			// 		format!("could not lower variable declaration: missing name"),
-			// 		self.default_span(),
-			// 	),
-			// ))
-		}
+				self.tchecker.tenv.insert(Spanned::new(
+					TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+					Span::new(var_decl.range(), self.file_id.clone()),
+				)),
+			),
+			true,
+		))
 	}
 
 	fn lower_return_stmt(&mut self, return_stmt: &ast::ReturnStmt) -> StmtResult {

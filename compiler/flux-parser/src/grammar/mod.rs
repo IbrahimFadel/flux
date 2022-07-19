@@ -1,6 +1,7 @@
 pub mod decl;
 mod expr;
 mod stmt;
+mod r#type;
 use crate::parser::{marker::CompletedMarker, Parser};
 pub use decl::top_level_decl;
 use flux_lexer::TokenKind;

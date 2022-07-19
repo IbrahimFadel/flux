@@ -1,6 +1,6 @@
 use crate::{recovery, EXPR_RECOVERY_SET};
 
-use super::{expr::type_expr, *};
+use super::*;
 
 pub(crate) fn stmt(p: &mut Parser) -> CompletedMarker {
 	if p.at(TokenKind::LetKw)
@@ -42,7 +42,7 @@ fn var_decl(p: &mut Parser) -> CompletedMarker {
 	p.bump();
 	p.expect(TokenKind::Ident, &recovery(&[TokenKind::Eq]));
 	if !p.at(TokenKind::Eq) {
-		type_expr(p);
+		r#type::type_expr(p);
 	}
 	p.expect(TokenKind::Eq, &recovery(EXPR_RECOVERY_SET));
 	expr::expr(p, true);

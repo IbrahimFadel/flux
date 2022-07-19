@@ -45,7 +45,18 @@ impl Error for ParseError {
 						comma_separated_end_with_or(&expected.iter().rev().collect::<Vec<_>>())
 					)),
 			),
-			ParseError::Unxpected { expected } => todo!(),
+			ParseError::Unxpected { expected } => Report::build(
+				ReportKind::Error,
+				expected.span.file_id.clone(),
+				expected.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::Expected)
+			.with_message(format!("expected `{}`", expected.inner))
+			.with_label(
+				Label::new(expected.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("expected `{}`", expected.inner)),
+			),
 		};
 		report.finish()
 	}

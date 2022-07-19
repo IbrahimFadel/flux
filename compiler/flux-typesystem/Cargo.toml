@@ -11,3 +11,4 @@ flux-span = { path = "../flux-span" }
 flux-error = { path = "../flux-error" }
 smol_str = "0.1.21"
 ariadne = "0.1.5"
+itertools = "0.10.3"

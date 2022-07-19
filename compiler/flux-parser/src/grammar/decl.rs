@@ -1,6 +1,6 @@
 use crate::{recovery, EXPR_RECOVERY_SET, TYPE_RECOVERY_SET};
 
-use super::{expr::type_expr, *};
+use super::{r#type::type_expr, *};
 
 pub fn top_level_decl(p: &mut Parser) {
 	if p.at(TokenKind::PubKw) {
@@ -86,12 +86,22 @@ fn apply_decl(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(TokenKind::ApplyKw));
 	let m = p.start();
 	p.bump();
+	let has_generics = if p.at(TokenKind::CmpLt) {
+		generic_list(p);
+		true
+	} else {
+		false
+	};
 	if p.at(TokenKind::ToKw) {
 		p.bump();
+		type_expr(p);
 	} else {
 		p.expect(TokenKind::Ident, &recovery(&[TokenKind::ToKw]));
 		p.expect(TokenKind::ToKw, &recovery(&[TokenKind::Ident]));
-		p.expect(TokenKind::Ident, &recovery(&[TokenKind::LBrace]));
+		type_expr(p);
+	}
+	if has_generics && p.at(TokenKind::WhereKw) {
+		where_clause(p);
 	}
 	apply_block(p);
 	m.complete(p, SyntaxKind::ApplyDecl)
@@ -206,6 +216,36 @@ fn fn_param(p: &mut Parser) -> CompletedMarker {
 	type_expr(p);
 	p.expect(TokenKind::Ident, &recovery(&[]));
 	m.complete(p, SyntaxKind::FnParam)
+}
+
+pub(crate) fn where_clause(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(TokenKind::WhereKw));
+	let m = p.start();
+	p.bump();
+
+	// TODO: this can be infinite
+	while p.loop_safe_not_at(TokenKind::LBrace) {
+		type_restriction(p);
+		if !p.at(TokenKind::LBrace) {
+			p.expect(TokenKind::Comma, &recovery(&[]))
+		}
+	}
+
+	m.complete(p, SyntaxKind::WhereClause)
+}
+
+fn type_restriction(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(
+		TokenKind::Ident,
+		&recovery(&[TokenKind::IsKw, TokenKind::Ident]),
+	);
+	p.expect(TokenKind::IsKw, &recovery(&[TokenKind::Ident]));
+	p.expect(
+		TokenKind::Ident,
+		&recovery(&[TokenKind::Comma, TokenKind::LBrace]),
+	);
+	m.complete(p, SyntaxKind::TypeRestriction)
 }
 
 #[cfg(test)]

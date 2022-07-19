@@ -68,6 +68,23 @@ impl<T> Spanned<T> {
 	pub fn new(inner: T, span: Span) -> Self {
 		Self { inner, span }
 	}
+
+	pub fn vec_span(v: &[Spanned<T>]) -> Option<Span> {
+		match v.len() {
+			0 => None,
+			1 => {
+				let range = v.first().unwrap().span.range;
+				Some(Span::new(range, v.first().unwrap().span.file_id.clone()))
+			}
+			_ => Some(Span::new(
+				TextRange::new(
+					v.first().unwrap().span.range.start(),
+					v.last().unwrap().span.range.end(),
+				),
+				v.first().unwrap().span.file_id.clone(),
+			)),
+		}
+	}
 }
 
 impl<A: Clone> Spanned<A> {

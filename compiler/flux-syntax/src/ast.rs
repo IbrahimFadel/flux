@@ -70,7 +70,14 @@ enum_node!(
 	StructExpr, IfExpr, BlockExpr, TupleExpr
 );
 enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
-enum_node!(Type, PrimitiveType, StructType, IdentType, TupleType);
+enum_node!(
+	Type,
+	PrimitiveType,
+	StructType,
+	IdentType,
+	TupleType,
+	PointerType
+);
 
 basic_node!(Root);
 
@@ -107,6 +114,12 @@ basic_node!(StructType);
 basic_node!(TraitDecl);
 basic_node!(IdentType);
 basic_node!(TupleType);
+basic_node!(PointerType);
+
+basic_node!(WhereClause);
+basic_node!(TypeRestriction);
+basic_node!(TypeParams);
+basic_node!(GenericList);
 
 impl Root {
 	pub fn mods(&self) -> impl Iterator<Item = ModDecl> {
@@ -235,6 +248,14 @@ impl FnDecl {
 }
 
 impl ApplyDecl {
+	pub fn generics(&self) -> Option<GenericList> {
+		self.0.children().find_map(GenericList::cast)
+	}
+
+	pub fn where_clause(&self) -> Option<WhereClause> {
+		self.0.children().find_map(WhereClause::cast)
+	}
+
 	pub fn trait_(&self) -> Option<SyntaxToken> {
 		self
 			.0
@@ -243,19 +264,8 @@ impl ApplyDecl {
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
-	pub fn struct_(&self) -> Option<SyntaxToken> {
-		self
-			.0
-			.children_with_tokens()
-			.filter_map(SyntaxElement::into_token)
-			.filter_map(|token| {
-				if token.kind() == SyntaxKind::Ident {
-					Some(token)
-				} else {
-					None
-				}
-			})
-			.nth(1)
+	pub fn ty(&self) -> Option<Type> {
+		self.0.children().find_map(Type::cast)
 	}
 
 	pub fn block(&self) -> Option<ApplyBlock> {
@@ -383,6 +393,10 @@ impl IdentType {
 			.filter_map(SyntaxElement::into_token)
 			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
+
+	pub fn type_params(&self) -> Option<TypeParams> {
+		self.0.children().find_map(TypeParams::cast)
+	}
 }
 
 impl TraitDecl {
@@ -456,6 +470,14 @@ impl FnParam {
 }
 
 impl StructType {
+	pub fn generics(&self) -> Option<GenericList> {
+		self.0.children().find_map(GenericList::cast)
+	}
+
+	pub fn where_clause(&self) -> Option<WhereClause> {
+		self.0.children().find_map(WhereClause::cast)
+	}
+
 	pub fn fields(&self) -> impl Iterator<Item = StructTypeField> {
 		self.0.children().filter_map(StructTypeField::cast)
 	}
@@ -638,17 +660,68 @@ impl StructExpr {
 }
 
 impl StructExprField {
-	pub fn name(&self) -> Option<PathExpr> {
-		self.0.children().find_map(PathExpr::cast)
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
 	}
 
 	pub fn value(&self) -> Option<Expr> {
-		self.0.children().filter_map(Expr::cast).nth(1)
+		self.0.children().find_map(Expr::cast)
 	}
 }
 
 impl TupleType {
 	pub fn types(&self) -> impl Iterator<Item = Type> {
 		self.0.children().filter_map(Type::cast)
+	}
+}
+
+impl PointerType {
+	pub fn to(&self) -> Option<Type> {
+		self.0.children().find_map(Type::cast)
+	}
+}
+
+impl WhereClause {
+	pub fn type_restrictions(&self) -> impl Iterator<Item = TypeRestriction> {
+		self.0.children().filter_map(TypeRestriction::cast)
+	}
+}
+
+impl TypeRestriction {
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Ident)
+	}
+
+	pub fn trait_(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.filter(|token| token.kind() == SyntaxKind::Ident)
+			.nth(1)
+	}
+}
+
+impl TypeParams {
+	pub fn params(&self) -> impl Iterator<Item = Type> {
+		self.0.children().filter_map(Type::cast)
+	}
+}
+
+impl GenericList {
+	pub fn names(&self) -> impl Iterator<Item = SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.filter(|token| token.kind() == SyntaxKind::Ident)
 	}
 }

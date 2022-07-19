@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use ariadne::Report;
+use ariadne::{Report, ReportKind};
 use flux_error::{Error, FluxErrorReporting};
 use flux_hir::{hir::Visibility, HirModule};
 use flux_parser::parse;
@@ -12,8 +12,8 @@ use text_size::{TextRange, TextSize};
 #[derive(Debug)]
 enum DriverError {}
 
-impl<'a> Into<&'a Report<Span>> for &'a DriverError {
-	fn into(self) -> &'a Report<Span> {
+impl Error for DriverError {
+	fn to_report(&self) -> Report<Span> {
 		todo!()
 	}
 }
@@ -101,7 +101,7 @@ fn parse_file_and_submodules<'a>(
 ) {
 	let src = find_path_with_mod_name(parent_dir, name);
 	if let Some(err) = src.as_ref().err() {
-		err_reporting.report(err.into());
+		err_reporting.report(&err.to_report());
 		return;
 	}
 	let (path, src) = src.unwrap();
@@ -195,7 +195,7 @@ fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut Fl
 	}
 	errors
 		.iter()
-		.for_each(|err| err_reporting.report(err.into()));
+		.for_each(|err| err_reporting.report(&err.to_report()));
 }
 
 pub fn parse_main_with_dependencies(

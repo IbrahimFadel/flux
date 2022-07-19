@@ -41,6 +41,8 @@ pub enum TokenKind {
 	ToKw,
 	#[token("where")]
 	WhereKw,
+	#[token("is")]
+	IsKw,
 	#[token("mut")]
 	MutKw,
 	#[token("if")]
@@ -142,6 +144,7 @@ impl Display for TokenKind {
 			Self::Ident => write!(f, "identifier"),
 			Self::IfKw => write!(f, "if"),
 			Self::IntLit => write!(f, "int"),
+			Self::IsKw => write!(f, "is"),
 			Self::LBrace => write!(f, "{{"),
 			Self::LParen => write!(f, "("),
 			Self::LetKw => write!(f, "let"),

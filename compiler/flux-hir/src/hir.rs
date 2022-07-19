@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use flux_span::Spanned;
 use flux_typesystem::r#type::TypeId;
@@ -51,7 +51,7 @@ pub struct FnParam {
 #[derive(Debug, Clone)]
 pub struct ApplyDecl {
 	pub trait_: Option<Spanned<SmolStr>>,
-	pub struct_: Spanned<SmolStr>,
+	pub ty: Spanned<Type>,
 	pub methods: Vec<FnDecl>,
 }
 
@@ -135,7 +135,7 @@ pub struct Binary {
 
 #[derive(Debug, Clone)]
 pub struct Struct {
-	pub name: Spanned<SmolStr>,
+	pub name: Path,
 	pub fields: Spanned<Vec<(Spanned<SmolStr>, ExprIdx)>>,
 }
 
@@ -179,7 +179,8 @@ pub enum Type {
 	F32,
 	Float,
 	Ref(usize),
-	Ident(SmolStr),
+	Ident((SmolStr, Vec<TypeId>)),
+	Generic((SmolStr, HashSet<SmolStr>)),
 	Struct(StructType),
 	Tuple(Vec<Type>),
 	Func(Box<Type>, Box<Type>),
@@ -207,4 +208,13 @@ pub struct StructTypeField {
 	pub visibility: Visibility,
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhereClause(pub Vec<TypeRestriction>);
+
+#[derive(Debug, Clone)]
+pub struct TypeRestriction {
+	pub name: Spanned<SmolStr>,
+	pub trt: Spanned<SmolStr>,
 }

@@ -1,22 +1,18 @@
-trait ToI32 {
-	fn to_i32(u8 x, i32 y) -> i32;
+type Vec struct<T> {
+	len u64,
+	capacity u64,
+	buf *T,
 }
 
-type Foo struct {
-	x i32,
-}
-
-apply ToI32 to Foo {
-	fn to_i32(u8 x, i32 x) -> i32 => {
-		0
+apply<T> to Vec<T> {
+	fn new() -> Vec<T> => {
+		Vec {
+			len: 0,
+			capacity: 0,
+			buf: malloc(0),
+		}
 	}
 }
 
-// TODO: parse where clauses, start typechecking generics
-type Bar struct<T>
-{
-	x T,
-}
-
-fn ) => {
+fn malloc() -> *u8 => {
 }

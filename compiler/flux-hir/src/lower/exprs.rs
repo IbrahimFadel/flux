@@ -1,5 +1,6 @@
 use flux_syntax::ast::{CallExpr, FloatExpr, IntExpr, PathExpr};
 use flux_typesystem::r#type::{ConcreteKind, TypeId};
+use itertools::Itertools;
 
 use super::*;
 
@@ -13,7 +14,7 @@ impl<'a> LoweringCtx<'a> {
 		let expr = if let Some(expr) = expr {
 			expr
 		} else {
-			todo!()
+			todo!("{:#?}", expr)
 			// return Err(FluxError::build(
 			// 	format!("could not lower expression: missing"),
 			// 	self.default_span(),
@@ -37,11 +38,11 @@ impl<'a> LoweringCtx<'a> {
 				ast::Expr::PrefixExpr(prefix_expr) => self.lower_prefix(prefix_expr)?,
 				ast::Expr::CallExpr(call_expr) => self.lower_call(call_expr)?,
 				ast::Expr::PathExpr(path_expr) => self.lower_path(path_expr)?,
-				// ast::Expr::StructExpr(struct_expr) => self.lower_struct_expr(struct_expr),
+				ast::Expr::StructExpr(struct_expr) => self.lower_struct_expr(struct_expr)?,
 				ast::Expr::IfExpr(if_expr) => self.lower_if_expr(if_expr)?,
 				ast::Expr::BlockExpr(block_expr) => self.lower_block_expr(block_expr)?,
 				ast::Expr::TupleExpr(tuple_expr) => self.lower_tuple_expr(tuple_expr)?,
-				_ => unreachable!(),
+				_ => todo!(),
 			};
 			(
 				self
@@ -305,56 +306,91 @@ impl<'a> LoweringCtx<'a> {
 			path.push(SmolStr::from(name.text()));
 		});
 
+		let id = self
+			.tchecker
+			.tenv
+			.get_path_id(&spanned_path)
+			.map_err(LowerError::TypeError)?;
 		Ok((
 			Expr::Path(spanned_path),
-			self.tchecker.tenv.insert(Spanned::new(
-				TypeKind::Ref(self.tchecker.tenv.get_path_id(&path)),
-				self.span(&path_expr),
-			)),
+			self
+				.tchecker
+				.tenv
+				.insert(Spanned::new(TypeKind::Ref(id), self.span(&path_expr))),
 		))
 	}
 
-	// fn lower_struct_expr(&mut self, struct_expr: ast::StructExpr) -> Expr {
-	// 	let name = if let Some(name) = struct_expr.name() {
-	// 		let syntax = &name.names().collect::<Vec<_>>()[0];
-	// 		Spanned::new(
-	// 			SmolStr::from(syntax.text()),
-	// 			Span::new(syntax.text_range(), self.file_id),
-	// 		)
-	// 	} else {
-	// 		self.errors.push(
-	// 			FluxError::default().with_msg(format!("could not lower struct expressions: missing name")),
-	// 		);
-	// 		return Expr::Missing;
-	// 	};
-	// 	let mut fields = vec![];
-	// 	for field in struct_expr.fields() {
-	// 		if let Some(name) = field.name() {
-	// 			let syntax = &name.names().collect::<Vec<_>>()[0];
-	// 			fields.push((
-	// 				Spanned::new(
-	// 					SmolStr::from(syntax.text()),
-	// 					Span::new(syntax.text_range(), self.file_id),
-	// 				),
-	// 				self.lower_expr(field.value()),
-	// 			));
-	// 		} else {
-	// 			self.errors.push(FluxError::default().with_msg(format!(
-	// 				"could not lower struct expressions: field missing name"
-	// 			)));
-	// 			return Expr::Missing;
-	// 		}
-	// 	}
-	// 	let fields_range = match (struct_expr.lparen(), struct_expr.rparen()) {
-	// 		(Some(lparen), Some(rparen)) => {
-	// 			TextRange::new(lparen.text_range().start(), rparen.text_range().end())
-	// 		}
-	// 		_ => struct_expr.range(),
-	// 	};
-	// 	let fields = Spanned::new(fields, Span::new(fields_range, self.file_id));
+	fn lower_struct_expr(&mut self, struct_expr: ast::StructExpr) -> ExprResult {
+		let struct_name = self.unwrap_path(
+			struct_expr.name(),
+			struct_expr.range(),
+			format!("struct expression name"),
+		)?;
+		let struct_name_str = Spanned::new(
+			SmolStr::from(struct_name.iter().map(|s| s.inner.clone()).join("::")),
+			Spanned::vec_span(&struct_name).unwrap(),
+		);
+		let struct_type = if let Some(struct_type) = self.type_decls.get(&struct_name_str.inner) {
+			let struct_ty = &struct_type.ty;
+			match &struct_ty.inner {
+				Type::Struct(struct_ty) => &struct_ty.0,
+				_ => unreachable!(),
+			}
+		} else {
+			return Err(LowerError::UnknownStruct {
+				name: Spanned::new(
+					struct_name_str.inner,
+					Spanned::vec_span(&struct_name).unwrap(),
+				),
+			});
+		};
 
-	// 	Expr::Struct(Struct { name, fields })
-	// }
+		let mut type_params = vec![]; // these are the types that will be retured associated with this expression's type
+		let mut fields = vec![];
+		for field in struct_expr.fields() {
+			let name = self.unwrap_ident(field.name(), field.range(), format!("struct field name"))?;
+			let (val, val_id) = self.lower_expr(field.value())?;
+
+			if let Some(field) = struct_type.get(&name.inner) {
+				let field_ty_id = self.tchecker.tenv.insert(self.to_ty_kind(&field.ty));
+				type_params.push(val_id);
+				self
+					.tchecker
+					.unify(val_id, field_ty_id, self.exprs[val].span.clone())
+					.map_err(LowerError::TypeError)?;
+			} else {
+				return Err(LowerError::NoSuchStructField {
+					struct_name: struct_name_str,
+					field_name: name,
+				});
+			}
+			// TODO: unify expression type
+			fields.push((
+				Spanned::new(
+					SmolStr::from(name.inner.clone()),
+					Span::new(name.span.range, self.file_id.clone()),
+				),
+				val,
+			));
+		}
+		let fields_range = match (struct_expr.lparen(), struct_expr.rparen()) {
+			(Some(lparen), Some(rparen)) => {
+				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
+			}
+			_ => struct_expr.range(),
+		};
+		let fields = Spanned::new(fields, Span::new(fields_range, self.file_id.clone()));
+
+		let id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Ident((struct_name_str.inner, type_params))),
+			Span::new(struct_expr.range(), self.file_id.clone()),
+		));
+		let expr = Expr::Struct(Struct {
+			name: struct_name,
+			fields,
+		});
+		Ok((expr, id))
+	}
 
 	fn lower_if_expr(&mut self, if_expr: ast::IfExpr) -> ExprResult {
 		let (condition, _) = self.lower_expr(if_expr.condition())?; // TODO: verify condition_id is a boolean

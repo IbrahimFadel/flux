@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use smol_str::SmolStr;
 
 pub type TypeId = usize;
@@ -8,6 +10,7 @@ pub enum TypeKind {
 	Int(Option<TypeId>),
 	Float(Option<TypeId>),
 	Ref(TypeId),
+	Generic((SmolStr, HashSet<SmolStr>)),
 	Unknown,
 }
 
@@ -19,7 +22,7 @@ pub enum ConcreteKind {
 	UInt(BitSize),
 	F64,
 	F32,
-	Ident(SmolStr),
+	Ident((SmolStr, Vec<TypeId>)),
 	Tuple(Vec<TypeId>),
 	Func(Vec<TypeId>, Box<TypeId>),
 }

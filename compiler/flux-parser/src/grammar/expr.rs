@@ -39,89 +39,6 @@ impl PrefixOp {
 	}
 }
 
-pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
-	let result = if p.at(TokenKind::INKw)
-		|| p.at(TokenKind::UNKw)
-		|| p.at(TokenKind::F32Kw)
-		|| p.at(TokenKind::F64Kw)
-	{
-		primitive_type(p)
-	} else if p.at(TokenKind::Ident) {
-		let m = p.start();
-		p.bump();
-		m.complete(p, SyntaxKind::IdentType)
-	} else if p.at(TokenKind::LParen) {
-		tuple_type(p)
-	} else if p.at(TokenKind::StructKw) {
-		struct_type(p)
-	} else {
-		p.expected(format!("type"));
-		return None;
-	};
-
-	Some(result)
-}
-
-fn tuple_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(TokenKind::LParen));
-	let m = p.start();
-	p.bump();
-	while p.loop_safe_not_at(TokenKind::RParen) {
-		type_expr(p);
-		if p.at(TokenKind::Comma) {
-			p.bump();
-		} else if !p.at(TokenKind::RParen) {
-			p.expected(format!("`)` at end of tuple type"));
-		}
-	}
-	p.expect(TokenKind::RParen, &recovery(&[TokenKind::RBrace]));
-	m.complete(p, SyntaxKind::TupleType)
-}
-
-fn struct_type(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(TokenKind::StructKw));
-	let m = p.start();
-	p.bump();
-	if p.at(TokenKind::CmpLt) {
-		decl::generic_list(p);
-		// parse where clause
-	}
-	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
-	while !p.at(TokenKind::RBrace) && !p.at_end() {
-		struct_type_field(p);
-		if !p.at(TokenKind::RBrace) {
-			p.expect(TokenKind::Comma, &recovery(&[TokenKind::RBrace]));
-		}
-	}
-	p.expect(TokenKind::RBrace, &recovery(&[]));
-	m.complete(p, SyntaxKind::StructType)
-}
-
-fn struct_type_field(p: &mut Parser) -> CompletedMarker {
-	let m = p.start();
-	if p.at(TokenKind::PubKw) {
-		p.bump();
-	}
-	if p.at(TokenKind::MutKw) {
-		p.bump();
-	}
-	p.expect(TokenKind::Ident, &recovery(TYPE_RECOVERY_SET));
-	type_expr(p);
-	m.complete(p, SyntaxKind::StructTypeField)
-}
-
-fn primitive_type(p: &mut Parser) -> CompletedMarker {
-	assert!(
-		p.at(TokenKind::INKw)
-			|| p.at(TokenKind::UNKw)
-			|| p.at(TokenKind::F32Kw)
-			|| p.at(TokenKind::F64Kw)
-	);
-	let m = p.start();
-	p.bump();
-	m.complete(p, SyntaxKind::PrimitiveType)
-}
-
 pub(crate) fn expr(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker> {
 	expr_binding_power(p, 0, allow_struct_expressions)
 }
@@ -205,7 +122,7 @@ fn struct_initialization(p: &mut Parser, e: CompletedMarker) -> CompletedMarker 
 
 	while !p.at(TokenKind::RBrace) && !p.at_end() {
 		let m = p.start();
-		ident_expr(p);
+		p.expect(TokenKind::Ident, &recovery(&[TokenKind::Comma]));
 		if p.at(TokenKind::Comma) {
 			p.bump();
 		} else {

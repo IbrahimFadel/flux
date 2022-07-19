@@ -5,12 +5,17 @@ use flux_typesystem::check::TypeError;
 use itertools::Itertools;
 use smol_str::SmolStr;
 
+use crate::hir::{FnParam, Type};
+
 #[derive(Debug)]
 pub enum LowerError {
 	TypeError(TypeError),
+	Missing {
+		missing: Spanned<String>,
+	},
 	AppliedUnknownTrait {
 		trt: Spanned<SmolStr>,
-		struct_: Spanned<SmolStr>,
+		ty: Spanned<String>,
 	},
 	AppliedUnknownMethodToTrait {
 		method: Spanned<SmolStr>,
@@ -19,42 +24,35 @@ pub enum LowerError {
 	},
 	UnimplementedTraitMethods {
 		trt: Spanned<SmolStr>,
-		struct_: Spanned<SmolStr>,
+		ty: Spanned<String>,
 		unimplemented_methods: Vec<SmolStr>,
+	},
+	IncorrectNumberOfParamsInTraitMethodDefinition {
+		method_name: String,
+		implementation_params: Spanned<Vec<Spanned<FnParam>>>,
+		declaration_params: Spanned<Vec<Spanned<FnParam>>>,
+	},
+	UnknownStruct {
+		name: Spanned<SmolStr>,
+	},
+	NoSuchStructField {
+		struct_name: Spanned<SmolStr>,
+		field_name: Spanned<SmolStr>,
 	},
 }
 
 impl Error for LowerError {
 	fn to_report(&self) -> Report<Span> {
 		let report = match self {
-			LowerError::TypeError(err) => match err {
-				TypeError::TypeMismatch { a, b, span } => Report::build(
-					ReportKind::Error,
-					span.file_id.clone(),
-					span.range.start().into(),
-				)
-				.with_code(FluxErrorCode::TypeMismatch)
-				.with_message(format!("type mismatch"))
-				.with_label(
-					Label::new(span.clone())
-						.with_color(Color::Red)
-						.with_message(format!(
-							"type mismatch between `{}` and `{}`",
-							a.inner, b.inner
-						)),
-				)
-				.with_label(
-					Label::new(a.span.clone())
-						.with_color(Color::Blue)
-						.with_message(format!("`{}`", a.inner)),
-				)
-				.with_label(
-					Label::new(b.span.clone())
-						.with_color(Color::Blue)
-						.with_message(format!("`{}`", b.inner)),
-				),
-			},
-			LowerError::AppliedUnknownTrait { trt, struct_ } => Report::build(
+			LowerError::TypeError(err) => return err.to_report(),
+			LowerError::Missing { missing } => Report::build(
+				ReportKind::Error,
+				missing.span.file_id.clone(),
+				missing.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::MissingDataInLowering)
+			.with_message(missing.inner.clone()),
+			LowerError::AppliedUnknownTrait { trt, ty } => Report::build(
 				ReportKind::Error,
 				trt.span.file_id.clone(),
 				trt.span.range.start().into(),
@@ -62,11 +60,11 @@ impl Error for LowerError {
 			.with_code(FluxErrorCode::AppliedUnknownTrait)
 			.with_message(format!("unknown trait `{}`", trt.inner))
 			.with_label(
-				Label::new(Span::combine(&trt.span, &struct_.span))
+				Label::new(Span::combine(&trt.span, &ty.span))
 					.with_color(Color::Red)
 					.with_message(format!(
 						"cannot apply trait `{}` to `{}`: the trait does not exist",
-						trt.inner, struct_.inner
+						trt.inner, ty.inner
 					)),
 			)
 			.with_note(format!("declare it with `trait {} {{}}`", trt.inner)),
@@ -108,26 +106,85 @@ impl Error for LowerError {
 			}),
 			LowerError::UnimplementedTraitMethods {
 				trt,
-				struct_,
+				ty,
 				unimplemented_methods,
 			} => Report::build(
 				ReportKind::Error,
-				struct_.span.file_id.clone(),
-				struct_.span.range.start().into(),
+				ty.span.file_id.clone(),
+				ty.span.range.start().into(),
 			)
 			.with_code(FluxErrorCode::UnimplementedTraitMethods)
 			.with_message(format!("unimplemented trait methods"))
 			.with_label(
-				Label::new(struct_.span.clone())
+				Label::new(ty.span.clone())
 					.with_color(Color::Red)
 					.with_message(format!(
-						"missing implementation for the methods {} in application of trait `{}` to struct `{}`",
+						"missing implementation for the methods {} in application of trait `{}` to type `{}`",
 						unimplemented_methods
 							.iter()
 							.map(|s| format!("`{s}`"))
 							.join(", "),
 						trt.inner,
-						struct_.inner
+						ty.inner
+					)),
+			),
+			LowerError::IncorrectNumberOfParamsInTraitMethodDefinition {
+				method_name,
+				implementation_params,
+				declaration_params,
+			} => Report::build(
+				ReportKind::Error,
+				implementation_params.span.file_id.clone(),
+				implementation_params.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::IncorrectNumberOfParamsInTraitMethodDefinition)
+			.with_message(format!(
+				"incorrect number of parameters in trait method definition"
+			))
+			.with_label(
+				Label::new(implementation_params.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"incorrect number of parameters in trait method definition"
+					)),
+			)
+			.with_label(
+				Label::new(implementation_params.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"the method `{}` is defined with {} parameters",
+						method_name,
+						declaration_params.len()
+					)),
+			),
+			LowerError::UnknownStruct { name } => Report::build(
+				ReportKind::Error,
+				name.span.file_id.clone(),
+				name.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::UnknownStruct)
+			.with_message(format!("unknown struct referenced"))
+			.with_label(
+				Label::new(name.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("unknown struct `{}` referenced", name.inner)),
+			),
+			LowerError::NoSuchStructField {
+				struct_name,
+				field_name,
+			} => Report::build(
+				ReportKind::Error,
+				field_name.span.file_id.clone(),
+				field_name.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::NoSuchStructField)
+			.with_message(format!("no such struct field"))
+			.with_label(
+				Label::new(field_name.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"no such field `{}` on struct `{}`",
+						field_name.inner, struct_name.inner
 					)),
 			),
 		};

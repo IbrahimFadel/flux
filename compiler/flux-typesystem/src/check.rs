@@ -1,6 +1,10 @@
+use std::collections::{HashMap, HashSet};
+use std::fmt::{Debug, Display};
+
 use ariadne::{Color, Label, Report, ReportKind};
 use flux_error::{Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
+use smol_str::SmolStr;
 
 use crate::r#type::TypeKind;
 use crate::{
@@ -40,15 +44,67 @@ impl Error for TypeError {
 					.with_color(Color::Blue)
 					.with_message(format!("`{}`", b.inner)),
 			),
+			TypeError::TraitBoundsUnsatisfied {
+				ty,
+				generic,
+				span,
+				missing_implementations,
+			} => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TraitBoundsUnsatisfied)
+			.with_message(format!("trait bounds unsatisfied"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"the {} not implemented for `{}`",
+						if missing_implementations.len() == 1 {
+							format!(
+								"trait `{}` is",
+								missing_implementations
+									.iter()
+									.collect::<Vec<_>>()
+									.first()
+									.unwrap()
+							)
+						} else {
+							format!(
+								"traits {} are",
+								comma_separated_end_with_and(missing_implementations)
+							)
+						},
+						ty.inner
+					)),
+			)
+			.with_label(
+				Label::new(generic.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("{}", generic.inner)),
+			),
+			TypeError::UnknownPath { path } => Report::build(
+				ReportKind::Error,
+				path.span.file_id.clone(),
+				path.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TypeMismatch)
+			.with_message(format!("unknown path"))
+			.with_label(
+				Label::new(path.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("unknown path `{}`", path.inner)),
+			),
 		};
 		report.finish()
 	}
 }
 
 impl TypeChecker {
-	pub fn new() -> Self {
+	pub fn new(implementations: HashMap<SmolStr, HashSet<SmolStr>>) -> Self {
 		Self {
-			tenv: TypeEnv::new(),
+			tenv: TypeEnv::new(implementations),
 		}
 	}
 
@@ -60,7 +116,7 @@ impl TypeChecker {
 			(Ref(a), _) => self.unify(*a, b, unification_span),
 			(_, Ref(b)) => self.unify(a, *b, unification_span),
 			(Unknown, _) => {
-				self.tenv.vars.insert(
+				self.tenv.set_type(
 					a,
 					Spanned {
 						inner: TypeKind::Ref(b),
@@ -70,7 +126,7 @@ impl TypeChecker {
 				Ok(())
 			}
 			(_, Unknown) => {
-				self.tenv.vars.insert(
+				self.tenv.set_type(
 					b,
 					Spanned {
 						inner: TypeKind::Ref(a),
@@ -79,7 +135,64 @@ impl TypeChecker {
 				);
 				Ok(())
 			}
+			(Concrete(aa), Generic((_, restrictions))) => {
+				match aa {
+					ConcreteKind::Ident((name, _)) => {
+						if let Some(implementations) = self.tenv.get_trait_implementations(name) {
+							let mut missing_implementations = HashSet::new();
+							for restriction in restrictions {
+								if implementations.get(restriction).is_none() {
+									missing_implementations.insert(restriction.clone());
+								}
+							}
+
+							if missing_implementations.len() == 0 {
+								return Ok(());
+							} else {
+								return Err(self.trait_bounds_unsatisfied(
+									a,
+									b,
+									unification_span,
+									missing_implementations,
+								));
+							}
+						} else {
+							return Err(self.trait_bounds_unsatisfied(
+								a,
+								b,
+								unification_span,
+								restrictions.clone(),
+							));
+						}
+					}
+					_ => {
+						return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()))
+					}
+				};
+			}
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
+				(ConcreteKind::Ident((a_name, a_params)), ConcreteKind::Ident((b_name, b_params))) => {
+					if a_name == b_name {
+						if a_params.len() != 0 && b_params.len() == 0 {
+							Ok(())
+						} else if b_params.len() != 0 && a_params.len() == 0 {
+							Ok(())
+						} else {
+							let result: Result<Vec<_>, _> = a_params
+								.iter()
+								.zip(b_params)
+								.map(|(a_param, b_param)| self.unify(*a_param, *b_param, unification_span.clone()))
+								.collect();
+							if let Some(err) = result.err() {
+								return Err(err);
+							} else {
+								Ok(())
+							}
+						}
+					} else {
+						Err(self.type_mismatch(a, b, unification_span))
+					}
+				}
 				(ConcreteKind::Tuple(a_types), ConcreteKind::Tuple(b_types)) => {
 					if a_types.len() != b_types.len() {
 						Err(self.type_mismatch(a, b, unification_span))
@@ -107,7 +220,7 @@ impl TypeChecker {
 						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
 						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
-					self.tenv.vars.insert(
+					self.tenv.set_type(
 						b,
 						Spanned {
 							inner: TypeKind::Int(Some(a)),
@@ -124,14 +237,10 @@ impl TypeChecker {
 					match t {
 						ConcreteKind::SInt(_) | ConcreteKind::UInt(_) => (),
 						_ => return Err(self.type_mismatch(a, b, unification_span)),
-					}
-					self.tenv.vars.insert(
-						a,
-						Spanned {
-							inner: TypeKind::Int(Some(b)),
-							span: akind.span,
-						},
-					);
+					};
+					self
+						.tenv
+						.set_type(a, Spanned::new(TypeKind::Int(Some(b)), akind.span));
 					Ok(())
 				}
 			}
@@ -143,7 +252,7 @@ impl TypeChecker {
 						ConcreteKind::F32 | ConcreteKind::F64 => (),
 						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
-					self.tenv.vars.insert(
+					self.tenv.set_type(
 						b,
 						Spanned {
 							inner: TypeKind::Float(Some(a)),
@@ -161,7 +270,7 @@ impl TypeChecker {
 						ConcreteKind::F32 | ConcreteKind::F64 => (),
 						_ => return Err(self.type_mismatch(a, b, unification_span)),
 					}
-					self.tenv.vars.insert(
+					self.tenv.set_type(
 						a,
 						Spanned {
 							inner: TypeKind::Float(Some(b)),
@@ -174,7 +283,7 @@ impl TypeChecker {
 			(Int(aa), Int(bb)) => match (aa, bb) {
 				(Some(aa), Some(bb)) => self.unify(*aa, *bb, unification_span),
 				(Some(_), None) => {
-					self.tenv.vars.insert(
+					self.tenv.set_type(
 						b,
 						Spanned {
 							inner: TypeKind::Int(Some(a)),
@@ -184,7 +293,7 @@ impl TypeChecker {
 					Ok(())
 				}
 				(None, Some(_)) => {
-					self.tenv.vars.insert(
+					self.tenv.set_type(
 						a,
 						Spanned {
 							inner: TypeKind::Int(Some(b)),
@@ -208,6 +317,23 @@ impl TypeChecker {
 			span,
 		}
 	}
+
+	fn trait_bounds_unsatisfied(
+		&self,
+		ty: TypeId,
+		generic: TypeId,
+		span: Span,
+		missing_implementations: HashSet<SmolStr>,
+	) -> TypeError {
+		let ty = self.tenv.get_type(ty);
+		let generic = self.tenv.get_type(generic);
+		TypeError::TraitBoundsUnsatisfied {
+			ty: ty.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
+			generic: generic.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
+			span: span,
+			missing_implementations,
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -218,4 +344,22 @@ pub enum TypeError {
 		b: Spanned<String>,
 		span: Span,
 	},
+	TraitBoundsUnsatisfied {
+		ty: Spanned<String>,
+		generic: Spanned<String>,
+		span: Span,
+		missing_implementations: HashSet<SmolStr>,
+	},
+	UnknownPath {
+		path: Spanned<SmolStr>,
+	},
+}
+
+fn comma_separated_end_with_and<T: Display>(els: &HashSet<T>) -> String {
+	let mut els: Vec<String> = els.iter().map(|el| format!("`{}`", el)).collect();
+	let len = els.len();
+	if len > 1 {
+		els[len - 1] = format!("and {}", els[len - 1]);
+	}
+	els.join(", ")
 }

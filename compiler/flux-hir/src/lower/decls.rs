@@ -14,21 +14,10 @@ impl<'a> LoweringCtx<'a> {
 			trait_decl.range(),
 			format!("trait declaration missing name"),
 		)?;
-		let name = Spanned::new(
-			name,
-			Span::new(
-				trait_decl.name().unwrap().text_range(),
-				self.file_id.clone(),
-			),
-		);
 
 		let mut methods = HashMap::new();
 		for method in trait_decl.methods() {
-			let name = method.name().unwrap();
-			let name: Spanned<SmolStr> = Spanned::new(
-				name.text().into(),
-				Span::new(name.text_range(), self.file_id.clone()),
-			);
+			let name = self.unwrap_ident(method.name(), method.range(), format!("method name"))?;
 			let params = self.lower_params(method.params())?;
 			let params_range = match (method.lparen(), method.rparen()) {
 				(Some(lparen), Some(rparen)) => {
@@ -55,7 +44,7 @@ impl<'a> LoweringCtx<'a> {
 			};
 			let params = Spanned::new(params, Span::new(params_range, self.file_id.clone()));
 
-			let return_type = self.lower_type(method.return_ty())?;
+			let return_type = self.lower_type(method.return_ty(), &HashMap::new())?;
 			let method = TraitMethod {
 				name: name.clone(),
 				params,
@@ -70,46 +59,44 @@ impl<'a> LoweringCtx<'a> {
 		&mut self,
 		apply_decl: ast::ApplyDecl,
 	) -> Result<ApplyDecl, LowerError> {
-		let (trait_, struct_): (Option<Spanned<SmolStr>>, Spanned<SmolStr>) =
-			match (apply_decl.trait_(), apply_decl.struct_()) {
-				(Some(struct_), None) => (
-					None,
-					Spanned::new(
-						struct_.text().into(),
-						Span::new(struct_.text_range(), self.file_id.clone()),
-					),
-				),
-				(Some(trait_), Some(struct_)) => (
+		let generics = match apply_decl.generics() {
+			Some(generics) => self.lower_generic_list(generics, apply_decl.where_clause())?,
+			None => HashMap::new(),
+		};
+		let (trait_, ty): (Option<Spanned<SmolStr>>, Spanned<Type>) =
+			match (apply_decl.trait_(), apply_decl.ty()) {
+				(None, Some(ty)) => (None, self.lower_type(Some(ty), &generics)?),
+				(Some(trait_), Some(ty)) => (
 					Some(Spanned::new(
 						trait_.text().into(),
 						Span::new(trait_.text_range(), self.file_id.clone()),
 					)),
-					Spanned::new(
-						struct_.text().into(),
-						Span::new(struct_.text_range(), self.file_id.clone()),
-					),
+					self.lower_type(Some(ty), &generics)?,
 				),
 				_ => unreachable!(),
 			};
 
 		let block = apply_decl.block().unwrap();
-		if let Some(trait_) = &trait_ {
+		let trait_decl = if let Some(trait_) = &trait_ {
 			let trait_decl = match self.traits.get(&trait_.inner) {
 				Some(decl) => decl,
 				None => {
 					return Err(LowerError::AppliedUnknownTrait {
 						trt: trait_.clone(),
-						struct_,
+						ty: ty.map(|ty| self.fmt_ty(&ty)),
 					});
 				}
 			};
+			Some(*trait_decl)
+		} else {
+			None
+		};
 
-			self.lower_and_validate_apply_block(&block, trait_decl, struct_.clone())?;
-		}
+		self.lower_and_validate_apply_block(&block, &trait_decl, &ty)?;
 
 		Ok(ApplyDecl {
 			trait_,
-			struct_,
+			ty,
 			methods: vec![],
 		})
 	}
@@ -117,61 +104,69 @@ impl<'a> LoweringCtx<'a> {
 	fn lower_and_validate_apply_block(
 		&mut self,
 		apply_block: &ast::ApplyBlock,
-		trait_decl: &TraitDecl,
-		struct_: Spanned<SmolStr>,
+		trait_decl: &Option<&TraitDecl>,
+		ty: &Spanned<Type>,
 	) -> Result<(), LowerError> {
 		let mut methods_implemented = HashSet::new();
 		for method in apply_block.methods() {
-			let method = self.lower_fn_decl(method)?;
-			if let Some(method_decl) = trait_decl.methods.get(&method.name.inner) {
-				self.validate_trait_method_implementation(method_decl, &method)?;
-				methods_implemented.insert(method_decl.name.inner.as_str());
-			} else {
-				return Err(LowerError::AppliedUnknownMethodToTrait {
-					trt: trait_decl.name.clone(),
-					method: method.name.clone(),
-					trt_methods: trait_decl
-						.methods
-						.keys()
-						.map(|s| s.clone())
-						.collect::<Vec<_>>(),
-				});
+			let method = self.lower_fn_decl(method, HashMap::new())?; // TODO: ?
+
+			let actual_return_ty_id = self
+				.tchecker
+				.tenv
+				.insert(self.to_ty_kind(&method.return_type));
+
+			if let Some(trait_decl) = trait_decl {
+				if let Some(method_decl) = trait_decl.methods.get(&method.name.inner) {
+					let decl_return_ty_id = self
+						.tchecker
+						.tenv
+						.insert(self.to_ty_kind(&method_decl.return_type));
+
+					self
+						.tchecker
+						.unify(
+							actual_return_ty_id,
+							decl_return_ty_id,
+							method.return_type.span.clone(),
+						)
+						.map_err(LowerError::TypeError)?;
+
+					self.validate_trait_method_implementation(method_decl, &method)?;
+					methods_implemented.insert(method_decl.name.inner.as_str());
+				} else {
+					return Err(LowerError::AppliedUnknownMethodToTrait {
+						trt: trait_decl.name.clone(),
+						method: method.name.clone(),
+						trt_methods: trait_decl
+							.methods
+							.keys()
+							.map(|s| s.clone())
+							.collect::<Vec<_>>(),
+					});
+				}
 			}
 		}
 
-		let unimplemented_methods: Vec<_> = trait_decl
-			.methods
-			.iter()
-			.filter_map(
-				|(method, _)| match methods_implemented.get(method.as_str()) {
-					Some(_) => None,
-					None => Some(method.clone()),
-				},
-			)
-			.collect();
+		if let Some(trait_decl) = trait_decl {
+			let unimplemented_methods: Vec<_> = trait_decl
+				.methods
+				.iter()
+				.filter_map(
+					|(method, _)| match methods_implemented.get(method.as_str()) {
+						Some(_) => None,
+						None => Some(method.clone()),
+					},
+				)
+				.collect();
 
-		if unimplemented_methods.len() > 0 {
-			return Err(LowerError::UnimplementedTraitMethods {
-				trt: trait_decl.name.clone(),
-				struct_,
-				unimplemented_methods: unimplemented_methods,
-			});
-			// return Err(FluxError::build(
-			// 	format!("unimplemented trait methods"),
-			// 	Span::new(apply_block.range(), self.file_id.clone()),
-			// 	FluxErrorCode::UnimplementedTraitMethods,
-			// 	(
-			// 		format!(
-			// 			"missing implementation for the trait methods {} on struct `{}`",
-			// 			unimplemented_methods
-			// 				.iter()
-			// 				.map(|m| format!("`{}`", m.as_str()))
-			// 				.join(", "),
-			// 			struct_
-			// 		),
-			// 		Span::new(apply_block.range(), self.file_id.clone()),
-			// 	),
-			// ));
+			if unimplemented_methods.len() > 0 {
+				return Err(LowerError::UnimplementedTraitMethods {
+					trt: trait_decl.name.clone(),
+					ty: ty.map(|ty| self.fmt_ty(&ty)),
+					unimplemented_methods: unimplemented_methods,
+				});
+			}
 		}
 
 		Ok(())
@@ -185,11 +180,11 @@ impl<'a> LoweringCtx<'a> {
 		let return_ty_id = self
 			.tchecker
 			.tenv
-			.insert(to_ty_kind(&method_decl.return_type));
+			.insert(self.to_ty_kind(&method_decl.return_type));
 		let return_ty_impl_id = self
 			.tchecker
 			.tenv
-			.insert(to_ty_kind(&method_impl.return_type));
+			.insert(self.to_ty_kind(&method_impl.return_type));
 		self
 			.tchecker
 			.unify(
@@ -202,31 +197,17 @@ impl<'a> LoweringCtx<'a> {
 		let method_decl_params = method_decl.params.len();
 		let method_impl_params = method_impl.params.len();
 		if method_decl_params != method_impl_params {
-			todo!()
-			// return Err(
-			// 	FluxError::build(
-			// 		format!("incorrect number of arguments supplied to trait method definition"),
-			// 		method_impl.params.span.clone(),
-			// 		FluxErrorCode::IncorrectNumberParamsInMethodImpl,
-			// 		(
-			// 			format!("incorrect number of arguments supplied to trait method definition"),
-			// 			method_impl.params.span.clone(),
-			// 		),
-			// 	)
-			// 	.with_label(
-			// 		format!(
-			// 			"the method `{}` is defined with {} parameters",
-			// 			method_decl.name.inner, method_decl_params
-			// 		),
-			// 		method_decl.params.span.clone(),
-			// 	),
-			// );
+			return Err(LowerError::IncorrectNumberOfParamsInTraitMethodDefinition {
+				method_name: method_decl.name.inner.to_string(),
+				implementation_params: method_impl.params.clone(),
+				declaration_params: method_decl.params.clone(),
+			});
 		}
 
 		for (i, decl_param) in method_decl.params.iter().enumerate() {
 			let impl_param = &method_impl.params[i];
-			let decl_id = self.tchecker.tenv.insert(to_ty_kind(&decl_param.ty));
-			let impl_id = self.tchecker.tenv.insert(to_ty_kind(&impl_param.ty));
+			let decl_id = self.tchecker.tenv.insert(self.to_ty_kind(&decl_param.ty));
+			let impl_id = self.tchecker.tenv.insert(self.to_ty_kind(&impl_param.ty));
 			self
 				.tchecker
 				.unify(decl_id, impl_id, impl_param.ty.span.clone())
@@ -251,24 +232,12 @@ impl<'a> LoweringCtx<'a> {
 				),
 			)
 		};
-		let name = if let Some(name) = ty_decl.name() {
-			Spanned::new(
-				name.text().into(),
-				Span::new(name.text_range(), self.file_id.clone()),
-			)
-		} else {
-			todo!()
-			// return Err(FluxError::build(
-			// 	format!("missing name in type declaration"),
-			// 	self.span(&ty_decl),
-			// 	FluxErrorCode::MissingNameTyDecl,
-			// 	(
-			// 		format!("missing name in type declaration"),
-			// 		self.span(&ty_decl),
-			// 	),
-			// ));
-		};
-		let ty = self.lower_type(ty_decl.ty())?;
+		let name = self.unwrap_ident(
+			ty_decl.name(),
+			ty_decl.range(),
+			format!("type declaration name"),
+		)?;
+		let ty = self.lower_type(ty_decl.ty(), &HashMap::new())?;
 		Ok(TypeDecl {
 			visibility,
 			name,
@@ -276,8 +245,12 @@ impl<'a> LoweringCtx<'a> {
 		})
 	}
 
-	pub(crate) fn lower_fn_decl(&mut self, fn_decl: ast::FnDecl) -> Result<FnDecl, LowerError> {
-		self.tchecker.tenv = TypeEnv::new();
+	pub(crate) fn lower_fn_decl(
+		&mut self,
+		fn_decl: ast::FnDecl,
+		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
+	) -> Result<FnDecl, LowerError> {
+		self.tchecker.tenv = TypeEnv::new(implementations);
 
 		let visibility = if let Some(p) = fn_decl.public() {
 			Spanned::new(
@@ -323,8 +296,9 @@ impl<'a> LoweringCtx<'a> {
 		let (body, body_id) = self.lower_expr(fn_decl.body())?;
 
 		let return_id = if let Some(return_type) = fn_decl.return_type() {
-			let ty = self.lower_type(Some(return_type))?;
-			self.tchecker.tenv.insert(to_ty_kind(&ty))
+			let ty = self.lower_type(Some(return_type), &HashMap::new())?;
+			let id = self.tchecker.tenv.insert(self.to_ty_kind(&ty));
+			id
 		} else {
 			self.tchecker.tenv.insert(Spanned::new(
 				TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
@@ -351,23 +325,11 @@ impl<'a> LoweringCtx<'a> {
 			.map_err(LowerError::TypeError)?;
 		let return_type: Spanned<Type> = self.to_ty(&self.tchecker.tenv.get_type(return_id));
 
-		let name = if let Some(name) = fn_decl.name() {
-			Spanned::new(
-				SmolStr::from(name.text()),
-				Span::new(name.text_range(), self.file_id.clone()),
-			)
-		} else {
-			todo!()
-			// return Err(FluxError::build(
-			// 	format!("could not lower function declaration: missing name"),
-			// 	self.span(&fn_decl),
-			// 	FluxErrorCode::CouldNotLowerinner,
-			// 	(
-			// 		format!("could not lower function declaration: missing name"),
-			// 		self.span(&fn_decl),
-			// 	),
-			// ));
-		};
+		let name = self.unwrap_ident(
+			fn_decl.name(),
+			fn_decl.range(),
+			format!("function declaration name"),
+		)?;
 
 		if let Expr::Block(block) = &mut self.exprs[body].inner {
 			for stmt in &mut block.0 {
@@ -398,7 +360,7 @@ impl<'a> LoweringCtx<'a> {
 			} else {
 				None
 			};
-			let ty = self.lower_type(param.ty())?;
+			let ty = self.lower_type(param.ty(), &HashMap::new())?;
 			hir_params.push(Spanned::new(
 				FnParam {
 					mutable: param.mutable().is_some(),

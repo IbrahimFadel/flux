@@ -472,6 +472,7 @@ dependencies = [
  "flux-error",
  "flux-span",
  "flux-syntax",
+ "itertools",
  "smol_str",
 ]
 

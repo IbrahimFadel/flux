@@ -9,10 +9,16 @@ pub trait Error {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FluxErrorCode {
 	UnexpectedToken,
+	Expected,
+	MissingDataInLowering,
 	TypeMismatch,
 	AppliedUnknownTrait,
 	AppliedUnknownMethodToTrait,
 	UnimplementedTraitMethods,
+	IncorrectNumberOfParamsInTraitMethodDefinition,
+	UnknownStruct,
+	NoSuchStructField,
+	TraitBoundsUnsatisfied,
 }
 
 impl std::fmt::Display for FluxErrorCode {

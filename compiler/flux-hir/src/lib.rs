@@ -1,6 +1,8 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+	collections::{HashMap, HashSet},
+	fmt::Debug,
+};
 
-use flux_error::Error;
 use flux_span::{FileId, Span, Spanned};
 use flux_syntax::ast;
 use flux_typesystem::{
@@ -44,29 +46,37 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 		ctx.traits.insert(trt.name.inner.clone(), trt);
 	});
 
-	let types = root
+	let types: Vec<TypeDecl> = root
 		.types()
 		.map(|ty| ctx.lower_type_decl(ty))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 
-	let applies = root
+	types.iter().for_each(|ty| {
+		ctx.type_decls.insert(ty.name.inner.clone(), &ty);
+	});
+
+	let applies: Vec<ApplyDecl> = root
 		.applies()
 		.map(|apply| ctx.lower_apply_decl(apply))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 
+	let mut implementations = HashMap::new();
+	applies.iter().for_each(|apply_decl| {
+		if let Some(trt) = &apply_decl.trait_ {
+			let trts = implementations
+				.entry(SmolStr::from(ctx.fmt_ty(&apply_decl.ty.inner)))
+				.or_insert(HashSet::new());
+			trts.insert(trt.inner.clone());
+		}
+	});
+
 	let functions = root
 		.functions()
-		.map(|f| ctx.lower_fn_decl(f))
+		.map(|f| ctx.lower_fn_decl(f, implementations.clone()))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
-
-	// let applies = root
-	// 	.applies()
-	// 	.map(|apply| ctx.lower_apply_decl(apply))
-	// 	.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
-	// 	.collect();
 
 	errors.append(&mut ctx.errors);
 
@@ -83,22 +93,4 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 		},
 		errors,
 	)
-}
-
-fn to_ty_kind(ty: &Spanned<Type>) -> Spanned<TypeKind> {
-	let kind = match &ty.inner {
-		Type::SInt(n) => TypeKind::Concrete(ConcreteKind::SInt(*n)),
-		Type::UInt(n) => TypeKind::Concrete(ConcreteKind::UInt(*n)),
-		Type::Int => TypeKind::Int(None),
-		Type::F64 => TypeKind::Concrete(ConcreteKind::F64),
-		Type::F32 => TypeKind::Concrete(ConcreteKind::F32),
-		Type::Float => TypeKind::Float(None),
-		Type::Ident(name) => TypeKind::Concrete(ConcreteKind::Ident(name.clone())),
-		Type::Unknown => TypeKind::Unknown,
-		_ => todo!(),
-	};
-	Spanned {
-		inner: kind,
-		span: ty.span.clone(),
-	}
 }

@@ -51,13 +51,10 @@ impl<'t, 'src> Parser<'t, 'src> {
 			};
 			self.error(ParseError::UnexpectedToken {
 				expected: self.expected_kinds.clone(),
-				got: Spanned::new(
-					got,
-					Span::new(range, self.source.file_id.clone()),
-				),
+				got: Spanned::new(got, Span::new(range, self.source.file_id.clone())),
 			});
 
-			while !self.at_set(recovery_set) && !self.at_end() {
+			while !self.at_set(recovery_set) && !self.at_end() && !self.at(TokenKind::Error) {
 				self.bump();
 			}
 		}
