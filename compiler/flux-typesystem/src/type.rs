@@ -22,6 +22,7 @@ pub enum ConcreteKind {
 	UInt(BitSize),
 	F64,
 	F32,
+	Ptr(TypeId),
 	Ident((SmolStr, Vec<TypeId>)),
 	Tuple(Vec<TypeId>),
 	Func(Vec<TypeId>, Box<TypeId>),

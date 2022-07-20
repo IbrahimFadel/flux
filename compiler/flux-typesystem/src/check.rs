@@ -16,91 +16,6 @@ pub struct TypeChecker {
 	pub tenv: TypeEnv,
 }
 
-impl Error for TypeError {
-	fn to_report(&self) -> Report<Span> {
-		let report = match self {
-			TypeError::TypeMismatch { a, b, span } => Report::build(
-				ReportKind::Error,
-				span.file_id.clone(),
-				span.range.start().into(),
-			)
-			.with_code(FluxErrorCode::TypeMismatch)
-			.with_message(format!("type mismatch"))
-			.with_label(
-				Label::new(span.clone())
-					.with_color(Color::Red)
-					.with_message(format!(
-						"type mismatch between `{}` and `{}`",
-						a.inner, b.inner
-					)),
-			)
-			.with_label(
-				Label::new(a.span.clone())
-					.with_color(Color::Blue)
-					.with_message(format!("`{}`", a.inner)),
-			)
-			.with_label(
-				Label::new(b.span.clone())
-					.with_color(Color::Blue)
-					.with_message(format!("`{}`", b.inner)),
-			),
-			TypeError::TraitBoundsUnsatisfied {
-				ty,
-				generic,
-				span,
-				missing_implementations,
-			} => Report::build(
-				ReportKind::Error,
-				span.file_id.clone(),
-				span.range.start().into(),
-			)
-			.with_code(FluxErrorCode::TraitBoundsUnsatisfied)
-			.with_message(format!("trait bounds unsatisfied"))
-			.with_label(
-				Label::new(span.clone())
-					.with_color(Color::Red)
-					.with_message(format!(
-						"the {} not implemented for `{}`",
-						if missing_implementations.len() == 1 {
-							format!(
-								"trait `{}` is",
-								missing_implementations
-									.iter()
-									.collect::<Vec<_>>()
-									.first()
-									.unwrap()
-							)
-						} else {
-							format!(
-								"traits {} are",
-								comma_separated_end_with_and(missing_implementations)
-							)
-						},
-						ty.inner
-					)),
-			)
-			.with_label(
-				Label::new(generic.span.clone())
-					.with_color(Color::Blue)
-					.with_message(format!("{}", generic.inner)),
-			),
-			TypeError::UnknownPath { path } => Report::build(
-				ReportKind::Error,
-				path.span.file_id.clone(),
-				path.span.range.start().into(),
-			)
-			.with_code(FluxErrorCode::TypeMismatch)
-			.with_message(format!("unknown path"))
-			.with_label(
-				Label::new(path.span.clone())
-					.with_color(Color::Red)
-					.with_message(format!("unknown path `{}`", path.inner)),
-			),
-		};
-		report.finish()
-	}
-}
-
 impl TypeChecker {
 	pub fn new(implementations: HashMap<SmolStr, HashSet<SmolStr>>) -> Self {
 		Self {
@@ -135,41 +50,24 @@ impl TypeChecker {
 				);
 				Ok(())
 			}
-			(Concrete(aa), Generic((_, restrictions))) => {
-				match aa {
-					ConcreteKind::Ident((name, _)) => {
-						if let Some(implementations) = self.tenv.get_trait_implementations(name) {
-							let mut missing_implementations = HashSet::new();
-							for restriction in restrictions {
-								if implementations.get(restriction).is_none() {
-									missing_implementations.insert(restriction.clone());
-								}
-							}
-
-							if missing_implementations.len() == 0 {
-								return Ok(());
-							} else {
-								return Err(self.trait_bounds_unsatisfied(
-									a,
-									b,
-									unification_span,
-									missing_implementations,
-								));
-							}
-						} else {
-							return Err(self.trait_bounds_unsatisfied(
-								a,
-								b,
-								unification_span,
-								restrictions.clone(),
-							));
-						}
-					}
-					_ => {
-						return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()))
-					}
-				};
-			}
+			(Concrete(aa), Generic((_, restrictions))) => self.verify_trait_bounds(
+				a,
+				b,
+				unification_span,
+				&SmolStr::from(self.tenv.fmt_concrete_ty(aa)),
+				restrictions,
+			),
+			// (Concrete(aa), Generic((_, restrictions))) => match aa {
+			// 	ConcreteKind::Ident((name, _)) => {
+			// 		self.verify_trait_bounds(a, b, unification_span, name, restrictions)
+			// 	}
+			// 	_ => {
+			// 		if restrictions.len() == 0 {
+			// 			return Ok(());
+			// 		}
+			// 		return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()));
+			// 	}
+			// },
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
 				(ConcreteKind::Ident((a_name, a_params)), ConcreteKind::Ident((b_name, b_params))) => {
 					if a_name == b_name {
@@ -203,6 +101,9 @@ impl TypeChecker {
 						}
 						Ok(())
 					}
+				}
+				(ConcreteKind::Ptr(a_id), ConcreteKind::Ptr(b_id)) => {
+					self.unify(*a_id, *b_id, unification_span)
 				}
 				_ => {
 					if aa == bb {
@@ -308,6 +209,35 @@ impl TypeChecker {
 		}
 	}
 
+	fn verify_trait_bounds(
+		&self,
+		a: TypeId,
+		b: TypeId,
+		unification_span: Span,
+		name: &SmolStr,
+		restrictions: &HashSet<SmolStr>,
+	) -> Result<(), TypeError> {
+		println!("{:?}", self.tenv.implementations);
+		println!("{}", name);
+		println!("{:?}", restrictions);
+		if let Some(implementations) = self.tenv.get_trait_implementations(name) {
+			let mut missing_implementations = HashSet::new();
+			for restriction in restrictions {
+				if implementations.get(restriction).is_none() {
+					missing_implementations.insert(restriction.clone());
+				}
+			}
+
+			if missing_implementations.len() == 0 {
+				return Ok(());
+			} else {
+				return Err(self.trait_bounds_unsatisfied(a, b, unification_span, missing_implementations));
+			}
+		} else {
+			return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()));
+		}
+	}
+
 	fn type_mismatch(&self, a: TypeId, b: TypeId, span: Span) -> TypeError {
 		let aa = self.tenv.get_type(a);
 		let bb = self.tenv.get_type(b);
@@ -353,6 +283,91 @@ pub enum TypeError {
 	UnknownPath {
 		path: Spanned<SmolStr>,
 	},
+}
+
+impl Error for TypeError {
+	fn to_report(&self) -> Report<Span> {
+		let report = match self {
+			TypeError::TypeMismatch { a, b, span } => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TypeMismatch)
+			.with_message(format!("type mismatch"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"type mismatch between `{}` and `{}`",
+						a.inner, b.inner
+					)),
+			)
+			.with_label(
+				Label::new(a.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("`{}`", a.inner)),
+			)
+			.with_label(
+				Label::new(b.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("`{}`", b.inner)),
+			),
+			TypeError::TraitBoundsUnsatisfied {
+				ty,
+				generic,
+				span,
+				missing_implementations,
+			} => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TraitBoundsUnsatisfied)
+			.with_message(format!("trait bounds unsatisfied"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"the {} not implemented for `{}`",
+						if missing_implementations.len() == 1 {
+							format!(
+								"trait `{}` is",
+								missing_implementations
+									.iter()
+									.collect::<Vec<_>>()
+									.first()
+									.unwrap()
+							)
+						} else {
+							format!(
+								"traits {} are",
+								comma_separated_end_with_and(missing_implementations)
+							)
+						},
+						ty.inner
+					)),
+			)
+			.with_label(
+				Label::new(generic.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("{}", generic.inner)),
+			),
+			TypeError::UnknownPath { path } => Report::build(
+				ReportKind::Error,
+				path.span.file_id.clone(),
+				path.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::TypeMismatch)
+			.with_message(format!("unknown path"))
+			.with_label(
+				Label::new(path.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("unknown path `{}`", path.inner)),
+			),
+		};
+		report.finish()
+	}
 }
 
 fn comma_separated_end_with_and<T: Display>(els: &HashSet<T>) -> String {

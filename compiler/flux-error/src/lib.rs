@@ -19,6 +19,7 @@ pub enum FluxErrorCode {
 	UnknownStruct,
 	NoSuchStructField,
 	TraitBoundsUnsatisfied,
+	NoSuchIntrinsic,
 }
 
 impl std::fmt::Display for FluxErrorCode {

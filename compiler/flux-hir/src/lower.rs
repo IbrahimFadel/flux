@@ -71,6 +71,7 @@ impl<'a> LoweringCtx<'a> {
 			Type::Int => TypeKind::Int(None),
 			Type::F64 => TypeKind::Concrete(ConcreteKind::F64),
 			Type::F32 => TypeKind::Concrete(ConcreteKind::F32),
+			Type::Ptr(id) => TypeKind::Concrete(ConcreteKind::Ptr(*id)),
 			Type::Float => TypeKind::Float(None),
 			Type::Ident((name, type_params)) => {
 				TypeKind::Concrete(ConcreteKind::Ident((name.clone(), type_params.clone())))
@@ -93,8 +94,21 @@ impl<'a> LoweringCtx<'a> {
 			Type::F64 => format!("f64"),
 			Type::F32 => format!("f32"),
 			Type::Float => format!("float"),
+			Type::Ptr(id) => format!(
+				"*{}",
+				self.tchecker.tenv.fmt_ty(&self.tchecker.tenv.get_type(*id))
+			),
 			_ => todo!(),
 		}
+	}
+
+	fn inner_type(&self, ty: &TypeKind) -> TypeKind {
+		if let TypeKind::Concrete(concrete) = ty {
+			if let ConcreteKind::Ptr(id) = concrete {
+				return self.inner_type(&self.tchecker.tenv.get_type(*id));
+			}
+		}
+		ty.clone()
 	}
 
 	fn unwrap_ident(

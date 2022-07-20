@@ -111,11 +111,10 @@ impl TypeEnv {
 	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
 		match ty {
 			TypeKind::Concrete(t) => self.fmt_concrete_ty(t),
-			// TypeKind::Ref(id) => format!("Ref({})", id),
 			TypeKind::Ref(id) => format!("{}", self.fmt_ty(&self.get_type(*id))),
 			TypeKind::Int(id) => {
 				if let Some(id) = id {
-					format!("Int({})", id)
+					format!("{}", self.fmt_ty(&self.get_type(*id)))
 				} else {
 					format!("Int")
 				}
@@ -146,6 +145,7 @@ impl TypeEnv {
 			ConcreteKind::UInt(n) => format!("u{}", n),
 			ConcreteKind::F64 => format!("f64"),
 			ConcreteKind::F32 => format!("f32"),
+			ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty(&self.get_type(*id))),
 			ConcreteKind::Ident((name, type_params)) => format!(
 				"{}{}",
 				name,

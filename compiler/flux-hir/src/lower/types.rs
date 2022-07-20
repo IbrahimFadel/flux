@@ -16,7 +16,7 @@ impl<'a> LoweringCtx<'a> {
 				ast::Type::StructType(struct_ty) => self.lower_struct_type(struct_ty),
 				ast::Type::IdentType(ident_ty) => self.lower_ident_type(ident_ty, generics),
 				ast::Type::TupleType(tuple_ty) => self.lower_tuple_type(tuple_ty),
-				ast::Type::PointerType(pointer_ty) => self.lower_pointer_type(pointer_ty),
+				ast::Type::PointerType(pointer_ty) => self.lower_pointer_type(pointer_ty, generics),
 			}
 		} else {
 			Ok(self.default_spanned(Type::Unknown))
@@ -125,16 +125,16 @@ impl<'a> LoweringCtx<'a> {
 		let mut restrictions = HashMap::new();
 		for generic in generics.names() {
 			let generic: SmolStr = generic.text().into();
+			let mut traits = HashSet::new();
 			if let Some(where_clause) = &where_clause {
-				let mut traits = HashSet::new();
 				for restriction in where_clause.type_restrictions() {
 					let restriction = self.lower_type_restriction(restriction)?;
 					if restriction.name.inner == generic {
 						traits.insert(restriction.trt.inner.clone());
 					}
 				}
-				restrictions.insert(generic, traits);
 			}
+			restrictions.insert(generic, traits);
 		}
 		Ok(restrictions)
 	}
@@ -177,7 +177,7 @@ impl<'a> LoweringCtx<'a> {
 		let type_params = if let Some(type_params) = ident_ty.type_params() {
 			let params: Result<Vec<_>, _> = type_params
 				.params()
-				.map(|ty| self.lower_type(Some(ty), &HashMap::new()))
+				.map(|ty| self.lower_type(Some(ty), generics))
 				.collect();
 			params?
 				.iter()
@@ -186,6 +186,9 @@ impl<'a> LoweringCtx<'a> {
 		} else {
 			vec![]
 		};
+		// println!("1 {:?}", type_params);
+		// println!("2 {:?}", generics);
+		// println!("3 {:?}", name.inner);
 		let ty = if let Some(restrictions) = generics.get(&name.inner) {
 			Type::Generic((name.inner.clone(), restrictions.clone()))
 		} else {
@@ -203,8 +206,16 @@ impl<'a> LoweringCtx<'a> {
 		Ok(Spanned::new(Type::Tuple(types), self.span(&tuple_ty)))
 	}
 
-	fn lower_pointer_type(&mut self, pointer_ty: ast::PointerType) -> TypeResult {
-		let ty = self.lower_type(pointer_ty.to(), &HashMap::new())?;
+	fn lower_pointer_type(
+		&mut self,
+		pointer_ty: ast::PointerType,
+		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+	) -> TypeResult {
+		let ty = self.lower_type(pointer_ty.to(), generics)?;
+		let ty = Spanned::new(
+			Type::Ptr(self.tchecker.tenv.insert(self.to_ty_kind(&ty))),
+			Span::new(pointer_ty.range(), self.file_id.clone()),
+		);
 		Ok(ty)
 	}
 }

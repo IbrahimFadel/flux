@@ -241,7 +241,17 @@ impl<'a> LoweringCtx<'a> {
 	}
 
 	fn lower_call(&mut self, call_expr: CallExpr) -> ExprResult {
+		if let ast::Expr::IntrinsicExpr(intrinsic) = call_expr.callee().unwrap() {
+			let intrinsic = intrinsic.name().unwrap();
+			let intrinsic = Spanned::new(
+				intrinsic.text().into(),
+				Span::new(intrinsic.text_range(), self.file_id.clone()),
+			);
+			return self.lower_intrinsic_call(intrinsic, call_expr.args());
+		}
+
 		let (callee, _) = self.lower_expr(call_expr.callee())?;
+
 		let mut args = vec![];
 		let mut arg_ids = vec![];
 		for arg in call_expr.args() {
@@ -249,6 +259,7 @@ impl<'a> LoweringCtx<'a> {
 			args.push(arg);
 			arg_ids.push(arg_id);
 		}
+
 		let args_range = match (call_expr.lparen(), call_expr.rparen()) {
 			(Some(lparen), Some(rparen)) => {
 				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
@@ -280,11 +291,6 @@ impl<'a> LoweringCtx<'a> {
 		};
 		let args = Spanned::new(args, Span::new(args_range, self.file_id.clone()));
 
-		// TODO: Fix
-		// let i = self.tenv.insert(TypeKind::Unknown);
-		// let o = self.tenv.insert(TypeKind::Unknown); // TODO: this shouldn't be unknown, we should find the signature
-		// let call_ty = TypeInfo::Func(Box::new(x), ())
-
 		Ok((
 			Expr::Call(Call { callee, args }),
 			self
@@ -292,6 +298,54 @@ impl<'a> LoweringCtx<'a> {
 				.tenv
 				.insert(Spanned::new(TypeKind::Unknown, self.span(&call_expr))),
 		))
+	}
+
+	fn lower_intrinsic_call(
+		&mut self,
+		intrinsic: Spanned<SmolStr>,
+		args: impl Iterator<Item = ast::Expr>,
+	) -> ExprResult {
+		let instrinsic_name = intrinsic.inner.split(".").last().unwrap();
+		match instrinsic_name {
+			"malloc" => self.lower_malloc_intrinsic_expr(args, intrinsic.span),
+			_ => return Err(LowerError::UnknownIntrinsic { intrinsic }),
+		}
+	}
+
+	fn lower_malloc_intrinsic_expr(
+		&mut self,
+		args: impl Iterator<Item = ast::Expr>,
+		span: Span,
+	) -> ExprResult {
+		let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
+		let args = args?;
+		if args.len() != 1 {
+			return Err(LowerError::IncorrectNumberOfArgsInCall {});
+		}
+		let (arg, arg_id) = args.first().unwrap();
+
+		let u64_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::UInt(64)),
+			span.clone(),
+		));
+
+		self
+			.tchecker
+			.unify(*arg_id, u64_id, self.exprs[*arg].span.clone())
+			.map_err(LowerError::TypeError)?;
+
+		let u8_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::UInt(8)),
+			span.clone(),
+		));
+		let u8_ptr_ty = TypeKind::Concrete(ConcreteKind::Ptr(u8_id));
+		let u8_ptr_id = self.tchecker.tenv.insert(Spanned::new(
+			u8_ptr_ty,
+			Span::combine(&span, &self.exprs[*arg].span),
+		));
+
+		let malloc = Intrinsic::Malloc(*arg);
+		Ok((Expr::Intrinsic(malloc), u8_ptr_id))
 	}
 
 	fn lower_path(&mut self, path_expr: PathExpr) -> ExprResult {
@@ -352,8 +406,12 @@ impl<'a> LoweringCtx<'a> {
 			let (val, val_id) = self.lower_expr(field.value())?;
 
 			if let Some(field) = struct_type.get(&name.inner) {
-				let field_ty_id = self.tchecker.tenv.insert(self.to_ty_kind(&field.ty));
-				type_params.push(val_id);
+				let field_ty_kind = self.to_ty_kind(&field.ty);
+				let field_ty_id = self.tchecker.tenv.insert(field_ty_kind.clone());
+
+				if let TypeKind::Generic(_) = self.inner_type(&field_ty_kind.inner) {
+					type_params.push(val_id);
+				}
 				self
 					.tchecker
 					.unify(val_id, field_ty_id, self.exprs[val].span.clone())

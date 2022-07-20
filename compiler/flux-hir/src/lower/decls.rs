@@ -92,7 +92,7 @@ impl<'a> LoweringCtx<'a> {
 			None
 		};
 
-		self.lower_and_validate_apply_block(&block, &trait_decl, &ty)?;
+		self.lower_and_validate_apply_block(&block, &trait_decl, &ty, &generics)?;
 
 		Ok(ApplyDecl {
 			trait_,
@@ -106,10 +106,11 @@ impl<'a> LoweringCtx<'a> {
 		apply_block: &ast::ApplyBlock,
 		trait_decl: &Option<&TraitDecl>,
 		ty: &Spanned<Type>,
+		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<(), LowerError> {
 		let mut methods_implemented = HashSet::new();
 		for method in apply_block.methods() {
-			let method = self.lower_fn_decl(method, HashMap::new())?; // TODO: ?
+			let method = self.lower_fn_decl(method, generics)?;
 
 			let actual_return_ty_id = self
 				.tchecker
@@ -248,10 +249,8 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_fn_decl(
 		&mut self,
 		fn_decl: ast::FnDecl,
-		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<FnDecl, LowerError> {
-		self.tchecker.tenv = TypeEnv::new(implementations);
-
 		let visibility = if let Some(p) = fn_decl.public() {
 			Spanned::new(
 				Visibility::Public,
@@ -296,7 +295,7 @@ impl<'a> LoweringCtx<'a> {
 		let (body, body_id) = self.lower_expr(fn_decl.body())?;
 
 		let return_id = if let Some(return_type) = fn_decl.return_type() {
-			let ty = self.lower_type(Some(return_type), &HashMap::new())?;
+			let ty = self.lower_type(Some(return_type), generics)?;
 			let id = self.tchecker.tenv.insert(self.to_ty_kind(&ty));
 			id
 		} else {

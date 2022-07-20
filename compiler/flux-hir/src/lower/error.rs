@@ -39,6 +39,10 @@ pub enum LowerError {
 		struct_name: Spanned<SmolStr>,
 		field_name: Spanned<SmolStr>,
 	},
+	UnknownIntrinsic {
+		intrinsic: Spanned<SmolStr>,
+	},
+	IncorrectNumberOfArgsInCall {},
 }
 
 impl Error for LowerError {
@@ -187,6 +191,19 @@ impl Error for LowerError {
 						field_name.inner, struct_name.inner
 					)),
 			),
+			LowerError::UnknownIntrinsic { intrinsic } => Report::build(
+				ReportKind::Error,
+				intrinsic.span.file_id.clone(),
+				intrinsic.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::NoSuchIntrinsic)
+			.with_message(format!("no such intrinsic `{}`", intrinsic.inner))
+			.with_label(
+				Label::new(intrinsic.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("no such intrinsic `{}`", intrinsic.inner)),
+			),
+			LowerError::IncorrectNumberOfArgsInCall {} => todo!(),
 		};
 		report.finish()
 	}

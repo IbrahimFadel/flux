@@ -12,6 +12,9 @@ pub enum TokenKind {
 	#[regex("[ \n\r\t]+")]
 	Whitespace,
 
+	#[regex(r"@flux.intrinsics.[a-zA-Z]+[a-zA-Z0-9_]*")]
+	Intrinsic,
+
 	#[regex("//.*")]
 	#[regex(r"/\*([^*]|\**[^*/])*\*+/")]
 	Comment,
@@ -144,6 +147,7 @@ impl Display for TokenKind {
 			Self::Ident => write!(f, "identifier"),
 			Self::IfKw => write!(f, "if"),
 			Self::IntLit => write!(f, "int"),
+			Self::Intrinsic => write!(f, "intrinsic"),
 			Self::IsKw => write!(f, "is"),
 			Self::LBrace => write!(f, "{{"),
 			Self::LParen => write!(f, "("),

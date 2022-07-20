@@ -175,6 +175,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		if_expr(p)
 	} else if p.at(TokenKind::LBrace) {
 		block_expr(p)
+	} else if p.at(TokenKind::Intrinsic) {
+		intrinsic_expr(p)
 	} else {
 		p.expected(format!("expression lhs"));
 		return None;
@@ -258,6 +260,13 @@ pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 	}
 	p.expect(TokenKind::RBrace, &recovery(&[]));
 	m.complete(p, SyntaxKind::BlockExpr)
+}
+
+fn intrinsic_expr(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(TokenKind::Intrinsic));
+	let m = p.start();
+	p.bump();
+	m.complete(p, SyntaxKind::IntrinsicExpr)
 }
 
 #[cfg(test)]

@@ -1,18 +1,26 @@
-type Vec struct<T> {
+type Vec struct<T>
+	where T is Clone
+{
 	len u64,
 	capacity u64,
 	buf *T,
 }
 
-apply<T> to Vec<T> {
+trait Clone {}
+
+apply Clone to u8 {
+}
+
+apply<T> to Vec<T>
+	where T is Clone
+{
 	fn new() -> Vec<T> => {
 		Vec {
 			len: 0,
 			capacity: 0,
-			buf: malloc(0),
+			buf: @flux.intrinsics.malloc(32),
 		}
 	}
 }
 
-fn malloc() -> *u8 => {
-}
+// TODO: collect applications first, then lower the bodies (how do we know clone)

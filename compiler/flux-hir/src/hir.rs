@@ -105,6 +105,7 @@ pub enum Expr {
 	If(If),
 	Block(Block),
 	Tuple(Tuple),
+	Intrinsic(Intrinsic),
 	Missing,
 }
 
@@ -115,6 +116,11 @@ impl Into<Option<Binary>> for Expr {
 			_ => None,
 		}
 	}
+}
+
+#[derive(Debug, Clone)]
+pub enum Intrinsic {
+	Malloc(ExprIdx),
 }
 
 #[derive(Debug, Clone)]
@@ -178,6 +184,7 @@ pub enum Type {
 	F64,
 	F32,
 	Float,
+	Ptr(TypeId),
 	Ref(usize),
 	Ident((SmolStr, Vec<TypeId>)),
 	Generic((SmolStr, HashSet<SmolStr>)),

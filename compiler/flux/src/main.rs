@@ -3,14 +3,6 @@ use flux_error::FluxErrorReporting;
 
 const PROJECT_DIR: &str = ".";
 
-trait ToI32 {}
-
-struct Foo;
-
-struct Bar<T: ToI32> {
-	pub x: T,
-}
-
 fn main() {
 	let mut err_reporting = FluxErrorReporting { files: vec![] };
 	let mut function_exports = FunctionExportTable::default();

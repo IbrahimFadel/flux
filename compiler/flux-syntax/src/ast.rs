@@ -66,8 +66,20 @@ macro_rules! enum_node {
 }
 
 enum_node!(
-	Expr, BinExpr, IntExpr, FloatExpr, ParenExpr, PrefixExpr, IdentExpr, CallExpr, PathExpr,
-	StructExpr, IfExpr, BlockExpr, TupleExpr
+	Expr,
+	BinExpr,
+	IntExpr,
+	FloatExpr,
+	ParenExpr,
+	PrefixExpr,
+	IdentExpr,
+	CallExpr,
+	PathExpr,
+	StructExpr,
+	IfExpr,
+	BlockExpr,
+	TupleExpr,
+	IntrinsicExpr
 );
 enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
 enum_node!(
@@ -106,6 +118,7 @@ basic_node!(StructExprField);
 basic_node!(IfExpr);
 basic_node!(BlockExpr);
 basic_node!(TupleExpr);
+basic_node!(IntrinsicExpr);
 
 basic_node!(StructTypeField);
 basic_node!(TraitMethod);
@@ -723,5 +736,15 @@ impl GenericList {
 			.children_with_tokens()
 			.filter_map(SyntaxElement::into_token)
 			.filter(|token| token.kind() == SyntaxKind::Ident)
+	}
+}
+
+impl IntrinsicExpr {
+	pub fn name(&self) -> Option<SyntaxToken> {
+		self
+			.0
+			.children_with_tokens()
+			.filter_map(SyntaxElement::into_token)
+			.find(|token| token.kind() == SyntaxKind::Intrinsic)
 	}
 }

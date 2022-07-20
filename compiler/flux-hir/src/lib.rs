@@ -71,10 +71,11 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 			trts.insert(trt.inner.clone());
 		}
 	});
+	ctx.tchecker.tenv.implementations = implementations;
 
 	let functions = root
 		.functions()
-		.map(|f| ctx.lower_fn_decl(f, implementations.clone()))
+		.map(|f| ctx.lower_fn_decl(f, &HashMap::new()))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 

@@ -43,6 +43,7 @@ pub enum SyntaxKind {
 	TypeRestriction,
 	TypeParams,
 	PointerType,
+	IntrinsicExpr,
 
 	Whitespace,
 	Comment,
@@ -90,6 +91,7 @@ pub enum SyntaxKind {
 	RBrace,
 	Eq,
 	SemiColon,
+	Intrinsic,
 	Error,
 }
 
@@ -144,6 +146,7 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::RBrace => SyntaxKind::RBrace,
 			TokenKind::Eq => SyntaxKind::Eq,
 			TokenKind::SemiColon => SyntaxKind::SemiColon,
+			TokenKind::Intrinsic => SyntaxKind::Intrinsic,
 			TokenKind::Error => SyntaxKind::Error,
 		}
 	}
