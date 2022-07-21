@@ -1,11 +1,11 @@
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_error::{Error, FluxErrorCode};
+use flux_error::{comma_separated_end_with_and, Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
 use flux_typesystem::check::TypeError;
 use itertools::Itertools;
 use smol_str::SmolStr;
 
-use crate::hir::{FnParam, Type};
+use crate::hir::FnParam;
 
 #[derive(Debug)]
 pub enum LowerError {
@@ -43,6 +43,12 @@ pub enum LowerError {
 		intrinsic: Spanned<SmolStr>,
 	},
 	IncorrectNumberOfArgsInCall {},
+	UninitializedFieldsInStructExpr {
+		struct_name: SmolStr,
+		struct_type: String,
+		uninitialized_fields: Vec<SmolStr>,
+		span: Span,
+	},
 }
 
 impl Error for LowerError {
@@ -204,6 +210,35 @@ impl Error for LowerError {
 					.with_message(format!("no such intrinsic `{}`", intrinsic.inner)),
 			),
 			LowerError::IncorrectNumberOfArgsInCall {} => todo!(),
+			LowerError::UninitializedFieldsInStructExpr {
+				struct_name,
+				struct_type,
+				uninitialized_fields,
+				span,
+			} => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::UninitializedFieldsInStructExpr)
+			.with_message(format!("uninitialized fields in struct expression"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"missing fields in `{}` struct initialization",
+						struct_name,
+					)),
+			)
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!(
+						"missing {}",
+						comma_separated_end_with_and(uninitialized_fields.iter())
+					)),
+			)
+			.with_note(format!("`{}` is defined as: {}", struct_name, struct_type)),
 		};
 		report.finish()
 	}

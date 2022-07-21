@@ -1,10 +1,92 @@
-use flux_syntax::ast::{CallExpr, FloatExpr, IntExpr, PathExpr};
+use flux_syntax::ast::{CallExpr, FloatExpr, IntExpr, IntrinsicExpr, PathExpr};
 use flux_typesystem::r#type::{ConcreteKind, TypeId};
 use itertools::Itertools;
 
 use super::*;
 
 type ExprResult = Result<(Expr, TypeId), LowerError>;
+
+// macro_rules! declare_instrs_wo_ids {
+// 	(
+//     $(
+//       $method:ident :
+//       $name:ident {
+//         $(
+//           $field_name:ident : $field_ty:ty
+//         ),*
+//         $(,)?
+//       };
+//     )*
+//   ) => {
+//     $(
+//       pub fn $method(&mut self, $($field_name : $field_ty),*) {
+//         let mut block = self.cur_block.as_ref().unwrap().borrow_mut();
+// 				block
+// 					.instrs
+// 					.push(Instruction::$name($name { $($field_name),* }));
+//       }
+//     )*
+//   };
+// }
+
+// macro_rules! lower_intrinsic {
+// 	($name:ident, $param_types:expr, $return_type:expr) => {
+// 		paste::paste! {
+// 			pub fn [<lower_intrinsic_expr_>] $name(
+// 				&mut self,
+// 				args: impl Iterator<Item = ast::Expr>,
+// 				span: Span,
+// 			) -> ExprResult {
+// 				//TODO: try_for_each
+// 				let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
+// 				let args = args?;
+// 				if args.len() !=  {
+// 					return Err(LowerError::IncorrectNumberOfArgsInCall {});
+// 				}
+// 				let (arg, arg_id) = args.first().unwrap();
+
+// 				let params
+// 			}
+// 		}
+// 	};
+// }
+
+// lower_intrinsic!(malloc, 0, 0);
+// fn lower_free_intrinsic_expr(
+// 	&mut self,
+// 	args: impl Iterator<Item = ast::Expr>,
+// 	span: Span,
+// ) -> ExprResult {
+// 	let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
+// 	let args = args?;
+// 	if args.len() != 1 {
+// 		return Err(LowerError::IncorrectNumberOfArgsInCall {});
+// 	}
+// 	let (arg, arg_id) = args.first().unwrap();
+
+// 	let u8_id = self.tchecker.tenv.insert(Spanned::new(
+// 		TypeKind::Concrete(ConcreteKind::UInt(8)),
+// 		span.clone(),
+// 	));
+// 	let u8_ptr_ty = TypeKind::Concrete(ConcreteKind::Ptr(u8_id));
+// 	let u8_ptr_id = self.tchecker.tenv.insert(Spanned::new(
+// 		u8_ptr_ty,
+// 		Span::combine(&span, &self.exprs[*arg].span),
+// 	));
+
+// 	self
+// 		.tchecker
+// 		.unify(*arg_id, u8_ptr_id, self.exprs[*arg].span.clone())
+// 		.map_err(LowerError::TypeError)?;
+
+// 	let unit_id = self.tchecker.tenv.insert(Spanned::new(
+// 		TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+// 		span.clone(),
+// 	));
+
+// 	let free = Intrinsic::Free(*arg);
+// 	Ok((Expr::Intrinsic(free), unit_id))
+// }
 
 impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_expr(
@@ -42,6 +124,7 @@ impl<'a> LoweringCtx<'a> {
 				ast::Expr::IfExpr(if_expr) => self.lower_if_expr(if_expr)?,
 				ast::Expr::BlockExpr(block_expr) => self.lower_block_expr(block_expr)?,
 				ast::Expr::TupleExpr(tuple_expr) => self.lower_tuple_expr(tuple_expr)?,
+				ast::Expr::IntrinsicExpr(intrinsic_expr) => self.lower_intrinsic_expr(intrinsic_expr)?,
 				_ => todo!(),
 			};
 			(
@@ -84,10 +167,10 @@ impl<'a> LoweringCtx<'a> {
 		)); // let's figure out what type it has
 		let (lhs, lhs_id) = self.lower_expr(bin_expr.lhs())?;
 		let lhs_ty = self.tchecker.tenv.get_type(lhs_id);
-		let lhs_id = self.tchecker.tenv.insert(lhs_ty);
+		let lhs_id = self.tchecker.tenv.insert(lhs_ty.clone());
 		let (rhs, rhs_id) = self.lower_expr(bin_expr.rhs())?;
 		let rhs_ty = self.tchecker.tenv.get_type(rhs_id);
-		let rhs_id = self.tchecker.tenv.insert(rhs_ty);
+		let rhs_id = self.tchecker.tenv.insert(rhs_ty.clone());
 		self
 			.tchecker
 			.unify(
@@ -132,7 +215,7 @@ impl<'a> LoweringCtx<'a> {
 		};
 
 		let n = u64::from_str_radix(int.as_str(), radix);
-		if let Some(err) = n.as_ref().err() {
+		if let Some(_) = n.as_ref().err() {
 			todo!()
 		// return Err(
 		// 	FluxError::build(
@@ -178,7 +261,7 @@ impl<'a> LoweringCtx<'a> {
 		}
 
 		let n = float_expr.tok().unwrap().text().parse::<f64>();
-		if let Some(err) = n.as_ref().err() {
+		if let Some(_) = n.as_ref().err() {
 			todo!()
 		// return Err(
 		// 	FluxError::build(
@@ -308,6 +391,7 @@ impl<'a> LoweringCtx<'a> {
 		let instrinsic_name = intrinsic.inner.split(".").last().unwrap();
 		match instrinsic_name {
 			"malloc" => self.lower_malloc_intrinsic_expr(args, intrinsic.span),
+			"free" => self.lower_free_intrinsic_expr(args, intrinsic.span),
 			_ => return Err(LowerError::UnknownIntrinsic { intrinsic }),
 		}
 	}
@@ -348,6 +432,66 @@ impl<'a> LoweringCtx<'a> {
 		Ok((Expr::Intrinsic(malloc), u8_ptr_id))
 	}
 
+	fn lower_free_intrinsic_expr(
+		&mut self,
+		args: impl Iterator<Item = ast::Expr>,
+		span: Span,
+	) -> ExprResult {
+		let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
+		let args = args?;
+		if args.len() != 1 {
+			return Err(LowerError::IncorrectNumberOfArgsInCall {});
+		}
+		let (arg, arg_id) = args.first().unwrap();
+
+		let u8_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::UInt(8)),
+			span.clone(),
+		));
+		let u8_ptr_ty = TypeKind::Concrete(ConcreteKind::Ptr(u8_id));
+		let u8_ptr_id = self.tchecker.tenv.insert(Spanned::new(
+			u8_ptr_ty,
+			Span::combine(&span, &self.exprs[*arg].span),
+		));
+
+		self
+			.tchecker
+			.unify(*arg_id, u8_ptr_id, self.exprs[*arg].span.clone())
+			.map_err(LowerError::TypeError)?;
+
+		let unit_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+			span.clone(),
+		));
+
+		let free = Intrinsic::Free(*arg);
+		Ok((Expr::Intrinsic(free), unit_id))
+	}
+
+	fn lower_intrinsic_expr(&mut self, intrinsic_expr: IntrinsicExpr) -> ExprResult {
+		let intrinsic = self.unwrap_ident(
+			intrinsic_expr.name(),
+			intrinsic_expr.range(),
+			format!("intrinsic name"),
+		)?;
+		match intrinsic.inner.split(".").last().unwrap() {
+			"nullptr" => self.lower_nullptr_intrinsic(intrinsic.span),
+			_ => return Err(LowerError::UnknownIntrinsic { intrinsic }),
+		}
+	}
+
+	fn lower_nullptr_intrinsic(&mut self, span: Span) -> ExprResult {
+		let unit_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+			span.clone(),
+		));
+		let unit_ptr_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Ptr(unit_id)),
+			span.clone(),
+		));
+		Ok((Expr::Intrinsic(Intrinsic::Nullptr), unit_ptr_id))
+	}
+
 	fn lower_path(&mut self, path_expr: PathExpr) -> ExprResult {
 		let mut spanned_path = vec![];
 		let mut path = vec![];
@@ -384,45 +528,58 @@ impl<'a> LoweringCtx<'a> {
 			SmolStr::from(struct_name.iter().map(|s| s.inner.clone()).join("::")),
 			Spanned::vec_span(&struct_name).unwrap(),
 		);
-		let struct_type = if let Some(struct_type) = self.type_decls.get(&struct_name_str.inner) {
-			let struct_ty = &struct_type.ty;
-			match &struct_ty.inner {
-				Type::Struct(struct_ty) => &struct_ty.0,
-				_ => unreachable!(),
+		let type_decl = match self.type_decls.get(&struct_name_str.inner) {
+			Some(ty_decl) => ty_decl.clone(),
+			None => {
+				return Err(LowerError::UnknownStruct {
+					name: Spanned::new(
+						struct_name_str.inner,
+						Spanned::vec_span(&struct_name).unwrap(),
+					),
+				})
 			}
-		} else {
-			return Err(LowerError::UnknownStruct {
-				name: Spanned::new(
-					struct_name_str.inner,
-					Spanned::vec_span(&struct_name).unwrap(),
-				),
-			});
+		};
+		let struct_type = match &type_decl.ty.inner {
+			Type::Struct(struct_ty) => struct_ty,
+			_ => unreachable!(),
 		};
 
-		let mut type_params = vec![]; // these are the types that will be retured associated with this expression's type
+		let num_generics = struct_type.generics.len();
+		let mut type_params = Vec::with_capacity(num_generics); // these are the types that will be retured associated with this expression's type
+		let type_params_uninit = type_params.spare_capacity_mut();
 		let mut fields = vec![];
+		let mut initialized_fields = HashSet::new();
 		for field in struct_expr.fields() {
 			let name = self.unwrap_ident(field.name(), field.range(), format!("struct field name"))?;
 			let (val, val_id) = self.lower_expr(field.value())?;
 
-			if let Some(field) = struct_type.get(&name.inner) {
+			if let Some(field) = struct_type.fields.get(&name.inner) {
 				let field_ty_kind = self.to_ty_kind(&field.ty);
 				let field_ty_id = self.tchecker.tenv.insert(field_ty_kind.clone());
 
-				if let TypeKind::Generic(_) = self.inner_type(&field_ty_kind.inner) {
-					type_params.push(val_id);
-				}
 				self
 					.tchecker
 					.unify(val_id, field_ty_id, self.exprs[val].span.clone())
 					.map_err(LowerError::TypeError)?;
+
+				if let TypeKind::Generic((name, _)) = self.tchecker.tenv.inner_type(&field_ty_kind.inner) {
+					let mut id = val_id;
+					while let TypeKind::Concrete(ConcreteKind::Ptr(new_id)) =
+						self.tchecker.tenv.get_type(id).inner
+					{
+						id = new_id;
+					}
+					let index = struct_type.generics.get_index_of(&name).unwrap();
+					type_params_uninit[index].write(id);
+				}
+
+				initialized_fields.insert(name.inner.clone());
 			} else {
 				return Err(LowerError::NoSuchStructField {
 					struct_name: struct_name_str,
 					field_name: name,
 				});
 			}
-			// TODO: unify expression type
 			fields.push((
 				Spanned::new(
 					SmolStr::from(name.inner.clone()),
@@ -431,6 +588,20 @@ impl<'a> LoweringCtx<'a> {
 				val,
 			));
 		}
+
+		unsafe {
+			type_params.set_len(num_generics);
+		}
+
+		let uninitialized_fields: Vec<SmolStr> = struct_type
+			.fields
+			.iter()
+			.filter_map(|(field_name, _)| match initialized_fields.get(field_name) {
+				Some(_) => None,
+				None => Some(field_name.clone()),
+			})
+			.collect();
+
 		let fields_range = match (struct_expr.lparen(), struct_expr.rparen()) {
 			(Some(lparen), Some(rparen)) => {
 				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
@@ -438,6 +609,15 @@ impl<'a> LoweringCtx<'a> {
 			_ => struct_expr.range(),
 		};
 		let fields = Spanned::new(fields, Span::new(fields_range, self.file_id.clone()));
+
+		if uninitialized_fields.len() > 0 {
+			return Err(LowerError::UninitializedFieldsInStructExpr {
+				struct_name: struct_name_str.inner,
+				struct_type: self.fmt_ty(&type_decl.ty),
+				uninitialized_fields,
+				span: fields.span.clone(),
+			});
+		}
 
 		let id = self.tchecker.tenv.insert(Spanned::new(
 			TypeKind::Concrete(ConcreteKind::Ident((struct_name_str.inner, type_params))),
@@ -529,7 +709,7 @@ impl<'a> LoweringCtx<'a> {
 		let stmts = block_expr.stmts();
 		let mut stmt_that_determines_type: Option<(Spanned<Stmt>, usize)> = None;
 		for stmt in stmts {
-			if let Some((s, _)) = stmt_that_determines_type {
+			if let Some((_, _)) = stmt_that_determines_type {
 				todo!()
 				// return Err(
 				// 		FluxError::build(

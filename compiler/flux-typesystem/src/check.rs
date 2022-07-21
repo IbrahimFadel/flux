@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_error::{Error, FluxErrorCode};
+use flux_error::{comma_separated_end_with_and, Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
 use smol_str::SmolStr;
 
@@ -50,24 +50,19 @@ impl TypeChecker {
 				);
 				Ok(())
 			}
-			(Concrete(aa), Generic((_, restrictions))) => self.verify_trait_bounds(
-				a,
-				b,
-				unification_span,
-				&SmolStr::from(self.tenv.fmt_concrete_ty(aa)),
-				restrictions,
-			),
-			// (Concrete(aa), Generic((_, restrictions))) => match aa {
-			// 	ConcreteKind::Ident((name, _)) => {
-			// 		self.verify_trait_bounds(a, b, unification_span, name, restrictions)
-			// 	}
-			// 	_ => {
-			// 		if restrictions.len() == 0 {
-			// 			return Ok(());
-			// 		}
-			// 		return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()));
-			// 	}
-			// },
+			(_, Generic((_, restrictions))) => {
+				// Suppose T implements the trait Foo
+				// *T, **T, ***T, etc. should also implement Foo without an explicit `apply`
+				// So verify trait bounds on the type being pointed to
+				let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
+				self.verify_trait_bounds(
+					a,
+					b,
+					unification_span,
+					&SmolStr::from(self.tenv.fmt_ty(&inner_a)),
+					restrictions,
+				)
+			}
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
 				(ConcreteKind::Ident((a_name, a_params)), ConcreteKind::Ident((b_name, b_params))) => {
 					if a_name == b_name {
@@ -75,17 +70,15 @@ impl TypeChecker {
 							Ok(())
 						} else if b_params.len() != 0 && a_params.len() == 0 {
 							Ok(())
+						} else if a_params.len() != b_params.len() {
+							Err(self.type_mismatch(a, b, unification_span))
 						} else {
-							let result: Result<Vec<_>, _> = a_params
+							a_params
 								.iter()
 								.zip(b_params)
-								.map(|(a_param, b_param)| self.unify(*a_param, *b_param, unification_span.clone()))
-								.collect();
-							if let Some(err) = result.err() {
-								return Err(err);
-							} else {
-								Ok(())
-							}
+								.try_for_each(|(a_param, b_param)| {
+									self.unify(*a_param, *b_param, unification_span.clone())
+								})
 						}
 					} else {
 						Err(self.type_mismatch(a, b, unification_span))
@@ -217,9 +210,9 @@ impl TypeChecker {
 		name: &SmolStr,
 		restrictions: &HashSet<SmolStr>,
 	) -> Result<(), TypeError> {
-		println!("{:?}", self.tenv.implementations);
-		println!("{}", name);
-		println!("{:?}", restrictions);
+		if restrictions.len() == 0 {
+			return Ok(());
+		}
 		if let Some(implementations) = self.tenv.get_trait_implementations(name) {
 			let mut missing_implementations = HashSet::new();
 			for restriction in restrictions {
@@ -342,7 +335,7 @@ impl Error for TypeError {
 						} else {
 							format!(
 								"traits {} are",
-								comma_separated_end_with_and(missing_implementations)
+								comma_separated_end_with_and(missing_implementations.iter())
 							)
 						},
 						ty.inner
@@ -368,13 +361,4 @@ impl Error for TypeError {
 		};
 		report.finish()
 	}
-}
-
-fn comma_separated_end_with_and<T: Display>(els: &HashSet<T>) -> String {
-	let mut els: Vec<String> = els.iter().map(|el| format!("`{}`", el)).collect();
-	let len = els.len();
-	if len > 1 {
-		els[len - 1] = format!("and {}", els[len - 1]);
-	}
-	els.join(", ")
 }

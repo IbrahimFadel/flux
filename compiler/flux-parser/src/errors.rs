@@ -1,7 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_error::{Error, FluxErrorCode};
+use flux_error::{comma_separated_end_with_or, Error, FluxErrorCode};
 use flux_lexer::TokenKind;
 use flux_span::{Span, Spanned};
 
@@ -60,14 +60,4 @@ impl Error for ParseError {
 		};
 		report.finish()
 	}
-}
-
-// eq pls clean
-fn comma_separated_end_with_or<T: Debug + Display>(els: &[T]) -> String {
-	let mut els: Vec<String> = els.iter().map(|el| format!("`{}`", el)).collect();
-	let len = els.len();
-	if len > 1 {
-		els[len - 1] = format!("or {}", els[len - 1]);
-	}
-	els.join(", ")
 }

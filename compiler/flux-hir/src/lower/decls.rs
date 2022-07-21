@@ -1,4 +1,5 @@
 use flux_typesystem::r#type::ConcreteKind;
+use indexmap::IndexMap;
 
 use super::*;
 
@@ -44,7 +45,7 @@ impl<'a> LoweringCtx<'a> {
 			};
 			let params = Spanned::new(params, Span::new(params_range, self.file_id.clone()));
 
-			let return_type = self.lower_type(method.return_ty(), &HashMap::new())?;
+			let return_type = self.lower_type(method.return_ty(), &IndexMap::new())?;
 			let method = TraitMethod {
 				name: name.clone(),
 				params,
@@ -55,13 +56,21 @@ impl<'a> LoweringCtx<'a> {
 		Ok(TraitDecl { name, methods })
 	}
 
-	pub(crate) fn lower_apply_decl(
+	/// Figure out what traits are being implemented for what types without lowering the block
+	pub(crate) fn apply_decl_first_pass(
 		&mut self,
 		apply_decl: ast::ApplyDecl,
-	) -> Result<ApplyDecl, LowerError> {
+	) -> Result<
+		(
+			(Option<Spanned<SmolStr>>, Spanned<Type>),
+			IndexMap<SmolStr, HashSet<SmolStr>>,
+			Option<ast::ApplyBlock>,
+		),
+		LowerError,
+	> {
 		let generics = match apply_decl.generics() {
 			Some(generics) => self.lower_generic_list(generics, apply_decl.where_clause())?,
-			None => HashMap::new(),
+			None => IndexMap::new(),
 		};
 		let (trait_, ty): (Option<Spanned<SmolStr>>, Spanned<Type>) =
 			match (apply_decl.trait_(), apply_decl.ty()) {
@@ -75,8 +84,16 @@ impl<'a> LoweringCtx<'a> {
 				),
 				_ => unreachable!(),
 			};
+		Ok(((trait_, ty), generics, apply_decl.block()))
+	}
 
-		let block = apply_decl.block().unwrap();
+	pub(crate) fn lower_apply_decl(
+		&mut self,
+		block: &Option<ast::ApplyBlock>,
+		trait_: &Option<Spanned<SmolStr>>,
+		ty: &Spanned<Type>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+	) -> Result<ApplyDecl, LowerError> {
 		let trait_decl = if let Some(trait_) = &trait_ {
 			let trait_decl = match self.traits.get(&trait_.inner) {
 				Some(decl) => decl,
@@ -92,11 +109,13 @@ impl<'a> LoweringCtx<'a> {
 			None
 		};
 
-		self.lower_and_validate_apply_block(&block, &trait_decl, &ty, &generics)?;
+		let block = block.as_ref().unwrap();
+
+		self.lower_and_validate_apply_block(block, &trait_decl, &ty, &generics)?;
 
 		Ok(ApplyDecl {
-			trait_,
-			ty,
+			trait_: trait_.clone(),
+			ty: ty.clone(),
 			methods: vec![],
 		})
 	}
@@ -106,7 +125,7 @@ impl<'a> LoweringCtx<'a> {
 		apply_block: &ast::ApplyBlock,
 		trait_decl: &Option<&TraitDecl>,
 		ty: &Spanned<Type>,
-		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<(), LowerError> {
 		let mut methods_implemented = HashSet::new();
 		for method in apply_block.methods() {
@@ -238,7 +257,7 @@ impl<'a> LoweringCtx<'a> {
 			ty_decl.range(),
 			format!("type declaration name"),
 		)?;
-		let ty = self.lower_type(ty_decl.ty(), &HashMap::new())?;
+		let ty = self.lower_type(ty_decl.ty(), &IndexMap::new())?;
 		Ok(TypeDecl {
 			visibility,
 			name,
@@ -249,7 +268,7 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_fn_decl(
 		&mut self,
 		fn_decl: ast::FnDecl,
-		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<FnDecl, LowerError> {
 		let visibility = if let Some(p) = fn_decl.public() {
 			Spanned::new(
@@ -330,11 +349,29 @@ impl<'a> LoweringCtx<'a> {
 			format!("function declaration name"),
 		)?;
 
+		let mut var_types: HashMap<SmolStr, Spanned<Type>> = HashMap::new(); // this is necessary cus mut ref and non-mut ref?
+		if let Expr::Block(block) = &self.exprs[body].inner {
+			for stmt in &block.0 {
+				if let Stmt::VarDecl(var) = &stmt.inner {
+					let id = self
+						.tchecker
+						.tenv
+						.get_path_id(&vec![var.name.clone()])
+						.map_err(LowerError::TypeError)?;
+					let ty = self
+						.tchecker
+						.tenv
+						.reconstruct(id)
+						.map_err(LowerError::TypeError)?;
+					var_types.insert(var.name.inner.clone(), self.to_ty(&ty));
+				}
+			}
+		}
+
 		if let Expr::Block(block) = &mut self.exprs[body].inner {
 			for stmt in &mut block.0 {
 				if let Stmt::VarDecl(var) = &mut stmt.inner {
-					// let id = self.tchecker.tenv.get_path_id(&[var.name.clone()]);
-					// var.ty = self.tchecker.tenv.reconstruct(id)?.into();
+					var.ty = var_types.get(&var.name.inner).unwrap().clone();
 				}
 			}
 		}
@@ -359,7 +396,7 @@ impl<'a> LoweringCtx<'a> {
 			} else {
 				None
 			};
-			let ty = self.lower_type(param.ty(), &HashMap::new())?;
+			let ty = self.lower_type(param.ty(), &IndexMap::new())?;
 			hir_params.push(Spanned::new(
 				FnParam {
 					mutable: param.mutable().is_some(),

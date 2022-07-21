@@ -1,19 +1,10 @@
-type Vec struct<T>
-	where T is Clone
-{
+type Vec struct<T> {
 	len u64,
 	capacity u64,
 	buf *T,
 }
 
-trait Clone {}
-
-apply Clone to u8 {
-}
-
-apply<T> to Vec<T>
-	where T is Clone
-{
+apply<T> to Vec<T> {
 	fn new() -> Vec<T> => {
 		Vec {
 			len: 0,
@@ -21,6 +12,11 @@ apply<T> to Vec<T>
 			buf: @flux.intrinsics.malloc(32),
 		}
 	}
-}
 
-// TODO: collect applications first, then lower the bodies (how do we know clone)
+	fn delete() => {
+		let x = 0;
+		if x == @flux.intrinsics.nullptr {
+		}
+		@flux.intrinsics.free(0);
+	}
+}

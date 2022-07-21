@@ -142,7 +142,10 @@ impl<'a> MirLoweringCtx<'a> {
 	fn lower_var_stmt(&mut self, var: &hir::VarDecl) {
 		let ty = hir_ty_to_mir_ty(&var.ty);
 		let ptr = self.builder.new_alloca(ty.clone());
-		self.cur_block_mut().locals.insert(var.name.clone(), ptr);
+		self
+			.cur_block_mut()
+			.locals
+			.insert(var.name.inner.clone(), ptr);
 		self.cur_block_mut().local_types.insert(ptr, ty);
 		let val = self.lower_expr(var.value);
 		self.builder.new_store(ptr, val);

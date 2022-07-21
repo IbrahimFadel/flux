@@ -1,4 +1,5 @@
 use flux_typesystem::r#type::ConcreteKind;
+use indexmap::IndexMap;
 
 use super::*;
 
@@ -31,7 +32,7 @@ impl<'a> LoweringCtx<'a> {
 			var_decl.range(),
 			format!("variable declaration name"),
 		)?;
-		let var_ty = self.lower_type(var_decl.ty(), &HashMap::new())?;
+		let var_ty = self.lower_type(var_decl.ty(), &IndexMap::new())?;
 		let var_ty_id = self.tchecker.tenv.insert(self.to_ty_kind(&var_ty));
 		let (expr, expr_id) = self.lower_expr(var_decl.value())?;
 
@@ -52,7 +53,7 @@ impl<'a> LoweringCtx<'a> {
 				Spanned::new(
 					Stmt::VarDecl(VarDecl {
 						ty: Spanned::new(Type::Unknown, var_ty.span.clone()),
-						name: name.inner,
+						name: name,
 						value: expr,
 					}),
 					Span::new(var_decl.range(), self.file_id.clone()),

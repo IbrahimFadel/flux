@@ -29,10 +29,29 @@ macro_rules! basic_node {
 			}
 
 			fn range(&self) -> TextRange {
-				self.syntax().text_range()
+				trim_trailing_whitesapce(&self.syntax())
 			}
 		}
 	};
+}
+
+fn trim_trailing_whitesapce(node: &SyntaxNode) -> TextRange {
+	let end = if let Some(last_child) = node.last_child_or_token() {
+		match last_child.as_node() {
+			Some(node) => trim_trailing_whitesapce(node).end(),
+			None => {
+				let tok = last_child.as_token().unwrap();
+				if tok.kind() == SyntaxKind::Whitespace {
+					tok.text_range().start()
+				} else {
+					tok.text_range().end()
+				}
+			}
+		}
+	} else {
+		return node.text_range();
+	};
+	TextRange::new(node.text_range().start(), end)
 }
 
 macro_rules! enum_node {

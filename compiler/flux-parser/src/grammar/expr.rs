@@ -1,4 +1,4 @@
-use crate::{recovery, EXPR_RECOVERY_SET, TYPE_RECOVERY_SET};
+use crate::{recovery, EXPR_RECOVERY_SET};
 
 use super::*;
 

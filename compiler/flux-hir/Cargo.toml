@@ -16,6 +16,7 @@ indexmap = "1.7.0"
 text-size = "1.0.0"
 itertools = "0.10.3"
 ariadne = "0.1.5"
+paste = "1.0.7"
 
 [dev-dependencies]
 insta = "1.15.0"

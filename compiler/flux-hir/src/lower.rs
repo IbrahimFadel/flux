@@ -5,6 +5,7 @@ use flux_syntax::{
 	syntax_kind::{SyntaxKind, SyntaxToken},
 };
 use flux_typesystem::check::TypeChecker;
+use itertools::Itertools;
 use text_size::{TextRange, TextSize};
 
 mod decls;
@@ -44,12 +45,7 @@ impl<'a> LoweringCtx<'a> {
 				ConcreteKind::F64 => Type::F64,
 				ConcreteKind::F32 => Type::F32,
 				ConcreteKind::Ident(name) => Type::Ident(name.clone()),
-				ConcreteKind::Tuple(types) => Type::Tuple(
-					types
-						.iter()
-						.map(|id| self.to_ty(&self.tchecker.tenv.get_type(*id)).inner)
-						.collect::<Vec<_>>(),
-				),
+				ConcreteKind::Tuple(types) => Type::Tuple(types.to_vec()),
 				_ => todo!(),
 			},
 			TypeKind::Int(_) => Type::Int,
@@ -78,7 +74,8 @@ impl<'a> LoweringCtx<'a> {
 			}
 			Type::Unknown => TypeKind::Unknown,
 			Type::Generic(name) => TypeKind::Generic(name.clone()),
-			_ => todo!(),
+			Type::Tuple(ty) => TypeKind::Concrete(ConcreteKind::Tuple(ty.clone())),
+			_ => todo!("{:#?}", ty.inner),
 		};
 		Spanned {
 			inner: kind,
@@ -98,17 +95,24 @@ impl<'a> LoweringCtx<'a> {
 				"*{}",
 				self.tchecker.tenv.fmt_ty(&self.tchecker.tenv.get_type(*id))
 			),
-			_ => todo!(),
+			Type::Struct(struct_ty) => format!(
+				"{{ {} }}",
+				struct_ty
+					.fields
+					.iter()
+					.map(|(name, ty)| format!("{} {}", name, self.fmt_ty(&ty.ty)))
+					.join(", ")
+			),
+			Type::Generic((name, restrictions)) => format!(
+				"{name}{}",
+				if restrictions.len() > 0 {
+					format!(": {}", restrictions.iter().join(", "))
+				} else {
+					format!("")
+				}
+			),
+			_ => todo!("{:#?}", ty),
 		}
-	}
-
-	fn inner_type(&self, ty: &TypeKind) -> TypeKind {
-		if let TypeKind::Concrete(concrete) = ty {
-			if let ConcreteKind::Ptr(id) = concrete {
-				return self.inner_type(&self.tchecker.tenv.get_type(*id));
-			}
-		}
-		ty.clone()
 	}
 
 	fn unwrap_ident(

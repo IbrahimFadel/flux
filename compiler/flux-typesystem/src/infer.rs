@@ -40,8 +40,8 @@ impl TypeEnv {
 		id
 	}
 
-	pub fn get_type(&self, id: TypeId) -> Spanned<TypeKind> {
-		self.vars.get(id).cloned().unwrap()
+	pub fn get_type(&self, id: TypeId) -> &Spanned<TypeKind> {
+		self.vars.get(id).unwrap()
 	}
 
 	pub fn set_type(&mut self, id: TypeId, ty: Spanned<TypeKind>) {
@@ -74,7 +74,7 @@ impl TypeEnv {
 		self.implementations.get(type_name)
 	}
 
-	pub fn reconstruct(&self, id: TypeId) -> Result<Spanned<TypeKind>, InferenceError> {
+	pub fn reconstruct(&self, _: TypeId) -> Result<Spanned<TypeKind>, TypeError> {
 		todo!()
 		// use TypeKind::*;
 		// let span = self.vars[&id].span.clone();
@@ -183,6 +183,15 @@ impl TypeEnv {
 				self.fmt_ty(&self.get_type(**o))
 			),
 		}
+	}
+
+	pub fn inner_type(&self, ty: &TypeKind) -> TypeKind {
+		if let TypeKind::Concrete(concrete) = ty {
+			if let ConcreteKind::Ptr(id) = concrete {
+				return self.inner_type(&self.get_type(*id));
+			}
+		}
+		ty.clone()
 	}
 }
 

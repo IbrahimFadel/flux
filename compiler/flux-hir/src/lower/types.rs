@@ -8,7 +8,7 @@ impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_type(
 		&mut self,
 		ty: Option<ast::Type>,
-		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> TypeResult {
 		if let Some(ty) = ty {
 			match ty {
@@ -87,7 +87,7 @@ impl<'a> LoweringCtx<'a> {
 		let mut hir_fields = IndexMap::new();
 		let generics = match struct_ty.generics() {
 			Some(generics) => self.lower_generic_list(generics, struct_ty.where_clause())?,
-			None => HashMap::new(),
+			None => IndexMap::new(),
 		};
 		for field in struct_ty.fields() {
 			let visibility = if field.public().is_some() {
@@ -112,7 +112,10 @@ impl<'a> LoweringCtx<'a> {
 		}
 		let hir_fields = Spanned::new(hir_fields, self.span(&struct_ty));
 		Ok(Spanned::new(
-			Type::Struct(StructType(hir_fields)),
+			Type::Struct(StructType {
+				generics,
+				fields: hir_fields,
+			}),
 			self.span(&struct_ty),
 		))
 	}
@@ -121,8 +124,8 @@ impl<'a> LoweringCtx<'a> {
 		&self,
 		generics: ast::GenericList,
 		where_clause: Option<ast::WhereClause>,
-	) -> Result<HashMap<SmolStr, HashSet<SmolStr>>, LowerError> {
-		let mut restrictions = HashMap::new();
+	) -> Result<IndexMap<SmolStr, HashSet<SmolStr>>, LowerError> {
+		let mut restrictions = IndexMap::new();
 		for generic in generics.names() {
 			let generic: SmolStr = generic.text().into();
 			let mut traits = HashSet::new();
@@ -137,14 +140,6 @@ impl<'a> LoweringCtx<'a> {
 			restrictions.insert(generic, traits);
 		}
 		Ok(restrictions)
-	}
-
-	fn lower_where_clause(&self, where_clause: ast::WhereClause) -> Result<WhereClause, LowerError> {
-		let restrictions: Result<Vec<_>, _> = where_clause
-			.type_restrictions()
-			.map(|restriction| self.lower_type_restriction(restriction))
-			.collect();
-		Ok(WhereClause(restrictions?))
 	}
 
 	fn lower_type_restriction(
@@ -167,7 +162,7 @@ impl<'a> LoweringCtx<'a> {
 	fn lower_ident_type(
 		&mut self,
 		ident_ty: ast::IdentType,
-		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> TypeResult {
 		let name = self.unwrap_ident(
 			ident_ty.name(),
@@ -186,9 +181,6 @@ impl<'a> LoweringCtx<'a> {
 		} else {
 			vec![]
 		};
-		// println!("1 {:?}", type_params);
-		// println!("2 {:?}", generics);
-		// println!("3 {:?}", name.inner);
 		let ty = if let Some(restrictions) = generics.get(&name.inner) {
 			Type::Generic((name.inner.clone(), restrictions.clone()))
 		} else {
@@ -200,8 +192,8 @@ impl<'a> LoweringCtx<'a> {
 	fn lower_tuple_type(&mut self, tuple_ty: ast::TupleType) -> TypeResult {
 		let mut types = vec![];
 		for ty in tuple_ty.types() {
-			let ty = self.lower_type(Some(ty), &HashMap::new())?;
-			types.push(ty.inner);
+			let ty = self.lower_type(Some(ty), &IndexMap::new())?;
+			types.push(self.tchecker.tenv.insert(self.to_ty_kind(&ty)));
 		}
 		Ok(Spanned::new(Type::Tuple(types), self.span(&tuple_ty)))
 	}
@@ -209,7 +201,7 @@ impl<'a> LoweringCtx<'a> {
 	fn lower_pointer_type(
 		&mut self,
 		pointer_ty: ast::PointerType,
-		generics: &HashMap<SmolStr, HashSet<SmolStr>>,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> TypeResult {
 		let ty = self.lower_type(pointer_ty.to(), generics)?;
 		let ty = Spanned::new(

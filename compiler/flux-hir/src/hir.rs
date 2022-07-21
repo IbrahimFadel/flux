@@ -70,7 +70,7 @@ pub struct Return {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
 	pub ty: Spanned<Type>,
-	pub name: SmolStr,
+	pub name: Spanned<SmolStr>,
 	pub value: ExprIdx,
 }
 
@@ -121,6 +121,8 @@ impl Into<Option<Binary>> for Expr {
 #[derive(Debug, Clone)]
 pub enum Intrinsic {
 	Malloc(ExprIdx),
+	Free(ExprIdx),
+	Nullptr,
 }
 
 #[derive(Debug, Clone)]
@@ -189,7 +191,7 @@ pub enum Type {
 	Ident((SmolStr, Vec<TypeId>)),
 	Generic((SmolStr, HashSet<SmolStr>)),
 	Struct(StructType),
-	Tuple(Vec<Type>),
+	Tuple(Vec<TypeId>),
 	Func(Box<Type>, Box<Type>),
 	Unknown,
 }
@@ -208,7 +210,10 @@ pub struct TraitMethod {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
+pub struct StructType {
+	pub generics: IndexMap<SmolStr, HashSet<SmolStr>>,
+	pub fields: Spanned<IndexMap<SmolStr, StructTypeField>>,
+}
 
 #[derive(Debug, Clone)]
 pub struct StructTypeField {

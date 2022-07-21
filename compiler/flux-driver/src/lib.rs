@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use ariadne::{Report, ReportKind};
+use ariadne::Report;
 use flux_error::{Error, FluxErrorReporting};
 use flux_hir::{hir::Visibility, HirModule};
 use flux_parser::parse;
@@ -162,11 +162,11 @@ fn generate_function_signature(f: &flux_hir::hir::FnDecl) -> FunctionSignature {
 }
 
 fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut FluxErrorReporting) {
-	let mut errors: Vec<DriverError> = vec![];
+	let errors: Vec<DriverError> = vec![];
 	let mut unique_uses: Vec<Spanned<SmolStr>> = vec![]; // hash set
 	for u in uses {
 		let last = u.path.last().unwrap();
-		if let Some(idx) = unique_uses.iter().position(|u| u.inner == last.as_str()) {
+		if let Some(_) = unique_uses.iter().position(|u| u.inner == last.as_str()) {
 			todo!()
 		// errors.push(
 		// 	FluxError::build(
