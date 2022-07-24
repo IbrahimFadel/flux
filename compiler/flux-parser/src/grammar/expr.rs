@@ -13,28 +13,34 @@ enum InfixOp {
 	CmpGt,
 	CmpLte,
 	CmpGte,
+	Access,
+	Assign,
 }
 
 impl InfixOp {
 	fn binding_power(&self) -> (u8, u8) {
 		match self {
+			Self::Assign => (1, 2),
 			Self::CmpEq | Self::CmpNeq | Self::CmpLt | Self::CmpGt | Self::CmpLte | Self::CmpGte => {
-				(1, 2)
+				(3, 4)
 			}
-			Self::Add | Self::Sub => (3, 4),
-			Self::Mul | Self::Div => (4, 5),
+			Self::Add | Self::Sub => (5, 6),
+			Self::Mul | Self::Div => (7, 8),
+			Self::Access => (9, 10),
 		}
 	}
 }
 
 enum PrefixOp {
 	Neg,
+	Addr,
 }
 
 impl PrefixOp {
 	fn binding_power(&self) -> ((), u8) {
 		match self {
 			Self::Neg => ((), 5),
+			Self::Addr => ((), 10), // TODO: not sure
 		}
 	}
 }
@@ -70,6 +76,10 @@ fn expr_binding_power(
 			InfixOp::CmpLte
 		} else if p.at(TokenKind::CmpGte) {
 			InfixOp::CmpGte
+		} else if p.at(TokenKind::Period) {
+			InfixOp::Access
+		} else if p.at(TokenKind::Eq) {
+			InfixOp::Assign
 		} else {
 			break;
 		};
@@ -84,6 +94,7 @@ fn expr_binding_power(
 		let m = lhs.precede(p);
 		let parsed_rhs = expr_binding_power(p, right_binding_power, allow_struct_expressions).is_some();
 		lhs = m.complete(p, SyntaxKind::BinExpr);
+		lhs = postfix(p, lhs, allow_struct_expressions);
 
 		if !parsed_rhs {
 			break;
@@ -110,9 +121,20 @@ fn postfix(p: &mut Parser, e: CompletedMarker, allow_struct_expressions: bool) -
 		call(p, e)
 	} else if allow_struct_expressions && p.at(TokenKind::LBrace) {
 		struct_initialization(p, e)
+	} else if p.at(TokenKind::LSquare) {
+		index_memory(p, e)
 	} else {
 		e
 	}
+}
+
+fn index_memory(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
+	assert!(p.at(TokenKind::LSquare));
+	let m = e.precede(p);
+	p.bump();
+	expr(p, true); // TODO: should this be true?
+	p.expect(TokenKind::RSquare, &recovery(&[]));
+	m.complete(p, SyntaxKind::IndexMemoryExpr)
 }
 
 fn struct_initialization(p: &mut Parser, e: CompletedMarker) -> CompletedMarker {
@@ -169,6 +191,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		ident_expr(p)
 	} else if p.at(TokenKind::Minus) {
 		prefix_neg(p, allow_struct_expressions)
+	} else if p.at(TokenKind::Ampersand) {
+		prefix_addr(p, allow_struct_expressions)
 	} else if p.at(TokenKind::LParen) {
 		paren_or_tuple_expr(p, allow_struct_expressions)
 	} else if p.at(TokenKind::IfKw) {
@@ -210,6 +234,16 @@ fn prefix_neg(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker
 	expr_binding_power(p, right_binding_power, allow_struct_expressions);
 
 	m.complete(p, SyntaxKind::PrefixExpr)
+}
+
+fn prefix_addr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {
+	assert!(p.at(TokenKind::Ampersand));
+	let m = p.start();
+	let op = PrefixOp::Addr;
+	let (_, right_binding_power) = op.binding_power();
+	p.bump();
+	expr_binding_power(p, right_binding_power, allow_struct_expressions);
+	m.complete(p, SyntaxKind::AddressExpr)
 }
 
 fn paren_or_tuple_expr(p: &mut Parser, allow_struct_expressions: bool) -> CompletedMarker {

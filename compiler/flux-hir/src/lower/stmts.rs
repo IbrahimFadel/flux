@@ -68,7 +68,22 @@ impl<'a> LoweringCtx<'a> {
 	}
 
 	fn lower_return_stmt(&mut self, return_stmt: &ast::ReturnStmt) -> StmtResult {
-		let (value, value_id) = self.lower_expr(return_stmt.value())?;
+		let (value, value_id) = match return_stmt.value() {
+			Some(val) => self.lower_expr(Some(val))?,
+			_ => {
+				let span = self.span(return_stmt);
+				let ty = self.tchecker.tenv.insert(Spanned::new(
+					TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+					span.clone(),
+				));
+				(
+					self
+						.exprs
+						.alloc(Spanned::new(Expr::Tuple(Tuple(vec![])), span)),
+					ty,
+				)
+			}
+		};
 		self
 			.tchecker
 			.unify(

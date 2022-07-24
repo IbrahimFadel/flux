@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
-use ariadne::Report;
-use flux_error::{Error, FluxErrorReporting};
+use ariadne::{Report, ReportKind};
+use flux_error::{Error, FluxErrorCode, FluxErrorReporting};
 use flux_hir::{hir::Visibility, HirModule};
 use flux_parser::parse;
 use flux_span::{FileId, Span, Spanned};
@@ -10,11 +10,28 @@ use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
 #[derive(Debug)]
-enum DriverError {}
+enum DriverError {
+	CouldNotOpenModule {
+		parent_dir: SmolStr,
+		module: Spanned<SmolStr>,
+	},
+}
 
 impl Error for DriverError {
 	fn to_report(&self) -> Report<Span> {
-		todo!()
+		let report = match self {
+			DriverError::CouldNotOpenModule { parent_dir, module } => Report::build(
+				ReportKind::Error,
+				module.span.file_id.clone(),
+				module.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::CouldNotOpenModule)
+			.with_message(format!(
+				"could not open module `{}`\nno such file `{}/{}.flx` or `{}/{}/{}.flx`",
+				module.inner, parent_dir, module.inner, parent_dir, module.inner, module.inner
+			)),
+		};
+		report.finish()
 	}
 }
 
@@ -38,25 +55,10 @@ fn find_path_with_mod_name(
 	if let Some(_) = src.as_ref().err() {
 		let src = fs::read_to_string(&format!("{}/{}/{}.flx", parent_dir, name.inner, name.inner));
 		if let Some(_) = src.as_ref().err() {
-			todo!()
-		// Err(
-		// 	FluxError::build(
-		// 		format!("could not find module `{}`", name.inner),
-		// 		name.span.clone(),
-		// 		FluxErrorCode::CouldNotFindModule,
-		// 		(
-		// 			format!("could not find module `{}`", name.inner),
-		// 			name.span.clone(),
-		// 		),
-		// 	)
-		// 	.with_label(
-		// 		format!(
-		// 			"no such file `{}/{}.flx` or `{}/{}/{}.flx`",
-		// 			parent_dir, name.inner, parent_dir, name.inner, name.inner
-		// 		),
-		// 		name.span.clone(),
-		// 	),
-		// )
+			return Err(DriverError::CouldNotOpenModule {
+				parent_dir: SmolStr::from(parent_dir),
+				module: name.clone(),
+			});
 		} else {
 			Ok((
 				format!("{}/{}/{}.flx", parent_dir, name.inner, name.inner),
@@ -155,7 +157,7 @@ fn generate_function_signature(f: &flux_hir::hir::FnDecl) -> FunctionSignature {
 	FunctionSignature {
 		return_type: f.return_type.clone(),
 		param_types: Spanned::new(
-			f.params.iter().map(|p| p.ty.clone()).collect(),
+			f.params.0.iter().map(|p| p.ty.clone()).collect(),
 			f.params.span.clone(),
 		),
 	}

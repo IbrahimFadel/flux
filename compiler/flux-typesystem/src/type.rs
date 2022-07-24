@@ -25,5 +25,5 @@ pub enum ConcreteKind {
 	Ptr(TypeId),
 	Ident((SmolStr, Vec<TypeId>)),
 	Tuple(Vec<TypeId>),
-	Func(Vec<TypeId>, Box<TypeId>),
+	Func(Vec<TypeId>, TypeId),
 }

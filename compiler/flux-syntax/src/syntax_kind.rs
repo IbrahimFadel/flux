@@ -44,6 +44,8 @@ pub enum SyntaxKind {
 	TypeParams,
 	PointerType,
 	IntrinsicExpr,
+	AddressExpr,
+	IndexMemoryExpr,
 
 	Whitespace,
 	Comment,
@@ -92,6 +94,10 @@ pub enum SyntaxKind {
 	Eq,
 	SemiColon,
 	Intrinsic,
+	Ampersand,
+	Period,
+	LSquare,
+	RSquare,
 	Error,
 }
 
@@ -147,19 +153,13 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::Eq => SyntaxKind::Eq,
 			TokenKind::SemiColon => SyntaxKind::SemiColon,
 			TokenKind::Intrinsic => SyntaxKind::Intrinsic,
+			TokenKind::Ampersand => SyntaxKind::Ampersand,
+			TokenKind::Period => SyntaxKind::Period,
+			TokenKind::LSquare => SyntaxKind::LSquare,
+			TokenKind::RSquare => SyntaxKind::RSquare,
 			TokenKind::Error => SyntaxKind::Error,
 		}
 	}
-}
-
-#[macro_export]
-macro_rules! S {
-	["+"] => { SyntaxKind::Plus };
-	["-"] => { SyntaxKind::Minus };
-	["*"] => { SyntaxKind::Star };
-	["/"] => { SyntaxKind::Slash };
-	["int_number"] => { SyntaxKind::INKw };
-	["ident"] => { SyntaxKind::Ident };
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]

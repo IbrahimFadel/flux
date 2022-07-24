@@ -23,6 +23,10 @@ pub enum FluxErrorCode {
 	TraitBoundsUnsatisfied,
 	NoSuchIntrinsic,
 	UninitializedFieldsInStructExpr,
+	StmtAfterTerminalStmt,
+	CouldNotInfer,
+	CouldNotOpenModule,
+	IndexMemAccessOnNonPtrExpr,
 }
 
 impl std::fmt::Display for FluxErrorCode {

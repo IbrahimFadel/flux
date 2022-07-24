@@ -80,9 +80,14 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 
+	// let signatures = root
+	// 	.functions()
+	// 	.map(|f| ctx.lower_fn_signature(&f, &generics))
+	// 	.collect();
+
 	let functions = root
 		.functions()
-		.map(|f| ctx.lower_fn_decl(f, &IndexMap::new()))
+		.map(|f| ctx.lower_fn_decl(f, None, &IndexMap::new()))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
 

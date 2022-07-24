@@ -6,88 +6,6 @@ use super::*;
 
 type ExprResult = Result<(Expr, TypeId), LowerError>;
 
-// macro_rules! declare_instrs_wo_ids {
-// 	(
-//     $(
-//       $method:ident :
-//       $name:ident {
-//         $(
-//           $field_name:ident : $field_ty:ty
-//         ),*
-//         $(,)?
-//       };
-//     )*
-//   ) => {
-//     $(
-//       pub fn $method(&mut self, $($field_name : $field_ty),*) {
-//         let mut block = self.cur_block.as_ref().unwrap().borrow_mut();
-// 				block
-// 					.instrs
-// 					.push(Instruction::$name($name { $($field_name),* }));
-//       }
-//     )*
-//   };
-// }
-
-// macro_rules! lower_intrinsic {
-// 	($name:ident, $param_types:expr, $return_type:expr) => {
-// 		paste::paste! {
-// 			pub fn [<lower_intrinsic_expr_>] $name(
-// 				&mut self,
-// 				args: impl Iterator<Item = ast::Expr>,
-// 				span: Span,
-// 			) -> ExprResult {
-// 				//TODO: try_for_each
-// 				let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
-// 				let args = args?;
-// 				if args.len() !=  {
-// 					return Err(LowerError::IncorrectNumberOfArgsInCall {});
-// 				}
-// 				let (arg, arg_id) = args.first().unwrap();
-
-// 				let params
-// 			}
-// 		}
-// 	};
-// }
-
-// lower_intrinsic!(malloc, 0, 0);
-// fn lower_free_intrinsic_expr(
-// 	&mut self,
-// 	args: impl Iterator<Item = ast::Expr>,
-// 	span: Span,
-// ) -> ExprResult {
-// 	let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
-// 	let args = args?;
-// 	if args.len() != 1 {
-// 		return Err(LowerError::IncorrectNumberOfArgsInCall {});
-// 	}
-// 	let (arg, arg_id) = args.first().unwrap();
-
-// 	let u8_id = self.tchecker.tenv.insert(Spanned::new(
-// 		TypeKind::Concrete(ConcreteKind::UInt(8)),
-// 		span.clone(),
-// 	));
-// 	let u8_ptr_ty = TypeKind::Concrete(ConcreteKind::Ptr(u8_id));
-// 	let u8_ptr_id = self.tchecker.tenv.insert(Spanned::new(
-// 		u8_ptr_ty,
-// 		Span::combine(&span, &self.exprs[*arg].span),
-// 	));
-
-// 	self
-// 		.tchecker
-// 		.unify(*arg_id, u8_ptr_id, self.exprs[*arg].span.clone())
-// 		.map_err(LowerError::TypeError)?;
-
-// 	let unit_id = self.tchecker.tenv.insert(Spanned::new(
-// 		TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
-// 		span.clone(),
-// 	));
-
-// 	let free = Intrinsic::Free(*arg);
-// 	Ok((Expr::Intrinsic(free), unit_id))
-// }
-
 impl<'a> LoweringCtx<'a> {
 	pub(super) fn lower_expr(
 		&mut self,
@@ -97,15 +15,6 @@ impl<'a> LoweringCtx<'a> {
 			expr
 		} else {
 			todo!("{:#?}", expr)
-			// return Err(FluxError::build(
-			// 	format!("could not lower expression: missing"),
-			// 	self.default_span(),
-			// 	FluxErrorCode::CouldNotLowerNode,
-			// 	(
-			// 		format!("could not lower expression: missing"),
-			// 		self.default_span(),
-			// 	),
-			// ));
 		};
 		let range = expr.range();
 		let idx = if let ast::Expr::ParenExpr(paren_e) = expr {
@@ -125,6 +34,8 @@ impl<'a> LoweringCtx<'a> {
 				ast::Expr::BlockExpr(block_expr) => self.lower_block_expr(block_expr)?,
 				ast::Expr::TupleExpr(tuple_expr) => self.lower_tuple_expr(tuple_expr)?,
 				ast::Expr::IntrinsicExpr(intrinsic_expr) => self.lower_intrinsic_expr(intrinsic_expr)?,
+				ast::Expr::AddressExpr(address_expr) => self.lower_address_expr(address_expr)?,
+				ast::Expr::IndexMemoryExpr(idx_mem_expr) => self.lower_idx_mem_expr(idx_mem_expr)?,
 				_ => todo!(),
 			};
 			(
@@ -138,33 +49,23 @@ impl<'a> LoweringCtx<'a> {
 	}
 
 	fn lower_binary(&mut self, bin_expr: ast::BinExpr) -> ExprResult {
-		let op = if let Some(op) = bin_expr.op() {
-			match op.kind() {
-				SyntaxKind::Plus => BinaryOp::Add,
-				SyntaxKind::Minus => BinaryOp::Sub,
-				SyntaxKind::Star => BinaryOp::Mul,
-				SyntaxKind::Slash => BinaryOp::Div,
-				SyntaxKind::CmpEq => BinaryOp::CmpEq,
-				SyntaxKind::DoubleColon => BinaryOp::DoubleColon,
-				_ => unreachable!(),
-			}
-		} else {
-			todo!()
-			// return Err(FluxError::build(
-			// 	format!("could not lower binary expression: missing operator"),
-			// 	self.default_span(),
-			// 	FluxErrorCode::CouldNotLowerNode,
-			// 	(
-			// 		format!("could not lower binary expression: missing operator"),
-			// 		self.default_span(),
-			// 	),
-			// ));
+		let op = match bin_expr.op().unwrap().kind() {
+			SyntaxKind::Plus => BinaryOp::Add,
+			SyntaxKind::Minus => BinaryOp::Sub,
+			SyntaxKind::Star => BinaryOp::Mul,
+			SyntaxKind::Slash => BinaryOp::Div,
+			SyntaxKind::CmpEq => BinaryOp::CmpEq,
+			SyntaxKind::DoubleColon => BinaryOp::DoubleColon,
+			SyntaxKind::Period => return self.lower_binary_access(bin_expr),
+			SyntaxKind::Eq => return self.lower_binary_assign(bin_expr),
+			SyntaxKind::CmpNeq => BinaryOp::CmpNeq,
+			_ => unreachable!(),
 		};
 
 		let binary_ty = self.tchecker.tenv.insert(Spanned::new(
 			TypeKind::Unknown,
 			Span::new(bin_expr.range(), self.file_id.clone()),
-		)); // let's figure out what type it has
+		));
 		let (lhs, lhs_id) = self.lower_expr(bin_expr.lhs())?;
 		let lhs_ty = self.tchecker.tenv.get_type(lhs_id);
 		let lhs_id = self.tchecker.tenv.insert(lhs_ty.clone());
@@ -188,6 +89,95 @@ impl<'a> LoweringCtx<'a> {
 			)
 			.map_err(LowerError::TypeError)?;
 		Ok((Expr::Binary(Binary { op, lhs, rhs }), binary_ty))
+	}
+
+	fn get_field_access_type(&mut self, access: &hir::Access) -> Result<TypeId, LowerError> {
+		let struct_expr = match self.exprs[access.lhs].inner.clone() {
+			Expr::Path(path) => {
+				let id = self
+					.tchecker
+					.tenv
+					.get_path_id(&path)
+					.map_err(LowerError::TypeError)?;
+				self.to_ty(&self.tchecker.tenv.get_type(id).clone())
+			}
+			Expr::Access(access) => {
+				let id = self.get_field_access_type(&access)?;
+				self.to_ty(&self.tchecker.tenv.get_type(id).clone())
+			}
+			_ => unreachable!("{:#?}", self.exprs[access.lhs].inner),
+		};
+
+		let struct_name = match &struct_expr.inner {
+			Type::Ident((name, _)) => name,
+			_ => unreachable!(),
+		};
+		let struct_type_decl = self.type_decls.get(struct_name).unwrap();
+		let struct_ty = &struct_type_decl.ty.inner;
+		let struct_ty = match struct_ty {
+			Type::Struct(struct_ty) => struct_ty,
+			_ => unreachable!(),
+		};
+
+		let ty_decl = struct_ty
+			.fields
+			.iter()
+			.find(|(name, _)| **name == access.field.inner);
+		let ty_id = match ty_decl {
+			Some((_, field_ty)) => {
+				let ty = self.to_ty_kind(&field_ty.ty);
+				self.tchecker.tenv.insert(ty)
+			}
+			None => match self.method_signatures.get(&self.fmt_ty(&struct_expr.inner)) {
+				Some(methods) => match methods.get(&access.field.inner) {
+					Some(signature) => *signature,
+					_ => todo!(),
+				},
+				_ => todo!(),
+			},
+		};
+
+		Ok(ty_id)
+	}
+
+	fn lower_binary_access(&mut self, access_expr: ast::BinExpr) -> ExprResult {
+		let (lhs, _) = self.lower_expr(access_expr.lhs())?;
+
+		let field = match access_expr.rhs().unwrap() {
+			ast::Expr::PathExpr(path) => {
+				let names = path.names().collect::<Vec<_>>();
+				let name = names.first().unwrap();
+				Spanned::new(
+					SmolStr::from(name.text()),
+					Span::new(name.text_range(), self.file_id.clone()),
+				)
+			}
+			_ => unreachable!(),
+		};
+		let access = Access { lhs, field };
+
+		let access_ty_id = self.get_field_access_type(&access)?;
+
+		Ok((Expr::Access(access), access_ty_id))
+	}
+
+	fn lower_binary_assign(&mut self, assign_expr: ast::BinExpr) -> ExprResult {
+		let (lhs, lhs_id) = self.lower_expr(assign_expr.lhs())?;
+		let (rhs, rhs_id) = self.lower_expr(assign_expr.rhs())?;
+
+		self
+			.tchecker
+			.unify(lhs_id, rhs_id, self.span(&assign_expr))
+			.map_err(LowerError::TypeError)?;
+
+		Ok((
+			Expr::Binary(Binary {
+				lhs,
+				op: BinaryOp::Assign,
+				rhs,
+			}),
+			lhs_id,
+		))
 	}
 
 	fn lower_int(&mut self, int_expr: IntExpr) -> ExprResult {
@@ -392,6 +382,7 @@ impl<'a> LoweringCtx<'a> {
 		match instrinsic_name {
 			"malloc" => self.lower_malloc_intrinsic_expr(args, intrinsic.span),
 			"free" => self.lower_free_intrinsic_expr(args, intrinsic.span),
+			"memcpy" => self.lower_memcpy_intrinsic_expr(args, intrinsic.span),
 			_ => return Err(LowerError::UnknownIntrinsic { intrinsic }),
 		}
 	}
@@ -466,6 +457,49 @@ impl<'a> LoweringCtx<'a> {
 
 		let free = Intrinsic::Free(*arg);
 		Ok((Expr::Intrinsic(free), unit_id))
+	}
+
+	fn lower_memcpy_intrinsic_expr(
+		&mut self,
+		args: impl Iterator<Item = ast::Expr>,
+		span: Span,
+	) -> ExprResult {
+		let args: Result<Vec<_>, _> = args.map(|arg| self.lower_expr(Some(arg))).collect();
+		let args = args?;
+		if args.len() != 3 {
+			return Err(LowerError::IncorrectNumberOfArgsInCall {});
+		}
+
+		let unit_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+			span.clone(),
+		));
+
+		let param_types = vec![
+			TypeKind::Concrete(ConcreteKind::Ptr(unit_id)),
+			TypeKind::Concrete(ConcreteKind::Ptr(unit_id)),
+			TypeKind::Concrete(ConcreteKind::UInt(64)),
+		];
+
+		for (i, (_, arg_ty)) in args.iter().enumerate() {
+			let param_ty = self
+				.tchecker
+				.tenv
+				.insert(self.default_spanned(param_types[i].clone()));
+			self
+				.tchecker
+				.unify(*arg_ty, param_ty, span.clone())
+				.map_err(LowerError::TypeError)?;
+		}
+
+		Ok((
+			Expr::Intrinsic(Intrinsic::Memcpy(Memcpy {
+				dest: args[0].0,
+				src: args[1].0,
+				n: args[2].0,
+			})),
+			unit_id,
+		))
 	}
 
 	fn lower_intrinsic_expr(&mut self, intrinsic_expr: IntrinsicExpr) -> ExprResult {
@@ -707,10 +741,13 @@ impl<'a> LoweringCtx<'a> {
 		let mut block = vec![];
 		let mut block_ids = vec![];
 		let stmts = block_expr.stmts();
-		let mut stmt_that_determines_type: Option<(Spanned<Stmt>, usize)> = None;
+		let mut terminal_stmt: Option<(Spanned<Stmt>, usize)> = None;
 		for stmt in stmts {
-			if let Some((_, _)) = stmt_that_determines_type {
-				todo!()
+			if let Some((terminal_stmt, _)) = terminal_stmt {
+				return Err(LowerError::StmtAfterTerminalStmt {
+					terminal_stmt: terminal_stmt.span,
+					stmt: Span::new(stmt.range(), self.file_id.clone()),
+				});
 				// return Err(
 				// 		FluxError::build(
 				// 			format!("cannot put statements after block value statement"),
@@ -728,10 +765,10 @@ impl<'a> LoweringCtx<'a> {
 			block.push(stmt.clone());
 			block_ids.push(stmt_id);
 			if !has_semi {
-				stmt_that_determines_type = Some((stmt, stmt_id));
+				terminal_stmt = Some((stmt, stmt_id));
 			}
 		}
-		let type_id = if let Some((_, id)) = stmt_that_determines_type {
+		let type_id = if let Some((_, id)) = terminal_stmt {
 			id
 		} else {
 			self.tchecker.tenv.insert(Spanned::new(
@@ -755,5 +792,33 @@ impl<'a> LoweringCtx<'a> {
 			self.span(&tuple_expr),
 		));
 		Ok((Expr::Tuple(Tuple(values)), type_id))
+	}
+
+	fn lower_address_expr(&mut self, address_expr: ast::AddressExpr) -> ExprResult {
+		let (expr, expr_id) = self.lower_expr(Some(address_expr.expr().unwrap()))?;
+		let ty = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Ptr(expr_id)),
+			self.span(&address_expr),
+		));
+		Ok((Expr::Address(Address(expr)), ty))
+	}
+
+	fn lower_idx_mem_expr(&mut self, idx_mem_expr: ast::IndexMemoryExpr) -> ExprResult {
+		let (val, val_id) = self.lower_expr(idx_mem_expr.expr())?;
+		let (idx, _) = self.lower_expr(idx_mem_expr.expr())?;
+
+		let ty = match &self.tchecker.tenv.get_type(val_id).inner {
+			TypeKind::Concrete(ConcreteKind::Ptr(id)) => *id,
+			_ => {
+				return Err(LowerError::IndexMemAccessOnNonPtrExpr {
+					span: self.span(&idx_mem_expr),
+					ty: self
+						.tchecker
+						.tenv
+						.fmt_ty(&self.tchecker.tenv.get_type(val_id)),
+				})
+			}
+		};
+		Ok((Expr::IdxMem(IdxMem { val, idx }), ty))
 	}
 }

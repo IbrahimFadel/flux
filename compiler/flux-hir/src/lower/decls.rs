@@ -1,9 +1,9 @@
-use flux_typesystem::r#type::ConcreteKind;
+use flux_typesystem::{infer::TypeEnv, r#type::ConcreteKind};
 use indexmap::IndexMap;
 
 use super::*;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_trait_decl(
@@ -19,32 +19,7 @@ impl<'a> LoweringCtx<'a> {
 		let mut methods = HashMap::new();
 		for method in trait_decl.methods() {
 			let name = self.unwrap_ident(method.name(), method.range(), format!("method name"))?;
-			let params = self.lower_params(method.params())?;
-			let params_range = match (method.lparen(), method.rparen()) {
-				(Some(lparen), Some(rparen)) => {
-					TextRange::new(lparen.text_range().start(), rparen.text_range().end())
-				}
-				(Some(lparen), _) => {
-					if !params.is_empty() {
-						TextRange::new(
-							lparen.text_range().start(),
-							params.last().unwrap().span.range.end(),
-						)
-					} else {
-						TextRange::new(lparen.text_range().start(), lparen.text_range().end())
-					}
-				}
-				(_, Some(rparen)) => {
-					if !params.is_empty() {
-						TextRange::new(params[0].span.range.end(), rparen.text_range().end())
-					} else {
-						TextRange::new(rparen.text_range().start(), rparen.text_range().end())
-					}
-				}
-				_ => method.range(),
-			};
-			let params = Spanned::new(params, Span::new(params_range, self.file_id.clone()));
-
+			let params = self.lower_params(method.params(), &IndexMap::new())?;
 			let return_type = self.lower_type(method.return_ty(), &IndexMap::new())?;
 			let method = TraitMethod {
 				name: name.clone(),
@@ -128,8 +103,23 @@ impl<'a> LoweringCtx<'a> {
 		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<(), LowerError> {
 		let mut methods_implemented = HashSet::new();
+
+		let signatures: Result<HashMap<_, _>, _> = apply_block
+			.methods()
+			.map(|method| {
+				self
+					.lower_fn_signature(&method, generics, Some(ty.clone()))
+					.map(|(_, func_id)| (SmolStr::from(method.name().unwrap().text()), func_id))
+			})
+			.collect();
+		let signatures = signatures?;
+		self.tchecker.tenv.signatures = signatures.clone(); // TODO: we actually need to append them...
+
+		let ty_name = self.fmt_ty(&ty.inner); // TODO: i think this is hacky
+		self.method_signatures.insert(ty_name, signatures);
+
 		for method in apply_block.methods() {
-			let method = self.lower_fn_decl(method, generics)?;
+			let method = self.lower_fn_decl(method, Some(ty.clone()), generics)?;
 
 			let actual_return_ty_id = self
 				.tchecker
@@ -214,8 +204,8 @@ impl<'a> LoweringCtx<'a> {
 			)
 			.map_err(LowerError::TypeError)?;
 
-		let method_decl_params = method_decl.params.len();
-		let method_impl_params = method_impl.params.len();
+		let method_decl_params = method_decl.params.0.len();
+		let method_impl_params = method_impl.params.0.len();
 		if method_decl_params != method_impl_params {
 			return Err(LowerError::IncorrectNumberOfParamsInTraitMethodDefinition {
 				method_name: method_decl.name.inner.to_string(),
@@ -224,8 +214,8 @@ impl<'a> LoweringCtx<'a> {
 			});
 		}
 
-		for (i, decl_param) in method_decl.params.iter().enumerate() {
-			let impl_param = &method_impl.params[i];
+		for (i, decl_param) in method_decl.params.0.iter().enumerate() {
+			let impl_param = &method_impl.params.0[i];
 			let decl_id = self.tchecker.tenv.insert(self.to_ty_kind(&decl_param.ty));
 			let impl_id = self.tchecker.tenv.insert(self.to_ty_kind(&impl_param.ty));
 			self
@@ -268,8 +258,11 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_fn_decl(
 		&mut self,
 		fn_decl: ast::FnDecl,
+		self_ty: Option<Spanned<Type>>,
 		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
 	) -> Result<FnDecl, LowerError> {
+		self.tchecker.tenv.reset_symbol_table();
+
 		let visibility = if let Some(p) = fn_decl.public() {
 			Spanned::new(
 				Visibility::Public,
@@ -285,48 +278,20 @@ impl<'a> LoweringCtx<'a> {
 			)
 		};
 
-		let params = self.lower_params(fn_decl.params())?;
-		let params_range = match (fn_decl.lparen(), fn_decl.rparen()) {
-			(Some(lparen), Some(rparen)) => {
-				TextRange::new(lparen.text_range().start(), rparen.text_range().end())
-			}
-			(Some(lparen), _) => {
-				if !params.is_empty() {
-					TextRange::new(
-						lparen.text_range().start(),
-						params.last().unwrap().span.range.end(),
-					)
-				} else {
-					TextRange::new(lparen.text_range().start(), lparen.text_range().end())
-				}
-			}
-			(_, Some(rparen)) => {
-				if !params.is_empty() {
-					TextRange::new(params[0].span.range.end(), rparen.text_range().end())
-				} else {
-					TextRange::new(rparen.text_range().start(), rparen.text_range().end())
-				}
-			}
-			_ => fn_decl.range(),
-		};
-		let params = Spanned::new(params, Span::new(params_range, self.file_id.clone()));
+		// TODO: eventually we will do this BEFORE entering fn decl for the typechecker, so we should really not do this here, but rather accept the results of lower_fn_signature as parameters to lower_fn_decl
+		let ((params, return_id), _) = self.lower_fn_signature(&fn_decl, generics, self_ty)?;
+
+		params.0.iter().for_each(|param| {
+			let param_ty_id = self.tchecker.tenv.insert(self.to_ty_kind(&param.ty));
+			self
+				.tchecker
+				.tenv
+				.var_ids
+				.insert(param.name.clone(), param_ty_id);
+		});
+		self.tchecker.tenv.return_type_id = return_id;
 
 		let (body, body_id) = self.lower_expr(fn_decl.body())?;
-
-		let return_id = if let Some(return_type) = fn_decl.return_type() {
-			let ty = self.lower_type(Some(return_type), generics)?;
-			let id = self.tchecker.tenv.insert(self.to_ty_kind(&ty));
-			id
-		} else {
-			self.tchecker.tenv.insert(Spanned::new(
-				TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
-				Span::new(
-					TextRange::new(params_range.end(), params_range.end()),
-					self.file_id.clone(),
-				),
-			))
-		};
-		self.tchecker.tenv.return_type_id = return_id;
 
 		let ret_ty_unification_span = if let Expr::Block(block) = &self.exprs[body].inner {
 			if block.0.len() > 0 {
@@ -341,7 +306,7 @@ impl<'a> LoweringCtx<'a> {
 			.tchecker
 			.unify(body_id, return_id, ret_ty_unification_span)
 			.map_err(LowerError::TypeError)?;
-		let return_type: Spanned<Type> = self.to_ty(&self.tchecker.tenv.get_type(return_id));
+		let return_type: Spanned<Type> = self.to_ty(&self.tchecker.tenv.get_type(return_id).clone());
 
 		let name = self.unwrap_ident(
 			fn_decl.name(),
@@ -350,7 +315,7 @@ impl<'a> LoweringCtx<'a> {
 		)?;
 
 		let mut var_types: HashMap<SmolStr, Spanned<Type>> = HashMap::new(); // this is necessary cus mut ref and non-mut ref?
-		if let Expr::Block(block) = &self.exprs[body].inner {
+		if let Expr::Block(block) = &self.exprs[body].inner.clone() {
 			for stmt in &block.0 {
 				if let Stmt::VarDecl(var) = &stmt.inner {
 					let id = self
@@ -363,7 +328,8 @@ impl<'a> LoweringCtx<'a> {
 						.tenv
 						.reconstruct(id)
 						.map_err(LowerError::TypeError)?;
-					var_types.insert(var.name.inner.clone(), self.to_ty(&ty));
+					let ty = self.to_ty(&ty);
+					var_types.insert(var.name.inner.clone(), ty);
 				}
 			}
 		}
@@ -385,27 +351,94 @@ impl<'a> LoweringCtx<'a> {
 		})
 	}
 
+	/// Returns params and return_type along with type_id pointing to function type
+	pub(crate) fn lower_fn_signature(
+		&mut self,
+		fn_decl: &ast::FnDecl,
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		self_ty: Option<Spanned<Type>>,
+	) -> Result<((Spanned<FnParams>, TypeId), TypeId), LowerError> {
+		let mut params = self.lower_params(fn_decl.params(), generics)?;
+		if let Some(self_ty) = self_ty {
+			let self_param = FnParam {
+				mutable: true,
+				ty: self_ty,
+				name: SmolStr::from("self"),
+			};
+			let self_span = Span::new(
+				TextRange::new(
+					fn_decl.lparen().unwrap().text_range().start(),
+					fn_decl.lparen().unwrap().text_range().start(),
+				),
+				self.file_id.clone(),
+			);
+			params.0.push_front(Spanned::new(self_param, self_span));
+		}
+		let param_type_ids = params
+			.0
+			.iter()
+			.map(|param| self.tchecker.tenv.insert(self.to_ty_kind(&param.ty)))
+			.collect();
+		let (params_front, params_back) = params.0.as_slices();
+		let params_span = match Spanned::vec_span(&[params_front, params_back].concat()) {
+			Some(span) => span,
+			None => Span::new(
+				TextRange::new(
+					fn_decl.lparen().unwrap().text_range().start(),
+					fn_decl.rparen().unwrap().text_range().end(),
+				),
+				self.file_id.clone(),
+			),
+		};
+		let params = Spanned::new(params, params_span);
+
+		let return_id = if let Some(return_type) = fn_decl.return_type() {
+			let ty = self.lower_type(Some(return_type), generics)?;
+			let id = self.tchecker.tenv.insert(self.to_ty_kind(&ty));
+			id
+		} else {
+			let params_end_range = TextRange::new(
+				fn_decl.rparen().unwrap().text_range().end(),
+				fn_decl.rparen().unwrap().text_range().end(),
+			);
+			self.tchecker.tenv.insert(Spanned::new(
+				TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+				Span::new(params_end_range, self.file_id.clone()),
+			))
+		};
+
+		let func_id = self.tchecker.tenv.insert(Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Func(param_type_ids, return_id)),
+			Span::new(
+				TextRange::new(
+					fn_decl.lparen().unwrap().text_range().start(),
+					self.tchecker.tenv.get_type(return_id).span.range.end(),
+				),
+				self.file_id.clone(),
+			),
+		));
+
+		Ok(((params, return_id), func_id))
+	}
+
 	pub(crate) fn lower_params(
 		&mut self,
 		params: impl Iterator<Item = ast::FnParam>,
-	) -> Result<Vec<Spanned<FnParam>>, LowerError> {
-		let mut hir_params = vec![];
+		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+	) -> Result<FnParams, LowerError> {
+		let mut hir_params = VecDeque::new();
 		for param in params {
-			let name = if let Some(name) = param.name() {
-				Some(name.text().into())
-			} else {
-				None
-			};
-			let ty = self.lower_type(param.ty(), &IndexMap::new())?;
-			hir_params.push(Spanned::new(
+			let name = self.unwrap_ident(param.name(), param.range(), format!("function parameter"))?;
+			let ty = self.lower_type(param.ty(), generics)?;
+			hir_params.push_back(Spanned::new(
 				FnParam {
 					mutable: param.mutable().is_some(),
 					ty,
-					name,
+					name: name.inner,
 				},
 				Span::new(param.range(), self.file_id.clone()),
 			));
 		}
-		Ok(hir_params)
+		Ok(FnParams(hir_params))
 	}
 }

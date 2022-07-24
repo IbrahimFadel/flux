@@ -5,18 +5,40 @@ type Vec struct<T> {
 }
 
 apply<T> to Vec<T> {
-	fn new() -> Vec<T> => {
+	pub fn new() -> Vec<T> => {
+		let initial_capacity = 32;
 		Vec {
 			len: 0,
 			capacity: 0,
-			buf: @flux.intrinsics.malloc(32),
+			buf: @flux.intrinsics.malloc(initial_capacity),
 		}
 	}
 
 	fn delete() => {
-		let x = 0;
-		if x == @flux.intrinsics.nullptr {
-		}
-		@flux.intrinsics.free(0);
+		if self.buf != @flux.intrinsics.nullptr {
+			@flux.intrinsics.free(self.buf);
+		};
+	}
+
+	fn resize(u64 value) => {
+		let output = @flux.intrinsics.malloc(value);
+		if output == @flux.intrinsics.nullptr {
+			return;
+		};
+		@flux.intrinsics.memcpy(output, self.buf, self.len);
+		@flux.intrinsics.free(self.buf);
+		self.buf = output;
+		self.capacity = value;
+	}
+
+	fn push(T value) => {
+		if self.len == self.capacity {
+			let new_capacity = self.capacity * 2;
+			self.resize(new_capacity);
+		};
+		self.buf[self.len] = value;
+		self.len = self.len + 1;
 	}
 }
+
+// TODO: terminal statements should just be assumed to be the last one *unless* it has a semicolon. that way if statements dont need semicolons to not be considered terminals

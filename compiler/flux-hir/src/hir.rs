@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use flux_span::Spanned;
 use flux_typesystem::r#type::TypeId;
@@ -36,16 +36,19 @@ pub struct Block(pub Vec<Spanned<Stmt>>);
 pub struct FnDecl {
 	pub visibility: Spanned<Visibility>,
 	pub name: Spanned<SmolStr>,
-	pub params: Spanned<Vec<Spanned<FnParam>>>,
-	pub body: ExprIdx,
+	pub params: Spanned<FnParams>,
 	pub return_type: Spanned<Type>,
+	pub body: ExprIdx,
 }
+
+#[derive(Debug, Clone)]
+pub struct FnParams(pub VecDeque<Spanned<FnParam>>); // TODO: VecDeque because we will prepend &self a lot, but probably benchmark this
 
 #[derive(Debug, Clone)]
 pub struct FnParam {
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
-	pub name: Option<SmolStr>,
+	pub name: SmolStr,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +99,7 @@ pub type ExprIdx = Idx<Spanned<Expr>>;
 #[derive(Debug, Clone)]
 pub enum Expr {
 	Binary(Binary),
+	Access(Access),
 	Int(Int),
 	Float(Float),
 	Prefix { op: PrefixOp, expr: ExprIdx },
@@ -106,6 +110,8 @@ pub enum Expr {
 	Block(Block),
 	Tuple(Tuple),
 	Intrinsic(Intrinsic),
+	Address(Address),
+	IdxMem(IdxMem),
 	Missing,
 }
 
@@ -119,10 +125,33 @@ impl Into<Option<Binary>> for Expr {
 }
 
 #[derive(Debug, Clone)]
+pub struct IdxMem {
+	pub val: ExprIdx,
+	pub idx: ExprIdx,
+}
+
+#[derive(Debug, Clone)]
+pub struct Access {
+	pub lhs: ExprIdx,
+	pub field: Spanned<SmolStr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Address(pub ExprIdx);
+
+#[derive(Debug, Clone)]
 pub enum Intrinsic {
 	Malloc(ExprIdx),
 	Free(ExprIdx),
+	Memcpy(Memcpy),
 	Nullptr,
+}
+
+#[derive(Debug, Clone)]
+pub struct Memcpy {
+	pub dest: ExprIdx,
+	pub src: ExprIdx,
+	pub n: ExprIdx,
 }
 
 #[derive(Debug, Clone)]
@@ -169,6 +198,9 @@ pub enum BinaryOp {
 	Div,
 	CmpEq,
 	DoubleColon,
+	Access,
+	Assign,
+	CmpNeq,
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +237,7 @@ pub struct TraitDecl {
 #[derive(Debug, Clone)]
 pub struct TraitMethod {
 	pub name: Spanned<SmolStr>,
-	pub params: Spanned<Vec<Spanned<FnParam>>>,
+	pub params: FnParams,
 	pub return_type: Spanned<Type>,
 }
 

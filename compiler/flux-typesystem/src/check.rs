@@ -17,9 +17,12 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
-	pub fn new(implementations: HashMap<SmolStr, HashSet<SmolStr>>) -> Self {
+	pub fn new(
+		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
+		signatures: HashMap<SmolStr, TypeId>,
+	) -> Self {
 		Self {
-			tenv: TypeEnv::new(implementations),
+			tenv: TypeEnv::new(implementations, signatures),
 		}
 	}
 
@@ -50,6 +53,27 @@ impl TypeChecker {
 				);
 				Ok(())
 			}
+			(Generic((a_name, restrictions)), Concrete(ConcreteKind::Ptr(id))) => {
+				match &self.tenv.get_type(*id).inner {
+					TypeKind::Generic((b_name, _)) => {
+						if a_name == b_name {
+							return Err(self.type_mismatch(a, b, unification_span));
+						} else {
+							Ok(())
+						}
+					}
+					_ => {
+						let inner_b = self.tenv.inner_type(&self.tenv.get_type(b));
+						self.verify_trait_bounds(
+							a,
+							b,
+							unification_span,
+							&SmolStr::from(self.tenv.fmt_ty(&inner_b)),
+							restrictions,
+						)
+					}
+				}
+			}
 			(_, Generic((_, restrictions))) => {
 				// Suppose T implements the trait Foo
 				// *T, **T, ***T, etc. should also implement Foo without an explicit `apply`
@@ -60,6 +84,16 @@ impl TypeChecker {
 					b,
 					unification_span,
 					&SmolStr::from(self.tenv.fmt_ty(&inner_a)),
+					restrictions,
+				)
+			}
+			(Generic((_, restrictions)), _) => {
+				let inner_b = self.tenv.inner_type(&self.tenv.get_type(b));
+				self.verify_trait_bounds(
+					a,
+					b,
+					unification_span,
+					&SmolStr::from(self.tenv.fmt_ty(&inner_b)),
 					restrictions,
 				)
 			}
@@ -96,7 +130,26 @@ impl TypeChecker {
 					}
 				}
 				(ConcreteKind::Ptr(a_id), ConcreteKind::Ptr(b_id)) => {
-					self.unify(*a_id, *b_id, unification_span)
+					match (
+						&self.tenv.get_type(*a_id).inner,
+						&self.tenv.get_type(*b_id).inner,
+					) {
+						(_, TypeKind::Concrete(ConcreteKind::Tuple(tuple_types))) => {
+							if tuple_types.len() == 0 {
+								Ok(())
+							} else {
+								self.unify(*a_id, *b_id, unification_span)
+							}
+						}
+						(TypeKind::Concrete(ConcreteKind::Tuple(tuple_types)), _) => {
+							if tuple_types.len() == 0 {
+								Ok(())
+							} else {
+								self.unify(*a_id, *b_id, unification_span)
+							}
+						}
+						_ => self.unify(*a_id, *b_id, unification_span),
+					}
 				}
 				_ => {
 					if aa == bb {
@@ -276,6 +329,9 @@ pub enum TypeError {
 	UnknownPath {
 		path: Spanned<SmolStr>,
 	},
+	CouldNotInfer {
+		ty_span: Span,
+	},
 }
 
 impl Error for TypeError {
@@ -358,6 +414,19 @@ impl Error for TypeError {
 					.with_color(Color::Red)
 					.with_message(format!("unknown path `{}`", path.inner)),
 			),
+			TypeError::CouldNotInfer { ty_span } => Report::build(
+				ReportKind::Error,
+				ty_span.file_id.clone(),
+				ty_span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::CouldNotInfer)
+			.with_message(format!("could not infer type"))
+			.with_label(
+				Label::new(ty_span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("could not infer type")),
+			)
+			.with_note(format!("add type annotations")),
 		};
 		report.finish()
 	}

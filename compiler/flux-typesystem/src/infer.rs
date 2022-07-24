@@ -19,19 +19,30 @@ pub enum InferenceError {
 pub struct TypeEnv {
 	/// A map from type name to the traits it implements
 	pub implementations: HashMap<SmolStr, HashSet<SmolStr>>, // TODO: how can we store spans for trait bounds (error messages)
+	pub signatures: HashMap<SmolStr, TypeId>,
 	pub vars: Vec<Spanned<TypeKind>>,
 	pub var_ids: HashMap<SmolStr, TypeId>,
 	pub return_type_id: TypeId,
 }
 
 impl TypeEnv {
-	pub fn new(implementations: HashMap<SmolStr, HashSet<SmolStr>>) -> Self {
+	pub fn new(
+		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
+		signatures: HashMap<SmolStr, TypeId>,
+	) -> Self {
 		Self {
 			implementations,
+			signatures,
 			vars: vec![],
 			var_ids: HashMap::new(),
 			return_type_id: 0,
 		}
+	}
+
+	pub fn reset_symbol_table(&mut self) {
+		// self.vars.clear(); // Because we're doing indexes, it might be safe to just not clear this. but this will probably become a huge vector so maybe we go back to hashmap? benchmark?
+		self.var_ids.clear();
+		self.return_type_id = 0;
 	}
 
 	pub fn insert(&mut self, ty: Spanned<TypeKind>) -> TypeId {
@@ -52,9 +63,12 @@ impl TypeEnv {
 		let as_str = SmolStr::from(path.iter().map(|s| s.to_string()).join("::"));
 		match self.var_ids.get(&as_str) {
 			Some(id) => Ok(*id),
-			None => Err(TypeError::UnknownPath {
-				path: Spanned::new(as_str, Spanned::vec_span(&path).unwrap()),
-			}),
+			None => match self.signatures.get(&as_str) {
+				Some(id) => Ok(*id),
+				None => Err(TypeError::UnknownPath {
+					path: Spanned::new(as_str, Spanned::vec_span(&path).unwrap()),
+				}),
+			},
 		}
 	}
 
@@ -74,38 +88,37 @@ impl TypeEnv {
 		self.implementations.get(type_name)
 	}
 
-	pub fn reconstruct(&self, _: TypeId) -> Result<Spanned<TypeKind>, TypeError> {
-		todo!()
-		// use TypeKind::*;
-		// let span = self.vars[&id].span.clone();
-		// match &self.vars[&id].inner {
-		// 	Unknown => Err(InferenceError::CouldNotInfer { ty_span: span }),
-		// 	Ref(id) => self.reconstruct(*id),
-		// 	Int(id) => {
-		// 		if let Some(id) = id {
-		// 			self.reconstruct(*id)
-		// 		} else {
-		// 			Ok(Spanned {
-		// 				inner: TypeKind::Int(None),
-		// 				span,
-		// 			})
-		// 		}
-		// 	}
-		// 	Float(id) => {
-		// 		if let Some(id) = id {
-		// 			self.reconstruct(*id)
-		// 		} else {
-		// 			Ok(Spanned {
-		// 				inner: TypeKind::Float(None),
-		// 				span,
-		// 			})
-		// 		}
-		// 	}
-		// 	Concrete(t) => Ok(Spanned {
-		// 		inner: TypeKind::Concrete(t.clone()),
-		// 		span,
-		// 	}),
-		// }
+	pub fn reconstruct(&self, id: TypeId) -> Result<Spanned<TypeKind>, TypeError> {
+		use TypeKind::*;
+		let span = self.vars[id].span.clone();
+		match &self.vars[id].inner {
+			Ref(id) => self.reconstruct(*id),
+			Int(id) => {
+				if let Some(id) = id {
+					self.reconstruct(*id)
+				} else {
+					Ok(Spanned {
+						inner: TypeKind::Int(None),
+						span,
+					})
+				}
+			}
+			Float(id) => {
+				if let Some(id) = id {
+					self.reconstruct(*id)
+				} else {
+					Ok(Spanned {
+						inner: TypeKind::Float(None),
+						span,
+					})
+				}
+			}
+			Concrete(t) => Ok(Spanned {
+				inner: TypeKind::Concrete(t.clone()),
+				span,
+			}),
+			_ => Err(TypeError::CouldNotInfer { ty_span: span }),
+		}
 	}
 
 	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
@@ -180,7 +193,7 @@ impl TypeEnv {
 				} else {
 					String::from("()")
 				},
-				self.fmt_ty(&self.get_type(**o))
+				self.fmt_ty(&self.get_type(*o))
 			),
 		}
 	}

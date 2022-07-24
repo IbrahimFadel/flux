@@ -95,6 +95,10 @@ pub enum TokenKind {
 	LBrace,
 	#[token("}")]
 	RBrace,
+	#[token("[")]
+	LSquare,
+	#[token("]")]
+	RSquare,
 	#[token("=")]
 	Eq,
 	#[token("==")]
@@ -113,6 +117,10 @@ pub enum TokenKind {
 	DoubleColon,
 	#[token(";")]
 	SemiColon,
+	#[token("&")]
+	Ampersand,
+	#[token(".")]
+	Period,
 
 	#[regex(r"/\*([^*]|\*+[^*/])*\*?")]
 	#[error]
@@ -122,6 +130,7 @@ pub enum TokenKind {
 impl Display for TokenKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
+			Self::Ampersand => write!(f, "&"),
 			Self::ApplyKw => write!(f, "apply"),
 			Self::Arrow => write!(f, "->"),
 			Self::BoolKw => write!(f, "bool"),
@@ -151,14 +160,17 @@ impl Display for TokenKind {
 			Self::IsKw => write!(f, "is"),
 			Self::LBrace => write!(f, "{{"),
 			Self::LParen => write!(f, "("),
+			Self::LSquare => write!(f, "["),
 			Self::LetKw => write!(f, "let"),
 			Self::Minus => write!(f, "-"),
 			Self::ModKw => write!(f, "mod"),
 			Self::MutKw => write!(f, "mut"),
+			Self::Period => write!(f, "."),
 			Self::Plus => write!(f, "+"),
 			Self::PubKw => write!(f, "pub"),
 			Self::RBrace => write!(f, "}}"),
 			Self::RParen => write!(f, ")"),
+			Self::RSquare => write!(f, "]"),
 			Self::ReturnKw => write!(f, "return"),
 			Self::Root => write!(f, "root"),
 			Self::SemiColon => write!(f, ";"),

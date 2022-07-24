@@ -98,7 +98,9 @@ enum_node!(
 	IfExpr,
 	BlockExpr,
 	TupleExpr,
-	IntrinsicExpr
+	IntrinsicExpr,
+	AddressExpr,
+	IndexMemoryExpr
 );
 enum_node!(Stmt, ExprStmt, VarDecl, ReturnStmt);
 enum_node!(
@@ -138,6 +140,8 @@ basic_node!(IfExpr);
 basic_node!(BlockExpr);
 basic_node!(TupleExpr);
 basic_node!(IntrinsicExpr);
+basic_node!(AddressExpr);
+basic_node!(IndexMemoryExpr);
 
 basic_node!(StructTypeField);
 basic_node!(TraitMethod);
@@ -605,7 +609,10 @@ impl BinExpr {
 						| SyntaxKind::Star
 						| SyntaxKind::Slash
 						| SyntaxKind::CmpEq
-						| SyntaxKind::DoubleColon,
+						| SyntaxKind::DoubleColon
+						| SyntaxKind::Period
+						| SyntaxKind::CmpNeq
+						| SyntaxKind::Eq,
 				)
 			})
 	}
@@ -765,5 +772,21 @@ impl IntrinsicExpr {
 			.children_with_tokens()
 			.filter_map(SyntaxElement::into_token)
 			.find(|token| token.kind() == SyntaxKind::Intrinsic)
+	}
+}
+
+impl AddressExpr {
+	pub fn expr(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
+	}
+}
+
+impl IndexMemoryExpr {
+	pub fn expr(&self) -> Option<Expr> {
+		self.0.children().find_map(Expr::cast)
+	}
+
+	pub fn idx(&self) -> Option<Expr> {
+		self.0.children().filter_map(Expr::cast).nth(1)
 	}
 }

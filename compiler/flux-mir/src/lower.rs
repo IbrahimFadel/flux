@@ -33,10 +33,11 @@ impl<'a> MirLoweringCtx<'a> {
 	pub fn lower_function(&mut self, hir_fn: &hir::FnDecl) {
 		let params: Vec<_> = hir_fn
 			.params
+			.0
 			.iter()
 			.map(|p| FnParam {
 				ty: hir_ty_to_mir_ty(&p.ty.inner),
-				name: p.name.as_ref().unwrap().clone(),
+				name: p.name.clone(),
 			})
 			.collect();
 		let mir_function = self.module.new_function(

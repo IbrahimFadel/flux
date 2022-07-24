@@ -1,7 +1,7 @@
 use flux_driver::{FunctionExportTable, TypeExportTable};
 use flux_error::FluxErrorReporting;
 
-const PROJECT_DIR: &str = ".";
+const PROJECT_DIR: &str = "./examples";
 
 fn main() {
 	let mut err_reporting = FluxErrorReporting { files: vec![] };

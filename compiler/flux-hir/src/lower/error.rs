@@ -5,7 +5,7 @@ use flux_typesystem::check::TypeError;
 use itertools::Itertools;
 use smol_str::SmolStr;
 
-use crate::hir::FnParam;
+use crate::hir::FnParams;
 
 #[derive(Debug)]
 pub enum LowerError {
@@ -29,8 +29,8 @@ pub enum LowerError {
 	},
 	IncorrectNumberOfParamsInTraitMethodDefinition {
 		method_name: String,
-		implementation_params: Spanned<Vec<Spanned<FnParam>>>,
-		declaration_params: Spanned<Vec<Spanned<FnParam>>>,
+		implementation_params: Spanned<FnParams>,
+		declaration_params: FnParams,
 	},
 	UnknownStruct {
 		name: Spanned<SmolStr>,
@@ -48,6 +48,14 @@ pub enum LowerError {
 		struct_type: String,
 		uninitialized_fields: Vec<SmolStr>,
 		span: Span,
+	},
+	StmtAfterTerminalStmt {
+		terminal_stmt: Span,
+		stmt: Span,
+	},
+	IndexMemAccessOnNonPtrExpr {
+		span: Span,
+		ty: String,
 	},
 }
 
@@ -164,7 +172,7 @@ impl Error for LowerError {
 					.with_message(format!(
 						"the method `{}` is defined with {} parameters",
 						method_name,
-						declaration_params.len()
+						declaration_params.0.len()
 					)),
 			),
 			LowerError::UnknownStruct { name } => Report::build(
@@ -239,6 +247,43 @@ impl Error for LowerError {
 					)),
 			)
 			.with_note(format!("`{}` is defined as: {}", struct_name, struct_type)),
+			LowerError::StmtAfterTerminalStmt {
+				terminal_stmt,
+				stmt,
+			} => Report::build(
+				ReportKind::Error,
+				stmt.file_id.clone(),
+				stmt.range.start().into(),
+			)
+			.with_code(FluxErrorCode::StmtAfterTerminalStmt)
+			.with_message(format!("found statement after block's terminal statement"))
+			.with_label(
+				Label::new(stmt.clone())
+					.with_color(Color::Red)
+					.with_message(format!("statement not allowed to follow block terminal")),
+			)
+			.with_label(
+				Label::new(terminal_stmt.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("terminal statement")),
+			),
+			LowerError::IndexMemAccessOnNonPtrExpr { span, ty } => Report::build(
+				ReportKind::Error,
+				span.file_id.clone(),
+				span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::IndexMemAccessOnNonPtrExpr)
+			.with_message(format!("cannot index memory that isn't a pointer type"))
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("cannot index memory that isn't a pointer type")),
+			)
+			.with_label(
+				Label::new(span.clone())
+					.with_color(Color::Blue)
+					.with_message(ty),
+			),
 		};
 		report.finish()
 	}

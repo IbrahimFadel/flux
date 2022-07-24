@@ -23,6 +23,8 @@ pub(super) struct LoweringCtx<'a> {
 	file_id: FileId,
 	pub traits: HashMap<SmolStr, &'a TraitDecl>,
 	pub type_decls: HashMap<SmolStr, &'a TypeDecl>,
+	// Type name -> (Method name -> Function Signature)
+	pub method_signatures: HashMap<String, HashMap<SmolStr, TypeId>>,
 }
 
 impl<'a> LoweringCtx<'a> {
@@ -30,14 +32,15 @@ impl<'a> LoweringCtx<'a> {
 		Self {
 			exprs: Arena::default(),
 			errors: vec![],
-			tchecker: TypeChecker::new(HashMap::new()),
+			tchecker: TypeChecker::new(HashMap::new(), HashMap::new()),
 			file_id,
 			traits: HashMap::new(),
 			type_decls: HashMap::new(),
+			method_signatures: HashMap::new(),
 		}
 	}
 
-	fn to_ty(&self, kind: &Spanned<TypeKind>) -> Spanned<Type> {
+	fn to_ty(&mut self, kind: &Spanned<TypeKind>) -> Spanned<Type> {
 		let ty = match &kind.inner {
 			TypeKind::Concrete(ty) => match ty {
 				ConcreteKind::SInt(n) => Type::SInt(*n),
@@ -46,13 +49,17 @@ impl<'a> LoweringCtx<'a> {
 				ConcreteKind::F32 => Type::F32,
 				ConcreteKind::Ident(name) => Type::Ident(name.clone()),
 				ConcreteKind::Tuple(types) => Type::Tuple(types.to_vec()),
-				_ => todo!(),
+				ConcreteKind::Ptr(id) => {
+					let ty = self.tchecker.tenv.get_type(*id).clone();
+					Type::Ptr(self.tchecker.tenv.insert(ty))
+				}
+				_ => todo!("{:#?}", kind.inner),
 			},
 			TypeKind::Int(_) => Type::Int,
 			TypeKind::Float(_) => Type::Float,
 			TypeKind::Generic(g) => Type::Generic(g.clone()),
 			TypeKind::Unknown => Type::Unknown,
-			TypeKind::Ref(id) => return self.to_ty(&self.tchecker.tenv.get_type(*id)),
+			TypeKind::Ref(id) => return self.to_ty(&self.tchecker.tenv.get_type(*id).clone()),
 		};
 		Spanned {
 			inner: ty,
@@ -109,6 +116,23 @@ impl<'a> LoweringCtx<'a> {
 					format!(": {}", restrictions.iter().join(", "))
 				} else {
 					format!("")
+				}
+			),
+			Type::Ident((name, type_params)) => format!(
+				"{name}{}",
+				if type_params.len() == 0 {
+					format!("")
+				} else {
+					format!(
+						"<{}>",
+						type_params
+							.iter()
+							.map(|type_id| {
+								let ty = self.tchecker.tenv.get_type(*type_id);
+								self.tchecker.tenv.fmt_ty(&ty)
+							})
+							.join(", ")
+					)
 				}
 			),
 			_ => todo!("{:#?}", ty),
