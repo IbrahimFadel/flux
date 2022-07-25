@@ -40,13 +40,15 @@ fn render_report(report: &Report<Span>, files: Vec<(FileId, String)>) -> String 
 
 #[macro_export]
 #[cfg(test)]
-macro_rules! unsuccessful {
+macro_rules! lower {
 	($name:ident, $src:literal) => {
 		paste::paste! {
 				#[test]
 				fn [<test_lower_ $name>]() {
-										let (_, errors) = lower_str($src);
-										let s = errors.iter().map(|err| render_report(&err.to_report(), vec![(flux_span::FileId("main.flx".into()), String::from($src))])).collect::<Vec<_>>().join("\n");
+										let (module, errors) = lower_str($src);
+										let m = format!("{module}");
+										let e = errors.iter().map(|err| render_report(&err.to_report(), vec![(flux_span::FileId("main.flx".into()), String::from($src))])).collect::<Vec<_>>().join("\n");
+										let s = format!("{m}\n{e}");
                                         insta::assert_snapshot!(s);
 
 				}
@@ -54,8 +56,34 @@ macro_rules! unsuccessful {
 	};
 }
 
-unsuccessful!(
-	type_mismatch,
+lower!(
+	return_type_mismatch,
 	r#"fn main() -> i32 => {
 }"#
 );
+
+lower!(
+	empty_fn,
+	r#"fn main() => {
+}"#
+);
+
+lower!(
+	basic_var_decls,
+	r#"fn main() => {
+	let foo = 0;
+	let bar i8 = foo;
+}"#
+);
+
+// lower!(
+// 	fn_call_coerce_types,
+// 	r#"fn foo(i8 x) -> i32 => {
+// 	0
+// }
+
+// fn main() => {
+// 	let x = 0;
+// 	let y = foo(x);
+// }"#
+// );

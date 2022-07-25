@@ -1,0 +1,366 @@
+---
+source: compiler/flux-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: ModKw,
+        text: "mod",
+        range: 0..3,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 3..4,
+    },
+    Token {
+        kind: UseKw,
+        text: "use",
+        range: 4..7,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 7..8,
+    },
+    Token {
+        kind: PubKw,
+        text: "pub",
+        range: 8..11,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 11..12,
+    },
+    Token {
+        kind: FnKw,
+        text: "fn",
+        range: 12..14,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 14..15,
+    },
+    Token {
+        kind: TypeKw,
+        text: "type",
+        range: 15..19,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 19..20,
+    },
+    Token {
+        kind: ApplyKw,
+        text: "apply",
+        range: 20..25,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 25..26,
+    },
+    Token {
+        kind: ToKw,
+        text: "to",
+        range: 26..28,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 28..29,
+    },
+    Token {
+        kind: WhereKw,
+        text: "where",
+        range: 29..34,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 34..35,
+    },
+    Token {
+        kind: IsKw,
+        text: "is",
+        range: 35..37,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 37..38,
+    },
+    Token {
+        kind: MutKw,
+        text: "mut",
+        range: 38..41,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 41..42,
+    },
+    Token {
+        kind: IfKw,
+        text: "if",
+        range: 42..44,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 44..45,
+    },
+    Token {
+        kind: ElseKw,
+        text: "else",
+        range: 45..49,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 49..50,
+    },
+    Token {
+        kind: StructKw,
+        text: "struct",
+        range: 50..56,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 56..57,
+    },
+    Token {
+        kind: TraitKw,
+        text: "trait",
+        range: 57..62,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 62..63,
+    },
+    Token {
+        kind: LetKw,
+        text: "let",
+        range: 63..66,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 66..67,
+    },
+    Token {
+        kind: ReturnKw,
+        text: "return",
+        range: 67..73,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 73..74,
+    },
+    Token {
+        kind: F64Kw,
+        text: "f64",
+        range: 74..77,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 77..78,
+    },
+    Token {
+        kind: F32Kw,
+        text: "f32",
+        range: 78..81,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 81..82,
+    },
+    Token {
+        kind: BoolKw,
+        text: "bool",
+        range: 82..86,
+    },
+    Token {
+        kind: Comma,
+        text: ",",
+        range: 86..87,
+    },
+    Token {
+        kind: Plus,
+        text: "+",
+        range: 87..88,
+    },
+    Token {
+        kind: Minus,
+        text: "-",
+        range: 88..89,
+    },
+    Token {
+        kind: Star,
+        text: "*",
+        range: 89..90,
+    },
+    Token {
+        kind: Slash,
+        text: "/",
+        range: 90..91,
+    },
+    Token {
+        kind: Arrow,
+        text: "->",
+        range: 91..93,
+    },
+    Token {
+        kind: FatArrow,
+        text: "=>",
+        range: 93..95,
+    },
+    Token {
+        kind: Colon,
+        text: ":",
+        range: 95..96,
+    },
+    Token {
+        kind: LParen,
+        text: "(",
+        range: 96..97,
+    },
+    Token {
+        kind: RParen,
+        text: ")",
+        range: 97..98,
+    },
+    Token {
+        kind: LBrace,
+        text: "{",
+        range: 98..99,
+    },
+    Token {
+        kind: RBrace,
+        text: "}",
+        range: 99..100,
+    },
+    Token {
+        kind: LSquare,
+        text: "[",
+        range: 100..101,
+    },
+    Token {
+        kind: RSquare,
+        text: "]",
+        range: 101..102,
+    },
+    Token {
+        kind: Eq,
+        text: "=",
+        range: 102..103,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 103..104,
+    },
+    Token {
+        kind: FatArrow,
+        text: "=>",
+        range: 104..106,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 106..107,
+    },
+    Token {
+        kind: CmpNeq,
+        text: "!=",
+        range: 107..109,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 109..110,
+    },
+    Token {
+        kind: CmpLt,
+        text: "<",
+        range: 110..111,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 111..112,
+    },
+    Token {
+        kind: CmpGt,
+        text: ">",
+        range: 112..113,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 113..114,
+    },
+    Token {
+        kind: CmpLte,
+        text: "<=",
+        range: 114..116,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 116..117,
+    },
+    Token {
+        kind: CmpGte,
+        text: ">=",
+        range: 117..119,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 119..120,
+    },
+    Token {
+        kind: DoubleColon,
+        text: "::",
+        range: 120..122,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 122..123,
+    },
+    Token {
+        kind: SemiColon,
+        text: ";",
+        range: 123..124,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 124..125,
+    },
+    Token {
+        kind: Ampersand,
+        text: "&",
+        range: 125..126,
+    },
+    Token {
+        kind: Whitespace,
+        text: " ",
+        range: 126..127,
+    },
+    Token {
+        kind: Period,
+        text: ".",
+        range: 127..128,
+    },
+]

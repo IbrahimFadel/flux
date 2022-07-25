@@ -74,6 +74,27 @@ impl TypeChecker {
 					}
 				}
 			}
+			(Concrete(ConcreteKind::Ptr(id)), Generic((b_name, restrictions))) => {
+				match &self.tenv.get_type(*id).inner {
+					TypeKind::Generic((a_name, _)) => {
+						if b_name == a_name {
+							return Err(self.type_mismatch(a, b, unification_span));
+						} else {
+							Ok(())
+						}
+					}
+					_ => {
+						let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
+						self.verify_trait_bounds(
+							a,
+							b,
+							unification_span,
+							&SmolStr::from(self.tenv.fmt_ty(&inner_a)),
+							restrictions,
+						)
+					}
+				}
+			}
 			(_, Generic((_, restrictions))) => {
 				// Suppose T implements the trait Foo
 				// *T, **T, ***T, etc. should also implement Foo without an explicit `apply`
@@ -244,6 +265,30 @@ impl TypeChecker {
 						a,
 						Spanned {
 							inner: TypeKind::Int(Some(b)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+				(None, None) => Ok(()),
+			},
+			(Float(aa), Float(bb)) => match (aa, bb) {
+				(Some(aa), Some(bb)) => self.unify(*aa, *bb, unification_span),
+				(Some(_), None) => {
+					self.tenv.set_type(
+						b,
+						Spanned {
+							inner: TypeKind::Float(Some(a)),
+							span: akind.span,
+						},
+					);
+					Ok(())
+				}
+				(None, Some(_)) => {
+					self.tenv.set_type(
+						a,
+						Spanned {
+							inner: TypeKind::Float(Some(b)),
 							span: akind.span,
 						},
 					);
@@ -429,5 +474,249 @@ impl Error for TypeError {
 			.with_note(format!("add type annotations")),
 		};
 		report.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::{
+		collections::{HashMap, HashSet},
+		io::Write,
+	};
+
+	use super::{TypeChecker, TypeError};
+	use crate::r#type::{ConcreteKind, TypeKind};
+	use ariadne::sources;
+	use flux_error::Error;
+	use flux_span::{FileId, Span, Spanned};
+	use smol_str::SmolStr;
+	use text_size::TextRange;
+
+	macro_rules! spnd {
+		($x:expr) => {
+			Spanned::new($x, spn!())
+		};
+	}
+
+	macro_rules! spn {
+		() => {
+			Span::new(
+				TextRange::new(0.into(), 0.into()),
+				FileId(SmolStr::from("foo.flx")),
+			)
+		};
+	}
+
+	macro_rules! sint {
+		($n:expr) => {
+			TypeKind::Concrete(ConcreteKind::SInt($n))
+		};
+	}
+	macro_rules! uint {
+		($n:expr) => {
+			TypeKind::Concrete(ConcreteKind::UInt($n))
+		};
+	}
+
+	macro_rules! int {
+		() => {
+			TypeKind::Int(None)
+		};
+	}
+
+	macro_rules! f64 {
+		() => {
+			TypeKind::Concrete(ConcreteKind::F64)
+		};
+	}
+
+	macro_rules! f32 {
+		() => {
+			TypeKind::Concrete(ConcreteKind::F32)
+		};
+	}
+
+	macro_rules! float {
+		() => {
+			TypeKind::Float(None)
+		};
+	}
+
+	macro_rules! ptr {
+		($tchk:expr, $x:expr) => {
+			TypeKind::Concrete(ConcreteKind::Ptr($tchk.tenv.insert(spnd!($x))))
+		};
+	}
+
+	macro_rules! generic {
+		($x:expr) => {
+			TypeKind::Generic(($x, HashSet::new()))
+		};
+		($x:expr, $restrictions:expr) => {
+			TypeKind::Generic(($x, $restrictions))
+		};
+	}
+
+	macro_rules! ident {
+		($x:expr) => {
+			TypeKind::Concrete(ConcreteKind::Ident(($x, vec![])))
+		};
+		($x:expr, $params:expr) => {
+			TypeKind::Concrete(ConcreteKind::Ident(($x, $params)))
+		};
+	}
+
+	macro_rules! tparam {
+		($tchk:expr, $x:expr) => {
+			$tchk.tenv.insert(spnd!($x))
+		};
+	}
+
+	struct Buf(pub String);
+
+	impl Write for &mut Buf {
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+			let s = String::from_utf8_lossy(buf);
+			self.0 += s.into_owned().as_str();
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+
+	fn format_err(err: &TypeError) -> String {
+		let mut s = Buf(String::new());
+		let files: Vec<(FileId, String)> = vec![(FileId(SmolStr::from("foo.flx")), format!(" "))];
+		err.to_report().write(sources(files), &mut s).unwrap();
+		s.0
+	}
+
+	pub fn check(tchk: &mut TypeChecker, a: TypeKind, b: TypeKind) -> String {
+		let a_id = tchk.tenv.insert(spnd!(a.clone()));
+		let b_id = tchk.tenv.insert(spnd!(b.clone()));
+
+		match tchk.unify(a_id, b_id, spn!()) {
+			Ok(_) => format!("{} <-> {} ✓", tchk.tenv.fmt_ty(&a), tchk.tenv.fmt_ty(&b)),
+			Err(err) => format_err(&err),
+		}
+	}
+
+	#[macro_export]
+	#[cfg(test)]
+	macro_rules! test_unify {
+		($name:ident, $a:expr, $b:expr) => {
+			paste::paste! {
+			#[test]
+			fn [<test_typecheck_ $name>]() {
+				let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+				let result = check(&mut tchk, $a, $b);
+				insta::assert_snapshot!(result);
+			}}
+		};
+	}
+
+	test_unify!(sint32_sint32, sint!(32), sint!(32));
+	test_unify!(sint32_sint31, sint!(32), sint!(31));
+	test_unify!(sint32_uint32, sint!(32), uint!(32));
+	test_unify!(uint32_uint31, uint!(32), uint!(31));
+	test_unify!(uint32_uint32, uint!(32), uint!(32));
+	test_unify!(uint32_int, uint!(32), int!());
+	test_unify!(sint32_int, sint!(32), int!());
+	test_unify!(int_int, int!(), int!());
+	test_unify!(f32_f64, f32!(), f64!());
+	test_unify!(f32_float, f32!(), float!());
+	test_unify!(f64_float, f64!(), float!());
+	test_unify!(float_float, float!(), float!());
+
+	#[test]
+	fn test_typecheck_floatptr_float() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ptr!(tchk, float!());
+		let b = float!();
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_genericptr_float() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ptr!(tchk, generic!(SmolStr::from("T")));
+		let b = float!();
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_genericptr_generic_same_name() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ptr!(tchk, generic!(SmolStr::from("T")));
+		let b = generic!(SmolStr::from("T"));
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_generic_generic_diff_name() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = generic!(SmolStr::from("T"));
+		let b = generic!(SmolStr::from("E"));
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_generic_ident() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = generic!(SmolStr::from("T"));
+		let b = ident!(SmolStr::from("Foo"));
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_generic_ident_with_params() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = generic!(SmolStr::from("T"));
+		let b = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_ident_ident() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ident!(SmolStr::from("Foo"));
+		let b = ident!(SmolStr::from("Bar"));
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_ident_ident_with_params() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ident!(SmolStr::from("Foo"));
+		let b = ident!(SmolStr::from("Bar"), vec![tparam!(tchk, sint!(32))]);
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_ident_ident_diff_same_params() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
+		let b = ident!(SmolStr::from("Bar"), vec![tparam!(tchk, sint!(32))]);
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
+	}
+
+	#[test]
+	fn test_typecheck_ident_ident_same_diff_params() {
+		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let a = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
+		let b = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, uint!(32))]);
+		let result = check(&mut tchk, a, b);
+		insta::assert_snapshot!(result);
 	}
 }

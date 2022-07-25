@@ -252,30 +252,24 @@ fn type_restriction(p: &mut Parser) -> CompletedMarker {
 mod test {
 	use crate::test_decl_str;
 
-	// test_decl_str!(fn_decl, r#"fn main(i15 argc, mut u4 test) -> f32 {}"#);
-	// test_decl_str!(fn_decl_ret_void, r#"fn main(i15 argc, mut u4 test) {}"#);
-	// test_decl_str!(ty_decl_prim, r#"type Foo i32"#);
-	// test_decl_str!(
-	// 	ty_decl_struct,
-	// 	r#"type Foo struct {
-	// 	i7 x;
-	// 	pub u1 y;
-	// 	mut f64 z;
-	// 	pub mut Bar a;
-	// }"#
-	// );
+	test_decl_str!(fn_decl, r#"fn main(i15 argc, mut u4 test) -> f32 => {}"#);
+	test_decl_str!(fn_decl_ret_void, r#"fn main(i15 argc, mut u4 test) => {}"#);
+	test_decl_str!(ty_decl_prim, r#"type Foo i32"#);
+	test_decl_str!(
+		ty_decl_struct,
+		r#"type Foo struct {
+		x i7,
+		y u1,
+		z f64,
+		a Bar
+	}"#
+	);
 	// test_decl_str!(
 	// 	ty_decl_trait,
-	// 	r#"type Foo trait {
+	// 	r#"trait Foo {
 	// 		fn foo();
 	// 		pub fn bar(i32 x) -> u5;
 	// 		fn bazz(mut f64 x) -> f32;
-	// }"#
-	// );
-	// test_decl_str!(
-	// 	ty_decl_trait_method_missing_ret_ty,
-	// 	r#"type Foo trait {
-	// 		fn foo() -> ;
 	// }"#
 	// );
 }

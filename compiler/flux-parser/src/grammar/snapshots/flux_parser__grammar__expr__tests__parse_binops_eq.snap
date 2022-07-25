@@ -1,6 +1,10 @@
 ---
 source: compiler/flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
+expression: parse.to_string()
 ---
-PathExpr@0..1
-  Ident@0..1 "x"
+BinExpr@0..3
+  PathExpr@0..1
+    Ident@0..1 "x"
+  Eq@1..2 "="
+  IntExpr@2..3
+    IntExpr@2..3 "1"

@@ -1,6 +1,6 @@
 ---
 source: compiler/flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
+expression: parse.to_string()
 ---
 PathExpr@0..8
   Ident@0..8 "f0o_B8rr"

@@ -1,6 +1,6 @@
 ---
-source: flux-parser/src/grammar/decl.rs
-expression: "&parse.debug_tree()"
+source: compiler/flux-parser/src/grammar/decl.rs
+expression: parse.to_string()
 ---
 TypeDecl@0..12
   TypeKw@0..4 "type"

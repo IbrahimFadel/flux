@@ -56,9 +56,9 @@ pub enum TokenKind {
 	StructKw,
 	#[token("trait")]
 	TraitKw,
-	#[regex("let")]
+	#[token("let")]
 	LetKw,
-	#[regex("return")]
+	#[token("return")]
 	ReturnKw,
 	#[regex(r"i[1-9]+")]
 	INKw,

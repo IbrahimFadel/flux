@@ -1,0 +1,5 @@
+---
+source: compiler/flux-typesystem/src/check.rs
+expression: "check(f64!(), float!())"
+---
+f64 <-> Float ✓

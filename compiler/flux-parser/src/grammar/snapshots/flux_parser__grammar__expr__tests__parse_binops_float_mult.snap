@@ -1,12 +1,12 @@
 ---
-source: flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
+source: compiler/flux-parser/src/grammar/expr.rs
+expression: parse.to_string()
 ---
-BinExpr@0..11
-  PrefixExpr@0..5
-    Minus@0..1 "-"
+PrefixExpr@0..11
+  Minus@0..1 "-"
+  BinExpr@1..11
     FloatExpr@1..5
       FloatExpr@1..5 "2.13"
-  Star@5..6 "*"
-  FloatExpr@6..11
-    FloatExpr@6..11 "0.2_5"
+    Star@5..6 "*"
+    FloatExpr@6..11
+      FloatExpr@6..11 "0.2_5"

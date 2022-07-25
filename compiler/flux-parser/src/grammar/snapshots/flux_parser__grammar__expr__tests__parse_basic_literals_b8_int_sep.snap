@@ -1,6 +1,0 @@
----
-source: flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
----
-IntExpr@0..11
-  IntExpr@0..11 "081_234_567"

@@ -86,12 +86,12 @@ impl<'a> LoweringCtx<'a> {
 
 		let block = block.as_ref().unwrap();
 
-		self.lower_and_validate_apply_block(block, &trait_decl, &ty, &generics)?;
+		let methods = self.lower_and_validate_apply_block(block, &trait_decl, &ty, &generics)?;
 
 		Ok(ApplyDecl {
 			trait_: trait_.clone(),
 			ty: ty.clone(),
-			methods: vec![],
+			methods,
 		})
 	}
 
@@ -101,7 +101,7 @@ impl<'a> LoweringCtx<'a> {
 		trait_decl: &Option<&TraitDecl>,
 		ty: &Spanned<Type>,
 		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
-	) -> Result<(), LowerError> {
+	) -> Result<Vec<FnDecl>, LowerError> {
 		let mut methods_implemented = HashSet::new();
 
 		let signatures: Result<HashMap<_, _>, _> = apply_block
@@ -118,6 +118,7 @@ impl<'a> LoweringCtx<'a> {
 		let ty_name = self.fmt_ty(&ty.inner); // TODO: i think this is hacky
 		self.method_signatures.insert(ty_name, signatures);
 
+		let mut methods = vec![];
 		for method in apply_block.methods() {
 			let method = self.lower_fn_decl(method, Some(ty.clone()), generics)?;
 
@@ -156,6 +157,8 @@ impl<'a> LoweringCtx<'a> {
 					});
 				}
 			}
+
+			methods.push(method);
 		}
 
 		if let Some(trait_decl) = trait_decl {
@@ -179,7 +182,7 @@ impl<'a> LoweringCtx<'a> {
 			}
 		}
 
-		Ok(())
+		Ok(methods)
 	}
 
 	fn validate_trait_method_implementation(

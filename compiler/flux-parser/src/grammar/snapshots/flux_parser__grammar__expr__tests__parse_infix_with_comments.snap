@@ -1,16 +1,16 @@
 ---
-source: flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
+source: compiler/flux-parser/src/grammar/expr.rs
+expression: parse.to_string()
 ---
-BinExpr@0..17
-  PrefixExpr@0..14
-    Comment@0..8 "// hello"
-    Whitespace@8..11 "\n\t\t"
-    Minus@11..12 "-"
+PrefixExpr@0..17
+  Comment@0..8 "// hello"
+  Whitespace@8..11 "\n\t\t"
+  Minus@11..12 "-"
+  BinExpr@12..17
     IntExpr@12..14
       IntExpr@12..13 "1"
       Whitespace@13..14 " "
-  Plus@14..15 "+"
-  Whitespace@15..16 " "
-  IntExpr@16..17
-    IntExpr@16..17 "1"
+    Plus@14..15 "+"
+    Whitespace@15..16 " "
+    IntExpr@16..17
+      IntExpr@16..17 "1"

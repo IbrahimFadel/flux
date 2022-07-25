@@ -1,0 +1,10 @@
+---
+source: compiler/flux-hir/src/lower/tests.rs
+expression: s
+---
+Traits
+------
+Functions
+---------
+main() -> Tuple([])
+

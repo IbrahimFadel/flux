@@ -1,20 +1,21 @@
 ---
 source: compiler/flux-parser/src/grammar/stmt.rs
-expression: "&parse.debug_tree()"
+expression: parse.to_string()
 ---
-VarDecl@0..15
-  PrimitiveType@0..4
-    INKw@0..3 "i32"
-    Whitespace@3..4 " "
+VarDecl@0..19
+  LetKw@0..3 "let"
+  Whitespace@3..4 " "
   Ident@4..5 "y"
   Whitespace@5..6 " "
   Eq@6..7 "="
   Whitespace@7..9 "\n\t"
-  Error@9..13
-    INKw@9..12 "i32"
-    Whitespace@12..13 " "
-  Error@13..15
-    Ident@13..14 "x"
-    Whitespace@14..15 " "
-FluxError { msg: "expected expression lhs", code: UnexpectedToken, primary: Some(("expected expression lhs", Some(Span { range: 9..12, file_id: FileId(0) }))), labels: [("expected expression lhs", Some(Span { range: 9..12, file_id: FileId(0) }))], notes: [] }
-FluxError { msg: "expected `;` after variable declaration", code: UnexpectedToken, primary: Some(("expected `;` after variable declaration", Some(Span { range: 13..14, file_id: FileId(0) }))), labels: [("expected `;` after variable declaration", Some(Span { range: 13..14, file_id: FileId(0) }))], notes: [] }
+  LetKw@9..12 "let"
+  Whitespace@12..13 " "
+  Ident@13..14 "x"
+  Whitespace@14..15 " "
+  Eq@15..16 "="
+  Whitespace@16..17 " "
+  IntExpr@17..18 "1"
+  SemiColon@18..19 ";"
+Unxpected { expected: Spanned { inner: "expression lhs", span: Span { range: 9..12, file_id: FileId("main.flx") } } }
+UnexpectedToken { expected: [IntLit, FloatLit, Ident, Minus, Ampersand, LParen, IfKw, LBrace, Intrinsic, SemiColon], got: Spanned { inner: LetKw, span: Span { range: 9..12, file_id: FileId("main.flx") } } }

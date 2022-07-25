@@ -1,0 +1,5 @@
+---
+source: compiler/flux-typesystem/src/check.rs
+expression: result
+---
+T <-> Foo<i32> ✓

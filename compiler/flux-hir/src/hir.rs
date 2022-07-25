@@ -6,6 +6,8 @@ use indexmap::IndexMap;
 use la_arena::Idx;
 use smol_str::SmolStr;
 
+mod print;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Visibility {
 	Private,

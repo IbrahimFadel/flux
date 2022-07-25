@@ -56,7 +56,7 @@ mod tests {
 		($name:ident, $src:literal) => {
 			paste::paste! {
 					#[test]
-					fn [<test_parse_ $name>]() {
+					fn [<test_lex_ $name>]() {
 						let tokens: Vec<_> = crate::Lexer::new($src).collect();
 						let mut settings = insta::Settings::clone_current();
 						let s = format!("{:#?}", tokens);
@@ -73,4 +73,8 @@ mod tests {
 	lex_str!(prim_ty_un, "u54");
 	lex_str!(float_sep, "1.0_1");
 	lex_str!(float_addition, "1.02+2.40");
+	lex_str!(
+		all_toks,
+		"mod use pub fn type apply to where is mut if else struct trait let return f64 f32 bool,+-*/->=>:(){}[]= => != < > <= >= :: ; & ."
+	);
 }

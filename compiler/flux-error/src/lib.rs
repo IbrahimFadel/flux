@@ -67,3 +67,32 @@ pub fn comma_separated_end_with_and<T: Display>(els: impl Iterator<Item = T>) ->
 	}
 	els.join(", ")
 }
+
+pub mod print {
+	use ariadne::sources;
+	use std::io::Write;
+
+	use flux_span::FileId;
+
+	use crate::Error;
+
+	struct Buf(pub String);
+
+	impl Write for &mut Buf {
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+			let s = String::from_utf8_lossy(buf);
+			self.0 += s.into_owned().as_str();
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+
+	pub fn format_err(err: &Box<dyn Error>, files: Vec<(FileId, String)>) -> String {
+		let mut s = Buf(String::new());
+		err.to_report().write(sources(files), &mut s).unwrap();
+		s.0
+	}
+}

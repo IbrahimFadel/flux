@@ -1,8 +1,8 @@
 ---
 source: compiler/flux-parser/src/grammar/decl.rs
-expression: "&parse.debug_tree()"
+expression: parse.to_string()
 ---
-FnDecl@0..40
+FnDecl@0..43
   FnKw@0..2 "fn"
   Whitespace@2..3 " "
   Ident@3..7 "main"
@@ -28,6 +28,8 @@ FnDecl@0..40
   PrimitiveType@34..38
     F32Kw@34..37 "f32"
     Whitespace@37..38 " "
-  BlockExpr@38..40
-    RBrace@38..39 "{"
-    RBrace@39..40 "}"
+  FatArrow@38..40 "=>"
+  Whitespace@40..41 " "
+  BlockExpr@41..43
+    RBrace@41..42 "{"
+    RBrace@42..43 "}"

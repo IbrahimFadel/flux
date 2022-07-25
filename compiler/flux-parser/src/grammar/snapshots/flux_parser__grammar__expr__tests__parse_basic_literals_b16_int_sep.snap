@@ -1,6 +1,6 @@
 ---
-source: flux-parser/src/grammar/expr.rs
-expression: "&parse.debug_tree()"
+source: compiler/flux-parser/src/grammar/expr.rs
+expression: parse.to_string()
 ---
 IntExpr@0..8
   IntExpr@0..8 "0xa_b_ff"

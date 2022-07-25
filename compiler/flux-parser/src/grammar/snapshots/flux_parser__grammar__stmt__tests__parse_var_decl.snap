@@ -1,11 +1,10 @@
 ---
-source: flux-parser/src/grammar/stmt.rs
-expression: "&parse.debug_tree()"
+source: compiler/flux-parser/src/grammar/stmt.rs
+expression: parse.to_string()
 ---
 VarDecl@0..10
-  PrimitiveType@0..4
-    INKw@0..3 "i32"
-    Whitespace@3..4 " "
+  LetKw@0..3 "let"
+  Whitespace@3..4 " "
   Ident@4..5 "x"
   Whitespace@5..6 " "
   Eq@6..7 "="

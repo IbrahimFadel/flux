@@ -1,5 +1,5 @@
 ---
-source: flux-lexer/src/lib.rs
+source: compiler/flux-lexer/src/lib.rs
 expression: s
 ---
 [
