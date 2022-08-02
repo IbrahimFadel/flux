@@ -5,7 +5,7 @@ use flux_typesystem::check::TypeError;
 use itertools::Itertools;
 use smol_str::SmolStr;
 
-use crate::hir::FnParams;
+use crate::hir::{FnParams, GenericList};
 
 #[derive(Debug)]
 pub enum LowerError {
@@ -56,6 +56,13 @@ pub enum LowerError {
 	IndexMemAccessOnNonPtrExpr {
 		span: Span,
 		ty: String,
+	},
+	UseOfUndeclaredGenerics {
+		undeclared_generics: Spanned<Vec<SmolStr>>,
+		declared_generics: Spanned<GenericList>,
+	},
+	UnknownType {
+		ty: Spanned<SmolStr>,
 	},
 }
 
@@ -283,6 +290,48 @@ impl Error for LowerError {
 				Label::new(span.clone())
 					.with_color(Color::Blue)
 					.with_message(ty),
+			),
+			LowerError::UseOfUndeclaredGenerics {
+				undeclared_generics,
+				declared_generics,
+			} => Report::build(
+				ReportKind::Error,
+				undeclared_generics.span.file_id.clone(),
+				undeclared_generics.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::UseOfUndeclaredGenerics)
+			.with_message(format!("use of undeclared generics"))
+			.with_label(
+				Label::new(undeclared_generics.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"use of undeclared generics `{}`",
+						undeclared_generics.join(", ")
+					)),
+			)
+			.with_label(
+				Label::new(declared_generics.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!(
+						"generics `{}` declared here",
+						declared_generics.iter().map(|(t, _)| t).join(", ")
+					)),
+			)
+			.with_note(format!(
+				"try adding {} to the generic list in the apply declaration",
+				comma_separated_end_with_and(undeclared_generics.iter())
+			)),
+			LowerError::UnknownType { ty } => Report::build(
+				ReportKind::Error,
+				ty.span.file_id.clone(),
+				ty.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::UnknownType)
+			.with_message(format!("use of unknown type `{}`", ty.inner))
+			.with_label(
+				Label::new(ty.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("use of unknown type `{}`", ty.inner)),
 			),
 		};
 		report.finish()

@@ -18,15 +18,13 @@ enum InfixOp {
 }
 
 impl InfixOp {
-	fn binding_power(&self) -> (u8, u8) {
+	fn binding_power(&self) -> u8 {
 		match self {
-			Self::Assign => (1, 2),
-			Self::CmpEq | Self::CmpNeq | Self::CmpLt | Self::CmpGt | Self::CmpLte | Self::CmpGte => {
-				(3, 4)
-			}
-			Self::Add | Self::Sub => (5, 6),
-			Self::Mul | Self::Div => (7, 8),
-			Self::Access => (9, 10),
+			Self::Assign => 1,
+			Self::CmpEq | Self::CmpNeq | Self::CmpLt | Self::CmpGt | Self::CmpLte | Self::CmpGte => 3,
+			Self::Add | Self::Sub => 5,
+			Self::Mul | Self::Div => 7,
+			Self::Access => 9,
 		}
 	}
 }
@@ -83,7 +81,7 @@ fn expr_binding_power(
 		} else {
 			break;
 		};
-		let (left_binding_power, right_binding_power) = op.binding_power();
+		let left_binding_power = op.binding_power();
 
 		if left_binding_power < minimum_binding_power {
 			break;
@@ -92,7 +90,8 @@ fn expr_binding_power(
 		p.bump();
 
 		let m = lhs.precede(p);
-		let parsed_rhs = expr_binding_power(p, right_binding_power, allow_struct_expressions).is_some();
+		let parsed_rhs =
+			expr_binding_power(p, left_binding_power + 1, allow_struct_expressions).is_some();
 		lhs = m.complete(p, SyntaxKind::BinExpr);
 		lhs = postfix(p, lhs, allow_struct_expressions);
 
@@ -201,6 +200,8 @@ fn lhs(p: &mut Parser, allow_struct_expressions: bool) -> Option<CompletedMarker
 		block_expr(p)
 	} else if p.at(TokenKind::Intrinsic) {
 		intrinsic_expr(p)
+	} else if p.at(TokenKind::ForKw) {
+		for_expr(p)
 	} else {
 		p.expected(format!("expression lhs"));
 		return None;
@@ -301,6 +302,17 @@ fn intrinsic_expr(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump();
 	m.complete(p, SyntaxKind::IntrinsicExpr)
+}
+
+fn for_expr(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(TokenKind::ForKw));
+	let m = p.start();
+	p.bump();
+	p.expect(TokenKind::Ident, &recovery(&[TokenKind::InKw]));
+	p.expect(TokenKind::InKw, &recovery(EXPR_RECOVERY_SET));
+	expr(p, false);
+	block_expr(p);
+	m.complete(p, SyntaxKind::ForExpr)
 }
 
 #[cfg(test)]

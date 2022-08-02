@@ -15,6 +15,8 @@ pub(crate) fn type_expr(p: &mut Parser) -> Option<CompletedMarker> {
 		tuple_type(p)
 	} else if p.at(TokenKind::StructKw) {
 		struct_type(p)
+	} else if p.at(TokenKind::EnumKw) {
+		enum_type(p)
 	} else if p.at(TokenKind::Star) {
 		pointer_type(p)
 	} else {
@@ -41,16 +43,38 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::TupleType)
 }
 
+fn enum_type(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(TokenKind::EnumKw));
+	let m = p.start();
+	p.bump();
+	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
+	while !p.at(TokenKind::RBrace) && !p.at_end() {
+		enum_type_field(p);
+		if !p.at(TokenKind::RBrace) {
+			p.expect(TokenKind::Comma, &recovery(&[TokenKind::RBrace]));
+		}
+	}
+	p.expect(TokenKind::RBrace, &recovery(&[]));
+	m.complete(p, SyntaxKind::EnumType)
+}
+
+fn enum_type_field(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	p.expect(
+		TokenKind::Ident,
+		&recovery(&[TokenKind::Comma, TokenKind::FatArrow]),
+	);
+	if p.at(TokenKind::FatArrow) {
+		p.bump();
+		type_expr(p);
+	}
+	m.complete(p, SyntaxKind::EnumTypeField)
+}
+
 fn struct_type(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(TokenKind::StructKw));
 	let m = p.start();
 	p.bump();
-	if p.at(TokenKind::CmpLt) {
-		decl::generic_list(p);
-		if p.at(TokenKind::WhereKw) {
-			decl::where_clause(p);
-		}
-	}
 	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 	while !p.at(TokenKind::RBrace) && !p.at_end() {
 		struct_type_field(p);

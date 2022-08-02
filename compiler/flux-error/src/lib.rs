@@ -27,6 +27,9 @@ pub enum FluxErrorCode {
 	CouldNotInfer,
 	CouldNotOpenModule,
 	IndexMemAccessOnNonPtrExpr,
+	IncorrectNumberOfTypeParamsSuppliedToTrait,
+	UseOfUndeclaredGenerics,
+	UnknownType,
 }
 
 impl std::fmt::Display for FluxErrorCode {

@@ -46,6 +46,10 @@ pub enum SyntaxKind {
 	IntrinsicExpr,
 	AddressExpr,
 	IndexMemoryExpr,
+	ForExpr,
+	ApplyDeclTrait,
+	EnumType,
+	EnumTypeField,
 
 	Whitespace,
 	Comment,
@@ -98,6 +102,9 @@ pub enum SyntaxKind {
 	Period,
 	LSquare,
 	RSquare,
+	ForKw,
+	InKw,
+	EnumKw,
 	Error,
 }
 
@@ -157,6 +164,9 @@ impl From<TokenKind> for SyntaxKind {
 			TokenKind::Period => SyntaxKind::Period,
 			TokenKind::LSquare => SyntaxKind::LSquare,
 			TokenKind::RSquare => SyntaxKind::RSquare,
+			TokenKind::ForKw => SyntaxKind::ForKw,
+			TokenKind::InKw => SyntaxKind::InKw,
+			TokenKind::EnumKw => SyntaxKind::EnumKw,
 			TokenKind::Error => SyntaxKind::Error,
 		}
 	}

@@ -1,28 +1,30 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::{
+	collections::{HashMap, HashSet},
+	fmt::Debug,
+};
 
 use ariadne::{Color, Label, Report, ReportKind};
 use flux_error::{comma_separated_end_with_and, Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
+use itertools::Itertools;
+// use indexmap::IndexMap;
 use smol_str::SmolStr;
+use tracing::{debug, info};
 
-use crate::r#type::TypeKind;
 use crate::{
 	infer::TypeEnv,
-	r#type::{ConcreteKind, TypeId},
+	r#type::{ConcreteKind, TypeId, TypeKind},
 };
 
+#[derive(Debug)]
 pub struct TypeChecker {
 	pub tenv: TypeEnv,
 }
 
 impl TypeChecker {
-	pub fn new(
-		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
-		signatures: HashMap<SmolStr, TypeId>,
-	) -> Self {
+	pub fn new() -> Self {
 		Self {
-			tenv: TypeEnv::new(implementations, signatures),
+			tenv: TypeEnv::new(),
 		}
 	}
 
@@ -30,6 +32,7 @@ impl TypeChecker {
 		use crate::r#type::TypeKind::*;
 		let akind = self.tenv.vars[a].clone();
 		let bkind = self.tenv.vars[b].clone();
+		// debug!("unify {:?} <-> {:?}", akind.inner, bkind.inner);
 		match (&akind.inner, &bkind.inner) {
 			(Ref(a), _) => self.unify(*a, b, unification_span),
 			(_, Ref(b)) => self.unify(a, *b, unification_span),
@@ -62,16 +65,7 @@ impl TypeChecker {
 							Ok(())
 						}
 					}
-					_ => {
-						let inner_b = self.tenv.inner_type(&self.tenv.get_type(b));
-						self.verify_trait_bounds(
-							a,
-							b,
-							unification_span,
-							&SmolStr::from(self.tenv.fmt_ty(&inner_b)),
-							restrictions,
-						)
-					}
+					_ => self.verify_trait_bounds(b, a, unification_span, restrictions),
 				}
 			}
 			(Concrete(ConcreteKind::Ptr(id)), Generic((b_name, restrictions))) => {
@@ -83,40 +77,19 @@ impl TypeChecker {
 							Ok(())
 						}
 					}
-					_ => {
-						let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
-						self.verify_trait_bounds(
-							a,
-							b,
-							unification_span,
-							&SmolStr::from(self.tenv.fmt_ty(&inner_a)),
-							restrictions,
-						)
-					}
+					_ => self.verify_trait_bounds(a, b, unification_span, restrictions),
 				}
 			}
 			(_, Generic((_, restrictions))) => {
 				// Suppose T implements the trait Foo
 				// *T, **T, ***T, etc. should also implement Foo without an explicit `apply`
 				// So verify trait bounds on the type being pointed to
-				let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
-				self.verify_trait_bounds(
-					a,
-					b,
-					unification_span,
-					&SmolStr::from(self.tenv.fmt_ty(&inner_a)),
-					restrictions,
-				)
+				// let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
+				self.verify_trait_bounds(a, b, unification_span, restrictions)
 			}
 			(Generic((_, restrictions)), _) => {
-				let inner_b = self.tenv.inner_type(&self.tenv.get_type(b));
-				self.verify_trait_bounds(
-					a,
-					b,
-					unification_span,
-					&SmolStr::from(self.tenv.fmt_ty(&inner_b)),
-					restrictions,
-				)
+				// let inner_b = self.tenv.innexr_type(&self.tenv.get_type(b));
+				self.verify_trait_bounds(b, a, unification_span, restrictions)
 			}
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
 				(ConcreteKind::Ident((a_name, a_params)), ConcreteKind::Ident((b_name, b_params))) => {
@@ -144,7 +117,6 @@ impl TypeChecker {
 						Err(self.type_mismatch(a, b, unification_span))
 					} else {
 						for (i, a_ty) in a_types.iter().enumerate() {
-							// println!("{:?} {}", self.tenv.get_type(*a_ty), i);
 							self.unify(*a_ty, *b_types.get(i).unwrap(), unification_span.clone())?
 						}
 						Ok(())
@@ -301,33 +273,150 @@ impl TypeChecker {
 	}
 
 	fn verify_trait_bounds(
-		&self,
-		a: TypeId,
-		b: TypeId,
+		&mut self,
+		ty: TypeId,
+		generic: TypeId,
 		unification_span: Span,
-		name: &SmolStr,
 		restrictions: &HashSet<SmolStr>,
 	) -> Result<(), TypeError> {
 		if restrictions.len() == 0 {
 			return Ok(());
 		}
-		if let Some(implementations) = self.tenv.get_trait_implementations(name) {
-			let mut missing_implementations = HashSet::new();
-			for restriction in restrictions {
-				if implementations.get(restriction).is_none() {
-					missing_implementations.insert(restriction.clone());
-				}
-			}
-
+		let inner_ty = self.tenv.inner_type(&self.tenv.get_type(ty));
+		if let TypeKind::Generic((_, actual_restrictions)) = inner_ty {
+			let missing_implementations =
+				self.get_missing_implementations(restrictions, &actual_restrictions);
 			if missing_implementations.len() == 0 {
 				return Ok(());
 			} else {
-				return Err(self.trait_bounds_unsatisfied(a, b, unification_span, missing_implementations));
+				return Err(self.trait_bounds_unsatisfied(
+					ty,
+					generic,
+					unification_span,
+					missing_implementations,
+				));
+			}
+		}
+
+		let (type_name, type_params) = match self.tenv.get_type(ty).inner.clone() {
+			TypeKind::Concrete(ConcreteKind::Ident(ident)) => ident,
+			_ => todo!(),
+		};
+
+		let mut missing_implementations = HashSet::new();
+		for restriction in restrictions {
+			let implements_trait_restriction =
+				self.does_type_implement_trait(restriction, &type_name, &type_params);
+			info!(
+				"`{}` implemented for `{}`: {}",
+				restriction, type_name, implements_trait_restriction
+			);
+			if !implements_trait_restriction {
+				missing_implementations.insert(restriction.clone());
+			}
+		}
+		if missing_implementations.len() > 0 {
+			return Err(self.trait_bounds_unsatisfied(
+				ty,
+				generic,
+				unification_span,
+				missing_implementations,
+			));
+		}
+		Ok(())
+	}
+
+	fn does_type_implement_trait(
+		&mut self,
+		trait_name: &SmolStr,
+		type_name: &SmolStr,
+		type_params: &[TypeId],
+	) -> bool {
+		if let Some(type_param_pairs) = self
+			.tenv
+			.trait_implementors
+			.get_trait_implentations_for_type(trait_name, type_name)
+			.cloned()
+		{
+			let mut acceptable_implementations = 0;
+			for (trait_ty_params, impltor_ty_params) in &type_param_pairs {
+				let result: Vec<_> = type_params
+					.iter()
+					.zip(impltor_ty_params)
+					.map(|(a, b)| {
+						let span = self.tenv.get_type(*a).span.clone();
+						self.unify(*a, *b, span)
+					})
+					.filter(|unification| unification.is_ok())
+					.collect();
+				if result.len() == type_params.len() {
+					acceptable_implementations += 1;
+				}
+			}
+
+			match acceptable_implementations {
+				0 => false,
+				1 => true,
+				_ => todo!(),
 			}
 		} else {
-			return Err(self.trait_bounds_unsatisfied(a, b, unification_span, restrictions.clone()));
+			false
 		}
 	}
+
+	fn get_missing_implementations(
+		&self,
+		expected_restricions: &HashSet<SmolStr>,
+		actual_restrictions: &HashSet<SmolStr>,
+	) -> HashSet<SmolStr> {
+		expected_restricions
+			.iter()
+			.cloned()
+			.filter(|restriction| actual_restrictions.get(restriction).is_none())
+			.collect::<HashSet<SmolStr>>()
+	}
+
+	pub fn has_trait(&self, id: TypeId, trt: &SmolStr) -> bool {
+		// let name = &SmolStr::from(self.tenv.fmt_ty(&self.tenv.get_type(id)));
+		let (type_name, type_params) = match &self.tenv.get_type(id).inner {
+			TypeKind::Concrete(ConcreteKind::Ident(ident)) => ident,
+			_ => todo!(),
+		};
+		todo!()
+		// match self.tenv.get_trait_implementations(type_name) {
+		// 	Some(implementations) => {
+		// 		todo!()
+		// 	}
+		// 	None => false,
+		// }
+		// match self.tenv.get_trait_implementations(type_name) {
+		// 	Some(implementations) => match implementations.get(trt) {
+		// 		Some(_) => true,
+		// 		None => false,
+		// 	},
+		// 	None => false,
+		// }
+	}
+
+	// pub fn check_type_params(
+	// 	&self,
+	// 	a_generics: &Spanned<IndexMap<SmolStr, HashSet<SmolStr>>>,
+	// 	b_generics: &Spanned<IndexMap<SmolStr, HashSet<SmolStr>>>,
+	// 	ty: Spanned<SmolStr>,
+	// ) -> Result<(), TypeError> {
+	// 	let a_len = a_generics.len();
+	// 	let b_len = b_generics.len();
+
+	// 	if a_len != b_len {
+	// 		return Err(TypeError::IncorrectNumberOfTypeParamsSuppliedToTrait {
+	// 			num_params_expected: a_generics.map(|params| params.len()),
+	// 			num_params_got: b_generics.map(|params| params.len()),
+	// 			ty,
+	// 		});
+	// 	}
+
+	// 	Ok(())
+	// }
 
 	fn type_mismatch(&self, a: TypeId, b: TypeId, span: Span) -> TypeError {
 		let aa = self.tenv.get_type(a);
@@ -376,6 +465,11 @@ pub enum TypeError {
 	},
 	CouldNotInfer {
 		ty_span: Span,
+	},
+	IncorrectNumberOfTypeParamsSuppliedToTrait {
+		num_params_expected: Spanned<usize>,
+		num_params_got: Spanned<usize>,
+		ty: Spanned<SmolStr>,
 	},
 }
 
@@ -472,6 +566,54 @@ impl Error for TypeError {
 					.with_message(format!("could not infer type")),
 			)
 			.with_note(format!("add type annotations")),
+			TypeError::IncorrectNumberOfTypeParamsSuppliedToTrait {
+				num_params_expected,
+				num_params_got,
+				ty,
+			} => Report::build(
+				ReportKind::Error,
+				num_params_got.span.file_id.clone(),
+				num_params_got.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::IncorrectNumberOfTypeParamsSuppliedToTrait)
+			.with_message(format!(
+				"incorrect number of type parameters supplied to trait `{}`",
+				ty.inner
+			))
+			.with_label(
+				Label::new(num_params_got.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!(
+						"incorrect number of type parameters supplied to trait `{}`",
+						ty.inner
+					)),
+			)
+			.with_label(
+				Label::new(num_params_expected.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!(
+						"expected {} type parameters",
+						num_params_expected.inner
+					)),
+			)
+			.with_label(
+				Label::new(num_params_got.span.clone())
+					.with_color(Color::Blue)
+					.with_message(format!("got {} type parameters", num_params_got.inner)),
+			)
+			.with_note(if num_params_got.inner > num_params_expected.inner {
+				format!(
+					"try removing {} type parameters from `{}`",
+					num_params_got.inner - num_params_expected.inner,
+					ty.inner
+				)
+			} else {
+				format!(
+					"try adding {} type parameters to `{}`",
+					num_params_expected.inner - num_params_got.inner,
+					ty.inner
+				)
+			}),
 		};
 		report.finish()
 	}
@@ -610,7 +752,7 @@ mod tests {
 			paste::paste! {
 			#[test]
 			fn [<test_typecheck_ $name>]() {
-				let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+				let mut tchk = TypeChecker::new();
 				let result = check(&mut tchk, $a, $b);
 				insta::assert_snapshot!(result);
 			}}
@@ -632,7 +774,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_floatptr_float() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ptr!(tchk, float!());
 		let b = float!();
 		let result = check(&mut tchk, a, b);
@@ -641,7 +783,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_genericptr_float() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ptr!(tchk, generic!(SmolStr::from("T")));
 		let b = float!();
 		let result = check(&mut tchk, a, b);
@@ -650,7 +792,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_genericptr_generic_same_name() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ptr!(tchk, generic!(SmolStr::from("T")));
 		let b = generic!(SmolStr::from("T"));
 		let result = check(&mut tchk, a, b);
@@ -659,7 +801,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_generic_generic_diff_name() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = generic!(SmolStr::from("T"));
 		let b = generic!(SmolStr::from("E"));
 		let result = check(&mut tchk, a, b);
@@ -668,7 +810,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_generic_ident() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = generic!(SmolStr::from("T"));
 		let b = ident!(SmolStr::from("Foo"));
 		let result = check(&mut tchk, a, b);
@@ -677,7 +819,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_generic_ident_with_params() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = generic!(SmolStr::from("T"));
 		let b = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
 		let result = check(&mut tchk, a, b);
@@ -686,7 +828,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_ident_ident() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ident!(SmolStr::from("Foo"));
 		let b = ident!(SmolStr::from("Bar"));
 		let result = check(&mut tchk, a, b);
@@ -695,7 +837,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_ident_ident_with_params() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ident!(SmolStr::from("Foo"));
 		let b = ident!(SmolStr::from("Bar"), vec![tparam!(tchk, sint!(32))]);
 		let result = check(&mut tchk, a, b);
@@ -704,7 +846,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_ident_ident_diff_same_params() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
 		let b = ident!(SmolStr::from("Bar"), vec![tparam!(tchk, sint!(32))]);
 		let result = check(&mut tchk, a, b);
@@ -713,7 +855,7 @@ mod tests {
 
 	#[test]
 	fn test_typecheck_ident_ident_same_diff_params() {
-		let mut tchk = TypeChecker::new(HashMap::new(), HashMap::new());
+		let mut tchk = TypeChecker::new();
 		let a = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, sint!(32))]);
 		let b = ident!(SmolStr::from("Foo"), vec![tparam!(tchk, uint!(32))]);
 		let result = check(&mut tchk, a, b);

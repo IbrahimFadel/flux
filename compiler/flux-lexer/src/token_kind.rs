@@ -60,6 +60,12 @@ pub enum TokenKind {
 	LetKw,
 	#[token("return")]
 	ReturnKw,
+	#[token("for")]
+	ForKw,
+	#[token("in")]
+	InKw,
+	#[token("enum")]
+	EnumKw,
 	#[regex(r"i[1-9]+")]
 	INKw,
 	#[regex(r"u[1-9]+")]
@@ -145,6 +151,7 @@ impl Display for TokenKind {
 			Self::Comment => write!(f, "comment"),
 			Self::DoubleColon => write!(f, "::"),
 			Self::ElseKw => write!(f, "else"),
+			Self::EnumKw => write!(f, "enum"),
 			Self::Eq => write!(f, "="),
 			Self::Error => write!(f, "error"),
 			Self::F32Kw => write!(f, "f32"),
@@ -152,7 +159,9 @@ impl Display for TokenKind {
 			Self::FatArrow => write!(f, "=>"),
 			Self::FloatLit => write!(f, "float"),
 			Self::FnKw => write!(f, "fn"),
+			Self::ForKw => write!(f, "for"),
 			Self::INKw => write!(f, "iN"),
+			Self::InKw => write!(f, "in"),
 			Self::Ident => write!(f, "identifier"),
 			Self::IfKw => write!(f, "if"),
 			Self::IntLit => write!(f, "int"),

@@ -1,5 +1,8 @@
 use flux_syntax::ast::{CallExpr, FloatExpr, IntExpr, IntrinsicExpr, PathExpr};
-use flux_typesystem::r#type::{ConcreteKind, TypeId};
+use flux_typesystem::{
+	check::TypeError,
+	r#type::{ConcreteKind, TypeId},
+};
 use itertools::Itertools;
 
 use super::*;
@@ -36,6 +39,7 @@ impl<'a> LoweringCtx<'a> {
 				ast::Expr::IntrinsicExpr(intrinsic_expr) => self.lower_intrinsic_expr(intrinsic_expr)?,
 				ast::Expr::AddressExpr(address_expr) => self.lower_address_expr(address_expr)?,
 				ast::Expr::IndexMemoryExpr(idx_mem_expr) => self.lower_idx_mem_expr(idx_mem_expr)?,
+				ast::Expr::ForExpr(for_expr) => self.lower_for_expr(for_expr)?,
 				_ => todo!(),
 			};
 			(
@@ -56,6 +60,7 @@ impl<'a> LoweringCtx<'a> {
 			SyntaxKind::Slash => BinaryOp::Div,
 			SyntaxKind::CmpEq => BinaryOp::CmpEq,
 			SyntaxKind::DoubleColon => BinaryOp::DoubleColon,
+			SyntaxKind::CmpGt => BinaryOp::CmpGt,
 			SyntaxKind::Period => return self.lower_binary_access(bin_expr),
 			SyntaxKind::Eq => return self.lower_binary_assign(bin_expr),
 			SyntaxKind::CmpNeq => BinaryOp::CmpNeq,
@@ -120,7 +125,7 @@ impl<'a> LoweringCtx<'a> {
 		};
 
 		let ty_decl = struct_ty
-			.fields
+			.0
 			.iter()
 			.find(|(name, _)| **name == access.field.inner);
 		let ty_id = match ty_decl {
@@ -128,13 +133,16 @@ impl<'a> LoweringCtx<'a> {
 				let ty = self.to_ty_kind(&field_ty.ty);
 				self.tchecker.tenv.insert(ty)
 			}
-			None => match self.method_signatures.get(&self.fmt_ty(&struct_expr.inner)) {
-				Some(methods) => match methods.get(&access.field.inner) {
-					Some(signature) => *signature,
+			None => {
+				let ty_name = &self.fmt_ty(&struct_expr.inner);
+				match self.method_signatures.get(ty_name) {
+					Some(methods) => match methods.get(&access.field.inner) {
+						Some(signature) => *signature,
+						_ => todo!(),
+					},
 					_ => todo!(),
-				},
-				_ => todo!(),
-			},
+				}
+			}
 		};
 
 		Ok(ty_id)
@@ -313,6 +321,65 @@ impl<'a> LoweringCtx<'a> {
 		Ok((Expr::Prefix { op, expr }, prefix_id))
 	}
 
+	fn lower_enum_expr(
+		&mut self,
+		enum_ty: &EnumType,
+		path: PathExpr,
+		arg: Option<(ExprIdx, TypeId)>,
+	) -> ExprResult {
+		let enum_name: SmolStr = path.names().nth(0).unwrap().text().into();
+
+		let mut enum_path = vec![];
+
+		path.names().for_each(|name| {
+			enum_path.push(Spanned::new(
+				SmolStr::from(name.text()),
+				Span::new(name.text_range(), self.file_id.clone()),
+			));
+		});
+
+		let variant = path.names().last().unwrap();
+		let variant_span = Span::new(variant.text_range(), self.file_id.clone());
+		let variant: SmolStr = variant.text().into();
+		if let Some(variant) = enum_ty.0.get(&variant).unwrap() {
+			let variant_id = self.tchecker.tenv.insert(self.to_ty_kind(variant));
+
+			let result = if let Some((arg, arg_id)) = arg {
+				self
+					.tchecker
+					.unify(arg_id, variant_id, Spanned::vec_span(&enum_path).unwrap())
+					.map_err(LowerError::TypeError)?;
+
+				let ty = TypeKind::Concrete(ConcreteKind::Ident((enum_name, vec![arg_id])));
+				let spanned_ty = Spanned::new(ty, variant.span.clone());
+				let ty_id = self.tchecker.tenv.insert(spanned_ty);
+
+				(
+					Expr::Enum(Enum {
+						path: enum_path,
+						arg: Some(arg),
+					}),
+					ty_id,
+				)
+			} else {
+				unreachable!()
+			};
+			Ok(result)
+		} else {
+			let ty = TypeKind::Concrete(ConcreteKind::Ident((enum_name, vec![])));
+			let spanned_ty = Spanned::new(ty, variant_span);
+			let ty_id = self.tchecker.tenv.insert(spanned_ty);
+
+			Ok((
+				Expr::Enum(Enum {
+					path: enum_path,
+					arg: None,
+				}),
+				ty_id,
+			))
+		}
+	}
+
 	fn lower_call(&mut self, call_expr: CallExpr) -> ExprResult {
 		if let ast::Expr::IntrinsicExpr(intrinsic) = call_expr.callee().unwrap() {
 			let intrinsic = intrinsic.name().unwrap();
@@ -323,8 +390,6 @@ impl<'a> LoweringCtx<'a> {
 			return self.lower_intrinsic_call(intrinsic, call_expr.args());
 		}
 
-		let (callee, _) = self.lower_expr(call_expr.callee())?;
-
 		let mut args = vec![];
 		let mut arg_ids = vec![];
 		for arg in call_expr.args() {
@@ -332,6 +397,21 @@ impl<'a> LoweringCtx<'a> {
 			args.push(arg);
 			arg_ids.push(arg_id);
 		}
+
+		if let ast::Expr::PathExpr(path) = call_expr.callee().unwrap() {
+			let ty: SmolStr = path.names().nth(0).unwrap().text().into();
+			if let Some(ty_decl) = self.type_decls.get(&ty).cloned() {
+				if let Type::Enum(enum_ty) = &ty_decl.ty.inner {
+					if args.len() != 1 {
+						return Err(LowerError::IncorrectNumberOfArgsInCall {});
+					}
+
+					return self.lower_enum_expr(enum_ty, path, Some((args[0], arg_ids[0])));
+				}
+			}
+		}
+
+		let (callee, _) = self.lower_expr(call_expr.callee())?;
 
 		let args_range = match (call_expr.lparen(), call_expr.rparen()) {
 			(Some(lparen), Some(rparen)) => {
@@ -527,6 +607,13 @@ impl<'a> LoweringCtx<'a> {
 	}
 
 	fn lower_path(&mut self, path_expr: PathExpr) -> ExprResult {
+		let ty: SmolStr = path_expr.names().nth(0).unwrap().text().into();
+		if let Some(ty_decl) = self.type_decls.get(&ty).cloned() {
+			if let Type::Enum(enum_ty) = &ty_decl.ty.inner {
+				return self.lower_enum_expr(enum_ty, path_expr, None);
+			}
+		}
+
 		let mut spanned_path = vec![];
 		let mut path = vec![];
 
@@ -573,12 +660,13 @@ impl<'a> LoweringCtx<'a> {
 				})
 			}
 		};
+		let type_decl_generics = &type_decl.generics;
 		let struct_type = match &type_decl.ty.inner {
 			Type::Struct(struct_ty) => struct_ty,
 			_ => unreachable!(),
 		};
 
-		let num_generics = struct_type.generics.len();
+		let num_generics = type_decl_generics.len();
 		let mut type_params = Vec::with_capacity(num_generics); // these are the types that will be retured associated with this expression's type
 		let type_params_uninit = type_params.spare_capacity_mut();
 		let mut fields = vec![];
@@ -587,7 +675,7 @@ impl<'a> LoweringCtx<'a> {
 			let name = self.unwrap_ident(field.name(), field.range(), format!("struct field name"))?;
 			let (val, val_id) = self.lower_expr(field.value())?;
 
-			if let Some(field) = struct_type.fields.get(&name.inner) {
+			if let Some(field) = struct_type.0.get(&name.inner) {
 				let field_ty_kind = self.to_ty_kind(&field.ty);
 				let field_ty_id = self.tchecker.tenv.insert(field_ty_kind.clone());
 
@@ -596,14 +684,29 @@ impl<'a> LoweringCtx<'a> {
 					.unify(val_id, field_ty_id, self.exprs[val].span.clone())
 					.map_err(LowerError::TypeError)?;
 
-				if let TypeKind::Generic((name, _)) = self.tchecker.tenv.inner_type(&field_ty_kind.inner) {
+				for generic in self.get_generics_used_in_type(field_ty_id) {
 					let mut id = val_id;
-					while let TypeKind::Concrete(ConcreteKind::Ptr(new_id)) =
-						self.tchecker.tenv.get_type(id).inner
-					{
-						id = new_id;
+
+					if let TypeKind::Concrete(ConcreteKind::Ident((_, params))) = &field_ty_kind.inner {
+						let mut index = 0;
+						for param in params {
+							if let TypeKind::Generic((name, _)) = &self.tchecker.tenv.get_type(*param).inner {
+								if name == &generic {
+									break;
+								}
+							}
+							index += 1;
+						}
+
+						id = if let TypeKind::Concrete(ConcreteKind::Ident((_, params))) =
+							&self.tchecker.tenv.get_deref_type(val_id).inner
+						{
+							params[index]
+						} else {
+							val_id
+						};
 					}
-					let index = struct_type.generics.get_index_of(&name).unwrap();
+					let index = type_decl_generics.get_index_of(&generic).unwrap();
 					type_params_uninit[index].write(id);
 				}
 
@@ -628,7 +731,7 @@ impl<'a> LoweringCtx<'a> {
 		}
 
 		let uninitialized_fields: Vec<SmolStr> = struct_type
-			.fields
+			.0
 			.iter()
 			.filter_map(|(field_name, _)| match initialized_fields.get(field_name) {
 				Some(_) => None,
@@ -662,6 +765,22 @@ impl<'a> LoweringCtx<'a> {
 			fields,
 		});
 		Ok((expr, id))
+	}
+
+	fn get_generics_used_in_type(&self, id: TypeId) -> Vec<SmolStr> {
+		let ty = self
+			.tchecker
+			.tenv
+			.inner_type(&self.tchecker.tenv.get_type(id).inner);
+		match ty {
+			TypeKind::Concrete(ConcreteKind::Ident((_, params))) => params
+				.iter()
+				.map(|id| self.get_generics_used_in_type(*id))
+				.flatten()
+				.collect(),
+			TypeKind::Generic((name, _)) => vec![name.clone()],
+			_ => vec![],
+		}
 	}
 
 	fn lower_if_expr(&mut self, if_expr: ast::IfExpr) -> ExprResult {
@@ -820,5 +939,60 @@ impl<'a> LoweringCtx<'a> {
 			}
 		};
 		Ok((Expr::IdxMem(IdxMem { val, idx }), ty))
+	}
+
+	fn lower_for_expr(&mut self, for_expr: ast::ForExpr) -> ExprResult {
+		let item = self.unwrap_ident(for_expr.item(), for_expr.range(), format!("for loop item"))?;
+		let (iterator, iterator_id) = self.lower_expr(for_expr.iterator())?;
+		let block = for_expr.block().unwrap();
+		let block_span = self.span(&block);
+		let (block, _) = self.lower_block_expr(block)?;
+		let block = self.exprs.alloc(Spanned::new(block, block_span));
+
+		self.verify_for_loop_iterator_implements_intoiterator(iterator, iterator_id)?;
+
+		// TODO: check for break
+		let ty = Spanned::new(
+			TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
+			self.span(&for_expr),
+		);
+		let ty = self.tchecker.tenv.insert(ty);
+		Ok((
+			Expr::For(For {
+				item,
+				iterator,
+				block,
+			}),
+			ty,
+		))
+	}
+
+	fn verify_for_loop_iterator_implements_intoiterator(
+		&self,
+		iterator: ExprIdx,
+		iterator_id: TypeId,
+	) -> Result<(), LowerError> {
+		if !self
+			.tchecker
+			.has_trait(iterator_id, &SmolStr::from("IntoIterator"))
+		{
+			let ref_ty_span = if let TypeKind::Ref(id) = self.tchecker.tenv.get_type(iterator_id).inner {
+				self.tchecker.tenv.get_type(id).span.clone()
+			} else {
+				self.tchecker.tenv.get_type(iterator_id).span.clone()
+			};
+			let ty = self
+				.tchecker
+				.tenv
+				.fmt_ty(&self.tchecker.tenv.get_type(iterator_id));
+			let ty = Spanned::new(ty, self.exprs[iterator].span.clone());
+			return Err(LowerError::TypeError(TypeError::TraitBoundsUnsatisfied {
+				ty: ty.clone(),
+				generic: Spanned::new(format!("`{}`", ty.inner), ref_ty_span),
+				span: self.tchecker.tenv.get_type(iterator_id).span.clone(),
+				missing_implementations: HashSet::from([SmolStr::from("IntoIterator")]),
+			}));
+		}
+		Ok(())
 	}
 }

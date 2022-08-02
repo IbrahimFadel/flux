@@ -1,5 +1,6 @@
-use flux_typesystem::{infer::TypeEnv, r#type::ConcreteKind};
+use flux_typesystem::{check::TypeError, r#type::ConcreteKind};
 use indexmap::IndexMap;
+use tracing::{debug, instrument, trace};
 
 use super::*;
 
@@ -16,11 +17,16 @@ impl<'a> LoweringCtx<'a> {
 			format!("trait declaration missing name"),
 		)?;
 
+		let generics = match trait_decl.generics() {
+			Some(generics) => self.lower_generic_list(generics, trait_decl.where_clause())?,
+			None => Spanned::new(IndexMap::new(), name.span.clone()),
+		};
+
 		let mut methods = HashMap::new();
 		for method in trait_decl.methods() {
 			let name = self.unwrap_ident(method.name(), method.range(), format!("method name"))?;
 			let params = self.lower_params(method.params(), &IndexMap::new())?;
-			let return_type = self.lower_type(method.return_ty(), &IndexMap::new())?;
+			let return_type = self.lower_type(method.return_ty(), &generics)?;
 			let method = TraitMethod {
 				name: name.clone(),
 				params,
@@ -28,48 +34,126 @@ impl<'a> LoweringCtx<'a> {
 			};
 			methods.insert(name.inner, method);
 		}
-		Ok(TraitDecl { name, methods })
+
+		Ok(TraitDecl {
+			name,
+			generics,
+			methods,
+		})
 	}
 
 	/// Figure out what traits are being implemented for what types without lowering the block
+	/// Returns typle of (Trait being implemented, Type that's getting the trait implemented to it),
+	/// followed by the generic list of the apply, and finally the apply block
 	pub(crate) fn apply_decl_first_pass(
 		&mut self,
 		apply_decl: ast::ApplyDecl,
 	) -> Result<
 		(
-			(Option<Spanned<SmolStr>>, Spanned<Type>),
-			IndexMap<SmolStr, HashSet<SmolStr>>,
+			(Option<(Spanned<SmolStr>, Vec<TypeId>)>, Spanned<Type>),
+			Spanned<GenericList>,
 			Option<ast::ApplyBlock>,
 		),
 		LowerError,
 	> {
 		let generics = match apply_decl.generics() {
 			Some(generics) => self.lower_generic_list(generics, apply_decl.where_clause())?,
-			None => IndexMap::new(),
+			None => Spanned::new(IndexMap::new(), self.span(&apply_decl)),
 		};
-		let (trait_, ty): (Option<Spanned<SmolStr>>, Spanned<Type>) =
+		let (trait_, ty): (Option<(Spanned<SmolStr>, Vec<TypeId>)>, Spanned<Type>) =
 			match (apply_decl.trait_(), apply_decl.ty()) {
 				(None, Some(ty)) => (None, self.lower_type(Some(ty), &generics)?),
-				(Some(trait_), Some(ty)) => (
-					Some(Spanned::new(
-						trait_.text().into(),
-						Span::new(trait_.text_range(), self.file_id.clone()),
-					)),
-					self.lower_type(Some(ty), &generics)?,
-				),
+				(Some(trait_), Some(ty)) => {
+					let trait_name =
+						self.unwrap_ident(trait_.name(), trait_.range(), format!("trait name"))?;
+					let trait_type_params = match trait_.type_params() {
+						Some(type_params) => {
+							let type_params: Vec<TypeId> = type_params
+								.params()
+								.map(|param| self.lower_type(Some(param), &generics))
+								.collect::<Result<Vec<_>, _>>()?
+								.iter()
+								.map(|ty| self.tchecker.tenv.insert(self.to_ty_kind(ty)))
+								.collect();
+							type_params
+						}
+						_ => vec![],
+					};
+
+					let ty = self.lower_type(Some(ty), &generics)?;
+
+					match self.traits.get(&trait_name.inner) {
+						Some(trt) => {
+							if trait_type_params.len() != trt.generics.len() {
+								return Err(LowerError::TypeError(
+									TypeError::IncorrectNumberOfTypeParamsSuppliedToTrait {
+										num_params_expected: trt.generics.map(|generics| generics.len()),
+										num_params_got: Spanned::new(trait_type_params.len(), self.span(&trait_)),
+										ty: trait_name,
+									},
+								));
+							}
+
+							debug!("checking trait type parameters");
+							for (idx, ty_param) in trait_type_params.iter().enumerate() {
+								let (generic_name, generic_restrictions) = trt.generics.get_index(idx).unwrap();
+								let generic_ty_kind =
+									TypeKind::Generic((generic_name.clone(), generic_restrictions.clone()));
+								let generic_ty_kind = Spanned::new(generic_ty_kind, trt.generics.span.clone());
+								let generic_id = self.tchecker.tenv.insert(generic_ty_kind);
+								let unification_span = self.tchecker.tenv.get_type(*ty_param).span.clone();
+								self
+									.tchecker
+									.unify(*ty_param, generic_id, unification_span)
+									.map_err(LowerError::TypeError)?;
+							}
+
+							(Some((trait_name, trait_type_params)), ty)
+						}
+						None => {
+							return Err(LowerError::AppliedUnknownTrait {
+								trt: trait_name,
+								ty: ty.map(|ty| self.fmt_ty(&ty)),
+							})
+						}
+					}
+				}
 				_ => unreachable!(),
 			};
+
+		if let Some((trait_name, trait_type_params)) = &trait_ {
+			self.add_trait_implementation(&ty.inner, trait_name.inner.clone(), trait_type_params);
+		};
+
 		Ok(((trait_, ty), generics, apply_decl.block()))
+	}
+
+	fn add_trait_implementation(
+		&mut self,
+		ty: &Type,
+		trait_name: SmolStr,
+		trait_type_params: &[TypeId],
+	) {
+		let (impltor_name, impltor_ty_params) = match ty {
+			Type::Ident(ident) => ident,
+			_ => todo!(),
+		};
+		self.tchecker.tenv.trait_implementors.insert_implementor(
+			trait_name,
+			trait_type_params,
+			impltor_name.clone(),
+			impltor_ty_params,
+		);
 	}
 
 	pub(crate) fn lower_apply_decl(
 		&mut self,
 		block: &Option<ast::ApplyBlock>,
-		trait_: &Option<Spanned<SmolStr>>,
+		trait_: &Option<(Spanned<SmolStr>, Vec<TypeId>)>,
 		ty: &Spanned<Type>,
-		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		generics: &Spanned<GenericList>,
 	) -> Result<ApplyDecl, LowerError> {
-		let trait_decl = if let Some(trait_) = &trait_ {
+		let trait_decl = if let Some((trait_, _)) = &trait_ {
 			let trait_decl = match self.traits.get(&trait_.inner) {
 				Some(decl) => decl,
 				None => {
@@ -100,7 +184,7 @@ impl<'a> LoweringCtx<'a> {
 		apply_block: &ast::ApplyBlock,
 		trait_decl: &Option<&TraitDecl>,
 		ty: &Spanned<Type>,
-		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		generics: &GenericList,
 	) -> Result<Vec<FnDecl>, LowerError> {
 		let mut methods_implemented = HashSet::new();
 
@@ -119,6 +203,7 @@ impl<'a> LoweringCtx<'a> {
 		self.method_signatures.insert(ty_name, signatures);
 
 		let mut methods = vec![];
+		debug!("lowering apply block methods");
 		for method in apply_block.methods() {
 			let method = self.lower_fn_decl(method, Some(ty.clone()), generics)?;
 
@@ -185,6 +270,7 @@ impl<'a> LoweringCtx<'a> {
 		Ok(methods)
 	}
 
+	#[instrument(skip_all)]
 	fn validate_trait_method_implementation(
 		&mut self,
 		method_decl: &TraitMethod,
@@ -198,6 +284,7 @@ impl<'a> LoweringCtx<'a> {
 			.tchecker
 			.tenv
 			.insert(self.to_ty_kind(&method_impl.return_type));
+		debug!("checking method return type with trait definition");
 		self
 			.tchecker
 			.unify(
@@ -208,7 +295,7 @@ impl<'a> LoweringCtx<'a> {
 			.map_err(LowerError::TypeError)?;
 
 		let method_decl_params = method_decl.params.0.len();
-		let method_impl_params = method_impl.params.0.len();
+		let method_impl_params = method_impl.params.0.len() - 1; // subtract one because it has self
 		if method_decl_params != method_impl_params {
 			return Err(LowerError::IncorrectNumberOfParamsInTraitMethodDefinition {
 				method_name: method_decl.name.inner.to_string(),
@@ -230,7 +317,9 @@ impl<'a> LoweringCtx<'a> {
 		Ok(())
 	}
 
+	#[instrument(skip(self))]
 	pub(crate) fn lower_type_decl(&mut self, ty_decl: ast::TypeDecl) -> Result<TypeDecl, LowerError> {
+		debug!("start lowering type decl");
 		let visibility = if let Some(public) = ty_decl.public() {
 			Spanned::new(
 				Visibility::Public,
@@ -245,24 +334,36 @@ impl<'a> LoweringCtx<'a> {
 				),
 			)
 		};
+		trace!(visibility = format!("{:?}", visibility.inner));
 		let name = self.unwrap_ident(
 			ty_decl.name(),
 			ty_decl.range(),
 			format!("type declaration name"),
 		)?;
-		let ty = self.lower_type(ty_decl.ty(), &IndexMap::new())?;
-		Ok(TypeDecl {
+		trace!(name = name.inner.as_str());
+		let generics = match ty_decl.generics() {
+			Some(generics) => self.lower_generic_list(generics, ty_decl.where_clause())?,
+			None => Spanned::new(IndexMap::new(), name.span.clone()),
+		};
+		let ty = self.lower_type(ty_decl.ty(), &generics)?;
+		let ty_decl = TypeDecl {
 			visibility,
-			name,
+			name: name.clone(),
+			generics,
 			ty,
-		})
+		};
+		self
+			.type_decls
+			.insert(name.inner, Box::new(ty_decl.clone()));
+		debug!("stop lowering type decl");
+		Ok(ty_decl)
 	}
 
 	pub(crate) fn lower_fn_decl(
 		&mut self,
 		fn_decl: ast::FnDecl,
 		self_ty: Option<Spanned<Type>>,
-		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		generics: &GenericList,
 	) -> Result<FnDecl, LowerError> {
 		self.tchecker.tenv.reset_symbol_table();
 
@@ -358,7 +459,7 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_fn_signature(
 		&mut self,
 		fn_decl: &ast::FnDecl,
-		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		generics: &GenericList,
 		self_ty: Option<Spanned<Type>>,
 	) -> Result<((Spanned<FnParams>, TypeId), TypeId), LowerError> {
 		let mut params = self.lower_params(fn_decl.params(), generics)?;
@@ -427,7 +528,7 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_params(
 		&mut self,
 		params: impl Iterator<Item = ast::FnParam>,
-		generics: &IndexMap<SmolStr, HashSet<SmolStr>>,
+		generics: &GenericList,
 	) -> Result<FnParams, LowerError> {
 		let mut hir_params = VecDeque::new();
 		for param in params {

@@ -16,13 +16,14 @@ mod stmts;
 mod tests;
 mod types;
 
+#[derive(Debug)]
 pub(super) struct LoweringCtx<'a> {
 	pub exprs: Arena<Spanned<Expr>>,
 	pub errors: Vec<LowerError>,
 	pub tchecker: TypeChecker,
 	file_id: FileId,
 	pub traits: HashMap<SmolStr, &'a TraitDecl>,
-	pub type_decls: HashMap<SmolStr, &'a TypeDecl>,
+	pub type_decls: HashMap<SmolStr, Box<TypeDecl>>,
 	// Type name -> (Method name -> Function Signature)
 	pub method_signatures: HashMap<String, HashMap<SmolStr, TypeId>>,
 }
@@ -32,7 +33,7 @@ impl<'a> LoweringCtx<'a> {
 		Self {
 			exprs: Arena::default(),
 			errors: vec![],
-			tchecker: TypeChecker::new(HashMap::new(), HashMap::new()),
+			tchecker: TypeChecker::new(),
 			file_id,
 			traits: HashMap::new(),
 			type_decls: HashMap::new(),
@@ -90,7 +91,7 @@ impl<'a> LoweringCtx<'a> {
 		}
 	}
 
-	pub fn fmt_ty(&self, ty: &Type) -> String {
+	pub fn fmt_ty(&mut self, ty: &Type) -> String {
 		match ty {
 			Type::SInt(n) => format!("i{n}"),
 			Type::UInt(n) => format!("u{n}"),
@@ -105,7 +106,7 @@ impl<'a> LoweringCtx<'a> {
 			Type::Struct(struct_ty) => format!(
 				"{{ {} }}",
 				struct_ty
-					.fields
+					.0
 					.iter()
 					.map(|(name, ty)| format!("{} {}", name, self.fmt_ty(&ty.ty)))
 					.join(", ")
@@ -134,6 +135,17 @@ impl<'a> LoweringCtx<'a> {
 							.join(", ")
 					)
 				}
+			),
+			Type::Tuple(types) => format!(
+				"({})",
+				types
+					.iter()
+					.map(|id| {
+						let ty = self.tchecker.tenv.get_type(*id).clone();
+						let ty = self.to_ty(&ty);
+						self.fmt_ty(&ty)
+					})
+					.join(", ")
 			),
 			_ => todo!("{:#?}", ty),
 		}

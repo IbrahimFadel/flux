@@ -28,6 +28,7 @@ pub struct UseDecl {
 pub struct TypeDecl {
 	pub visibility: Spanned<Visibility>,
 	pub name: Spanned<SmolStr>,
+	pub generics: Spanned<GenericList>,
 	pub ty: Spanned<Type>,
 }
 
@@ -55,7 +56,7 @@ pub struct FnParam {
 
 #[derive(Debug, Clone)]
 pub struct ApplyDecl {
-	pub trait_: Option<Spanned<SmolStr>>,
+	pub trait_: Option<(Spanned<SmolStr>, Vec<TypeId>)>,
 	pub ty: Spanned<Type>,
 	pub methods: Vec<FnDecl>,
 }
@@ -114,6 +115,8 @@ pub enum Expr {
 	Intrinsic(Intrinsic),
 	Address(Address),
 	IdxMem(IdxMem),
+	For(For),
+	Enum(Enum),
 	Missing,
 }
 
@@ -124,6 +127,19 @@ impl Into<Option<Binary>> for Expr {
 			_ => None,
 		}
 	}
+}
+
+#[derive(Debug, Clone)]
+pub struct Enum {
+	pub path: Path,
+	pub arg: Option<ExprIdx>,
+}
+
+#[derive(Debug, Clone)]
+pub struct For {
+	pub item: Spanned<SmolStr>,
+	pub iterator: ExprIdx,
+	pub block: ExprIdx,
 }
 
 #[derive(Debug, Clone)]
@@ -203,6 +219,7 @@ pub enum BinaryOp {
 	Access,
 	Assign,
 	CmpNeq,
+	CmpGt,
 }
 
 #[derive(Debug, Clone)]
@@ -225,14 +242,18 @@ pub enum Type {
 	Ident((SmolStr, Vec<TypeId>)),
 	Generic((SmolStr, HashSet<SmolStr>)),
 	Struct(StructType),
+	Enum(EnumType),
 	Tuple(Vec<TypeId>),
 	Func(Box<Type>, Box<Type>),
 	Unknown,
 }
 
+pub type GenericList = IndexMap<SmolStr, HashSet<SmolStr>>;
+
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
 	pub name: Spanned<SmolStr>,
+	pub generics: Spanned<GenericList>,
 	pub methods: HashMap<SmolStr, TraitMethod>,
 }
 
@@ -244,10 +265,7 @@ pub struct TraitMethod {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructType {
-	pub generics: IndexMap<SmolStr, HashSet<SmolStr>>,
-	pub fields: Spanned<IndexMap<SmolStr, StructTypeField>>,
-}
+pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
 
 #[derive(Debug, Clone)]
 pub struct StructTypeField {
@@ -264,3 +282,6 @@ pub struct TypeRestriction {
 	pub name: Spanned<SmolStr>,
 	pub trt: Spanned<SmolStr>,
 }
+
+#[derive(Debug, Clone)]
+pub struct EnumType(pub IndexMap<SmolStr, Option<Spanned<Type>>>);

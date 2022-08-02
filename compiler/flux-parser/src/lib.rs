@@ -1,6 +1,5 @@
 use self::{sink::Sink, source::Source};
 use errors::ParseError;
-use flux_error::print::format_err;
 use flux_lexer::{Lexer, TokenKind};
 use flux_span::FileId;
 use flux_syntax::syntax_kind::SyntaxNode;

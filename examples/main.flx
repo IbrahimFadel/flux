@@ -1,4 +1,9 @@
-type Vec struct<T> {
+type Maybe<T> enum {
+	Some => T,
+	None,
+}
+
+type Vec<T> struct {
 	len u64,
 	capacity u64,
 	buf *T,
@@ -6,7 +11,7 @@ type Vec struct<T> {
 
 apply<T> to Vec<T> {
 	pub fn new() -> Vec<T> => {
-		let initial_capacity = 32;
+		let initial_capacity = 32; // what do people actually use for this
 		Vec {
 			len: 0,
 			capacity: 0,
@@ -33,12 +38,54 @@ apply<T> to Vec<T> {
 
 	fn push(T value) => {
 		if self.len == self.capacity {
-			let new_capacity = self.capacity * 2;
+			let new_capacity = self.capacity * 2; // what do people actually use for this
 			self.resize(new_capacity);
 		};
 		self.buf[self.len] = value;
 		self.len = self.len + 1;
 	}
+
+	pub fn get(u64 idx) -> T => {
+		self.buf[idx]
+	}
 }
 
-// TODO: terminal statements should just be assumed to be the last one *unless* it has a semicolon. that way if statements dont need semicolons to not be considered terminals
+trait Iterator<T> {
+	fn next() -> Maybe<T>;
+}
+
+type VecIterator<T> struct {
+  vec Vec<T>,
+	idx u64,
+}
+
+trait Clone {}
+
+apply Clone to Maybe<u32> {}
+
+apply<T> Iterator<T> to VecIterator<T> {
+	fn next() -> Maybe<T> => {
+		let len = self.vec.len;
+		if self.idx == len {
+			Maybe::None
+		} else {
+			self.idx = self.idx + 1;
+			Maybe::Some(self.vec.get(self.idx))
+		}
+	}
+}
+
+trait IntoIterator<T>
+	where T is Iterator
+{
+	fn into_iter() -> T;
+}
+
+apply IntoIterator<VecIterator<i32>> to Vec<i32> {
+	fn into_iter() -> VecIterator<i32> => {
+		VecIterator {
+			vec: self,
+			idx: 0,
+		}
+	}
+}

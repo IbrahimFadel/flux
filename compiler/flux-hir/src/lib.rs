@@ -6,11 +6,12 @@ use std::{
 use flux_span::{FileId, Span, Spanned};
 use flux_syntax::ast;
 use flux_typesystem::r#type::{ConcreteKind, TypeId, TypeKind};
-use hir::{ApplyDecl, Expr, FnDecl, ModDecl, TraitDecl, Type, TypeDecl, UseDecl};
+use hir::{ApplyDecl, Expr, FnDecl, GenericList, ModDecl, TraitDecl, Type, TypeDecl, UseDecl};
 use indexmap::IndexMap;
 use la_arena::{Arena, Idx};
 use lower::error::LowerError;
 use smol_str::SmolStr;
+use tracing::{event, info, Level};
 
 pub mod hir;
 mod lower;
@@ -32,64 +33,56 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 
 	let mut errors = vec![];
 
+	let span = tracing::span!(Level::INFO, "type decls");
+	let _enter = span.enter();
+	let types: Vec<TypeDecl> = root
+		.types()
+		.map(|ty| ctx.lower_type_decl(ty))
+		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
+		.collect();
+	drop(_enter);
+	// info!("stop lowering type decls");
+
+	info!("start lowering trait decls");
 	// We need to populate LoweringCtx::traits before we can lower the applies, so it is necessary to lower these first
 	let traits: Vec<TraitDecl> = root
 		.traits()
 		.map(|trt| ctx.lower_trait_decl(trt))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+	info!("stop lowering trait decls");
 
 	traits.iter().for_each(|trt| {
 		ctx.traits.insert(trt.name.inner.clone(), trt);
 	});
 
-	let types: Vec<TypeDecl> = root
-		.types()
-		.map(|ty| ctx.lower_type_decl(ty))
-		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
-		.collect();
-
-	types.iter().for_each(|ty| {
-		ctx.type_decls.insert(ty.name.inner.clone(), &ty);
-	});
-
+	info!("start lowering apply decls (first pass)");
 	let applications: Vec<(
-		(Option<Spanned<SmolStr>>, Spanned<Type>),
-		IndexMap<SmolStr, HashSet<SmolStr>>,
+		(Option<(Spanned<SmolStr>, Vec<TypeId>)>, Spanned<Type>),
+		Spanned<GenericList>,
 		Option<ast::ApplyBlock>,
 	)> = root
 		.applies()
 		.map(|apply| ctx.apply_decl_first_pass(apply))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+	info!("stop lowering apply decls (first pass)");
 
-	let mut implementations = HashMap::new();
-	applications.iter().for_each(|((trt, ty), _, _)| {
-		if let Some(trt) = &trt {
-			let trts = implementations
-				.entry(SmolStr::from(ctx.fmt_ty(&ty.inner)))
-				.or_insert(HashSet::new());
-			trts.insert(trt.inner.clone());
-		}
-	});
-	ctx.tchecker.tenv.implementations = implementations;
-
+	info!("start lowering apply decls (second pass)");
 	let applies = applications
 		.iter()
 		.map(|((trt, ty), generics, block)| ctx.lower_apply_decl(block, trt, ty, generics))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+	info!("stop lowering apply decls (second pass)");
 
-	// let signatures = root
-	// 	.functions()
-	// 	.map(|f| ctx.lower_fn_signature(&f, &generics))
-	// 	.collect();
-
+	info!("start lowering fn decls");
 	let functions = root
 		.functions()
 		.map(|f| ctx.lower_fn_decl(f, None, &IndexMap::new()))
 		.filter_map(|r| r.map_err(|e| errors.push(e)).ok())
 		.collect();
+	info!("stop lowering fn decls");
 
 	errors.append(&mut ctx.errors);
 

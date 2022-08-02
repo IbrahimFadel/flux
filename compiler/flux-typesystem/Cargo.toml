@@ -12,6 +12,8 @@ flux-error = { path = "../flux-error" }
 smol_str = "0.1.21"
 ariadne = "0.1.5"
 itertools = "0.10.3"
+indexmap = "1.9.1"
+tracing = "0.1.36"
 
 [dev-dependencies]
 text-size = "1.1.0"

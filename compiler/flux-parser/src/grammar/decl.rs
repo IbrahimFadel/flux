@@ -41,6 +41,12 @@ fn trait_decl(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump();
 	p.expect(TokenKind::Ident, &recovery(&[TokenKind::LBrace]));
+	if p.at(TokenKind::CmpLt) {
+		generic_list(p);
+		if p.at(TokenKind::WhereKw) {
+			where_clause(p, TokenKind::LBrace);
+		}
+	}
 	p.expect(TokenKind::LBrace, &recovery(&[TokenKind::RBrace]));
 	while p.loop_safe_not_at(TokenKind::RBrace) {
 		trait_method(p);
@@ -96,12 +102,17 @@ fn apply_decl(p: &mut Parser) -> CompletedMarker {
 		p.bump();
 		type_expr(p);
 	} else {
+		let m = p.start();
 		p.expect(TokenKind::Ident, &recovery(&[TokenKind::ToKw]));
+		if p.at(TokenKind::CmpLt) {
+			type_params(p);
+		}
+		m.complete(p, SyntaxKind::ApplyDeclTrait);
 		p.expect(TokenKind::ToKw, &recovery(&[TokenKind::Ident]));
 		type_expr(p);
 	}
 	if has_generics && p.at(TokenKind::WhereKw) {
-		where_clause(p);
+		where_clause(p, TokenKind::LBrace);
 	}
 	apply_block(p);
 	m.complete(p, SyntaxKind::ApplyDecl)
@@ -145,7 +156,14 @@ fn type_decl(p: &mut Parser) -> CompletedMarker {
 	}
 	p.expect(TokenKind::TypeKw, &recovery(&[TokenKind::Ident]));
 	p.expect(TokenKind::Ident, &recovery(TYPE_RECOVERY_SET));
+	if p.at(TokenKind::CmpLt) {
+		generic_list(p);
+	}
 	type_expr(p);
+	if p.at(TokenKind::WhereKw) {
+		where_clause(p, TokenKind::SemiColon);
+		p.expect(TokenKind::SemiColon, &recovery(&[]));
+	}
 	m.complete(p, SyntaxKind::TypeDecl)
 }
 
@@ -192,6 +210,25 @@ pub(crate) fn generic_list(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::GenericList)
 }
 
+pub(crate) fn type_params(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at(TokenKind::CmpLt));
+	let m = p.start();
+	p.bump();
+	while p.loop_safe_not_at(TokenKind::CmpGt) {
+		type_expr(p);
+		if !p.at(TokenKind::Comma) {
+			if !p.at(TokenKind::CmpGt) {
+				p.expected(format!("`>` at end of type parameters"));
+			}
+			break;
+		} else {
+			p.bump();
+		}
+	}
+	p.expect(TokenKind::CmpGt, &recovery(&[]));
+	m.complete(p, SyntaxKind::TypeParams)
+}
+
 fn fn_params(p: &mut Parser) {
 	p.expect(TokenKind::LParen, &recovery(&[TokenKind::RParen]));
 	while !p.at(TokenKind::RParen) && !p.at_end() {
@@ -218,15 +255,15 @@ fn fn_param(p: &mut Parser) -> CompletedMarker {
 	m.complete(p, SyntaxKind::FnParam)
 }
 
-pub(crate) fn where_clause(p: &mut Parser) -> CompletedMarker {
+pub(crate) fn where_clause(p: &mut Parser, end_with: TokenKind) -> CompletedMarker {
 	assert!(p.at(TokenKind::WhereKw));
 	let m = p.start();
 	p.bump();
 
 	// TODO: this can be infinite
-	while p.loop_safe_not_at(TokenKind::LBrace) {
+	while p.loop_safe_not_at(end_with) {
 		type_restriction(p);
-		if !p.at(TokenKind::LBrace) {
+		if !p.at(end_with) {
 			p.expect(TokenKind::Comma, &recovery(&[]))
 		}
 	}

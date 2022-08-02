@@ -12,27 +12,37 @@ use crate::{
 	r#type::{ConcreteKind, TypeId, TypeKind},
 };
 
+use self::trait_implementors::TraitImplementorTable;
+
+mod trait_implementors;
+
 pub enum InferenceError {
 	CouldNotInfer { ty_span: Span },
 }
 
+#[derive(Debug)]
 pub struct TypeEnv {
 	/// A map from type name to the traits it implements
-	pub implementations: HashMap<SmolStr, HashSet<SmolStr>>, // TODO: how can we store spans for trait bounds (error messages)
+	// pub implementations: HashMap<SmolStr, HashSet<SmolStr>>, // TODO: how can we store spans for trait bounds (error messages)
+	// pub implementations: HashMap<(SmolStr, Vec<TypeId>), HashSet<SmolStr>>,
+	// pub implementations: HashMap<SmolStr, Vec<(Vec<TypeId>, HashSet<SmolStr>)>>,
+
+	// trait name -> ( impltor name -> ([trait_type_params], [impltor_type_params]) )
+	pub trait_implementors: TraitImplementorTable,
+
 	pub signatures: HashMap<SmolStr, TypeId>,
+	pub enums: HashMap<SmolStr, HashMap<SmolStr, Option<TypeId>>>,
 	pub vars: Vec<Spanned<TypeKind>>,
 	pub var_ids: HashMap<SmolStr, TypeId>,
 	pub return_type_id: TypeId,
 }
 
 impl TypeEnv {
-	pub fn new(
-		implementations: HashMap<SmolStr, HashSet<SmolStr>>,
-		signatures: HashMap<SmolStr, TypeId>,
-	) -> Self {
+	pub fn new() -> Self {
 		Self {
-			implementations,
-			signatures,
+			trait_implementors: TraitImplementorTable::new(),
+			signatures: HashMap::new(),
+			enums: HashMap::new(),
 			vars: vec![],
 			var_ids: HashMap::new(),
 			return_type_id: 0,
@@ -51,10 +61,20 @@ impl TypeEnv {
 		id
 	}
 
+	#[inline]
 	pub fn get_type(&self, id: TypeId) -> &Spanned<TypeKind> {
 		self.vars.get(id).unwrap()
 	}
 
+	pub fn get_deref_type(&self, id: TypeId) -> &Spanned<TypeKind> {
+		let mut true_id = id;
+		while let TypeKind::Ref(id) = &self.get_type(true_id).inner {
+			true_id = *id;
+		}
+		self.get_type(true_id)
+	}
+
+	#[inline]
 	pub fn set_type(&mut self, id: TypeId, ty: Spanned<TypeKind>) {
 		self.vars[id] = ty;
 	}
@@ -72,21 +92,26 @@ impl TypeEnv {
 		}
 	}
 
+	#[inline]
 	pub fn set_path_id(&mut self, path: &[SmolStr], id: TypeId) {
 		self.var_ids.insert(SmolStr::from(path.join("::")), id);
 	}
 
-	pub fn set_trait_implementation(&mut self, type_name: SmolStr, trt: SmolStr) {
-		let trts = self
-			.implementations
-			.entry(type_name)
-			.or_insert(HashSet::new());
-		trts.insert(trt);
+	pub fn set_trait_implementation(&mut self, type_name: (SmolStr, Vec<TypeId>), trt: SmolStr) {
+		todo!()
+		// let trts = self
+		// 	.implementations
+		// 	.entry(type_name)
+		// 	.or_insert(HashSet::new());
+		// trts.insert(trt);
 	}
 
-	pub fn get_trait_implementations(&self, type_name: &SmolStr) -> Option<&HashSet<SmolStr>> {
-		self.implementations.get(type_name)
-	}
+	// pub fn get_trait_implementations(
+	// 	&self,
+	// 	type_name: &SmolStr,
+	// ) -> Option<&Vec<(Vec<TypeId>, HashSet<SmolStr>)>> {
+	// 	self.implementations.get(type_name)
+	// }
 
 	pub fn reconstruct(&self, id: TypeId) -> Result<Spanned<TypeKind>, TypeError> {
 		use TypeKind::*;
@@ -124,10 +149,10 @@ impl TypeEnv {
 	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
 		match ty {
 			TypeKind::Concrete(t) => self.fmt_concrete_ty(t),
-			TypeKind::Ref(id) => format!("{}", self.fmt_ty(&self.get_type(*id))),
+			TypeKind::Ref(id) => format!("{}", self.fmt_ty(&self.get_type(*id).inner)),
 			TypeKind::Int(id) => {
 				if let Some(id) = id {
-					format!("{}", self.fmt_ty(&self.get_type(*id)))
+					format!("{}", self.fmt_ty(&self.get_type(*id).inner))
 				} else {
 					format!("Int")
 				}
@@ -158,7 +183,7 @@ impl TypeEnv {
 			ConcreteKind::UInt(n) => format!("u{}", n),
 			ConcreteKind::F64 => format!("f64"),
 			ConcreteKind::F32 => format!("f32"),
-			ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty(&self.get_type(*id))),
+			ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty(&self.get_type(*id).inner)),
 			ConcreteKind::Ident((name, type_params)) => format!(
 				"{}{}",
 				name,
@@ -169,7 +194,7 @@ impl TypeEnv {
 						"<{}>",
 						type_params
 							.iter()
-							.map(|id| self.fmt_ty(&self.get_type(*id)))
+							.map(|id| self.fmt_ty(&self.get_type(*id).inner))
 							.join(", ")
 					)
 				}
@@ -193,7 +218,7 @@ impl TypeEnv {
 				} else {
 					String::from("()")
 				},
-				self.fmt_ty(&self.get_type(*o))
+				self.fmt_ty(&self.get_type(*o).inner)
 			),
 		}
 	}
@@ -201,7 +226,7 @@ impl TypeEnv {
 	pub fn inner_type(&self, ty: &TypeKind) -> TypeKind {
 		if let TypeKind::Concrete(concrete) = ty {
 			if let ConcreteKind::Ptr(id) = concrete {
-				return self.inner_type(&self.get_type(*id));
+				return self.inner_type(&self.get_type(*id).inner);
 			}
 		}
 		ty.clone()

@@ -1,5 +1,0 @@
-mod bazz;
-
-pub fn do_bar(i7 x) {
-
-}

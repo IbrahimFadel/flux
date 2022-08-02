@@ -14,3 +14,5 @@ flux-typesystem = { path = "../flux-typesystem" }
 flux-mir = { path = "../flux-mir" }
 flux-error = { path = "../flux-error" }
 text-size = "1.0.0"
+tracing = "0.1.36"
+tracing-subscriber = "0.3.15"
