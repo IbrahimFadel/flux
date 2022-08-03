@@ -50,7 +50,11 @@ apply<T> to Vec<T> {
 	}
 }
 
-trait Iterator<T> {
+trait Foo {}
+
+trait Iterator<T>
+	where T is Foo
+{
 	fn next() -> Maybe<T>;
 }
 
@@ -59,11 +63,9 @@ type VecIterator<T> struct {
 	idx u64,
 }
 
-trait Clone {}
-
-apply Clone to Maybe<u32> {}
-
-apply<T> Iterator<T> to VecIterator<T> {
+apply<T> Iterator<T> to VecIterator<T>
+	where T is Foo
+{
 	fn next() -> Maybe<T> => {
 		let len = self.vec.len;
 		if self.idx == len {
@@ -75,14 +77,16 @@ apply<T> Iterator<T> to VecIterator<T> {
 	}
 }
 
-trait IntoIterator<T>
-	where T is Iterator
+trait IntoIterator<T, E>
+	where E is Foo, T is Iterator<E>
 {
 	fn into_iter() -> T;
 }
 
-apply IntoIterator<VecIterator<i32>> to Vec<i32> {
-	fn into_iter() -> VecIterator<i32> => {
+apply<T> IntoIterator<VecIterator<T>, T> to Vec<T>
+	where T is Foo
+{
+	fn into_iter() -> VecIterator<T> => {
 		VecIterator {
 			vec: self,
 			idx: 0,

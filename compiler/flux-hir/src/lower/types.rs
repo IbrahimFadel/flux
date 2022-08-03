@@ -120,36 +120,70 @@ impl<'a> LoweringCtx<'a> {
 
 	#[instrument(skip(self))]
 	pub fn lower_generic_list(
-		&self,
+		&mut self,
 		generics: ast::GenericList,
 		where_clause: Option<ast::WhereClause>,
 	) -> Result<Spanned<GenericList>, LowerError> {
-		let mut restrictions = IndexMap::new();
-		for generic in generics.names() {
-			let generic: SmolStr = generic.text().into();
-			trace!(generic_name = generic.as_str());
-			let mut traits = HashSet::new();
-			if let Some(where_clause) = &where_clause {
-				for restriction in where_clause.type_restrictions() {
-					let restriction = self.lower_type_restriction(restriction)?;
-					if restriction.name.inner == generic {
-						trace!(restriction = restriction.trt.inner.as_str());
-						traits.insert(restriction.trt.inner.clone());
-					}
+		// Collect list of generics first, then lower where clause
+		// since the where clause needs access to generic list
+
+		let mut generic_list = IndexMap::new();
+
+		generics.names().for_each(|name| {
+			let name: SmolStr = name.text().into();
+			trace!(generic_name = name.as_str());
+			generic_list.insert(name, HashSet::new());
+		});
+
+		if let Some(where_clause) = where_clause {
+			for restriction in where_clause.type_restrictions() {
+				let restriction = self.lower_type_restriction(restriction, &generic_list)?;
+				if let Some(restrictions) = generic_list.get_mut(&restriction.name.inner) {
+					trace!(
+						restriction = self
+							.tchecker
+							.tenv
+							.fmt_ident_w_types(&restriction.trt.0, &restriction.trt.1),
+						"restricting {}",
+						restriction.name.inner
+					);
+					restrictions.insert(restriction.trt.inner);
 				}
 			}
-			restrictions.insert(generic, traits);
 		}
-		let restrictions = Spanned::new(
-			restrictions,
-			Span::new(generics.range(), self.file_id.clone()),
-		);
-		Ok(restrictions)
+		let generic_list = Spanned::new(generic_list, self.span(&generics));
+		Ok(generic_list)
+
+		// todo!()
+
+		// Ok(restrictions)
+		// let mut restrictions = IndexMap::new();
+		// for generic in generics.names() {
+		// 	let generic: SmolStr = generic.text().into();
+		// 	trace!(generic_name = generic.as_str());
+		// 	let mut traits = HashSet::new();
+		// 	if let Some(where_clause) = &where_clause {
+		// 		for restriction in where_clause.type_restrictions() {
+		// 			let restriction = self.lower_type_restriction(restriction)?;
+		// 			if restriction.name.inner == generic {
+		// 				trace!(restriction = restriction.trt.inner.as_str());
+		// 				traits.insert(restriction.trt.inner.clone());
+		// 			}
+		// 		}
+		// 	}
+		// 	restrictions.insert(generic, traits);
+		// }
+		// let restrictions = Spanned::new(
+		// 	restrictions,
+		// 	Span::new(generics.range(), self.file_id.clone()),
+		// );
+		// Ok(restrictions)
 	}
 
 	fn lower_type_restriction(
-		&self,
+		&mut self,
 		type_restriction: ast::TypeRestriction,
+		generics: &GenericList,
 	) -> Result<TypeRestriction, LowerError> {
 		let name = self.unwrap_ident(
 			type_restriction.name(),
@@ -161,6 +195,26 @@ impl<'a> LoweringCtx<'a> {
 			type_restriction.range(),
 			format!("missing name of trait in type restriction"),
 		)?;
+		let type_params = match type_restriction.trait_type_params() {
+			Some(type_params) => {
+				let params = type_params
+					.params()
+					.map(|ty| self.lower_type(Some(ty), generics))
+					.collect::<Result<Vec<_>, _>>()?;
+				let span = Spanned::vec_span(&params).unwrap();
+				let params = params
+					.iter()
+					.map(|ty| self.tchecker.tenv.insert(self.to_ty_kind(ty)))
+					.collect();
+				let spanned = Spanned::new(params, span);
+				spanned
+			}
+			None => Spanned::new(vec![], trt.span.clone()),
+		};
+		let trt = Spanned::new(
+			(trt.inner, type_params.inner),
+			Span::combine(&trt.span, &type_params.span),
+		);
 		Ok(TypeRestriction { name, trt })
 	}
 

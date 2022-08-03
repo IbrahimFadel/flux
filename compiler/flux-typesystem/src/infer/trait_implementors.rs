@@ -6,6 +6,7 @@ use crate::r#type::TypeId;
 
 #[derive(Debug)]
 pub struct TraitImplementorTable {
+	// trait name -> ( impltor name -> ([trait_type_params], [impltor_type_params]) )
 	table: HashMap<SmolStr, HashMap<SmolStr, Vec<(Vec<TypeId>, Vec<TypeId>)>>>,
 }
 
@@ -30,10 +31,10 @@ impl TraitImplementorTable {
 
 	pub fn get_trait_implentations_for_type(
 		&self,
-		trait_name: &SmolStr,
+		trait_name: &(SmolStr, Vec<TypeId>),
 		type_name: &SmolStr,
 	) -> Option<&Vec<(Vec<TypeId>, Vec<TypeId>)>> {
-		match self.table.get(trait_name) {
+		match self.table.get(&trait_name.0) {
 			Some(types_implementing_trait) => match types_implementing_trait.get(type_name) {
 				Some(v) => Some(v),
 				None => None,

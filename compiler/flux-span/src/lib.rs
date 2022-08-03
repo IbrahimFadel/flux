@@ -1,6 +1,5 @@
 use smol_str::SmolStr;
-use std::fmt;
-use std::ops::Deref;
+use std::{fmt, ops::Deref};
 use text_size::TextRange;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

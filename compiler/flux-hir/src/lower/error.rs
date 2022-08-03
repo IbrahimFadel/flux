@@ -64,6 +64,9 @@ pub enum LowerError {
 	UnknownType {
 		ty: Spanned<SmolStr>,
 	},
+	UnknownTrait {
+		trt: Spanned<String>,
+	},
 }
 
 impl Error for LowerError {
@@ -332,6 +335,18 @@ impl Error for LowerError {
 				Label::new(ty.span.clone())
 					.with_color(Color::Red)
 					.with_message(format!("use of unknown type `{}`", ty.inner)),
+			),
+			LowerError::UnknownTrait { trt } => Report::build(
+				ReportKind::Error,
+				trt.span.file_id.clone(),
+				trt.span.range.start().into(),
+			)
+			.with_code(FluxErrorCode::UnknownTrait)
+			.with_message(format!("use of unknown trait `{}`", trt.inner))
+			.with_label(
+				Label::new(trt.span.clone())
+					.with_color(Color::Red)
+					.with_message(format!("use of unknown trait `{}`", trt.inner)),
 			),
 		};
 		report.finish()

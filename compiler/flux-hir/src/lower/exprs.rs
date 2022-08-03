@@ -681,7 +681,7 @@ impl<'a> LoweringCtx<'a> {
 
 				self
 					.tchecker
-					.unify(val_id, field_ty_id, self.exprs[val].span.clone())
+					.unify(field_ty_id, val_id, self.exprs[val].span.clone())
 					.map_err(LowerError::TypeError)?;
 
 				for generic in self.get_generics_used_in_type(field_ty_id) {
@@ -990,7 +990,7 @@ impl<'a> LoweringCtx<'a> {
 				ty: ty.clone(),
 				generic: Spanned::new(format!("`{}`", ty.inner), ref_ty_span),
 				span: self.tchecker.tenv.get_type(iterator_id).span.clone(),
-				missing_implementations: HashSet::from([SmolStr::from("IntoIterator")]),
+				missing_implementations: HashSet::from([(SmolStr::from("IntoIterator"), vec![])]),
 			}));
 		}
 		Ok(())

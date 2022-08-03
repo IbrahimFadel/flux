@@ -22,14 +22,7 @@ pub enum InferenceError {
 
 #[derive(Debug)]
 pub struct TypeEnv {
-	/// A map from type name to the traits it implements
-	// pub implementations: HashMap<SmolStr, HashSet<SmolStr>>, // TODO: how can we store spans for trait bounds (error messages)
-	// pub implementations: HashMap<(SmolStr, Vec<TypeId>), HashSet<SmolStr>>,
-	// pub implementations: HashMap<SmolStr, Vec<(Vec<TypeId>, HashSet<SmolStr>)>>,
-
-	// trait name -> ( impltor name -> ([trait_type_params], [impltor_type_params]) )
 	pub trait_implementors: TraitImplementorTable,
-
 	pub signatures: HashMap<SmolStr, TypeId>,
 	pub enums: HashMap<SmolStr, HashMap<SmolStr, Option<TypeId>>>,
 	pub vars: Vec<Spanned<TypeKind>>,
@@ -77,6 +70,23 @@ impl TypeEnv {
 	#[inline]
 	pub fn set_type(&mut self, id: TypeId, ty: Spanned<TypeKind>) {
 		self.vars[id] = ty;
+	}
+
+	#[inline]
+	pub fn fmt_id(&self, id: TypeId) -> String {
+		self.fmt_ty(&self.get_type(id))
+	}
+
+	pub fn fmt_ident_w_types(&self, name: &str, types: &[TypeId]) -> String {
+		format!(
+			"{}{}",
+			name,
+			if types.len() > 0 {
+				format!("<{}>", types.iter().map(|id| self.fmt_id(*id)).join(", "))
+			} else {
+				format!("")
+			}
+		)
 	}
 
 	pub fn get_path_id(&self, path: &Vec<Spanned<SmolStr>>) -> Result<TypeId, TypeError> {
@@ -170,7 +180,21 @@ impl TypeEnv {
 				if restrictions.len() == 0 {
 					format!("")
 				} else {
-					format!(": {}", restrictions.iter().join(", "))
+					format!(
+						": {}",
+						restrictions
+							.iter()
+							.map(|(name, params)| format!(
+								"{}{}",
+								name,
+								if params.len() > 0 {
+									format!("<{}>", params.iter().map(|id| self.fmt_id(*id)).join(", "))
+								} else {
+									format!("")
+								}
+							))
+							.join(", ")
+					)
 				}
 			),
 			TypeKind::Unknown => format!("Unknown"),

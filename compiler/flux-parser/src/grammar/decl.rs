@@ -282,6 +282,9 @@ fn type_restriction(p: &mut Parser) -> CompletedMarker {
 		TokenKind::Ident,
 		&recovery(&[TokenKind::Comma, TokenKind::LBrace]),
 	);
+	if p.at(TokenKind::CmpLt) {
+		type_params(p);
+	}
 	m.complete(p, SyntaxKind::TypeRestriction)
 }
 

@@ -758,6 +758,10 @@ impl TypeRestriction {
 			.filter(|token| token.kind() == SyntaxKind::Ident)
 			.nth(1)
 	}
+
+	pub fn trait_type_params(&self) -> Option<TypeParams> {
+		self.0.children().find_map(TypeParams::cast)
+	}
 }
 
 impl TypeParams {

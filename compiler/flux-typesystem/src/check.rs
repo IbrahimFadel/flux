@@ -1,13 +1,9 @@
-use std::{
-	collections::{HashMap, HashSet},
-	fmt::Debug,
-};
+use std::{collections::HashSet, fmt::Debug};
 
 use ariadne::{Color, Label, Report, ReportKind};
 use flux_error::{comma_separated_end_with_and, Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
 use itertools::Itertools;
-// use indexmap::IndexMap;
 use smol_str::SmolStr;
 use tracing::{debug, info};
 
@@ -32,7 +28,6 @@ impl TypeChecker {
 		use crate::r#type::TypeKind::*;
 		let akind = self.tenv.vars[a].clone();
 		let bkind = self.tenv.vars[b].clone();
-		// debug!("unify {:?} <-> {:?}", akind.inner, bkind.inner);
 		match (&akind.inner, &bkind.inner) {
 			(Ref(a), _) => self.unify(*a, b, unification_span),
 			(_, Ref(b)) => self.unify(a, *b, unification_span),
@@ -80,15 +75,13 @@ impl TypeChecker {
 					_ => self.verify_trait_bounds(a, b, unification_span, restrictions),
 				}
 			}
+			(Generic((a_name, a_restrictions)), Generic((b_name, b_restrictions))) => {
+				self.verify_trait_bounds(b, a, unification_span, a_restrictions)
+			}
 			(_, Generic((_, restrictions))) => {
-				// Suppose T implements the trait Foo
-				// *T, **T, ***T, etc. should also implement Foo without an explicit `apply`
-				// So verify trait bounds on the type being pointed to
-				// let inner_a = self.tenv.inner_type(&self.tenv.get_type(a));
 				self.verify_trait_bounds(a, b, unification_span, restrictions)
 			}
 			(Generic((_, restrictions)), _) => {
-				// let inner_b = self.tenv.innexr_type(&self.tenv.get_type(b));
 				self.verify_trait_bounds(b, a, unification_span, restrictions)
 			}
 			(Concrete(aa), Concrete(bb)) => match (aa, bb) {
@@ -277,15 +270,14 @@ impl TypeChecker {
 		ty: TypeId,
 		generic: TypeId,
 		unification_span: Span,
-		restrictions: &HashSet<SmolStr>,
+		traits: &HashSet<(SmolStr, Vec<TypeId>)>,
 	) -> Result<(), TypeError> {
-		if restrictions.len() == 0 {
+		if traits.len() == 0 {
 			return Ok(());
 		}
 		let inner_ty = self.tenv.inner_type(&self.tenv.get_type(ty));
 		if let TypeKind::Generic((_, actual_restrictions)) = inner_ty {
-			let missing_implementations =
-				self.get_missing_implementations(restrictions, &actual_restrictions);
+			let missing_implementations = self.get_missing_implementations(traits, &actual_restrictions);
 			if missing_implementations.len() == 0 {
 				return Ok(());
 			} else {
@@ -297,19 +289,33 @@ impl TypeChecker {
 				));
 			}
 		}
+		// let inner_ty = self.tenv.inner_type(&self.tenv.get_type(generic));
+		// if let TypeKind::Generic((_, actual_restrictions)) = inner_ty {
+		// 	let missing_implementations = self.get_missing_implementations(&actual_restrictions, traits);
+		// 	if missing_implementations.len() == 0 {
+		// 		return Ok(());
+		// 	} else {
+		// 		return Err(self.trait_bounds_unsatisfied(
+		// 			ty,
+		// 			generic,
+		// 			unification_span,
+		// 			missing_implementations,
+		// 		));
+		// 	}
+		// }
 
 		let (type_name, type_params) = match self.tenv.get_type(ty).inner.clone() {
 			TypeKind::Concrete(ConcreteKind::Ident(ident)) => ident,
-			_ => todo!(),
+			ty => (SmolStr::from(self.tenv.fmt_ty(&ty)), vec![]),
 		};
 
 		let mut missing_implementations = HashSet::new();
-		for restriction in restrictions {
+		for restriction in traits {
 			let implements_trait_restriction =
 				self.does_type_implement_trait(restriction, &type_name, &type_params);
 			info!(
 				"`{}` implemented for `{}`: {}",
-				restriction, type_name, implements_trait_restriction
+				restriction.0, type_name, implements_trait_restriction
 			);
 			if !implements_trait_restriction {
 				missing_implementations.insert(restriction.clone());
@@ -328,28 +334,49 @@ impl TypeChecker {
 
 	fn does_type_implement_trait(
 		&mut self,
-		trait_name: &SmolStr,
+		trt: &(SmolStr, Vec<TypeId>),
 		type_name: &SmolStr,
 		type_params: &[TypeId],
 	) -> bool {
+		// TODO: get trait restrictions with name
+		debug!(
+			"does {} implement {}",
+			self.tenv.fmt_ident_w_types(type_name, type_params),
+			self.tenv.fmt_ident_w_types(&trt.0, &trt.1),
+		);
 		if let Some(type_param_pairs) = self
 			.tenv
 			.trait_implementors
-			.get_trait_implentations_for_type(trait_name, type_name)
+			.get_trait_implentations_for_type(trt, type_name)
 			.cloned()
 		{
 			let mut acceptable_implementations = 0;
 			for (trait_ty_params, impltor_ty_params) in &type_param_pairs {
-				let result: Vec<_> = type_params
+				// Check if impltor type params unifies with any of the implmtors already stored in implementation table
+				let impltor_type_params_unification_results: Vec<_> = impltor_ty_params
 					.iter()
-					.zip(impltor_ty_params)
+					.zip(type_params)
 					.map(|(a, b)| {
 						let span = self.tenv.get_type(*a).span.clone();
 						self.unify(*a, *b, span)
 					})
 					.filter(|unification| unification.is_ok())
 					.collect();
-				if result.len() == type_params.len() {
+
+				// next, check if trait type params in implementation table unify with type params supplied to trait type params being applied
+				let trait_type_params_unification_results: Vec<_> = trait_ty_params
+					.iter()
+					.zip(&trt.1)
+					.map(|(a, b)| {
+						let span = self.tenv.get_type(*a).span.clone();
+						self.unify(*a, *b, span)
+					})
+					.filter(|unification| unification.is_ok())
+					.collect();
+
+				if impltor_type_params_unification_results.len() == type_params.len()
+					&& trait_type_params_unification_results.len() == trait_ty_params.len()
+				{
 					acceptable_implementations += 1;
 				}
 			}
@@ -365,15 +392,40 @@ impl TypeChecker {
 	}
 
 	fn get_missing_implementations(
-		&self,
-		expected_restricions: &HashSet<SmolStr>,
-		actual_restrictions: &HashSet<SmolStr>,
-	) -> HashSet<SmolStr> {
+		&mut self,
+		expected_restricions: &HashSet<(SmolStr, Vec<TypeId>)>,
+		actual_restrictions: &HashSet<(SmolStr, Vec<TypeId>)>,
+	) -> HashSet<(SmolStr, Vec<TypeId>)> {
 		expected_restricions
 			.iter()
 			.cloned()
-			.filter(|restriction| actual_restrictions.get(restriction).is_none())
-			.collect::<HashSet<SmolStr>>()
+			.filter(
+				|(expected_restriction_name, expected_restriction_type_params)| {
+					let mut acceptable_implementations = 0;
+					for (actual_restriction_name, actual_restriction_type_params) in actual_restrictions {
+						if actual_restriction_name == expected_restriction_name {
+							let results: Vec<_> = expected_restriction_type_params
+								.iter()
+								.zip(actual_restriction_type_params)
+								.map(|(a, b)| {
+									let span = self.tenv.get_type(*a).span.clone();
+									self.unify(*a, *b, span)
+								})
+								.filter(|unification| unification.is_ok())
+								.collect();
+							if results.len() == expected_restriction_type_params.len() {
+								acceptable_implementations += 1;
+							}
+						}
+					}
+					match acceptable_implementations {
+						0 => true,
+						1 => false,
+						_ => todo!(),
+					}
+				},
+			)
+			.collect::<HashSet<(SmolStr, Vec<TypeId>)>>()
 	}
 
 	pub fn has_trait(&self, id: TypeId, trt: &SmolStr) -> bool {
@@ -433,10 +485,19 @@ impl TypeChecker {
 		ty: TypeId,
 		generic: TypeId,
 		span: Span,
-		missing_implementations: HashSet<SmolStr>,
+		missing_implementations: HashSet<(SmolStr, Vec<TypeId>)>,
 	) -> TypeError {
 		let ty = self.tenv.get_type(ty);
 		let generic = self.tenv.get_type(generic);
+		let missing_implementations = missing_implementations
+			.iter()
+			.map(|(name, ids)| {
+				(
+					name.clone(),
+					ids.iter().map(|id| self.tenv.fmt_id(*id)).collect(),
+				)
+			})
+			.collect();
 		TypeError::TraitBoundsUnsatisfied {
 			ty: ty.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
 			generic: generic.map(|ty_kind| self.tenv.fmt_ty(&ty_kind)),
@@ -458,7 +519,7 @@ pub enum TypeError {
 		ty: Spanned<String>,
 		generic: Spanned<String>,
 		span: Span,
-		missing_implementations: HashSet<SmolStr>,
+		missing_implementations: HashSet<(SmolStr, Vec<String>)>,
 	},
 	UnknownPath {
 		path: Spanned<SmolStr>,
@@ -526,12 +587,14 @@ impl Error for TypeError {
 									.collect::<Vec<_>>()
 									.first()
 									.unwrap()
+									.0
 							)
 						} else {
-							format!(
-								"traits {} are",
-								comma_separated_end_with_and(missing_implementations.iter())
-							)
+							todo!()
+							// format!(
+							// 	"traits {} are",
+							// 	comma_separated_end_with_and(missing_implementations.iter())
+							// )
 						},
 						ty.inner
 					)),

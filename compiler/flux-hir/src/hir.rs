@@ -240,7 +240,7 @@ pub enum Type {
 	Ptr(TypeId),
 	Ref(usize),
 	Ident((SmolStr, Vec<TypeId>)),
-	Generic((SmolStr, HashSet<SmolStr>)),
+	Generic((SmolStr, HashSet<(SmolStr, Vec<TypeId>)>)),
 	Struct(StructType),
 	Enum(EnumType),
 	Tuple(Vec<TypeId>),
@@ -248,7 +248,7 @@ pub enum Type {
 	Unknown,
 }
 
-pub type GenericList = IndexMap<SmolStr, HashSet<SmolStr>>;
+pub type GenericList = IndexMap<SmolStr, HashSet<(SmolStr, Vec<TypeId>)>>;
 
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
@@ -280,7 +280,7 @@ pub struct WhereClause(pub Vec<TypeRestriction>);
 #[derive(Debug, Clone)]
 pub struct TypeRestriction {
 	pub name: Spanned<SmolStr>,
-	pub trt: Spanned<SmolStr>,
+	pub trt: Spanned<(SmolStr, Vec<TypeId>)>,
 }
 
 #[derive(Debug, Clone)]

@@ -114,7 +114,16 @@ impl<'a> LoweringCtx<'a> {
 			Type::Generic((name, restrictions)) => format!(
 				"{name}{}",
 				if restrictions.len() > 0 {
-					format!(": {}", restrictions.iter().join(", "))
+					format!(
+						": {}",
+						restrictions
+							.iter()
+							.map(|restriction| self
+								.tchecker
+								.tenv
+								.fmt_ident_w_types(&restriction.0, &restriction.1))
+							.join(", ")
+					)
 				} else {
 					format!("")
 				}

@@ -10,7 +10,7 @@ pub enum TypeKind {
 	Int(Option<TypeId>),
 	Float(Option<TypeId>),
 	Ref(TypeId),
-	Generic((SmolStr, HashSet<SmolStr>)),
+	Generic((SmolStr, HashSet<(SmolStr, Vec<TypeId>)>)),
 	Unknown,
 }
 

@@ -60,6 +60,21 @@ impl<'a> LoweringCtx<'a> {
 			Some(generics) => self.lower_generic_list(generics, apply_decl.where_clause())?,
 			None => Spanned::new(IndexMap::new(), self.span(&apply_decl)),
 		};
+		for (_, restrictions) in &generics.inner {
+			for restriction in restrictions {
+				if self.traits.get(&restriction.0).is_none() {
+					return Err(LowerError::UnknownTrait {
+						trt: Spanned::new(
+							self
+								.tchecker
+								.tenv
+								.fmt_ident_w_types(&restriction.0, &restriction.1),
+							self.span(&apply_decl.where_clause().unwrap()),
+						),
+					});
+				}
+			}
+		}
 		let (trait_, ty): (Option<(Spanned<SmolStr>, Vec<TypeId>)>, Spanned<Type>) =
 			match (apply_decl.trait_(), apply_decl.ty()) {
 				(None, Some(ty)) => (None, self.lower_type(Some(ty), &generics)?),
@@ -122,6 +137,14 @@ impl<'a> LoweringCtx<'a> {
 			};
 
 		if let Some((trait_name, trait_type_params)) = &trait_ {
+			debug!(
+				"adding trait implementation: {} implements {}",
+				self.fmt_ty(&ty.inner),
+				self
+					.tchecker
+					.tenv
+					.fmt_ident_w_types(&trait_name.inner, trait_type_params)
+			);
 			self.add_trait_implementation(&ty.inner, trait_name.inner.clone(), trait_type_params);
 		};
 
@@ -135,14 +158,14 @@ impl<'a> LoweringCtx<'a> {
 		trait_type_params: &[TypeId],
 	) {
 		let (impltor_name, impltor_ty_params) = match ty {
-			Type::Ident(ident) => ident,
-			_ => todo!(),
+			Type::Ident(ident) => ident.clone(),
+			_ => (SmolStr::from(self.fmt_ty(ty)), vec![]),
 		};
 		self.tchecker.tenv.trait_implementors.insert_implementor(
 			trait_name,
 			trait_type_params,
-			impltor_name.clone(),
-			impltor_ty_params,
+			impltor_name,
+			&impltor_ty_params,
 		);
 	}
 
@@ -285,6 +308,7 @@ impl<'a> LoweringCtx<'a> {
 			.tenv
 			.insert(self.to_ty_kind(&method_impl.return_type));
 		debug!("checking method return type with trait definition");
+
 		self
 			.tchecker
 			.unify(

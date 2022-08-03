@@ -30,6 +30,7 @@ pub enum FluxErrorCode {
 	IncorrectNumberOfTypeParamsSuppliedToTrait,
 	UseOfUndeclaredGenerics,
 	UnknownType,
+	UnknownTrait,
 }
 
 impl std::fmt::Display for FluxErrorCode {
