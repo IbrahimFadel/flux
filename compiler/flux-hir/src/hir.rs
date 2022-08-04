@@ -4,7 +4,7 @@ use flux_span::Spanned;
 use flux_typesystem::r#type::TypeId;
 use indexmap::IndexMap;
 use la_arena::Idx;
-use smol_str::SmolStr;
+use lasso::Spur;
 
 mod print;
 
@@ -16,18 +16,18 @@ pub enum Visibility {
 
 #[derive(Debug, Clone)]
 pub struct ModDecl {
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 }
 
 #[derive(Debug, Clone)]
 pub struct UseDecl {
-	pub path: Vec<Spanned<SmolStr>>,
+	pub path: Vec<Spanned<Spur>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
 	pub visibility: Spanned<Visibility>,
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 	pub generics: Spanned<GenericList>,
 	pub ty: Spanned<Type>,
 }
@@ -38,7 +38,7 @@ pub struct Block(pub Vec<Spanned<Stmt>>);
 #[derive(Debug, Clone)]
 pub struct FnDecl {
 	pub visibility: Spanned<Visibility>,
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 	pub params: Spanned<FnParams>,
 	pub return_type: Spanned<Type>,
 	pub body: ExprIdx,
@@ -51,12 +51,12 @@ pub struct FnParams(pub VecDeque<Spanned<FnParam>>); // TODO: VecDeque because w
 pub struct FnParam {
 	pub mutable: bool,
 	pub ty: Spanned<Type>,
-	pub name: SmolStr,
+	pub name: Spur,
 }
 
 #[derive(Debug, Clone)]
 pub struct ApplyDecl {
-	pub trait_: Option<(Spanned<SmolStr>, Vec<TypeId>)>,
+	pub trait_: Option<(Spanned<Spur>, Vec<TypeId>)>,
 	pub ty: Spanned<Type>,
 	pub methods: Vec<FnDecl>,
 }
@@ -76,7 +76,7 @@ pub struct Return {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
 	pub ty: Spanned<Type>,
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 	pub value: ExprIdx,
 }
 
@@ -137,7 +137,7 @@ pub struct Enum {
 
 #[derive(Debug, Clone)]
 pub struct For {
-	pub item: Spanned<SmolStr>,
+	pub item: Spanned<Spur>,
 	pub iterator: ExprIdx,
 	pub block: ExprIdx,
 }
@@ -151,7 +151,7 @@ pub struct IdxMem {
 #[derive(Debug, Clone)]
 pub struct Access {
 	pub lhs: ExprIdx,
-	pub field: Spanned<SmolStr>,
+	pub field: Spanned<Spur>,
 }
 
 #[derive(Debug, Clone)]
@@ -191,10 +191,10 @@ pub struct Binary {
 #[derive(Debug, Clone)]
 pub struct Struct {
 	pub name: Path,
-	pub fields: Spanned<Vec<(Spanned<SmolStr>, ExprIdx)>>,
+	pub fields: Spanned<Vec<(Spanned<Spur>, ExprIdx)>>,
 }
 
-pub type Path = Vec<Spanned<SmolStr>>;
+pub type Path = Vec<Spanned<Spur>>;
 
 #[derive(Debug, Clone)]
 pub struct Int {
@@ -239,8 +239,8 @@ pub enum Type {
 	Float,
 	Ptr(TypeId),
 	Ref(usize),
-	Ident((SmolStr, Vec<TypeId>)),
-	Generic((SmolStr, HashSet<(SmolStr, Vec<TypeId>)>)),
+	Ident((Spur, Vec<TypeId>)),
+	Generic((Spur, HashSet<(Spur, Vec<TypeId>)>)),
 	Struct(StructType),
 	Enum(EnumType),
 	Tuple(Vec<TypeId>),
@@ -248,24 +248,24 @@ pub enum Type {
 	Unknown,
 }
 
-pub type GenericList = IndexMap<SmolStr, HashSet<(SmolStr, Vec<TypeId>)>>;
+pub type GenericList = IndexMap<Spur, HashSet<(Spur, Vec<TypeId>)>>;
 
 #[derive(Debug, Clone)]
 pub struct TraitDecl {
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 	pub generics: Spanned<GenericList>,
-	pub methods: HashMap<SmolStr, TraitMethod>,
+	pub methods: HashMap<Spur, TraitMethod>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TraitMethod {
-	pub name: Spanned<SmolStr>,
+	pub name: Spanned<Spur>,
 	pub params: FnParams,
 	pub return_type: Spanned<Type>,
 }
 
 #[derive(Debug, Clone)]
-pub struct StructType(pub Spanned<IndexMap<SmolStr, StructTypeField>>);
+pub struct StructType(pub Spanned<IndexMap<Spur, StructTypeField>>);
 
 #[derive(Debug, Clone)]
 pub struct StructTypeField {
@@ -279,9 +279,9 @@ pub struct WhereClause(pub Vec<TypeRestriction>);
 
 #[derive(Debug, Clone)]
 pub struct TypeRestriction {
-	pub name: Spanned<SmolStr>,
-	pub trt: Spanned<(SmolStr, Vec<TypeId>)>,
+	pub name: Spanned<Spur>,
+	pub trt: Spanned<(Spur, Vec<TypeId>)>,
 }
 
 #[derive(Debug, Clone)]
-pub struct EnumType(pub IndexMap<SmolStr, Option<Spanned<Type>>>);
+pub struct EnumType(pub IndexMap<Spur, Option<Spanned<Type>>>);

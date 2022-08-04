@@ -1,7 +1,7 @@
+use cstree::TextRange;
 use flux_lexer::{Token, TokenKind};
 use flux_span::{Span, Spanned};
 use flux_syntax::syntax_kind::SyntaxKind;
-use rowan::TextRange;
 
 use crate::{errors::ParseError, event::Event, grammar::top_level_decl, source::Source};
 

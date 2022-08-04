@@ -9,8 +9,8 @@ use flux_typesystem::r#type::{ConcreteKind, TypeId, TypeKind};
 use hir::{ApplyDecl, Expr, FnDecl, GenericList, ModDecl, TraitDecl, Type, TypeDecl, UseDecl};
 use indexmap::IndexMap;
 use la_arena::{Arena, Idx};
+use lasso::{Rodeo, Spur};
 use lower::error::LowerError;
-use smol_str::SmolStr;
 use tracing::{event, info, Level};
 
 pub mod hir;
@@ -18,7 +18,7 @@ mod lower;
 
 #[derive(Clone, Debug)]
 pub struct HirModule {
-	pub path: Vec<SmolStr>,
+	pub path: Vec<Spur>,
 	pub exprs: Arena<Spanned<Expr>>,
 	pub mods: Vec<ModDecl>,
 	pub uses: Vec<UseDecl>,
@@ -28,8 +28,13 @@ pub struct HirModule {
 	pub traits: Vec<TraitDecl>,
 }
 
-pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule, Vec<LowerError>) {
-	let mut ctx = lower::LoweringCtx::new(file_id);
+pub fn lower(
+	path: Vec<Spur>,
+	root: ast::Root,
+	file_id: FileId,
+	resolver: &Rodeo,
+) -> (HirModule, Vec<LowerError>) {
+	let mut ctx = lower::LoweringCtx::new(file_id, resolver);
 
 	let mut errors = vec![];
 
@@ -58,7 +63,7 @@ pub fn lower(path: Vec<SmolStr>, root: ast::Root, file_id: FileId) -> (HirModule
 
 	info!("start lowering apply decls (first pass)");
 	let applications: Vec<(
-		(Option<(Spanned<SmolStr>, Vec<TypeId>)>, Spanned<Type>),
+		(Option<(Spanned<Spur>, Vec<TypeId>)>, Spanned<Type>),
 		Spanned<GenericList>,
 		Option<ast::ApplyBlock>,
 	)> = root

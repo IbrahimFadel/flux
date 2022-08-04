@@ -1,10 +1,9 @@
 use std::{collections::HashSet, fmt::Debug};
 
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_error::{comma_separated_end_with_and, Error, FluxErrorCode};
+use flux_error::{Error, FluxErrorCode};
 use flux_span::{Span, Spanned};
-use itertools::Itertools;
-use smol_str::SmolStr;
+use lasso::{Rodeo, Spur};
 use tracing::{debug, info};
 
 use crate::{
@@ -13,14 +12,14 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TypeChecker {
-	pub tenv: TypeEnv,
+pub struct TypeChecker<'a> {
+	pub tenv: TypeEnv<'a>,
 }
 
-impl TypeChecker {
-	pub fn new() -> Self {
+impl<'a> TypeChecker<'a> {
+	pub fn new(resolver: &'a Rodeo) -> Self {
 		Self {
-			tenv: TypeEnv::new(),
+			tenv: TypeEnv::new(resolver),
 		}
 	}
 
@@ -270,7 +269,7 @@ impl TypeChecker {
 		ty: TypeId,
 		generic: TypeId,
 		unification_span: Span,
-		traits: &HashSet<(SmolStr, Vec<TypeId>)>,
+		traits: &HashSet<(Spur, Vec<TypeId>)>,
 	) -> Result<(), TypeError> {
 		if traits.len() == 0 {
 			return Ok(());
@@ -393,9 +392,9 @@ impl TypeChecker {
 
 	fn get_missing_implementations(
 		&mut self,
-		expected_restricions: &HashSet<(SmolStr, Vec<TypeId>)>,
-		actual_restrictions: &HashSet<(SmolStr, Vec<TypeId>)>,
-	) -> HashSet<(SmolStr, Vec<TypeId>)> {
+		expected_restricions: &HashSet<(Spur, Vec<TypeId>)>,
+		actual_restrictions: &HashSet<(Spur, Vec<TypeId>)>,
+	) -> HashSet<(Spur, Vec<TypeId>)> {
 		expected_restricions
 			.iter()
 			.cloned()

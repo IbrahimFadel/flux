@@ -15,3 +15,8 @@ flux-span = { path = "../flux-span" }
 text-size = "1.0.0"
 smol_str = "0.1.23"
 ariadne = "0.1.5"
+clap = { version = "3.2.16", features = ["derive"] }
+tracing = "0.1.36"
+tracing-subscriber = "0.3.15"
+tracing-tree = "0.2.1"
+tracing-flame = "0.2.0"

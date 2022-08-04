@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fs, path::Path, process::exit};
 
 use ariadne::{Report, ReportKind};
+use clap::Parser;
+use error::DriverError;
 use flux_error::{Error, FluxErrorCode, FluxErrorReporting};
 use flux_hir::{hir::Visibility, HirModule};
 use flux_parser::parse;
@@ -8,32 +10,11 @@ use flux_span::{FileId, Span, Spanned};
 use flux_syntax::{ast, ast::AstNode};
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
+use tracing_flame::FlameLayer;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, Registry};
+use tracing_tree::HierarchicalLayer;
 
-#[derive(Debug)]
-enum DriverError {
-	CouldNotOpenModule {
-		parent_dir: SmolStr,
-		module: Spanned<SmolStr>,
-	},
-}
-
-impl Error for DriverError {
-	fn to_report(&self) -> Report<Span> {
-		let report = match self {
-			DriverError::CouldNotOpenModule { parent_dir, module } => Report::build(
-				ReportKind::Error,
-				module.span.file_id.clone(),
-				module.span.range.start().into(),
-			)
-			.with_code(FluxErrorCode::CouldNotOpenModule)
-			.with_message(format!(
-				"could not open module `{}`\nno such file `{}/{}.flx` or `{}/{}/{}.flx`",
-				module.inner, parent_dir, module.inner, parent_dir, module.inner, module.inner
-			)),
-		};
-		report.finish()
-	}
-}
+mod error;
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
@@ -113,12 +94,16 @@ fn parse_file_and_submodules<'a>(
 		src.clone(),
 	);
 	let cst = parse(src.as_str(), file_id.clone());
+
+	let resolver = &cst.resolver;
+
 	cst
 		.errors
 		.iter()
 		.for_each(|err| err_reporting.report(&err.to_report()));
 	let root = ast::Root::cast(cst.syntax()).unwrap();
-	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id);
+
+	let (hir_module, errors) = flux_hir::lower(module_path.clone(), root, file_id, resolver);
 	errors
 		.iter()
 		.for_each(|err| err_reporting.report(&err.to_report()));
@@ -200,7 +185,7 @@ fn report_ambiguous_uses(uses: &[flux_hir::hir::UseDecl], err_reporting: &mut Fl
 		.for_each(|err| err_reporting.report(&err.to_report()));
 }
 
-pub fn parse_main_with_dependencies(
+fn parse_main_with_dependencies(
 	directory: &str,
 	function_exports: &mut FunctionExportTable,
 	type_exports: &mut TypeExportTable,
@@ -223,4 +208,48 @@ pub fn parse_main_with_dependencies(
 		&mut hir_modules,
 	);
 	hir_modules
+}
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = Some("The flux compiler"))]
+struct Args {
+	#[clap(long)]
+	trace_parser: bool,
+
+	#[clap(long)]
+	trace_hir: bool,
+
+	#[clap(short, long, value_parser, default_value_t = String::from("main.flx"))]
+	entry: String,
+}
+
+fn initialize_tracing() {
+	let fmt_layer = HierarchicalLayer::new(2);
+	let (flame_layer, _guard) =
+		FlameLayer::with_file("./tracing.folded").expect("could not create flame layer");
+	let subscriber = Registry::default().with(fmt_layer).with(flame_layer);
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+}
+
+pub fn main() {
+	let args = Args::parse();
+
+	let entry = Path::new(&args.entry);
+	let dir = match entry.parent() {
+		Some(parent) => parent,
+		None => todo!(),
+	};
+
+	let mut err_reporting = FluxErrorReporting { files: vec![] };
+	let mut function_exports = FunctionExportTable::default();
+	let mut type_exports = TypeExportTable::default();
+
+	initialize_tracing();
+
+	let _ = parse_main_with_dependencies(
+		dir.to_str().unwrap(),
+		&mut function_exports,
+		&mut type_exports,
+		&mut err_reporting,
+	);
 }

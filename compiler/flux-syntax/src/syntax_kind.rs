@@ -1,8 +1,7 @@
 use flux_lexer::TokenKind;
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, Copy, Clone, PartialEq, FromPrimitive, ToPrimitive, Hash, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[repr(u16)]
 pub enum SyntaxKind {
 	Root,
 	BinExpr,
@@ -173,20 +172,26 @@ impl From<TokenKind> for SyntaxKind {
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum PILanguage {}
+pub enum FluxLanguage {}
 
-impl rowan::Language for PILanguage {
+impl cstree::Language for FluxLanguage {
 	type Kind = SyntaxKind;
 
-	fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-		Self::Kind::from_u16(raw.0).unwrap()
+	fn kind_from_raw(raw: cstree::SyntaxKind) -> Self::Kind {
+		unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
 	}
 
-	fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
-		rowan::SyntaxKind(kind.to_u16().unwrap())
+	fn kind_to_raw(kind: Self::Kind) -> cstree::SyntaxKind {
+		kind.into()
 	}
 }
 
-pub type SyntaxNode = rowan::SyntaxNode<PILanguage>;
-pub type SyntaxToken = rowan::SyntaxToken<PILanguage>;
-pub type SyntaxElement = rowan::SyntaxElement<PILanguage>;
+impl From<SyntaxKind> for cstree::SyntaxKind {
+	fn from(kind: SyntaxKind) -> Self {
+		Self(kind as u16)
+	}
+}
+
+pub type SyntaxNode = cstree::SyntaxNode<FluxLanguage>;
+pub type SyntaxToken = cstree::SyntaxToken<FluxLanguage>;
+pub type SyntaxElement = cstree::SyntaxElement<FluxLanguage>;

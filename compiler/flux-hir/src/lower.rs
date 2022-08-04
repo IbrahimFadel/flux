@@ -6,6 +6,7 @@ use flux_syntax::{
 };
 use flux_typesystem::check::TypeChecker;
 use itertools::Itertools;
+use lasso::{Rodeo, Spur};
 use text_size::{TextRange, TextSize};
 
 mod decls;
@@ -22,18 +23,18 @@ pub(super) struct LoweringCtx<'a> {
 	pub errors: Vec<LowerError>,
 	pub tchecker: TypeChecker,
 	file_id: FileId,
-	pub traits: HashMap<SmolStr, &'a TraitDecl>,
-	pub type_decls: HashMap<SmolStr, Box<TypeDecl>>,
+	pub traits: HashMap<Spur, &'a TraitDecl>,
+	pub type_decls: HashMap<Spur, Box<TypeDecl>>,
 	// Type name -> (Method name -> Function Signature)
-	pub method_signatures: HashMap<String, HashMap<SmolStr, TypeId>>,
+	pub method_signatures: HashMap<String, HashMap<Spur, TypeId>>,
 }
 
 impl<'a> LoweringCtx<'a> {
-	pub fn new(file_id: FileId) -> Self {
+	pub fn new(file_id: FileId, resolver: &Rodeo) -> Self {
 		Self {
 			exprs: Arena::default(),
 			errors: vec![],
-			tchecker: TypeChecker::new(),
+			tchecker: TypeChecker::new(resolver),
 			file_id,
 			traits: HashMap::new(),
 			type_decls: HashMap::new(),
@@ -162,13 +163,13 @@ impl<'a> LoweringCtx<'a> {
 
 	fn unwrap_ident(
 		&self,
-		ident: Option<SyntaxToken>,
+		ident: Option<&SyntaxToken>,
 		range: TextRange,
 		msg: String,
-	) -> Result<Spanned<SmolStr>, LowerError> {
+	) -> Result<Spanned<Spur>, LowerError> {
 		if let Some(ident) = ident {
 			Ok(Spanned::new(
-				ident.text().into(),
+				ident.text_key(),
 				Span::new(ident.text_range(), self.file_id.clone()),
 			))
 		} else {

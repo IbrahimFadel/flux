@@ -1,11 +1,8 @@
-use std::{
-	collections::{HashMap, HashSet},
-	fmt,
-};
+use std::{collections::HashMap, fmt};
 
 use flux_span::{Span, Spanned};
 use itertools::Itertools;
-use smol_str::SmolStr;
+use lasso::{Resolver, Rodeo, Spur};
 
 use crate::{
 	check::TypeError,
@@ -21,18 +18,20 @@ pub enum InferenceError {
 }
 
 #[derive(Debug)]
-pub struct TypeEnv {
+pub struct TypeEnv<'a> {
+	pub resolver: &'a Rodeo,
 	pub trait_implementors: TraitImplementorTable,
-	pub signatures: HashMap<SmolStr, TypeId>,
-	pub enums: HashMap<SmolStr, HashMap<SmolStr, Option<TypeId>>>,
+	pub signatures: HashMap<Spur, TypeId>,
+	pub enums: HashMap<Spur, HashMap<Spur, Option<TypeId>>>,
 	pub vars: Vec<Spanned<TypeKind>>,
-	pub var_ids: HashMap<SmolStr, TypeId>,
+	pub var_ids: HashMap<Spur, TypeId>,
 	pub return_type_id: TypeId,
 }
 
-impl TypeEnv {
-	pub fn new() -> Self {
+impl<'a> TypeEnv<'a> {
+	pub fn new(resolver: &'a Rodeo) -> Self {
 		Self {
+			resolver,
 			trait_implementors: TraitImplementorTable::new(),
 			signatures: HashMap::new(),
 			enums: HashMap::new(),
@@ -89,11 +88,15 @@ impl TypeEnv {
 		)
 	}
 
-	pub fn get_path_id(&self, path: &Vec<Spanned<SmolStr>>) -> Result<TypeId, TypeError> {
-		let as_str = SmolStr::from(path.iter().map(|s| s.to_string()).join("::"));
-		match self.var_ids.get(&as_str) {
+	pub fn get_path_id(&self, path: &Vec<Spanned<Spur>>) -> Result<TypeId, TypeError> {
+		let as_str = path
+			.iter()
+			.map(|s| self.resolver.resolve(&s.inner))
+			.join("::");
+		let interned = self.resolver.get_or_intern(as_str);
+		match self.var_ids.get(&interned) {
 			Some(id) => Ok(*id),
-			None => match self.signatures.get(&as_str) {
+			None => match self.signatures.get(&interned) {
 				Some(id) => Ok(*id),
 				None => Err(TypeError::UnknownPath {
 					path: Spanned::new(as_str, Spanned::vec_span(&path).unwrap()),
@@ -103,11 +106,12 @@ impl TypeEnv {
 	}
 
 	#[inline]
-	pub fn set_path_id(&mut self, path: &[SmolStr], id: TypeId) {
-		self.var_ids.insert(SmolStr::from(path.join("::")), id);
+	pub fn set_path_id(&mut self, path: &[Spur], id: TypeId) {
+		todo!()
+		// self.var_ids.insert(SmolStr::from(path.join("::")), id);
 	}
 
-	pub fn set_trait_implementation(&mut self, type_name: (SmolStr, Vec<TypeId>), trt: SmolStr) {
+	pub fn set_trait_implementation(&mut self, type_name: (Spur, Vec<TypeId>), trt: Spur) {
 		todo!()
 		// let trts = self
 		// 	.implementations
@@ -157,94 +161,96 @@ impl TypeEnv {
 	}
 
 	pub fn fmt_ty(&self, ty: &TypeKind) -> String {
-		match ty {
-			TypeKind::Concrete(t) => self.fmt_concrete_ty(t),
-			TypeKind::Ref(id) => format!("{}", self.fmt_ty(&self.get_type(*id).inner)),
-			TypeKind::Int(id) => {
-				if let Some(id) = id {
-					format!("{}", self.fmt_ty(&self.get_type(*id).inner))
-				} else {
-					format!("Int")
-				}
-			}
-			TypeKind::Float(id) => {
-				if let Some(id) = id {
-					format!("Float({})", id)
-				} else {
-					format!("Float")
-				}
-			}
-			TypeKind::Generic((name, restrictions)) => format!(
-				"{}{}",
-				name,
-				if restrictions.len() == 0 {
-					format!("")
-				} else {
-					format!(
-						": {}",
-						restrictions
-							.iter()
-							.map(|(name, params)| format!(
-								"{}{}",
-								name,
-								if params.len() > 0 {
-									format!("<{}>", params.iter().map(|id| self.fmt_id(*id)).join(", "))
-								} else {
-									format!("")
-								}
-							))
-							.join(", ")
-					)
-				}
-			),
-			TypeKind::Unknown => format!("Unknown"),
-		}
+		todo!()
+		// match ty {
+		// 	TypeKind::Concrete(t) => self.fmt_concrete_ty(t),
+		// 	TypeKind::Ref(id) => format!("{}", self.fmt_ty(&self.get_type(*id).inner)),
+		// 	TypeKind::Int(id) => {
+		// 		if let Some(id) = id {
+		// 			format!("{}", self.fmt_ty(&self.get_type(*id).inner))
+		// 		} else {
+		// 			format!("Int")
+		// 		}
+		// 	}
+		// 	TypeKind::Float(id) => {
+		// 		if let Some(id) = id {
+		// 			format!("Float({})", id)
+		// 		} else {
+		// 			format!("Float")
+		// 		}
+		// 	}
+		// 	TypeKind::Generic((name, restrictions)) => format!(
+		// 		"{}{}",
+		// 		name,
+		// 		if restrictions.len() == 0 {
+		// 			format!("")
+		// 		} else {
+		// 			format!(
+		// 				": {}",
+		// 				restrictions
+		// 					.iter()
+		// 					.map(|(name, params)| format!(
+		// 						"{}{}",
+		// 						name,
+		// 						if params.len() > 0 {
+		// 							format!("<{}>", params.iter().map(|id| self.fmt_id(*id)).join(", "))
+		// 						} else {
+		// 							format!("")
+		// 						}
+		// 					))
+		// 					.join(", ")
+		// 			)
+		// 		}
+		// 	),
+		// 	TypeKind::Unknown => format!("Unknown"),
+		// }
 	}
 
 	pub fn fmt_concrete_ty(&self, ty: &ConcreteKind) -> String {
-		match ty {
-			ConcreteKind::SInt(n) => format!("i{}", n),
-			ConcreteKind::UInt(n) => format!("u{}", n),
-			ConcreteKind::F64 => format!("f64"),
-			ConcreteKind::F32 => format!("f32"),
-			ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty(&self.get_type(*id).inner)),
-			ConcreteKind::Ident((name, type_params)) => format!(
-				"{}{}",
-				name,
-				if type_params.len() == 0 {
-					format!("")
-				} else {
-					format!(
-						"<{}>",
-						type_params
-							.iter()
-							.map(|id| self.fmt_ty(&self.get_type(*id).inner))
-							.join(", ")
-					)
-				}
-			),
-			ConcreteKind::Tuple(types) => format!(
-				"({})",
-				types
-					.iter()
-					.map(|id| self.fmt_ty(&self.get_type(*id).inner))
-					.reduce(|s, ty| format!("{}, {}", s, ty))
-					.map_or(String::new(), |s| s)
-			),
-			ConcreteKind::Func(i, o) => format!(
-				"{} -> {}",
-				if let Some(s) = i
-					.iter()
-					.map(|ty| self.fmt_ty(&self.get_type(*ty).inner))
-					.reduce(|s, ty| format!("{}, {}", s, ty))
-				{
-					s
-				} else {
-					String::from("()")
-				},
-				self.fmt_ty(&self.get_type(*o).inner)
-			),
-		}
+		todo!()
+		// match ty {
+		// 	ConcreteKind::SInt(n) => format!("i{}", n),
+		// 	ConcreteKind::UInt(n) => format!("u{}", n),
+		// 	ConcreteKind::F64 => format!("f64"),
+		// 	ConcreteKind::F32 => format!("f32"),
+		// 	ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty(&self.get_type(*id).inner)),
+		// 	ConcreteKind::Ident((name, type_params)) => format!(
+		// 		"{}{}",
+		// 		name,
+		// 		if type_params.len() == 0 {
+		// 			format!("")
+		// 		} else {
+		// 			format!(
+		// 				"<{}>",
+		// 				type_params
+		// 					.iter()
+		// 					.map(|id| self.fmt_ty(&self.get_type(*id).inner))
+		// 					.join(", ")
+		// 			)
+		// 		}
+		// 	),
+		// 	ConcreteKind::Tuple(types) => format!(
+		// 		"({})",
+		// 		types
+		// 			.iter()
+		// 			.map(|id| self.fmt_ty(&self.get_type(*id).inner))
+		// 			.reduce(|s, ty| format!("{}, {}", s, ty))
+		// 			.map_or(String::new(), |s| s)
+		// 	),
+		// 	ConcreteKind::Func(i, o) => format!(
+		// 		"{} -> {}",
+		// 		if let Some(s) = i
+		// 			.iter()
+		// 			.map(|ty| self.fmt_ty(&self.get_type(*ty).inner))
+		// 			.reduce(|s, ty| format!("{}, {}", s, ty))
+		// 		{
+		// 			s
+		// 		} else {
+		// 			String::from("()")
+		// 		},
+		// 		self.fmt_ty(&self.get_type(*o).inner)
+		// 	),
+		// }
 	}
 
 	pub fn inner_type(&self, ty: &TypeKind) -> TypeKind {
@@ -257,16 +263,17 @@ impl TypeEnv {
 	}
 }
 
-impl fmt::Display for TypeEnv {
+impl<'a> fmt::Display for TypeEnv<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let mut s = String::new();
-		for var in &self.var_ids {
-			s += &format!("{} -> {:?}\n", var.0, var.1);
-		}
-		s += &format!("\n-------------\n");
-		// for var in &self.vars {
-		// 	s += &format!("{} -> {}\n", var.0, self.fmt_ty(&var.1.inner));
+		todo!()
+		// let mut s = String::new();
+		// for var in &self.var_ids {
+		// 	s += &format!("{} -> {:?}\n", var.0, var.1);
 		// }
-		write!(f, "{}", s)
+		// s += &format!("\n-------------\n");
+		// // for var in &self.vars {
+		// // 	s += &format!("{} -> {}\n", var.0, self.fmt_ty(&var.1.inner));
+		// // }
+		// write!(f, "{}", s)
 	}
 }

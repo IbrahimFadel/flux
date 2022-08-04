@@ -1,13 +1,16 @@
 use crate::{errors::ParseError, Parse};
 
 use super::event::Event;
+use cstree::{
+	interning::{IntoResolver, Resolver},
+	GreenNodeBuilder, Language,
+};
 use flux_lexer::{Token, TokenKind};
-use flux_syntax::syntax_kind::PILanguage;
-use rowan::{GreenNodeBuilder, Language};
+use flux_syntax::syntax_kind::FluxLanguage;
 use std::mem;
 
 pub struct Sink<'t, 'src> {
-	builder: GreenNodeBuilder<'static>,
+	builder: GreenNodeBuilder<'static, 'static>,
 	tokens: &'t [Token<'src>],
 	cursor: usize,
 	events: Vec<Event>,
@@ -25,7 +28,7 @@ impl<'t, 'src> Sink<'t, 'src> {
 		}
 	}
 
-	pub fn finish(mut self) -> Parse {
+	pub fn finish(mut self) -> Parse<impl Resolver> {
 		for idx in 0..self.events.len() {
 			match mem::replace(&mut self.events[idx], Event::Placeholder) {
 				Event::StartNode {
@@ -53,7 +56,7 @@ impl<'t, 'src> Sink<'t, 'src> {
 					}
 
 					for kind in kinds.into_iter().rev() {
-						self.builder.start_node(PILanguage::kind_to_raw(kind));
+						self.builder.start_node(FluxLanguage::kind_to_raw(kind));
 					}
 				}
 				Event::AddToken => self.token(),
@@ -65,8 +68,11 @@ impl<'t, 'src> Sink<'t, 'src> {
 			self.eat_trivia();
 		}
 
+		let (tree, cache) = self.builder.finish();
+
 		Parse {
-			green_node: self.builder.finish(),
+			green_node: tree,
+			resolver: cache.unwrap().into_interner().unwrap().into_resolver(),
 			errors: self.errors,
 		}
 	}
@@ -76,7 +82,7 @@ impl<'t, 'src> Sink<'t, 'src> {
 
 		self
 			.builder
-			.token(PILanguage::kind_to_raw(kind.into()), text);
+			.token(FluxLanguage::kind_to_raw(kind.into()), text);
 
 		self.cursor += 1;
 	}

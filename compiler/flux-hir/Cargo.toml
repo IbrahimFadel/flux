@@ -10,7 +10,8 @@ flux-syntax = { path = "../flux-syntax" }
 flux-typesystem = { path = "../flux-typesystem" }
 flux-error = { path = "../flux-error" }
 flux-span = { path = "../flux-span" }
-smol_str = "0.1.21"
+# smol_str = "0.1.21"
+lasso = "0.6.0"
 la-arena = "0.2.0"
 indexmap = "1.7.0"
 text-size = "1.0.0"

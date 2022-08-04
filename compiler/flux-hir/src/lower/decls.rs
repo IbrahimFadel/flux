@@ -154,7 +154,7 @@ impl<'a> LoweringCtx<'a> {
 	fn add_trait_implementation(
 		&mut self,
 		ty: &Type,
-		trait_name: SmolStr,
+		trait_name: Spur,
 		trait_type_params: &[TypeId],
 	) {
 		let (impltor_name, impltor_ty_params) = match ty {
@@ -172,7 +172,7 @@ impl<'a> LoweringCtx<'a> {
 	pub(crate) fn lower_apply_decl(
 		&mut self,
 		block: &Option<ast::ApplyBlock>,
-		trait_: &Option<(Spanned<SmolStr>, Vec<TypeId>)>,
+		trait_: &Option<(Spanned<Spur>, Vec<TypeId>)>,
 		ty: &Spanned<Type>,
 		generics: &Spanned<GenericList>,
 	) -> Result<ApplyDecl, LowerError> {

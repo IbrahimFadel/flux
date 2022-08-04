@@ -1,10 +1,10 @@
 use self::{sink::Sink, source::Source};
+use cstree::{interning::Resolver, GreenNode};
 use errors::ParseError;
 use flux_lexer::{Lexer, TokenKind};
 use flux_span::FileId;
 use flux_syntax::syntax_kind::SyntaxNode;
 use parser::Parser;
-use rowan::GreenNode;
 
 mod errors;
 mod event;
@@ -41,7 +41,7 @@ fn recovery<'a>(set: &'a [TokenKind]) -> Vec<TokenKind> {
 	[set, GLOBAL_RECOVERY_SET].concat()
 }
 
-pub fn parse(src: &str, file_id: FileId) -> Parse {
+pub fn parse(src: &str, file_id: FileId) -> Parse<impl Resolver> {
 	let tokens: Vec<_> = Lexer::new(src).collect();
 	let source = Source::new(&tokens, file_id);
 	let parser = Parser::new(source);
@@ -52,18 +52,19 @@ pub fn parse(src: &str, file_id: FileId) -> Parse {
 }
 
 #[derive(Debug, Clone)]
-pub struct Parse {
+pub struct Parse<I> {
 	green_node: GreenNode,
+	pub resolver: I,
 	pub errors: Vec<ParseError>,
 }
 
-impl Parse {
+impl<I> Parse<I> {
 	pub fn syntax(&self) -> SyntaxNode {
 		SyntaxNode::new_root(self.green_node.clone())
 	}
 }
 
-impl std::fmt::Display for Parse {
+impl<I> std::fmt::Display for Parse<I> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let mut s = String::new();
 		let tree = format!("{:#?}", self.syntax());

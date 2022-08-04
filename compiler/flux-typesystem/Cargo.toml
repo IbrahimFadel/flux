@@ -9,7 +9,8 @@ edition = "2021"
 flux-syntax = { path = "../flux-syntax" }
 flux-span = { path = "../flux-span" }
 flux-error = { path = "../flux-error" }
-smol_str = "0.1.21"
+# smol_str = "0.1.21"
+lasso = "0.6.0"
 ariadne = "0.1.5"
 itertools = "0.10.3"
 indexmap = "1.9.1"
