@@ -1,5 +1,0 @@
-node_modules/
-client/node_modules
-client/out/**
-*.vsix
-flux-lsp

@@ -1,9 +1,0 @@
----
-source: compiler/flux-parser/src/grammar/expr.rs
-expression: parse.to_string()
----
-ParenExpr@0..4
-  LParen@0..1 "("
-  PathExpr@1..4
-    Ident@1..4 "foo"
-UnexpectedToken { expected: [DoubleColon, Plus, Minus, Star, Slash, CmpEq, CmpNeq, CmpLt, CmpGt, CmpLte, CmpGte, Period, Eq, LParen, LBrace, LSquare, Comma, RParen], got: Spanned { inner: Error, span: Span { range: 1..4, file_id: FileId("main.flx") } } }

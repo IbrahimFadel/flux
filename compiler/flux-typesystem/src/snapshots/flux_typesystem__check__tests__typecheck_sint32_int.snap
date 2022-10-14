@@ -1,5 +1,0 @@
----
-source: compiler/flux-typesystem/src/check.rs
-expression: "check(sint!(32), int!())"
----
-i32 <-> Int ✓

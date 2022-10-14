@@ -1,23 +1,22 @@
-use flux_driver::{FunctionExportTable, TypeExportTable};
-use flux_error::FluxErrorReporting;
+use std::fs;
 
-const PROJECT_DIR: &str = "./examples";
+use flux_diagnostics::reporting::FileCache;
+use flux_hir::lower_to_hir;
+use flux_parser::parse;
+use lasso::ThreadedRodeo;
+use once_cell::sync::Lazy;
+
+static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 
 fn main() {
-	let mut err_reporting = FluxErrorReporting { files: vec![] };
-	let mut function_exports = FunctionExportTable::default();
-	let mut type_exports = TypeExportTable::default();
-
-	let _ = flux_driver::parse_main_with_dependencies(
-		PROJECT_DIR,
-		&mut function_exports,
-		&mut type_exports,
-		&mut err_reporting,
-	);
-
-	// for _ in &modules {
-	// println!("{:#?}", module);
-	// std::fs::write("ast.txt", format!("{:#?}", module)).unwrap();
-	// flux_mir::lower::lower_module(module);
-	// }
+    let path = "examples/main.flx";
+    let src = fs::read_to_string(path).unwrap();
+    let mut file_cache = FileCache::new(&INTERNER);
+    let file_id = file_cache.add_file(path, &src);
+    let result = parse(&src, file_id, &INTERNER);
+    let (root, diagnostics) = (result.syntax(), result.diagnostics);
+    file_cache.report_diagnostics(&diagnostics);
+    let (module, diagnostics) = lower_to_hir(root, file_id, &INTERNER);
+    file_cache.report_diagnostics(&diagnostics);
+    println!("{:#?}", module);
 }

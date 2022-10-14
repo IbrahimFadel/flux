@@ -1,6 +1,0 @@
----
-source: compiler/flux-parser/src/grammar/expr.rs
-expression: parse.to_string()
----
-FloatExpr@0..7
-  FloatExpr@0..7 "1.0_000"

@@ -1,0 +1,15 @@
+[package]
+name = "flux_hir"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+la-arena = "0.2.1"
+lasso = "0.6.0"
+text-size = "1.1.0"
+itertools = "0.10.5"
+tinyvec = { version = "1.6.0", features = ["alloc"] }
+flux_span = { path = "../flux_span" }
+flux_syntax = { path = "../flux_syntax" }
+flux_typesystem = { path = "../flux_typesystem" }
+flux_diagnostics = { path = "../flux_diagnostics" }

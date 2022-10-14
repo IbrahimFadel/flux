@@ -1,5 +1,0 @@
----
-source: compiler/flux-typesystem/src/check.rs
-expression: "check(int!(), int!())"
----
-Int <-> Int ✓

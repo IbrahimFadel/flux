@@ -1,0 +1,12 @@
+[package]
+name = "flux_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cstree = "0.11.1"
+lasso = "0.6.0"
+flux_span = { path = "../flux_span" }
+flux_lexer = { path = "../flux_lexer" }
+flux_syntax = { path = "../flux_syntax" }
+flux_diagnostics = { path = "../flux_diagnostics" }

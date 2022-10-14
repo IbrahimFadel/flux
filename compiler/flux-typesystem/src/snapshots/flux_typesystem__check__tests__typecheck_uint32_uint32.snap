@@ -1,5 +1,0 @@
----
-source: compiler/flux-typesystem/src/check.rs
-expression: "check(uint!(32), uint!(32))"
----
-u32 <-> u32 ✓

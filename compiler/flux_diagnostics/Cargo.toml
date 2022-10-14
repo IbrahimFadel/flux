@@ -1,0 +1,9 @@
+[package]
+name = "flux_diagnostics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ariadne = "0.1.5"
+lasso = { version = "0.6.0", features = ["multi-threaded"] }
+flux_span = { path = "../flux_span" }

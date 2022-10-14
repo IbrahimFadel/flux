@@ -1,8 +1,0 @@
----
-source: compiler/flux-parser/src/grammar/expr.rs
-expression: parse.to_string()
----
-PrefixExpr@0..12
-  Minus@0..1 "-"
-  IntExpr@1..12
-    IntExpr@1..12 "0b1_010_001"

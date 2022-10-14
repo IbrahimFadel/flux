@@ -3,14 +3,10 @@ name = "flux"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-flux-driver = { path = "../flux-driver" }
-flux-parser = { path = "../flux-parser" }
-flux-syntax = { path = "../flux-syntax" }
-flux-hir = { path = "../flux-hir" }
-flux-typesystem = { path = "../flux-typesystem" }
-flux-mir = { path = "../flux-mir" }
-flux-error = { path = "../flux-error" }
-text-size = "1.0.0"
+once_cell = "1.15.0"
+lasso = { version = "0.6.0", features = ["multi-threaded"] }
+
+flux_diagnostics = { path = "../flux_diagnostics" }
+flux_parser = { path = "../flux_parser" }
+flux_hir = { path = "../flux_hir" }

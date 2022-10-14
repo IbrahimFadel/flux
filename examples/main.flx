@@ -1,44 +1,38 @@
-type Vec struct<T> {
-	len u64,
-	capacity u64,
-	buf *T,
+/*
+struct Spanned<T>
+    where T is Clone
+{
+    inner T,
+    span Span
 }
 
-apply<T> to Vec<T> {
-	pub fn new() -> Vec<T> => {
-		let initial_capacity = 32;
-		Vec {
-			len: 0,
-			capacity: 0,
-			buf: @flux.intrinsics.malloc(initial_capacity),
-		}
-	}
-
-	fn delete() => {
-		if self.buf != @flux.intrinsics.nullptr {
-			@flux.intrinsics.free(self.buf);
-		};
-	}
-
-	fn resize(u64 value) => {
-		let output = @flux.intrinsics.malloc(value);
-		if output == @flux.intrinsics.nullptr {
-			return;
-		};
-		@flux.intrinsics.memcpy(output, self.buf, self.len);
-		@flux.intrinsics.free(self.buf);
-		self.buf = output;
-		self.capacity = value;
-	}
-
-	fn push(T value) => {
-		if self.len == self.capacity {
-			let new_capacity = self.capacity * 2;
-			self.resize(new_capacity);
-		};
-		self.buf[self.len] = value;
-		self.len = self.len + 1;
-	}
+enum Result<T, E> {
+    Ok -> T,
+    Err -> E,
+    UB,
 }
 
-// TODO: terminal statements should just be assumed to be the last one *unless* it has a semicolon. that way if statements dont need semicolons to not be considered terminals
+trait Foo<F, E>
+    where F is Clone, E is Foo
+{
+    type T;
+
+    fn to_foo();
+    fn test() T;
+    fn bar<X, Y>(x X) Y
+        where X is Clone;
+}
+
+apply<A, B> Foo<A> to Spanned<B>
+    where A is Clone, B is Food
+{
+    type T = i32;
+
+    fn to_foo() {
+    }
+}
+*/
+
+fn main(x i32) -> i32 {
+    let x = y::z;
+}
