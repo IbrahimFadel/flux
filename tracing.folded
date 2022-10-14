@@ -1,0 +1,40 @@
+ThreadId(1)-main 2874133
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36 120188
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 351843
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_generic_list:compiler/flux-hir/src/lower/types.rs:121 118143
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 118620
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 116642
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 72738
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 125940
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 118054
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36 99255
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 217536
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_generic_list:compiler/flux-hir/src/lower/types.rs:121 81413
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 109752
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 200670
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 31467
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 186252
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 29721
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 205871
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 106208
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 41733
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 78129
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 82504
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 131150
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36 98961
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 199935
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_generic_list:compiler/flux-hir/src/lower/types.rs:121 83208
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 108726
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 161140
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 90415
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 38631
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 85673
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 215677
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 42450
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 79763
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36; flux_hir::lower::decls::lower_type_decl:compiler/flux-hir/src/lower/decls.rs:344 133082
+ThreadId(1)-main; flux_hir::type decls:compiler/flux-hir/src/lib.rs:36 81604
+ThreadId(1)-main 123606
+ThreadId(1)-main; flux_hir::lower::types::lower_generic_list:compiler/flux-hir/src/lower/types.rs:121 151095
+ThreadId(1)-main 116485
+ThreadId(1)-main; flux_hir::lower::types::lower_type:compiler/flux-hir/src/lower/types.rs:9 76720
