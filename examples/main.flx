@@ -33,6 +33,14 @@ apply<A, B> Foo<A> to Spanned<B>
 }
 */
 
+fn foo() -> u60 {
+    0
+}
+
 fn main(x i32) -> i32 {
-    let x = y::z;
+    let y = 0;
+    let x = y;
+    let z = 1.0;
+    let a i32 = z;
+    let b u1 = foo();
 }

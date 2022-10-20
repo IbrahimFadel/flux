@@ -51,7 +51,30 @@ getters! {
     IntExpr {
         v -> tok(IntLit);
     }
+    FloatExpr {
+        v -> tok(FloatLit);
+    }
     PathExpr {
         segments -> toks(Ident);
+    }
+    BlockExpr {
+        stmts -> nodes(Stmt);
+    }
+    CallExpr {
+        path -> node(PathExpr);
+        args -> node(ArgList);
+    }
+    ArgList {
+        args -> nodes(Expr);
+    }
+
+    LetStmt {
+        name -> node(Name);
+        ty -> node(Type);
+        value -> node(Expr);
+    }
+    ExprStmt {
+        expr -> node(Expr);
+        semicolon -> tok(SemiColon);
     }
 }

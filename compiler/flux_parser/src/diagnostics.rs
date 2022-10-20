@@ -10,7 +10,7 @@ impl ToDiagnostic for ParserDiagnostic {
     fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
         match self {
             Self::Unxpected { expected } => Diagnostic::error(
-                expected.cloned_map(|msg| msg.span.range.start().into()),
+                expected.map_ref(|msg| msg.span.range.start().into()),
                 DiagnosticCode::ParserExpected,
                 expected.inner.inner.to_string(),
                 vec![expected.clone()],

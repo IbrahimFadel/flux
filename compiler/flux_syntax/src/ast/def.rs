@@ -11,10 +11,6 @@ basic_node!(EnumDecl);
 basic_node!(TraitDecl);
 basic_node!(ApplyDecl);
 
-basic_node!(Visibility);
-basic_node!(ParamList);
-basic_node!(Param);
-
 basic_node!(PathExpr);
 basic_node!(ParenExpr);
 basic_node!(FloatExpr);
@@ -26,6 +22,9 @@ basic_node!(BlockExpr);
 basic_node!(TupleExpr);
 basic_node!(AddressExpr);
 basic_node!(IdxExpr);
+
+basic_node!(LetStmt);
+basic_node!(ExprStmt);
 
 enum_node!(
     Expr: PathExpr,
@@ -47,8 +46,14 @@ basic_node!(TupleType);
 basic_node!(ArrayType);
 basic_node!(PtrType);
 
+enum_node!(Stmt: LetStmt, ExprStmt);
+
 basic_node!(Path);
 basic_node!(Name);
+basic_node!(ArgList);
+basic_node!(Visibility);
+basic_node!(ParamList);
+basic_node!(Param);
 
 // basic_node!(Visibility);
 // basic_node!(FnDecl);

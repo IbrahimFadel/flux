@@ -1,5 +1,5 @@
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_span::{FileId, FileSpanned, InFile};
+use flux_span::{FileId, FileSpanned, InFile, Span};
 use lasso::Spur;
 
 use crate::reporting::FileSpan;
@@ -84,17 +84,24 @@ impl Diagnostic {
         let mut builder = Report::build(self.kind.to_ariadne_report_kind(), file_id, offset)
             .with_code(self.code)
             .with_message(&self.msg);
-        // .with_label(Label::new(FileSpan(InFile::new(
-        //     Span::new((offset as u32)..(offset as u32)),
-        //     file_id,
-        // ))));
 
-        for msg in &self.labels {
+        if let Some(primary) = self.labels.get(0) {
             builder.add_label(
-                Label::new(FileSpan(msg.cloned_map(|msg| msg.span)))
+                Label::new(FileSpan(InFile::new(
+                    Span::new((offset as u32)..(offset as u32)),
+                    file_id,
+                )))
+                .with_color(Color::Red)
+                .with_message(primary.inner.inner.clone()),
+            )
+        }
+
+        if let Some(labels) = &self.labels.get(1..) {
+            builder.add_labels(labels.iter().map(|msg| {
+                Label::new(FileSpan(msg.map_ref(|msg| msg.span)))
                     .with_color(Color::Blue)
-                    .with_message(&msg.inner.inner),
-            );
+                    .with_message(&msg.inner.inner)
+            }))
         }
 
         builder.finish()
@@ -105,6 +112,10 @@ impl Diagnostic {
 pub enum DiagnosticCode {
     ParserExpected,
     HirMissing,
+    TypeMismatch,
+    UnknownLocal,
+    CouldNotParseInt,
+    UnknownFunction,
     // CouldNotInitializeCacheDir,
     // UnexpectedToken,
     // Expected,

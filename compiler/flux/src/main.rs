@@ -16,7 +16,7 @@ fn main() {
     let result = parse(&src, file_id, &INTERNER);
     let (root, diagnostics) = (result.syntax(), result.diagnostics);
     file_cache.report_diagnostics(&diagnostics);
+    println!("{}", root.debug(&*INTERNER, true));
     let (module, diagnostics) = lower_to_hir(root, file_id, &INTERNER);
     file_cache.report_diagnostics(&diagnostics);
-    println!("{:#?}", module);
 }

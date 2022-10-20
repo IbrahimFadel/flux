@@ -1,8 +1,11 @@
+mod check;
 mod constraint;
-mod infer;
+pub mod diagnostics;
+mod env;
 mod intern;
 pub mod r#type;
 
+pub use check::TChecker;
 pub use constraint::Constraint;
-pub use infer::TEnv;
+pub use env::TEnv;
 pub use r#type::{ConcreteKind, Type, TypeId, TypeKind};

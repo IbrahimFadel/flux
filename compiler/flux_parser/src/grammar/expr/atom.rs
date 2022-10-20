@@ -67,11 +67,20 @@ fn paren_or_tuple_expr(p: &mut Parser) -> CompletedMarker {
 
 pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
-    p.bump(TokenKind::LBrace);
+    /* We can enter this parser from the function declaration parser and it's not guaranteed to be at a LBrace, so do not bump.
+    Example:
+    ```flux
+    fn main() test {
+
+    }
+    ```
+    the `->` before return type was omitted, so now we are at `test`, not `->`
+    */
+    p.expect(TokenKind::LBrace);
     while p.loop_safe_not_at(TokenKind::RBrace) {
         stmt(p);
     }
-    p.bump(TokenKind::RBrace);
+    p.expect(TokenKind::RBrace);
     m.complete(p, SyntaxKind::BlockExpr)
 }
 

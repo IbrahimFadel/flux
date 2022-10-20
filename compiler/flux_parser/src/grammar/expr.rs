@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{marker::CompletedMarker, parser::Parser, token_set::TokenSet};
 
-use super::r#type::type_;
+use super::{name, r#type::type_};
 
 pub(crate) mod atom;
 
@@ -182,10 +182,10 @@ fn stmt(p: &mut Parser) {
     }
 }
 
-fn let_stmt(p: &mut Parser) {
+fn let_stmt(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
     p.bump(TokenKind::Let);
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Eq, TokenKind::SemiColon]));
     if !p.at(TokenKind::Eq) {
         type_(p);
     }
@@ -198,5 +198,5 @@ fn let_stmt(p: &mut Parser) {
         );
     }
     p.expect(TokenKind::SemiColon);
-    m.complete(p, SyntaxKind::LetStmt);
+    m.complete(p, SyntaxKind::LetStmt)
 }

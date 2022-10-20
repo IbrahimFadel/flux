@@ -31,8 +31,6 @@ pub enum SyntaxKind {
     ParamList,
     Param,
 
-    LetStmt,
-
     CastExpr,
     BinExpr,
     IntExpr,
@@ -116,6 +114,7 @@ pub enum SyntaxKind {
     As,
     Name,
     Poisoned,
+    LetStmt,
     Error,
 }
 
@@ -125,8 +124,8 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::Whitespace => SyntaxKind::Whitespace,
             TokenKind::Comment => SyntaxKind::Comment,
             TokenKind::Ident => SyntaxKind::Ident,
-            TokenKind::IntLit => SyntaxKind::IntExpr,
-            TokenKind::FloatLit => SyntaxKind::FloatExpr,
+            TokenKind::IntLit => SyntaxKind::IntLit,
+            TokenKind::FloatLit => SyntaxKind::FloatLit,
             TokenKind::Mod => SyntaxKind::Mod,
             TokenKind::Use => SyntaxKind::Use,
             TokenKind::Pub => SyntaxKind::Pub,

@@ -32,20 +32,57 @@ impl<T> Spanned<T> {
     /// `[Spanned<T>]` -> `Spanned<[T]>`
     ///
     /// Returns `None` if the iterator has no items, as there can be no span
-    pub fn span_iter<C: FromIterator<T>>(
+    pub fn spanned_iter<C: FromIterator<T>>(
         iter: impl IntoIterator<Item = Spanned<T>>,
     ) -> Option<Spanned<C>> {
-        let mut iter = iter.into_iter();
-        let first = iter.next()?;
+        let mut iter = iter.into_iter().peekable();
+        let first = iter.peek()?;
+        let start = first.span.range.start();
+        let mut end = first.span.range.end();
+        let c = C::from_iter(iter.inspect(|t| end = t.span.range.end()).map(|v| v.inner));
+        let span = Span::new(TextRange::new(start, end));
+        Some(Spanned::new(c, span))
+    }
+
+    /// Convert an iterator of spanned items into a spanned collection of unspanned items that have been mapped with the supplied closure
+    ///
+    /// `[Spanned<A>]` -> `Spanned<[B]>`
+    ///
+    /// Returns `None` if the iterator has no items, as there can be no span
+    pub fn spanned_iter_with<C, F, B>(
+        iter: impl IntoIterator<Item = Spanned<T>>,
+        f: F,
+    ) -> Option<Spanned<C>>
+    where
+        C: FromIterator<B>,
+        F: Fn(T) -> B,
+    {
+        let mut iter = iter.into_iter().peekable();
+        let first = iter.peek()?;
         let start = first.span.range.start();
         let mut end = first.span.range.end();
         let c = C::from_iter(
-            std::iter::once(first.inner)
-                .chain(iter.inspect(|t| end = t.span.range.end()).map(|v| v.inner)),
+            iter.inspect(|t| end = t.span.range.end())
+                .map(|v| f(v.inner)),
         );
         let span = Span::new(TextRange::new(start, end));
         Some(Spanned::new(c, span))
     }
+
+    // Gets the [`Span`] of an iterator of [`Spanned`] items
+    //
+    // Returns `None` if the iterator has no items, as there can be no span
+    // pub fn span_iter<C: FromIterator<T>>(
+    //     iter: impl IntoIterator<Item = Spanned<T>>,
+    // ) -> Option<Span> {
+    //     let mut iter = iter.into_iter().peekable();
+    //     let first = iter.peek()?;
+    //     let start = first.span.range.start();
+    //     let mut end = first.span.range.end();
+    //     iter.for_each(|t| end = t.span.range.end());
+    //     let span = Span::new(TextRange::new(start, end));
+    //     Some(span)
+    // }
 }
 
 impl<A> Spanned<A> {
@@ -58,6 +95,17 @@ impl<A> Spanned<A> {
         F: FnOnce(A) -> B,
     {
         Spanned::new(f(self.inner), self.span)
+    }
+
+    /// Maps the inner value of an [`Spanned`] passing the values to the closure by reference
+    ///
+    /// `Spanned<A>` -> `Spanned<B>`
+    ///
+    pub fn map_ref<F, B>(&self, f: F) -> Spanned<B>
+    where
+        F: FnOnce(&A) -> B,
+    {
+        Spanned::new(f(&self.inner), self.span)
     }
 }
 
@@ -92,19 +140,31 @@ impl<T> InFile<T> {
     {
         InFile::new(f(self.inner), self.file_id)
     }
-}
 
-impl<A: Clone> InFile<A> {
-    /// Maps the inner value of an [`InFile`] cloning the values
+    /// Maps the inner value of an [`InFile`] passing the values to the closure by reference
     ///
     /// `InFile<A>` -> `InFile<B>`
-    pub fn cloned_map<F, B>(&self, f: F) -> InFile<B>
+    pub fn map_ref<F, B>(&self, f: F) -> InFile<B>
     where
-        F: FnOnce(A) -> B,
+        F: FnOnce(&T) -> B,
     {
-        InFile::new(f(self.inner.clone()), self.file_id)
+        InFile::new(f(&self.inner), self.file_id)
     }
 }
+
+impl<T> InFile<Spanned<T>> {
+    /// Maps the inner value of an `InFile<Spanned<T>` passing the values to the closure by reference
+    ///
+    /// `InFile<Spanned<A>>` -> `InFile<Spanned<B>>`
+    pub fn map_inner_ref<F, B>(&self, f: F) -> InFile<Spanned<B>>
+    where
+        F: FnOnce(&T) -> B,
+    {
+        InFile::new(self.inner.map_ref(|v| f(v)), self.file_id)
+    }
+}
+
+impl<A: Clone> InFile<A> {}
 
 impl<T> Deref for InFile<T> {
     type Target = T;

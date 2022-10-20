@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use flux_span::Span;
 use lasso::Spur;
 use tinyvec::TinyVec;
 
@@ -10,43 +9,35 @@ use tinyvec::TinyVec;
 ///
 /// The type `Foo<i32, T, Bar>` has the constructor `Foo` and parameters `[i32, T, Bar]`
 ///
-/// Types always have a constructor, but not always parameters, as such we can store all the information in once vector rather than two to save memory.
+/// Types always have a constructor, but not always parameters, as such we can store all the information in one vector rather than two to save memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Type {
-    types: Vec<TypeKind>,
-    span: Span,
-}
+pub struct Type(Vec<TypeKind>);
 
 impl Type {
     /// Create a new [`Type`] with only a constructor
     ///
     /// Stores the constructor as the first element in the vector
-    pub fn new(constr: TypeKind, span: Span) -> Self {
-        let mut types = Vec::with_capacity(1);
-        types.push(constr);
-        Self { types, span }
+    pub fn new(constr: TypeKind) -> Self {
+        let types = vec![constr; 1];
+        Self(types)
     }
 
     /// Create a new [`Type`] with a constructor and parameters
     ///
     /// Stores the constructor as the first element in the vector, and fills the rest of the vector with the parameters
-    pub fn with_params(
-        constr: TypeKind,
-        params: impl Iterator<Item = TypeKind>,
-        span: Span,
-    ) -> Self {
+    pub fn with_params(constr: TypeKind, params: impl Iterator<Item = TypeKind>) -> Self {
         let types = std::iter::once(constr).chain(params).collect();
-        Self { types, span }
+        Self(types)
     }
 
     /// Get a [`Type`]'s type constructor (the first element in the vector)
     pub fn constr(&self) -> TypeKind {
-        self.types[0].clone()
+        self.0[0].clone()
     }
 
     /// Get a [`Type`]'s type parameters (everything following the first element in the vector)
-    pub fn params(&self) -> &[TypeKind] {
-        &self.types[1..]
+    pub fn params(&self) -> Option<&[TypeKind]> {
+        self.0.get(1..)
     }
 }
 
@@ -114,18 +105,6 @@ impl Display for TypeKind {
     }
 }
 
-// /// A `flux_typesystem` bit width
-// ///
-// /// The number of bits required to represent an integer
-// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-// #[repr(u8)]
-// pub enum BitWidth {
-//     Eight,
-//     Sixteen,
-//     ThirtyTwo,
-//     SixtyFour,
-// }
-
 /// A `flux_typesystem` concrete kind
 ///
 /// The kind of [`TypeKind::Concrete`]
@@ -135,13 +114,3 @@ pub enum ConcreteKind {
     Path(TinyVec<[Spur; 2]>),
     Tuple(TinyVec<[TypeId; 2]>),
 }
-
-// impl Display for ConcreteKind {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::F32 => write!(f, "f32"),
-//             Self::F64 => write!(f, "f32"),
-//             _ => write!(f, "{:?}", self),
-//         }
-//     }
-// }
