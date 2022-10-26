@@ -87,12 +87,9 @@ impl Diagnostic {
 
         if let Some(primary) = self.labels.get(0) {
             builder.add_label(
-                Label::new(FileSpan(InFile::new(
-                    Span::new((offset as u32)..(offset as u32)),
-                    file_id,
-                )))
-                .with_color(Color::Red)
-                .with_message(primary.inner.inner.clone()),
+                Label::new(FileSpan(InFile::new(primary.span, file_id)))
+                    .with_color(Color::Red)
+                    .with_message(primary.inner.inner.clone()),
             )
         }
 
@@ -116,6 +113,7 @@ pub enum DiagnosticCode {
     UnknownLocal,
     CouldNotParseInt,
     UnknownFunction,
+    IncorrectNumberOfArgsInCall,
     // CouldNotInitializeCacheDir,
     // UnexpectedToken,
     // Expected,

@@ -53,6 +53,7 @@ pub enum SyntaxKind {
     TupleType,
     PathType,
     StructDecl,
+    StructDeclFieldList,
     StructDeclField,
     EnumDecl,
     EnumDeclVariant,

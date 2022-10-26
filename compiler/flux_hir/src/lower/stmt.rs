@@ -1,4 +1,4 @@
-use crate::hir::{LetStmt, Stmt};
+use crate::hir::{GenericParamList, LetStmt, Stmt};
 
 use super::*;
 
@@ -7,14 +7,22 @@ use super::*;
 type StmtResult = (Stmt, bool, TypeId);
 
 impl LoweringCtx {
-    pub(crate) fn lower_stmt(&mut self, stmt: ast::Stmt) -> StmtResult {
+    pub(crate) fn lower_stmt(
+        &mut self,
+        stmt: ast::Stmt,
+        generic_param_list: &GenericParamList,
+    ) -> StmtResult {
         match stmt {
-            ast::Stmt::LetStmt(let_stmt) => self.lower_let_stmt(let_stmt),
-            ast::Stmt::ExprStmt(expr) => self.lower_expr_stmt(expr),
+            ast::Stmt::LetStmt(let_stmt) => self.lower_let_stmt(let_stmt, generic_param_list),
+            ast::Stmt::ExprStmt(expr) => self.lower_expr_stmt(expr, generic_param_list),
         }
     }
 
-    fn lower_let_stmt(&mut self, let_stmt: ast::LetStmt) -> StmtResult {
+    fn lower_let_stmt(
+        &mut self,
+        let_stmt: ast::LetStmt,
+        generic_param_list: &GenericParamList,
+    ) -> StmtResult {
         let name = self.lower_node(
             let_stmt.name(),
             |this, _| {
@@ -27,7 +35,7 @@ impl LoweringCtx {
         );
 
         let ty = if let Some(ty) = let_stmt.ty() {
-            let ty = self.lower_type(ty);
+            let ty = self.lower_type(ty, generic_param_list);
             self.tchk.tenv.insert(self.file_spanned(self.to_ts_ty(&ty)))
         } else {
             self.tchk.tenv.insert(self.file_spanned(Spanned::new(
@@ -48,7 +56,7 @@ impl LoweringCtx {
                     ))),
                 )
             },
-            |this, expr| this.lower_expr(expr),
+            |this, expr| this.lower_expr(expr, generic_param_list),
         );
 
         let result = self
@@ -61,7 +69,11 @@ impl LoweringCtx {
         (Stmt::LetStmt(LetStmt { name, ty, value }), true, ty)
     }
 
-    fn lower_expr_stmt(&mut self, expr: ast::ExprStmt) -> StmtResult {
+    fn lower_expr_stmt(
+        &mut self,
+        expr: ast::ExprStmt,
+        generic_param_list: &GenericParamList,
+    ) -> StmtResult {
         let (idx, ty_id) = self.lower_node(
             expr.expr(),
             |this, _| {
@@ -72,7 +84,7 @@ impl LoweringCtx {
                 let idx = this.exprs.alloc(expr);
                 (idx, ty_id)
             },
-            |this, expr| this.lower_expr(expr),
+            |this, expr| this.lower_expr(expr, generic_param_list),
         );
         let has_semicolon = expr.semicolon().is_some();
         (Stmt::ExprStmt(idx), has_semicolon, ty_id)

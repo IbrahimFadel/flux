@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{borrow::Borrow, hash::Hash, ops::Deref};
 
 use lasso::Spur;
 use text_size::TextRange;
@@ -14,12 +14,59 @@ impl Span {
         let range: TextRange = TextRange::new(start.into(), end.into());
         Self { range }
     }
+
+    /// Convert an iterator of spanned items into a span of all the items
+    ///
+    /// `[Spanned<T>]` -> `Span`
+    ///
+    /// Returns `None` if the iterator has no items, as there can be no span
+    pub fn span_iter_of_span(iter: impl IntoIterator<Item = Span>) -> Option<Span> {
+        let mut iter = iter.into_iter().peekable();
+        let first = iter.peek()?;
+        let start = first.range.start();
+        let mut end = first.range.end();
+        iter.for_each(|t| end = t.range.end());
+        let span = Span::new(TextRange::new(start, end));
+        Some(span)
+    }
+
+    /// Convert an iterator of spanned items into a span of all the items
+    ///
+    /// `[Spanned<T>]` -> `Span`
+    ///
+    /// Returns `None` if the iterator has no items, as there can be no span
+    pub fn span_iter_of_spanned<T, B>(iter: impl IntoIterator<Item = B>) -> Option<Span>
+    where
+        B: Borrow<Spanned<T>>,
+    {
+        let mut iter = iter.into_iter().peekable();
+        let first = iter.peek()?;
+        let start = first.borrow().span.range.start();
+        let mut end = first.borrow().span.range.end();
+        iter.for_each(|t| end = t.borrow().span.range.end());
+        let span = Span::new(TextRange::new(start, end));
+        Some(span)
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Spanned<T> {
     pub inner: T,
     pub span: Span,
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner)
+    }
+}
+
+impl<T: PartialEq> Eq for Spanned<T> {}
+
+impl<T: Hash> Hash for Spanned<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state)
+    }
 }
 
 impl<T> Spanned<T> {

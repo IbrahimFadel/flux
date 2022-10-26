@@ -23,6 +23,12 @@ pub(super) fn struct_decl(p: &mut Parser, visibility: CompletedMarker) {
     if !p.eat(TokenKind::LBrace) {
         p.error("`{` in struct declaration");
     }
+    struct_decl_field_list(p);
+    m.complete(p, SyntaxKind::StructDecl);
+}
+
+fn struct_decl_field_list(p: &mut Parser) {
+    let m = p.start();
     while p.loop_safe_not_at(TokenKind::RBrace) {
         struct_decl_field(p);
         if !p.eat(TokenKind::Comma) {
@@ -30,12 +36,12 @@ pub(super) fn struct_decl(p: &mut Parser, visibility: CompletedMarker) {
         }
     }
     p.expect(TokenKind::RBrace);
-    m.complete(p, SyntaxKind::StructDecl);
+    m.complete(p, SyntaxKind::StructDeclFieldList);
 }
 
 fn struct_decl_field(p: &mut Parser) {
     let m = p.start();
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Colon]));
     type_(p);
     m.complete(p, SyntaxKind::StructDeclField);
 }

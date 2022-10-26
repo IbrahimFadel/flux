@@ -4,17 +4,18 @@ use flux_syntax::ast;
 use flux_syntax::{ast::AstNode, SyntaxToken};
 use flux_typesystem as ts;
 use la_arena::Arena;
-use lasso::{Spur, ThreadedRodeo};
+use lasso::ThreadedRodeo;
 use text_size::TextRange;
-use tinyvec::TinyVec;
 use ts::{ConcreteKind, TChecker, TypeId, TypeKind};
 
-use crate::hir::{Path, Type};
+use crate::hir::{Name, Path, Type};
 use crate::{diagnostics::LoweringDiagnostic, hir::Expr};
 
 mod expr;
 pub(crate) mod fn_decl;
+mod generic;
 mod stmt;
+mod struct_decl;
 mod r#type;
 
 static POISONED_STRING_VALUE: &str = "poisoned";
@@ -68,12 +69,12 @@ impl LoweringCtx {
         }
     }
 
-    fn unwrap_token(
+    fn unwrap_token<S: ToString>(
         &mut self,
         tok: Option<&SyntaxToken>,
-        msg: String,
+        msg: S,
         range: TextRange,
-    ) -> Spanned<Spur> {
+    ) -> Name {
         match tok {
             Some(tok) => Spanned::new(tok.text_key(), Span::new(tok.text_range())),
             None => {
@@ -81,7 +82,7 @@ impl LoweringCtx {
                     LoweringDiagnostic::Missing {
                         msg: FileSpanned::new(
                             Spanned {
-                                inner: msg,
+                                inner: msg.to_string(),
                                 span: Span::new(range),
                             },
                             self.file_id,
@@ -112,7 +113,7 @@ impl LoweringCtx {
         }
     }
 
-    fn file_spanned<T>(&self, spanned: Spanned<T>) -> FileSpanned<T> {
+    pub(crate) fn file_spanned<T>(&self, spanned: Spanned<T>) -> FileSpanned<T> {
         FileSpanned::new(spanned, self.file_id)
     }
 
@@ -160,8 +161,11 @@ impl LoweringCtx {
     pub(crate) fn to_ts_ty(&self, ty: &Spanned<Type>) -> Spanned<ts::Type> {
         ty.map_ref(|ty| {
             ts::Type::new(match ty {
-                Type::Path(path) => TypeKind::Concrete(ConcreteKind::Path(path.get_spurs())),
+                Type::Path(path) => {
+                    TypeKind::Concrete(ConcreteKind::Path(path.get_unspanned_spurs()))
+                }
                 Type::Tuple(ids) => TypeKind::Concrete(ConcreteKind::Tuple(ids.clone())),
+                Type::Generic => TypeKind::Generic,
                 Type::Error => TypeKind::Unknown,
             })
         })

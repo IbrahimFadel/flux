@@ -1,0 +1,88 @@
+use tinyvec::tiny_vec;
+
+use crate::hir::{GenericParamList, StructDecl, StructField, StructFieldList, WhereClause};
+
+use super::*;
+
+impl LoweringCtx {
+    pub(crate) fn lower_struct_decl(&mut self, struct_decl: ast::StructDecl) -> StructDecl {
+        let name = self.lower_node(
+            struct_decl.name(),
+            |this, _| {
+                Spanned::new(
+                    this.interner.get_or_intern_static(POISONED_STRING_VALUE),
+                    this.span_node(&struct_decl),
+                )
+            },
+            |this, name| {
+                Spanned::new(
+                    name.ident().unwrap().text_key(),
+                    this.span_node(&struct_decl),
+                )
+            },
+        );
+
+        let generic_param_list = struct_decl
+            .generic_param_list()
+            .map_or(GenericParamList::empty(), |generic_param_list| {
+                self.lower_generic_param_list(generic_param_list)
+            });
+
+        let where_clause = struct_decl
+            .where_clause()
+            .map_or(WhereClause::EMPTY, |where_clause| {
+                self.lower_where_clause(where_clause, &generic_param_list)
+            });
+
+        let field_list = self.lower_node(
+            struct_decl.field_list(),
+            |_, _| StructFieldList::empty(),
+            |this, struct_field_list| {
+                this.lower_struct_field_list(struct_field_list, &generic_param_list)
+            },
+        );
+
+        StructDecl::new(name, generic_param_list, where_clause, field_list)
+    }
+
+    fn lower_struct_field_list(
+        &mut self,
+        struct_field_list: ast::StructDeclFieldList,
+        generic_param_list: &GenericParamList,
+    ) -> StructFieldList {
+        StructFieldList::new(
+            struct_field_list
+                .fields()
+                .map(|field| self.lower_struct_field(field, generic_param_list))
+                .collect(),
+        )
+    }
+
+    fn lower_struct_field(
+        &mut self,
+        struct_field: ast::StructDeclField,
+        generic_param_list: &GenericParamList,
+    ) -> StructField {
+        let name = self.lower_node(
+            struct_field.name(),
+            |this, _| {
+                Spanned::new(
+                    this.interner.get_or_intern_static(POISONED_STRING_VALUE),
+                    this.span_node(&struct_field),
+                )
+            },
+            |this, name| {
+                Spanned::new(
+                    name.ident().unwrap().text_key(),
+                    this.span_node(&struct_field),
+                )
+            },
+        );
+        let ty = if let Some(ty) = struct_field.ty() {
+            self.lower_type(ty, &generic_param_list)
+        } else {
+            Spanned::new(Type::Tuple(tiny_vec!()), name.span)
+        };
+        StructField::new(name, ty)
+    }
+}

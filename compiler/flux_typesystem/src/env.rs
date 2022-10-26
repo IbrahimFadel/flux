@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, convert::identity, fmt::Display};
+use std::{collections::VecDeque, fmt::Display};
 
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
@@ -32,6 +32,9 @@ impl Scope {
     }
 }
 
+type FunctionSignature = (FileSpanned<Vec<TypeId>>, FileSpanned<TypeId>);
+type FunctionSignatureMap = HashMap<Vec<Spur>, FunctionSignature>;
+
 #[derive(Debug)]
 pub struct TEnv {
     type_interner: Interner,
@@ -39,7 +42,9 @@ pub struct TEnv {
     entries: Vec<FileSpanned<TEntry>>,
     scopes: Vec<Scope>,
     constraints: VecDeque<Constraint>,
-    function_signatures: HashMap<TinyVec<[Spur; 2]>, (TinyVec<[TypeId; 2]>, TypeId)>,
+    function_signatures: FunctionSignatureMap,
+    pub(super) int_paths: HashSet<Spur>,
+    pub(super) float_paths: HashSet<Spur>,
 }
 
 /// A `flux_typesystem` type entry
@@ -72,12 +77,26 @@ impl TEnv {
     /// Construct a new `flux_typesystem` [`TEnv`]
     pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
         Self {
-            type_interner: Interner::with_preinterned(string_interner),
+            type_interner: Interner::new(string_interner),
             string_interner,
             entries: vec![],
             scopes: vec![Scope::new()],
             constraints: VecDeque::new(),
             function_signatures: HashMap::new(),
+            int_paths: HashSet::from([
+                string_interner.get_or_intern_static("u8"),
+                string_interner.get_or_intern_static("u16"),
+                string_interner.get_or_intern_static("u32"),
+                string_interner.get_or_intern_static("u64"),
+                string_interner.get_or_intern_static("i8"),
+                string_interner.get_or_intern_static("i16"),
+                string_interner.get_or_intern_static("i32"),
+                string_interner.get_or_intern_static("i64"),
+            ]),
+            float_paths: HashSet::from([
+                string_interner.get_or_intern_static("f32"),
+                string_interner.get_or_intern_static("f64"),
+            ]),
         }
     }
 
@@ -105,7 +124,8 @@ impl TEnv {
     /// is considered an ICE.
     pub fn get_typekind_with_id(&self, id: TypeId) -> FileSpanned<TypeKind> {
         let entry = self.get_entry(id);
-        entry.map_ref(|entry| entry.map_ref(|entry| self.type_interner.resolve(entry.key).clone()))
+        entry.map_inner_ref(|entry| self.type_interner.resolve(entry.key).clone())
+        // entry.map_ref(|entry| entry.map_ref(|entry| self.type_interner.resolve(entry.key).clone()))
     }
 
     /// Get the `InFile<Span>` of a [`Type`] given its [`TypeId`]
@@ -147,8 +167,7 @@ impl TEnv {
     pub fn insert(&mut self, ty: FileSpanned<Type>) -> TypeId {
         let key = self.type_interner.intern(ty.constr());
         let idx = self.entries.len();
-        self.entries
-            .push(ty.map_ref(|ty| ty.map_ref(|_| TEntry::new(key))));
+        self.entries.push(ty.map_inner_ref(|_| TEntry::new(key)));
         TypeId::new(idx)
     }
 
@@ -181,18 +200,14 @@ impl TEnv {
         scope.insert_local(name, id);
     }
 
-    pub fn insert_function_signature(
-        &mut self,
-        path: TinyVec<[Spur; 2]>,
-        signature: (TinyVec<[TypeId; 2]>, TypeId),
-    ) {
+    pub fn insert_function_signature(&mut self, path: Vec<Spur>, signature: FunctionSignature) {
         self.function_signatures.insert(path, signature);
     }
 
     pub fn get_function_signature(
         &mut self,
-        path: &FileSpanned<TinyVec<[Spur; 2]>>,
-    ) -> Result<(TinyVec<[TypeId; 2]>, TypeId), Diagnostic> {
+        path: &FileSpanned<Vec<Spur>>,
+    ) -> Result<FunctionSignature, Diagnostic> {
         self.function_signatures
             .get(&path.inner.inner)
             .map_or_else(
@@ -298,11 +313,13 @@ impl Display for TEnv {
                 .enumerate()
                 .format_with("\n  ", |(idx, entry), f| {
                     f(&format_args!(
-                        "{}{} {} {}",
+                        "{}{} {} Key({}) {} {} ",
                         "'".blue(),
                         idx.blue(),
                         "->".purple(),
-                        self.fmt_tentry(entry)
+                        entry.key,
+                        "->".purple(),
+                        self.fmt_tentry(entry),
                     ))
                 }),
             self.scopes
@@ -420,13 +437,13 @@ mod tests {
         let fmt = tenv.fmt_ty_id(id);
         assert_eq!(fmt, "()");
         let a = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Path(tiny_vec!(STRING_INTERNER.get_or_intern("test"))),
+            ConcreteKind::Path(vec![STRING_INTERNER.get_or_intern("test")]),
         ))));
         let b = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Path(tiny_vec!(
+            ConcreteKind::Path(vec![
                 STRING_INTERNER.get_or_intern("test"),
-                STRING_INTERNER.get_or_intern("foo")
-            )),
+                STRING_INTERNER.get_or_intern("foo"),
+            ]),
         ))));
         let c = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
             ConcreteKind::Ptr(a),

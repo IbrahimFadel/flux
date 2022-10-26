@@ -4,15 +4,12 @@ use hashbrown::{hash_map::Entry, HashMap};
 use itertools::Itertools;
 use lasso::ThreadedRodeo;
 use owo_colors::OwoColorize;
-use tinyvec::tiny_vec;
 
 use crate::{ConcreteKind, TypeId, TypeKind};
 
 macro_rules! path_kind {
     ($interner:expr, $path:expr) => {
-        TypeKind::Concrete(ConcreteKind::Path(
-            tiny_vec!($interner.get_or_intern($path)),
-        ))
+        TypeKind::Concrete(ConcreteKind::Path(vec![$interner.get_or_intern($path)]))
     };
 }
 
@@ -29,21 +26,21 @@ impl Key {
     }
 }
 
+impl Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Interner {
     ty_to_key: HashMap<TypeKind, Key>,
     key_to_ty: HashMap<Key, TypeKind>,
+    string_interner: &'static ThreadedRodeo,
 }
 
 impl Interner {
-    pub fn new() -> Self {
-        Self {
-            ty_to_key: HashMap::new(),
-            key_to_ty: HashMap::new(),
-        }
-    }
-
-    pub fn with_preinterned(string_interner: &'static ThreadedRodeo) -> Self {
+    pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
         Self {
             ty_to_key: HashMap::from([
                 (path_kind!(string_interner, "u8"), Key::new(0)),
@@ -69,6 +66,7 @@ impl Interner {
                 (Key::new(8), path_kind!(string_interner, "f32")),
                 (Key::new(9), path_kind!(string_interner, "f64")),
             ]),
+            string_interner,
         }
     }
 
@@ -102,11 +100,9 @@ impl Interner {
     // }
 
     pub fn resolve(&self, key: Key) -> &TypeKind {
-        unsafe {
-            assert!((key.0 as usize) < self.ty_to_key.len());
-            assert!((key.0 as usize) < self.key_to_ty.len());
-            self.key_to_ty.get(&key).unwrap()
-        }
+        assert!((key.0 as usize) < self.ty_to_key.len());
+        assert!((key.0 as usize) < self.key_to_ty.len());
+        self.key_to_ty.get(&key).unwrap()
     }
 }
 
@@ -120,9 +116,22 @@ impl Display for Interner {
                 .iter()
                 .enumerate()
                 .format_with("\n  ", |(idx, (_, ty)), f| f(&format_args!(
-                    "{} {} {ty}",
+                    "{} {} {}{}",
                     idx.blue(),
-                    "->".purple()
+                    "->".purple(),
+                    ty,
+                    match ty {
+                        TypeKind::Concrete(ConcreteKind::Path(path)) => {
+                            format!(
+                                " {} {}",
+                                "->".purple(),
+                                path.iter()
+                                    .map(|spur| self.string_interner.resolve(spur))
+                                    .join("::")
+                            )
+                        }
+                        _ => String::new(),
+                    }
                 )))
         )
     }
@@ -142,7 +151,7 @@ mod tests {
 
     #[test]
     fn same_key_for_same_type() {
-        let mut interner = Interner::new();
+        let mut interner = Interner::new(&INTERNER);
         let k0 = interner.intern(path_kind!(&INTERNER, "i8"));
         let k1 = interner.intern(path_kind!(&INTERNER, "i8"));
         assert_eq!(k0, k1);
@@ -150,7 +159,7 @@ mod tests {
 
     #[test]
     fn diff_keys_for_diff_types() {
-        let mut interner = Interner::new();
+        let mut interner = Interner::new(&INTERNER);
         let k0 = interner.intern(path_kind!(&INTERNER, "i8"));
         let k1 = interner.intern(path_kind!(&INTERNER, "i16"));
         assert_ne!(k0, k1);
@@ -158,7 +167,7 @@ mod tests {
 
     #[test]
     fn preinterned() {
-        let mut interner = Interner::with_preinterned(&INTERNER);
+        let mut interner = Interner::new(&INTERNER);
         let pre_intern_size_a = interner.ty_to_key.len();
         let pre_intern_size_b = interner.key_to_ty.len();
         assert_eq!(pre_intern_size_a, pre_intern_size_b);

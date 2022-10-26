@@ -111,6 +111,6 @@ impl Display for TypeKind {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConcreteKind {
     Ptr(TypeId),
-    Path(TinyVec<[Spur; 2]>),
+    Path(Vec<Spur>),
     Tuple(TinyVec<[TypeId; 2]>),
 }

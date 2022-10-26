@@ -7,6 +7,8 @@ basic_node!(Poisoned);
 
 basic_node!(FnDecl);
 basic_node!(StructDecl);
+basic_node!(StructDeclFieldList);
+basic_node!(StructDeclField);
 basic_node!(EnumDecl);
 basic_node!(TraitDecl);
 basic_node!(ApplyDecl);
@@ -54,6 +56,13 @@ basic_node!(ArgList);
 basic_node!(Visibility);
 basic_node!(ParamList);
 basic_node!(Param);
+basic_node!(GenericParamList);
+basic_node!(TypeParam);
+basic_node!(WhereClause);
+basic_node!(WherePredicate);
+basic_node!(TypeBoundList);
+basic_node!(TypeBound);
+basic_node!(GenericArgList);
 
 // basic_node!(Visibility);
 // basic_node!(FnDecl);

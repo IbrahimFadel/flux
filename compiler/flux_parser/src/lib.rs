@@ -3,7 +3,7 @@ use flux_diagnostics::Diagnostic;
 use flux_lexer::Lexer;
 use flux_span::FileId;
 use flux_syntax::SyntaxNode;
-use lasso::{Resolver, ThreadedRodeo};
+use lasso::ThreadedRodeo;
 use parser::Parser;
 use sink::Sink;
 use source::Source;

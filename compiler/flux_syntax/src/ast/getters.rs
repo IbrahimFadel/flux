@@ -16,6 +16,8 @@ getters! {
     FnDecl {
         fn_kw -> tok(Fn);
         name -> node(Name);
+        generic_param_list -> node(GenericParamList);
+        where_clause -> node(WhereClause);
         visibility -> node(Visibility);
         param_list -> node(ParamList);
         return_type -> node(Type);
@@ -63,6 +65,8 @@ getters! {
     CallExpr {
         path -> node(PathExpr);
         args -> node(ArgList);
+        lparen -> tok(LParen);
+        rparen -> tok(RParen);
     }
     ArgList {
         args -> nodes(Expr);
@@ -76,5 +80,41 @@ getters! {
     ExprStmt {
         expr -> node(Expr);
         semicolon -> tok(SemiColon);
+    }
+    StructDecl {
+        name -> node(Name);
+        generic_param_list -> node(GenericParamList);
+        where_clause -> node(WhereClause);
+        field_list -> node(StructDeclFieldList);
+    }
+    StructDeclFieldList {
+        fields -> nodes(StructDeclField);
+    }
+    StructDeclField {
+        name -> node(Name);
+        ty -> node(Type);
+    }
+    GenericParamList {
+        type_params -> nodes(TypeParam);
+    }
+    TypeParam {
+        name -> tok(Ident);
+    }
+    WhereClause {
+        predicates -> nodes(WherePredicate);
+    }
+    WherePredicate {
+        name -> tok(Ident);
+        type_bound_list -> node(TypeBoundList);
+    }
+    TypeBoundList {
+        type_bounds -> nodes(TypeBound);
+    }
+    TypeBound {
+        trait_name -> tok(Ident);
+        generic_arg_list -> node(GenericArgList);
+    }
+    GenericArgList {
+        args -> nodes(Type);
     }
 }
