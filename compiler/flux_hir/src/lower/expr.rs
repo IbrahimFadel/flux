@@ -1,6 +1,9 @@
-use tinyvec::tiny_vec;
+use lasso::Spur;
+use ts::r#type::StructConcreteKind;
 
-use crate::hir::{Block, Call, ExprIdx, Float, GenericParamList, Int};
+use crate::hir::{
+    Block, Call, ExprIdx, Float, GenericParamList, Int, Struct, StructExprFieldAssignment,
+};
 
 use super::*;
 
@@ -18,6 +21,7 @@ impl LoweringCtx {
             ast::Expr::IntExpr(int) => self.lower_int_expr(int),
             ast::Expr::FloatExpr(float) => self.lower_float_expr(float),
             ast::Expr::PathExpr(path) => self.lower_path_expr(path),
+            ast::Expr::StructExpr(strukt) => self.lower_struct_expr(strukt, generic_param_list),
             _ => todo!("{:#?}", expr),
         }
     }
@@ -249,5 +253,154 @@ impl LoweringCtx {
         let expr = Spanned::new(Expr::Path(hir_path), self.span_node(&path));
         let expr_id = self.exprs.alloc(expr);
         (expr_id, ty_id)
+    }
+
+    fn lower_struct_expr(
+        &mut self,
+        strukt: ast::StructExpr,
+        generic_param_list: &GenericParamList,
+    ) -> ExprResult {
+        let (path, generic_arg_list) = self.lower_node(
+            strukt.path(),
+            |_, _| (Path::poisoned(Span::new(strukt.range())), None),
+            |this, path| (this.lower_path(path.segments()), path.generic_arg_list()),
+        );
+        let args =
+            generic_arg_list.map_or(Spanned::new(vec![], self.span_node(&strukt)), |arg_list| {
+                Spanned::new(
+                    arg_list
+                        .args()
+                        .map(|arg| self.lower_type(arg, generic_param_list))
+                        .collect(),
+                    Span::new(arg_list.range()),
+                )
+            });
+        let struct_span = self.span_node(&strukt);
+
+        let struct_field_types_result =
+            self.tchk
+                .tenv
+                .get_struct_field_types(self.file_spanned(Spanned::new(
+                    path.iter().map(|spur| spur.inner),
+                    struct_span,
+                )));
+        let (struct_concrete_kind, struct_decl_span) = self.maybe_emit_diagnostic_with(
+            struct_field_types_result,
+            |this| (StructConcreteKind::EMPTY, this.file_span(struct_span)),
+            |_, strukt| strukt,
+        );
+
+        let type_name = FileSpanned::new(
+            Spanned::new(path.to_string(self.interner), struct_decl_span.inner),
+            struct_decl_span.file_id,
+        );
+
+        let decl_generic_params_span = struct_concrete_kind
+            .generic_params
+            .iter()
+            .map(|id| self.tchk.tenv.get_type_filespan(*id).inner);
+        let decl_generic_params_span =
+            Span::span_iter_of_span(decl_generic_params_span).unwrap_or(type_name.span);
+        let decl_generic_params_len = struct_concrete_kind.generic_params.len();
+        let generic_args_len = args.len();
+        if decl_generic_params_len != generic_args_len {
+            // People can have 0 args if they want to rely on type inference
+            if !(decl_generic_params_len > 0 && generic_args_len == 0) {
+                self.emit_diagnostic(
+                    LoweringDiagnostic::IncorrectNumberOfTypeArgs {
+                        type_decl: type_name.clone(),
+                        num_params: FileSpanned::new(
+                            Spanned::new(decl_generic_params_len, decl_generic_params_span),
+                            struct_decl_span.file_id,
+                        ),
+                        num_args: self.file_spanned(Spanned::new(generic_args_len, args.span)),
+                    }
+                    .to_diagnostic(),
+                )
+            }
+        }
+
+        let fields = self.lower_node(
+            strukt.field_list(),
+            |_, _| vec![],
+            |this, fields| {
+                this.lower_struct_expr_field_list(
+                    fields,
+                    generic_param_list,
+                    struct_concrete_kind.fields.iter(),
+                    type_name,
+                )
+            },
+        );
+
+        let ty = ts::Type::with_params(
+            TypeKind::Concrete(ConcreteKind::Path(path.get_unspanned_spurs())),
+            args.iter().map(|arg| self.to_ts_tykind(*arg).inner),
+        );
+        let ty_id = self
+            .tchk
+            .tenv
+            .insert(self.file_spanned(Spanned::new(ty, struct_span)));
+
+        let strukt = Struct::new(path, args.inner, fields);
+        let expr = Spanned::new(Expr::Struct(strukt), struct_span);
+        let expr_id = self.exprs.alloc(expr);
+
+        (expr_id, ty_id)
+    }
+
+    fn lower_struct_expr_field_list<'a>(
+        &mut self,
+        field_list: ast::StructExprFieldList,
+        generic_param_list: &GenericParamList,
+        mut struct_field_types: impl Iterator<Item = &'a (Spur, TypeId)>,
+        struct_decl: FileSpanned<String>,
+    ) -> Vec<StructExprFieldAssignment> {
+        field_list
+            .fields()
+            .map(|field| {
+                let name = self.unwrap_token(
+                    field.name(),
+                    "expected name in struct expression field assignment",
+                    field.range(),
+                );
+                let (val, val_id) = self.lower_node(
+                    field.val(),
+                    |this, _| {
+                        let field_span = this.span_node(&field);
+                        (
+                            this.exprs.alloc(Spanned::new(Expr::Error, field_span)),
+                            this.tchk.tenv.insert(this.file_spanned(Spanned::new(
+                                ts::Type::new(TypeKind::Unknown),
+                                field_span,
+                            ))),
+                        )
+                    },
+                    |this, expr| this.lower_expr(expr, generic_param_list),
+                );
+
+                let expected_field_ty =
+                    struct_field_types.find(|(field_name, _)| *field_name == name.inner);
+                match expected_field_ty {
+                    Some((_, expected_field_ty)) => {
+                        let unification_result =
+                            self.tchk
+                                .unify(*expected_field_ty, val_id, self.file_span(name.span));
+                        self.maybe_emit_diagnostic(unification_result);
+                    }
+                    None => self.emit_diagnostic(
+                        LoweringDiagnostic::UnknownFieldInStructExpr {
+                            unknown_field: self.file_spanned(
+                                name.map_ref(|spur| self.interner.resolve(spur).to_string()),
+                            ),
+                            struct_definition: struct_decl.clone(),
+                        }
+                        .to_diagnostic(),
+                    ),
+                };
+
+                StructExprFieldAssignment::new(name, val)
+            })
+            .collect()
     }
 }

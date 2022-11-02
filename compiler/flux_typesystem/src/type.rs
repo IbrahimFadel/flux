@@ -113,4 +113,27 @@ pub enum ConcreteKind {
     Ptr(TypeId),
     Path(Vec<Spur>),
     Tuple(TinyVec<[TypeId; 2]>),
+    /// A vec of all the fields and their types
+    /// We hold on to the field names because its necessary for checking if the field names are correct in struct initialization expressions
+    Struct(StructConcreteKind),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructConcreteKind {
+    pub generic_params: Vec<TypeId>,
+    pub fields: Vec<(Spur, TypeId)>,
+}
+
+impl StructConcreteKind {
+    pub const EMPTY: Self = Self {
+        generic_params: vec![],
+        fields: vec![],
+    };
+
+    pub fn new(generic_params: Vec<TypeId>, fields: Vec<(Spur, TypeId)>) -> Self {
+        Self {
+            generic_params,
+            fields,
+        }
+    }
 }

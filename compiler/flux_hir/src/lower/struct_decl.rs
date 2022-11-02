@@ -1,4 +1,5 @@
 use tinyvec::tiny_vec;
+use ts::r#type::StructConcreteKind;
 
 use crate::hir::{GenericParamList, StructDecl, StructField, StructFieldList, WhereClause};
 
@@ -42,6 +43,37 @@ impl LoweringCtx {
             },
         );
 
+        let field_types = field_list
+            .iter()
+            .map(|field| {
+                let name = field.name.inner;
+                let ty = self
+                    .tchk
+                    .tenv
+                    .insert(self.file_spanned(self.to_ts_ty(field.ty)));
+                (name, ty)
+            })
+            .collect();
+        let struct_ty_kind =
+            TypeKind::Concrete(ConcreteKind::Struct(StructConcreteKind::new(
+                generic_param_list
+                    .iter()
+                    .map(|name| {
+                        self.tchk.tenv.insert(self.file_spanned(Spanned::new(
+                            ts::Type::new(TypeKind::Generic),
+                            name.span,
+                        )))
+                    })
+                    .collect(),
+                field_types,
+            )));
+        let struct_ty_id = self.tchk.tenv.insert(self.file_spanned(Spanned::new(
+            ts::Type::new(struct_ty_kind),
+            self.span_node(&struct_decl),
+        )));
+        self.tchk
+            .tenv
+            .insert_struct_type(std::iter::once(name.inner), struct_ty_id);
         StructDecl::new(name, generic_param_list, where_clause, field_list)
     }
 
@@ -79,9 +111,10 @@ impl LoweringCtx {
             },
         );
         let ty = if let Some(ty) = struct_field.ty() {
-            self.lower_type(ty, &generic_param_list)
+            self.lower_type(ty, generic_param_list)
         } else {
-            Spanned::new(Type::Tuple(tiny_vec!()), name.span)
+            self.types
+                .alloc(Spanned::new(Type::Tuple(tiny_vec!()), name.span))
         };
         StructField::new(name, ty)
     }

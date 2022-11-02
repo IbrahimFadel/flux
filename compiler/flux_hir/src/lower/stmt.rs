@@ -1,3 +1,5 @@
+use tinyvec::tiny_vec;
+
 use crate::hir::{GenericParamList, LetStmt, Stmt};
 
 use super::*;
@@ -34,14 +36,23 @@ impl LoweringCtx {
             |this, name| Spanned::new(name.ident().unwrap().text_key(), this.span_node(&let_stmt)),
         );
 
-        let ty = if let Some(ty) = let_stmt.ty() {
+        let (ty_id, ty_idx) = if let Some(ty) = let_stmt.ty() {
             let ty = self.lower_type(ty, generic_param_list);
-            self.tchk.tenv.insert(self.file_spanned(self.to_ts_ty(&ty)))
+            (
+                self.tchk.tenv.insert(self.file_spanned(self.to_ts_ty(ty))),
+                ty,
+            )
         } else {
-            self.tchk.tenv.insert(self.file_spanned(Spanned::new(
-                ts::Type::new(TypeKind::Unknown),
-                self.span_node(&let_stmt),
-            )))
+            (
+                self.tchk.tenv.insert(self.file_spanned(Spanned::new(
+                    ts::Type::new(TypeKind::Unknown),
+                    self.span_node(&let_stmt),
+                ))),
+                self.types.alloc(Spanned::new(
+                    Type::Tuple(tiny_vec!()),
+                    self.span_node(&let_stmt),
+                )),
+            )
         };
 
         let (value, value_ty_id) = self.lower_node(
@@ -59,14 +70,24 @@ impl LoweringCtx {
             |this, expr| this.lower_expr(expr, generic_param_list),
         );
 
-        let result = self
-            .tchk
-            .unify(ty, value_ty_id, self.file_span(self.span_node(&let_stmt)));
+        let result = self.tchk.unify(
+            ty_id,
+            value_ty_id,
+            self.file_span(self.span_node(&let_stmt)),
+        );
         self.maybe_emit_diagnostic(result);
 
-        self.tchk.tenv.insert_local_to_scope(name.inner, ty);
+        self.tchk.tenv.insert_local_to_scope(name.inner, ty_id);
 
-        (Stmt::LetStmt(LetStmt { name, ty, value }), true, ty)
+        (
+            Stmt::LetStmt(LetStmt {
+                name,
+                ty: ty_idx,
+                value,
+            }),
+            true,
+            ty_id,
+        )
     }
 
     fn lower_expr_stmt(

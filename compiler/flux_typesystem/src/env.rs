@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Display};
+use std::fmt::Display;
 
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
@@ -6,13 +6,13 @@ use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
-use tinyvec::{tiny_vec, TinyVec};
+use tinyvec::tiny_vec;
 
 use crate::{
     constraint::Constraint,
     diagnostics::TypeError,
     intern::{Interner, Key},
-    r#type::{ConcreteKind, Type, TypeId, TypeKind},
+    r#type::{ConcreteKind, StructConcreteKind, Type, TypeId, TypeKind},
 };
 
 #[derive(Debug)]
@@ -32,6 +32,16 @@ impl Scope {
     }
 }
 
+/// A `flux_typesystem` path
+///
+/// In the `flux_hir` paths are represented as vectors of [`Spur`]s
+/// However inserting / getting paths from a hashmap with that representation would suck
+/// So instead, hir paths are resolved, joined with `::` and interned, then inserted into the typesystem
+///
+/// `[Spur1, Spur2, Spur3]` -> `["ResolvedSpur1", "ResolvedSpur2", "ResolvedSpur3"]` -> `"ResolvedSpur1::ResolvedSpur2::ResolvedSpur3"` -> `Spur`
+///
+/// I haven't benchmarked it but I would be extremely surprised if a few calls to the string interner would be slower than repeatedly hashing a vector
+type Path = Spur;
 type FunctionSignature = (FileSpanned<Vec<TypeId>>, FileSpanned<TypeId>);
 type FunctionSignatureMap = HashMap<Vec<Spur>, FunctionSignature>;
 
@@ -41,8 +51,9 @@ pub struct TEnv {
     string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
     scopes: Vec<Scope>,
-    constraints: VecDeque<Constraint>,
     function_signatures: FunctionSignatureMap,
+    /// A map from the path of a struct to its [`TypeId`], useful for typechecking struct expressions to make sure that the fields being initialized are of the correct type, that all the fields are initialized, and no unknown fields are being initialized.
+    struct_types: HashMap<Path, TypeId>,
     pub(super) int_paths: HashSet<Spur>,
     pub(super) float_paths: HashSet<Spur>,
 }
@@ -81,8 +92,8 @@ impl TEnv {
             string_interner,
             entries: vec![],
             scopes: vec![Scope::new()],
-            constraints: VecDeque::new(),
             function_signatures: HashMap::new(),
+            struct_types: HashMap::new(),
             int_paths: HashSet::from([
                 string_interner.get_or_intern_static("u8"),
                 string_interner.get_or_intern_static("u16"),
@@ -204,6 +215,18 @@ impl TEnv {
         self.function_signatures.insert(path, signature);
     }
 
+    fn hir_path_to_spur(&self, path: impl Iterator<Item = Spur>) -> Spur {
+        let path_string = path
+            .map(|spur| self.string_interner.resolve(&spur))
+            .join("::");
+        self.string_interner.get_or_intern(path_string)
+    }
+
+    pub fn insert_struct_type(&mut self, path: impl Iterator<Item = Spur>, struct_ty: TypeId) {
+        let spur = self.hir_path_to_spur(path);
+        self.struct_types.insert(spur, struct_ty);
+    }
+
     pub fn get_function_signature(
         &mut self,
         path: &FileSpanned<Vec<Spur>>,
@@ -224,6 +247,35 @@ impl TEnv {
                 Ok,
             )
             .cloned()
+    }
+
+    pub fn get_struct_field_types(
+        &self,
+        path: FileSpanned<impl Iterator<Item = Spur>>,
+    ) -> Result<(StructConcreteKind, InFile<Span>), Diagnostic> {
+        let (file_id, span) = (path.file_id, path.span);
+        let spur = self.hir_path_to_spur(path.inner.inner);
+        let struct_type_id = self.struct_types.get(&spur).cloned().ok_or_else(|| {
+            TypeError::UnknownStruct {
+                path: FileSpanned::new(
+                    Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
+                    file_id,
+                ),
+            }
+            .to_diagnostic()
+        })?;
+        let typekind = self.get_typekind_with_id(struct_type_id);
+        let filespan = InFile::new(typekind.span, typekind.file_id);
+        match typekind.inner.inner {
+            TypeKind::Concrete(ConcreteKind::Struct(fields)) => Ok((fields, filespan)),
+            _ => Err(TypeError::UnknownStruct {
+                path: FileSpanned::new(
+                    Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
+                    file_id,
+                ),
+            }
+            .to_diagnostic()),
+        }
     }
 
     /// Get the [`TypeId`] of a path in any currently accessible [`Scope`]
@@ -285,6 +337,18 @@ impl TEnv {
             ConcreteKind::Tuple(ids) => {
                 format!("({})", ids.iter().map(|id| self.fmt_ty_id(*id)).join(", "))
             }
+            ConcreteKind::Struct(strukt) => format!(
+                "{{{}}}",
+                strukt
+                    .fields
+                    .iter()
+                    .map(|(name, ty)| format!(
+                        "{}: {}",
+                        self.string_interner.resolve(name),
+                        self.fmt_ty_id(*ty)
+                    ))
+                    .join(",\n"),
+            ),
         }
     }
 
@@ -377,13 +441,10 @@ impl Display for Type {
 impl Display for ConcreteKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // Self::F32 => write!(f, "f32"),
-            // Self::F64 => write!(f, "f64"),
             Self::Path(path) => write!(f, "{:?}", path),
             Self::Ptr(ptr) => write!(f, "*'{}", ptr),
-            // Self::SInt(bitwidth) => write!(f, "i{}", bitwidth),
             Self::Tuple(_) => write!(f, "()"),
-            // Self::UInt(bitwidth) => write!(f, "u{}", bitwidth),
+            Self::Struct(_) => write!(f, "todo (lazy pos)"),
         }
     }
 }

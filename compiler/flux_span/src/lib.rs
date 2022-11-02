@@ -17,7 +17,7 @@ impl Span {
 
     /// Convert an iterator of spanned items into a span of all the items
     ///
-    /// `[Spanned<T>]` -> `Span`
+    /// `[Span]` -> `Span`
     ///
     /// Returns `None` if the iterator has no items, as there can be no span
     pub fn span_iter_of_span(iter: impl IntoIterator<Item = Span>) -> Option<Span> {

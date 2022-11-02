@@ -113,6 +113,7 @@ pub enum DiagnosticCode {
     UnknownLocal,
     CouldNotParseInt,
     UnknownFunction,
+    UnknownStruct,
     IncorrectNumberOfArgsInCall,
     // CouldNotInitializeCacheDir,
     // UnexpectedToken,

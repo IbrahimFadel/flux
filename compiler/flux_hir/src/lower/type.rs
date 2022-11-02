@@ -3,7 +3,7 @@ use crate::hir::{GenericParamList, Type};
 use super::*;
 
 // type TypeResult = Result<Spanned<Type>, LoweringDiagnostic>;
-type TypeResult = Spanned<Type>;
+type TypeResult = TypeIdx;
 
 impl LoweringCtx {
     pub(crate) fn lower_type(
@@ -29,17 +29,22 @@ impl LoweringCtx {
             .path()
             .expect("internal compiler error: path type does not contain path");
         let path = self.lower_path(path.segments());
+        let args = path_ty
+            .generic_arg_list()
+            .map_or(vec![], |generic_arg_list| {
+                self.lower_generic_arg_list(generic_arg_list, generic_param_list)
+            });
 
         let ty = if path.len() > 1 {
-            Type::Path(path)
+            Type::Path(path, args)
         } else if generic_param_list
             .get(path.nth(0).expect("internal compiler error: path is empty"))
         {
             Type::Generic
         } else {
-            Type::Path(path)
+            Type::Path(path, args)
         };
 
-        Spanned::new(ty, self.span_node(&path_ty))
+        self.types.alloc(Spanned::new(ty, self.span_node(&path_ty)))
     }
 }

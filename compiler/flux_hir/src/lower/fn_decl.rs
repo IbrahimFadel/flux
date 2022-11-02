@@ -12,7 +12,7 @@ impl LoweringCtx {
         Name,
         GenericParamList,
         Spanned<ParamList>,
-        Spanned<Type>,
+        TypeIdx,
         WhereClause,
     ) {
         let name = self.lower_node(
@@ -43,7 +43,8 @@ impl LoweringCtx {
         let return_ty = if let Some(return_ty) = fn_decl.return_type() {
             self.lower_type(return_ty, &generic_param_list)
         } else {
-            Spanned::new(Type::Tuple(tiny_vec!()), param_list.span)
+            self.types
+                .alloc(Spanned::new(Type::Tuple(tiny_vec!()), param_list.span))
         };
         (
             name,
@@ -60,22 +61,23 @@ impl LoweringCtx {
         name: Name,
         generic_param_list: GenericParamList,
         param_list: Spanned<ParamList>,
-        return_ty: Spanned<Type>,
+        return_ty: TypeIdx,
         where_clause: WhereClause,
     ) -> FnDecl {
         let return_ty_id = self
             .tchk
             .tenv
-            .insert(self.file_spanned(self.to_ts_ty(&return_ty)));
+            .insert(self.file_spanned(self.to_ts_ty(return_ty)));
+        let return_ty_span = self.types[return_ty].span;
 
         let (body, body_ty_id) = self.lower_node(
             fn_decl.body(),
             |this, _| {
                 (
-                    this.exprs.alloc(Spanned::new(Expr::Error, return_ty.span)),
+                    this.exprs.alloc(Spanned::new(Expr::Error, return_ty_span)),
                     this.tchk.tenv.insert(this.file_spanned(Spanned::new(
                         ts::Type::new(TypeKind::Unknown),
-                        return_ty.span,
+                        return_ty_span,
                     ))),
                 )
             },
@@ -84,7 +86,7 @@ impl LoweringCtx {
 
         let result = self
             .tchk
-            .unify(return_ty_id, body_ty_id, self.file_span(return_ty.span));
+            .unify(return_ty_id, body_ty_id, self.file_span(return_ty_span));
         self.maybe_emit_diagnostic(result);
 
         FnDecl::new(
@@ -97,7 +99,7 @@ impl LoweringCtx {
         )
     }
 
-    fn lower_param_list(
+    pub(crate) fn lower_param_list(
         &mut self,
         param_list: ast::ParamList,
         generic_param_list: &GenericParamList,
@@ -128,7 +130,7 @@ impl LoweringCtx {
                     }
                     .to_diagnostic(),
                 );
-                Spanned::new(Type::Error, span)
+                self.types.alloc(Spanned::new(Type::Error, span))
             }
         };
         Param { name, ty }

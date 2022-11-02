@@ -5,6 +5,7 @@ use crate::{
     grammar::{
         generic_args::opt_generic_arg_list,
         generic_params::{opt_generic_param_list, opt_where_clause},
+        path,
         r#type::type_,
     },
     marker::CompletedMarker,
@@ -25,7 +26,7 @@ pub(crate) fn apply_decl(p: &mut Parser, visibility: CompletedMarker) {
         m.complete(p, SyntaxKind::ApplyDeclType);
     } else {
         let m = p.start();
-        p.expect(TokenKind::Ident);
+        path(p);
         opt_generic_arg_list(p);
         m.complete(p, SyntaxKind::ApplyDeclTrait);
 

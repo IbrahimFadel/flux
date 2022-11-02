@@ -12,12 +12,13 @@ pub enum TypeError {
         b: FileSpanned<String>,
         span: InFile<Span>,
     },
-
     UnknownLocal {
         name: FileSpanned<String>,
     },
-
     UnknownFunction {
+        path: FileSpanned<String>,
+    },
+    UnknownStruct {
         path: FileSpanned<String>,
     },
 }
@@ -63,6 +64,18 @@ impl ToDiagnostic for TypeError {
                 vec![FileSpanned::new(
                     Spanned::new(
                         format!("unknown function `{}` referenced", path.inner.inner),
+                        path.span,
+                    ),
+                    path.file_id,
+                )],
+            ),
+            Self::UnknownStruct { path } => Diagnostic::error(
+                path.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnknownStruct,
+                "unknown struct referenced".to_string(),
+                vec![FileSpanned::new(
+                    Spanned::new(
+                        format!("unknown struct `{}` referenced", path.inner.inner),
                         path.span,
                     ),
                     path.file_id,

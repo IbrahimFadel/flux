@@ -8,10 +8,6 @@ use la_arena::Idx;
 use lasso::{Spur, ThreadedRodeo};
 use tinyvec::TinyVec;
 
-struct Module {
-    functions: Vec<FnDecl>,
-}
-
 pub type Name = Spanned<Spur>;
 
 #[derive(Debug)]
@@ -19,7 +15,7 @@ pub struct FnDecl {
     name: Name,
     generic_param_list: GenericParamList,
     param_list: Spanned<ParamList>,
-    return_ty: Spanned<Type>,
+    return_ty: TypeIdx,
     where_clause: WhereClause,
     body: ExprIdx,
 }
@@ -29,7 +25,7 @@ impl FnDecl {
         name: Name,
         generic_param_list: GenericParamList,
         param_list: Spanned<ParamList>,
-        return_ty: Spanned<Type>,
+        return_ty: TypeIdx,
         where_clause: WhereClause,
         body: ExprIdx,
     ) -> Self {
@@ -60,7 +56,7 @@ impl ParamList {
 #[derive(Debug)]
 pub struct Param {
     pub name: Name,
-    pub ty: Spanned<Type>,
+    pub ty: TypeIdx,
 }
 
 pub type ExprIdx = Idx<Spanned<Expr>>;
@@ -72,6 +68,7 @@ pub enum Expr {
     Int(Int),
     Float(Float),
     Call(Call),
+    Struct(Struct),
     Error,
 }
 
@@ -109,6 +106,28 @@ impl Block {
 }
 
 #[derive(Debug)]
+pub struct Struct {
+    path: Path,
+    args: Vec<TypeIdx>,
+    fields: Vec<StructExprFieldAssignment>,
+}
+
+impl Struct {
+    pub fn new(path: Path, args: Vec<TypeIdx>, fields: Vec<StructExprFieldAssignment>) -> Self {
+        Self { path, args, fields }
+    }
+}
+
+#[derive(Debug)]
+pub struct StructExprFieldAssignment((Name, ExprIdx));
+
+impl StructExprFieldAssignment {
+    pub fn new(name: Name, val: ExprIdx) -> Self {
+        Self((name, val))
+    }
+}
+
+#[derive(Debug)]
 pub enum Stmt {
     LetStmt(LetStmt),
     ExprStmt(ExprIdx),
@@ -117,7 +136,7 @@ pub enum Stmt {
 #[derive(Debug)]
 pub struct LetStmt {
     pub name: Name,
-    pub ty: TypeId,
+    pub ty: TypeIdx,
     pub value: ExprIdx,
 }
 
@@ -171,15 +190,21 @@ impl Path {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Spanned<Spur>> {
+        self.0.iter()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Type {
-    Path(Path),
+    Path(Path, Vec<TypeIdx>),
     Tuple(TinyVec<[TypeId; 2]>),
     Generic,
     Error,
 }
+
+pub type TypeIdx = Idx<Spanned<Type>>;
 
 #[derive(Debug)]
 pub struct StructDecl {
@@ -219,6 +244,10 @@ impl GenericParamList {
 
     pub fn get(&self, path: &Name) -> bool {
         self.0.contains(path)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Name> {
+        self.0.iter()
     }
 }
 
@@ -269,7 +298,7 @@ impl TypeBoundList {
 #[derive(Debug)]
 pub struct TypeBound {
     name: Name,
-    args: Vec<Spanned<Type>>,
+    args: Vec<TypeIdx>,
 }
 
 impl TypeBound {
@@ -277,7 +306,7 @@ impl TypeBound {
         Self { name, args: vec![] }
     }
 
-    pub fn with_args(name: Name, args: Vec<Spanned<Type>>) -> Self {
+    pub fn with_args(name: Name, args: Vec<TypeIdx>) -> Self {
         Self { name, args }
     }
 }
@@ -293,16 +322,145 @@ impl StructFieldList {
     pub fn new(fields: Vec<StructField>) -> Self {
         Self(fields)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &StructField> {
+        self.0.iter()
+    }
 }
 
 #[derive(Debug)]
 pub struct StructField {
-    name: Name,
-    ty: Spanned<Type>,
+    pub name: Name,
+    pub ty: TypeIdx,
 }
 
 impl StructField {
-    pub fn new(name: Name, ty: Spanned<Type>) -> Self {
+    pub fn new(name: Name, ty: TypeIdx) -> Self {
         Self { name, ty }
+    }
+}
+
+#[derive(Debug)]
+pub struct TraitDecl {
+    name: Name,
+    generic_param_list: GenericParamList,
+    where_clause: WhereClause,
+    associated_types: Vec<AssociatedType>,
+    methods: Vec<TraitMethod>,
+}
+
+impl TraitDecl {
+    pub fn new(
+        name: Name,
+        generic_param_list: GenericParamList,
+        where_clause: WhereClause,
+        associated_types: Vec<AssociatedType>,
+        methods: Vec<TraitMethod>,
+    ) -> Self {
+        Self {
+            name,
+            generic_param_list,
+            where_clause,
+            associated_types,
+            methods,
+        }
+    }
+}
+
+pub type AssociatedType = Name;
+
+#[derive(Debug)]
+pub struct TraitMethod {
+    name: Name,
+    generic_param_list: GenericParamList,
+    param_list: Spanned<ParamList>,
+    return_ty: TypeIdx,
+    where_clause: WhereClause,
+}
+
+impl TraitMethod {
+    pub fn new(
+        name: Name,
+        generic_param_list: GenericParamList,
+        param_list: Spanned<ParamList>,
+        return_ty: TypeIdx,
+        where_clause: WhereClause,
+    ) -> Self {
+        Self {
+            name,
+            generic_param_list,
+            param_list,
+            return_ty,
+            where_clause,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EnumDecl {
+    name: Name,
+    generic_param_list: GenericParamList,
+    where_clause: WhereClause,
+    variants: Vec<EnumVariant>,
+}
+
+impl EnumDecl {
+    pub fn new(
+        name: Name,
+        generic_param_list: GenericParamList,
+        where_clause: WhereClause,
+        variants: Vec<EnumVariant>,
+    ) -> Self {
+        Self {
+            name,
+            generic_param_list,
+            where_clause,
+            variants,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EnumVariant((Name, Option<TypeIdx>));
+
+impl EnumVariant {
+    pub fn new(name: Name, ty: Option<TypeIdx>) -> Self {
+        Self((name, ty))
+    }
+}
+
+#[derive(Debug)]
+pub struct ApplyDecl {
+    trt: Option<(Path, Vec<TypeIdx>)>,
+    to_ty: TypeIdx,
+    where_clause: WhereClause,
+    associated_types: Vec<AssociatedTypeDef>,
+    methods: Vec<FnDecl>,
+}
+
+impl ApplyDecl {
+    pub fn new(
+        trt: Option<(Path, Vec<TypeIdx>)>,
+        to_ty: TypeIdx,
+        where_clause: WhereClause,
+        associated_types: Vec<AssociatedTypeDef>,
+        methods: Vec<FnDecl>,
+    ) -> Self {
+        Self {
+            trt,
+            to_ty,
+            where_clause,
+            associated_types,
+            methods,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AssociatedTypeDef((Name, TypeIdx));
+
+impl AssociatedTypeDef {
+    pub fn new(name: Name, ty: TypeIdx) -> Self {
+        Self((name, ty))
     }
 }

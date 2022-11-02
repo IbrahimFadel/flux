@@ -83,11 +83,11 @@ impl LoweringCtx {
         TypeBound::with_args(name, generic_arg_list)
     }
 
-    fn lower_generic_arg_list(
+    pub(crate) fn lower_generic_arg_list(
         &mut self,
         generic_arg_list: ast::GenericArgList,
         generic_params_list: &GenericParamList,
-    ) -> Vec<Spanned<Type>> {
+    ) -> Vec<TypeIdx> {
         generic_arg_list
             .args()
             .map(|ty| self.lower_type(ty, generic_params_list))

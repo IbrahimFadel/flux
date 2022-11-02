@@ -35,6 +35,7 @@ getters! {
     }
     PathType {
         path -> node(Path);
+        generic_arg_list -> node(GenericArgList);
     }
     TupleType {
         types -> nodes(Type);
@@ -48,6 +49,7 @@ getters! {
     }
     Path {
         segments -> toks(Ident);
+        generic_arg_list -> node(GenericArgList);
     }
 
     IntExpr {
@@ -70,6 +72,18 @@ getters! {
     }
     ArgList {
         args -> nodes(Expr);
+    }
+    StructExpr {
+        path -> node(Path);
+        // generic_arg_list -> node(GenericArgList);
+        field_list -> node(StructExprFieldList);
+    }
+    StructExprFieldList {
+        fields -> nodes(StructExprField);
+    }
+    StructExprField {
+        name -> tok(Ident);
+        val -> node(Expr);
     }
 
     LetStmt {
@@ -116,5 +130,51 @@ getters! {
     }
     GenericArgList {
         args -> nodes(Type);
+    }
+    TraitDecl {
+        name -> node(Name);
+        generic_param_list -> node(GenericParamList);
+        where_clause -> node(WhereClause);
+        associated_types -> nodes(TraitAssocTypeDecl);
+        method_decls -> nodes(TraitMethodDecl);
+    }
+    TraitAssocTypeDecl {
+        name -> tok(Ident);
+    }
+    TraitMethodDecl {
+        name -> node(Name);
+        generic_param_list -> node(GenericParamList);
+        param_list -> node(ParamList);
+        return_ty -> node(Type);
+        where_clause -> node(WhereClause);
+    }
+    EnumDecl {
+        name -> node(Name);
+        generic_param_list -> node(GenericParamList);
+        where_clause -> node(WhereClause);
+        variants -> nodes(EnumDeclVariant);
+    }
+    EnumDeclVariant {
+        name -> tok(Ident);
+        ty -> node(Type);
+    }
+    ApplyDecl {
+        generic_param_list -> node(GenericParamList);
+        trt -> node(ApplyDeclTrait);
+        to_ty -> node(ApplyDeclType);
+        where_clause -> node(WhereClause);
+        associated_types -> nodes(ApplyDeclAssocType);
+        methods -> nodes(FnDecl);
+    }
+    ApplyDeclTrait {
+        path -> node(Path);
+        generic_arg_list -> node(GenericArgList);
+    }
+    ApplyDeclType {
+        ty -> node(Type);
+    }
+    ApplyDeclAssocType {
+        name -> tok(Ident);
+        ty -> node(Type);
     }
 }

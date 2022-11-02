@@ -14,6 +14,15 @@ pub(crate) enum LoweringDiagnostic {
         expected_number: InFile<Spanned<usize>>,
         got_number: InFile<Spanned<usize>>,
     },
+    UnknownFieldInStructExpr {
+        unknown_field: InFile<Spanned<String>>,
+        struct_definition: InFile<Spanned<String>>,
+    },
+    IncorrectNumberOfTypeArgs {
+        type_decl: InFile<Spanned<String>>,
+        num_params: InFile<Spanned<usize>>,
+        num_args: InFile<Spanned<usize>>,
+    },
 }
 
 impl ToDiagnostic for LoweringDiagnostic {
@@ -49,12 +58,51 @@ impl ToDiagnostic for LoweringDiagnostic {
                     expected_number.map_inner_ref(|num| {
                         format!(
                             "expected {} argument{}",
-                            num.to_string(),
+                            num,
                             if *num == 1 { "" } else { "s" }
                         )
                     }),
                     got_number.map_inner_ref(|num| {
                         format!("got {} argument{}", num, if *num == 1 { "" } else { "s" })
+                    }),
+                ],
+            ),
+            Self::UnknownFieldInStructExpr {
+                unknown_field,
+                struct_definition,
+            } => Diagnostic::error(
+                unknown_field.map_ref(|field| field.span.range.start().into()),
+                DiagnosticCode::IncorrectNumberOfArgsInCall,
+                "unknown field in struct expression".to_string(),
+                vec![
+                    unknown_field.map_inner_ref(|field| format!("unknown field `{}`", field)),
+                    struct_definition
+                        .map_inner_ref(|strukt| format!("struct `{}` declared here", strukt)),
+                ],
+            ),
+            Self::IncorrectNumberOfTypeArgs {
+                type_decl,
+                num_params,
+                num_args,
+            } => Diagnostic::error(
+                num_args.map_ref(|num| num.span.range.start().into()),
+                DiagnosticCode::IncorrectNumberOfArgsInCall,
+                "incorrect number of type arguments in expression".to_string(),
+                vec![
+                    num_args.map_inner_ref(|num| {
+                        format!(
+                            "{} type argument{} supplied",
+                            num,
+                            if *num == 1 { "" } else { "s" }
+                        )
+                    }),
+                    type_decl.map_inner_ref(|name| {
+                        format!(
+                            "`{}` declared with {} type parameter{}",
+                            name,
+                            num_params.inner.inner,
+                            if num_params.inner.inner == 1 { "" } else { "s" }
+                        )
                     }),
                 ],
             ),

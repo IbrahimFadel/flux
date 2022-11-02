@@ -33,15 +33,22 @@ apply<A, B> Foo<A> to Spanned<B>
 }
 */
 
-struct Spanned<T, A, B>
-    where
-        T is Clone + Test,
-        A is Foo<B>,
-        B is Bar<i32, A>,
-{
-    inner T,
-    span Span
+struct Foo {
+    x i32,
+    y f32,
+    z Bar,
 }
 
-fn main<T>() where T is Clone {
+struct Bar {
+    bar_field u64
+}
+
+fn main() {
+    let x Foo = Foo {
+        x: 0,
+        y: 1,
+        z: Bar<X> {
+            bar_field: 100.99,
+        }
+    };
 }

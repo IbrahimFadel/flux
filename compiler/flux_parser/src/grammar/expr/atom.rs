@@ -94,14 +94,14 @@ fn path_or_complex_type_expr(p: &mut Parser, restrictions: ExprRestrictions) -> 
         }
     }
     opt_generic_arg_list(p);
-    let kind = if p.at(TokenKind::LBrace) && restrictions.allow_struct_expressions {
+    if p.at(TokenKind::LBrace) && restrictions.allow_struct_expressions {
+        let path = m.complete(p, SyntaxKind::Path);
+        let m = path.precede(p);
         struct_expr_field_list(p);
-        SyntaxKind::StructExpr
+        m.complete(p, SyntaxKind::StructExpr)
     } else {
-        SyntaxKind::PathExpr
-    };
-
-    m.complete(p, kind)
+        m.complete(p, SyntaxKind::PathExpr)
+    }
 }
 
 fn struct_expr_field_list(p: &mut Parser) {
