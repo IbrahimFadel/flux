@@ -47,6 +47,10 @@ impl Span {
         let span = Span::new(TextRange::new(start, end));
         Some(span)
     }
+
+    pub fn in_file(self, file_id: FileId) -> InFile<Span> {
+        InFile::new(self, file_id)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +134,10 @@ impl<T> Spanned<T> {
     //     let span = Span::new(TextRange::new(start, end));
     //     Some(span)
     // }
+
+    pub fn in_file(self, file_id: FileId) -> InFile<Spanned<T>> {
+        InFile::new(self, file_id)
+    }
 }
 
 impl<A> Spanned<A> {
@@ -203,6 +211,16 @@ impl<T> InFile<Spanned<T>> {
     /// Maps the inner value of an `InFile<Spanned<T>` passing the values to the closure by reference
     ///
     /// `InFile<Spanned<A>>` -> `InFile<Spanned<B>>`
+    pub fn map_inner<F, B>(self, f: F) -> InFile<Spanned<B>>
+    where
+        F: FnOnce(T) -> B,
+    {
+        InFile::new(self.inner.map(f), self.file_id)
+    }
+
+    /// Maps the inner value of an `InFile<Spanned<T>` passing the values to the closure by reference
+    ///
+    /// `InFile<Spanned<A>>` -> `InFile<Spanned<B>>`
     pub fn map_inner_ref<F, B>(&self, f: F) -> InFile<Spanned<B>>
     where
         F: FnOnce(&T) -> B,
@@ -222,3 +240,49 @@ impl<T> Deref for InFile<T> {
 }
 
 pub type FileSpanned<T> = InFile<Spanned<T>>;
+
+pub trait WithSpan: Sized {
+    fn at(self, span: Span) -> Spanned<Self> {
+        Spanned::new(self, span)
+    }
+
+    fn in_file(self, file_id: FileId, span: Span) -> InFile<Spanned<Self>> {
+        InFile::new(Spanned::new(self, span), file_id)
+    }
+}
+
+impl WithSpan for String {}
+impl<'a> WithSpan for &'a str {}
+impl WithSpan for Spur {}
+impl WithSpan for usize {}
+impl<T> WithSpan for Vec<T> {}
+impl<T, F> WithSpan for std::iter::Map<T, F> {}
+// impl<I, T> WithSpan for I where I: Iterator<Item = T> {}
+
+pub trait ToSpan: Into<TextRange> {
+    fn to_span(self) -> Span {
+        Span::new(self.into())
+    }
+}
+
+impl ToSpan for TextRange {}
+
+// #[macro_export]
+// macro_rules! can_be_spanned {
+//     ($($name:ident)*) => {
+//         $( $name );*
+//         // $($name),+,
+//     };
+// }
+// macro_rules! can_be_spanned {
+//     (
+//         $name:ident,
+//         $($rest:tt)*
+//     ) => {
+//         $(impl WithSpan for $name {})*
+//         can_be_spanned! {
+//             $($rest)*
+//         }
+//     };
+//     () => {}
+// }

@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use flux_span::WithSpan;
 use lasso::Spur;
 use tinyvec::TinyVec;
 
@@ -12,6 +13,8 @@ use tinyvec::TinyVec;
 /// Types always have a constructor, but not always parameters, as such we can store all the information in one vector rather than two to save memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Type(Vec<TypeKind>);
+
+impl WithSpan for Type {}
 
 impl Type {
     /// Create a new [`Type`] with only a constructor
@@ -46,6 +49,8 @@ impl Type {
 /// Types are stored in and organized by the type environment -- in order to refer to them, `TypeId`s are used.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeId(usize);
+
+impl WithSpan for TypeId {}
 
 impl TypeId {
     pub fn new(id: usize) -> Self {

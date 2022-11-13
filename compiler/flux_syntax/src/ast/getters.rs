@@ -9,6 +9,8 @@ getters! {
         enum_decls -> nodes(EnumDecl);
         trait_decls -> nodes(TraitDecl);
         apply_decls -> nodes(ApplyDecl);
+        use_decls -> nodes(UseDecl);
+        mod_decls -> nodes(ModDecl);
     }
     Visibility {
         public -> tok(Pub);
@@ -176,5 +178,13 @@ getters! {
     ApplyDeclAssocType {
         name -> tok(Ident);
         ty -> node(Type);
+    }
+    UseDecl {
+        path -> node(Path);
+        alias -> node(Name);
+    }
+    ModDecl {
+        visibility -> node(Visibility);
+        name -> node(Name);
     }
 }

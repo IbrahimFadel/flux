@@ -1,5 +1,6 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
+use itertools::Itertools;
 
 pub(crate) enum LoweringDiagnostic {
     Missing {
@@ -22,6 +23,10 @@ pub(crate) enum LoweringDiagnostic {
         type_decl: InFile<Spanned<String>>,
         num_params: InFile<Spanned<usize>>,
         num_args: InFile<Spanned<usize>>,
+    },
+    UnusedGenericParams {
+        declared_params: InFile<Spanned<Vec<String>>>,
+        unused_params: InFile<Spanned<Vec<String>>>,
     },
 }
 
@@ -102,6 +107,30 @@ impl ToDiagnostic for LoweringDiagnostic {
                             name,
                             num_params.inner.inner,
                             if num_params.inner.inner == 1 { "" } else { "s" }
+                        )
+                    }),
+                ],
+            ),
+            Self::UnusedGenericParams {
+                declared_params,
+                unused_params,
+            } => Diagnostic::error(
+                declared_params.map_ref(|params| params.span.range.start().into()),
+                DiagnosticCode::UnusedGenericParams,
+                "unused generic parameters".to_string(),
+                vec![
+                    unused_params.map_inner_ref(|params| {
+                        format!(
+                            "unused generic parameter{} {}",
+                            if unused_params.len() == 1 { ""} else { "s" },
+                            params.iter().map(|param| format!("`{param}`")).join(", ")
+                        )
+                    }),
+                    declared_params.map_inner_ref(|params| {
+                        format!(
+                            "declared generic parameter{} {}",
+                            if declared_params.len() == 1 { ""} else { "s" },
+                            params.iter().map(|param| format!("`{param}`")).join(", ")
                         )
                     }),
                 ],

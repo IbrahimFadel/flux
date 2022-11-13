@@ -12,6 +12,7 @@ use crate::{
     constraint::Constraint,
     diagnostics::TypeError,
     intern::{Interner, Key},
+    name_res::NameResolver,
     r#type::{ConcreteKind, StructConcreteKind, Type, TypeId, TypeKind},
 };
 
@@ -45,15 +46,27 @@ type Path = Spur;
 type FunctionSignature = (FileSpanned<Vec<TypeId>>, FileSpanned<TypeId>);
 type FunctionSignatureMap = HashMap<Vec<Spur>, FunctionSignature>;
 
+/*
+
+module tree: function exports, type exports, submodule exports?
+variable namespace
+type namespace
+use lookup table
+
+
+
+*/
+
 #[derive(Debug)]
 pub struct TEnv {
     type_interner: Interner,
     string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
-    scopes: Vec<Scope>,
+    name_resolver: NameResolver,
+    /// Scopes of the current [`TEnv`]
+    ///
+    /// Holds types of locals. Furthermore, the first element in the vector represents the global scope (outside of the current function / type environment).
     function_signatures: FunctionSignatureMap,
-    /// A map from the path of a struct to its [`TypeId`], useful for typechecking struct expressions to make sure that the fields being initialized are of the correct type, that all the fields are initialized, and no unknown fields are being initialized.
-    struct_types: HashMap<Path, TypeId>,
     pub(super) int_paths: HashSet<Spur>,
     pub(super) float_paths: HashSet<Spur>,
 }
@@ -91,9 +104,9 @@ impl TEnv {
             type_interner: Interner::new(string_interner),
             string_interner,
             entries: vec![],
-            scopes: vec![Scope::new()],
+            name_resolver: NameResolver::new(),
+            // Global scope, and function scope
             function_signatures: HashMap::new(),
-            struct_types: HashMap::new(),
             int_paths: HashSet::from([
                 string_interner.get_or_intern_static("u8"),
                 string_interner.get_or_intern_static("u16"),
@@ -205,10 +218,7 @@ impl TEnv {
 
     /// Insert a local to the current [`Scope`]
     pub fn insert_local_to_scope(&mut self, name: Spur, id: TypeId) {
-        let scope = self.scopes.last_mut().expect(
-            "internal compiler error: tried inserting local to type environment's scope but there was no active scope",
-        );
-        scope.insert_local(name, id);
+        self.name_resolver.insert_local_to_current_scope(name, id);
     }
 
     pub fn insert_function_signature(&mut self, path: Vec<Spur>, signature: FunctionSignature) {
@@ -224,7 +234,7 @@ impl TEnv {
 
     pub fn insert_struct_type(&mut self, path: impl Iterator<Item = Spur>, struct_ty: TypeId) {
         let spur = self.hir_path_to_spur(path);
-        self.struct_types.insert(spur, struct_ty);
+        self.name_resolver.insert_type(spur, struct_ty);
     }
 
     pub fn get_function_signature(
@@ -254,16 +264,10 @@ impl TEnv {
         path: FileSpanned<impl Iterator<Item = Spur>>,
     ) -> Result<(StructConcreteKind, InFile<Span>), Diagnostic> {
         let (file_id, span) = (path.file_id, path.span);
-        let spur = self.hir_path_to_spur(path.inner.inner);
-        let struct_type_id = self.struct_types.get(&spur).cloned().ok_or_else(|| {
-            TypeError::UnknownStruct {
-                path: FileSpanned::new(
-                    Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
-                    file_id,
-                ),
-            }
-            .to_diagnostic()
-        })?;
+        let spur = path.map_inner(|path| self.hir_path_to_spur(path));
+        let struct_type_id = self
+            .name_resolver
+            .resolve_type(spur.clone(), self.string_interner)?;
         let typekind = self.get_typekind_with_id(struct_type_id);
         let filespan = InFile::new(typekind.span, typekind.file_id);
         match typekind.inner.inner {
@@ -279,21 +283,13 @@ impl TEnv {
     }
 
     /// Get the [`TypeId`] of a path in any currently accessible [`Scope`]
-    pub fn get_path_typeid(&mut self, name: FileSpanned<Spur>) -> Result<TypeId, Diagnostic> {
-        let scope = self.scopes.last_mut().expect(
-            "internal compiler error: tried inserting local to type environment's scope but there was no active scope",
-        );
-        let result = scope.get_local_typeid(name.inner.inner).map_or_else(
-            || {
-                Err(TypeError::UnknownLocal {
-                    name: name.map_ref(|spanned| {
-                        spanned.map_ref(|spur| self.string_interner.resolve(spur).to_string())
-                    }),
-                })
-            },
-            Ok,
-        );
-        result.map_err(|err| err.to_diagnostic())
+    pub fn get_path_typeid(
+        &mut self,
+        path: FileSpanned<impl Iterator<Item = Spur>>,
+    ) -> Result<TypeId, Diagnostic> {
+        let spur = path.map_inner(|path| self.hir_path_to_spur(path));
+        self.name_resolver
+            .resolve_variable(spur, self.string_interner)
     }
 
     /// Format a `flux_typesystem` [`TypeId`] to a `String`
@@ -369,7 +365,7 @@ impl Display for TEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{}\n  {}\n-----\n{}",
+            "{}\n{}\n  {}\n",
             self.type_interner,
             "TEnv".green(),
             self.entries
@@ -386,23 +382,23 @@ impl Display for TEnv {
                         self.fmt_tentry(entry),
                     ))
                 }),
-            self.scopes
-                .iter()
-                .enumerate()
-                .map(|(idx, scope)| {
-                    format!(
-                        "scope {idx} {{\n  {}\n}}\n",
-                        scope.0.iter().format_with("\n  ", |(name, ty), f| {
-                            f(&format_args!(
-                                "{} {} {}",
-                                self.string_interner.resolve(name).yellow(),
-                                "->".purple(),
-                                ty
-                            ))
-                        })
-                    )
-                })
-                .join("\n")
+            // self.scopes
+            //     .iter()
+            //     .enumerate()
+            //     .map(|(idx, scope)| {
+            //         format!(
+            //             "scope {idx} {{\n  {}\n}}\n",
+            //             scope.0.iter().format_with("\n  ", |(name, ty), f| {
+            //                 f(&format_args!(
+            //                     "{} {} {}",
+            //                     self.string_interner.resolve(name).yellow(),
+            //                     "->".purple(),
+            //                     ty
+            //                 ))
+            //             })
+            //         )
+            //     })
+            //     .join("\n")
         )
     }
 }

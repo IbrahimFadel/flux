@@ -16,6 +16,8 @@ basic_node!(ApplyDecl);
 basic_node!(ApplyDeclTrait);
 basic_node!(ApplyDeclType);
 basic_node!(ApplyDeclAssocType);
+basic_node!(UseDecl);
+basic_node!(ModDecl);
 
 basic_node!(PathExpr);
 basic_node!(ParenExpr);

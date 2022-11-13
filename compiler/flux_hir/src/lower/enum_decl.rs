@@ -7,25 +7,28 @@ impl LoweringCtx {
         let name = self.lower_node(
             enum_decl.name(),
             |this, _| {
-                Spanned::new(
-                    this.interner.get_or_intern_static(POISONED_STRING_VALUE),
-                    this.span_node(&enum_decl),
-                )
+                this.interner
+                    .get_or_intern_static(POISONED_STRING_VALUE)
+                    .at(enum_decl.range().to_span())
             },
-            |this, name| Spanned::new(name.ident().unwrap().text_key(), this.span_node(&enum_decl)),
+            |_, name| {
+                name.ident()
+                    .unwrap()
+                    .text_key()
+                    .at(enum_decl.range().to_span())
+            },
         );
-        let generic_param_list = enum_decl
-            .generic_param_list()
-            .map_or(GenericParamList::empty(), |generic_param_list| {
-                self.lower_generic_param_list(generic_param_list)
-            });
+        let generic_param_list = enum_decl.generic_param_list().map_or(
+            GenericParamList::empty().at(name.span),
+            |generic_param_list| self.lower_generic_param_list(generic_param_list),
+        );
         let where_clause = enum_decl
             .where_clause()
             .map_or(WhereClause::EMPTY, |where_clause| {
                 self.lower_where_clause(where_clause, &generic_param_list)
             });
         let variants = self.lower_enum_variants(enum_decl.variants(), &generic_param_list);
-        EnumDecl::new(name, generic_param_list, where_clause, variants)
+        EnumDecl::new(name, where_clause, variants)
     }
 
     fn lower_enum_variants(

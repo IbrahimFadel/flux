@@ -6,7 +6,7 @@ impl LoweringCtx {
     pub(crate) fn lower_generic_param_list(
         &mut self,
         generic_param_list: ast::GenericParamList,
-    ) -> GenericParamList {
+    ) -> Spanned<GenericParamList> {
         let type_params = generic_param_list
             .type_params()
             .map(|type_param| {
@@ -17,7 +17,7 @@ impl LoweringCtx {
                 )
             })
             .collect();
-        GenericParamList::new(type_params)
+            GenericParamList::new(type_params).at(generic_param_list.range().to_span())
     }
 
     pub(crate) fn lower_where_clause(

@@ -1,22 +1,19 @@
 use flux_syntax::ast::ApplyDeclAssocType;
 
-use crate::hir::{
-    ApplyDecl, AssociatedType, AssociatedTypeDef, FnDecl, GenericParamList, WhereClause,
-};
+use crate::hir::{ApplyDecl, AssociatedTypeDef, FnDecl, GenericParamList, WhereClause};
 
 use super::*;
 
 impl LoweringCtx {
     pub(crate) fn lower_apply_decl(&mut self, apply_decl: ast::ApplyDecl) -> ApplyDecl {
-        let generic_param_list = apply_decl
-            .generic_param_list()
-            .map_or(GenericParamList::empty(), |generic_param_list| {
-                self.lower_generic_param_list(generic_param_list)
-            });
+        let generic_param_list = apply_decl.generic_param_list().map_or(
+            GenericParamList::empty().at(apply_decl.range().to_span()),
+            |generic_param_list| self.lower_generic_param_list(generic_param_list),
+        );
         let trt = apply_decl.trt().map(|trt| {
             let path = self.lower_node(
                 trt.path(),
-                |_, _| Path::poisoned(Span::new(trt.range())),
+                |_, _| Path::poisoned(),
                 |this, trt| this.lower_path(trt.segments()),
             );
             let args = trt.generic_arg_list().map_or(vec![], |arg_list| {
@@ -29,10 +26,7 @@ impl LoweringCtx {
         });
         let ty = self.lower_node(
             apply_decl.to_ty(),
-            |this, ty| {
-                this.types
-                    .alloc(Spanned::new(Type::Error, this.span_node(&ty)))
-            },
+            |this, ty| this.types.alloc(Type::Error.at(ty.range().to_span())),
             |this, ty| this.lower_apply_decl_type(ty, &generic_param_list),
         );
         let where_clause = apply_decl
@@ -53,10 +47,7 @@ impl LoweringCtx {
     ) -> TypeIdx {
         self.lower_node(
             ty.ty(),
-            |this, _| {
-                this.types
-                    .alloc(Spanned::new(Type::Error, this.span_node(&ty)))
-            },
+            |this, _| this.types.alloc(Type::Error.at(ty.range().to_span())),
             |this, ty| this.lower_type(ty, generic_param_list),
         )
     }
@@ -75,11 +66,8 @@ impl LoweringCtx {
                 );
                 let ty = self.lower_node(
                     ty.ty(),
-                    |this, ty| {
-                        this.types
-                            .alloc(Spanned::new(Type::Error, this.span_node(&ty)))
-                    },
-                    |this, ty| this.lower_type(ty, &generic_param_list),
+                    |this, ty| this.types.alloc(Type::Error.at(ty.range().to_span())),
+                    |this, ty| this.lower_type(ty, generic_param_list),
                 );
                 AssociatedTypeDef::new(name, ty)
             })

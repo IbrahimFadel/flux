@@ -12,13 +12,16 @@ pub enum TypeError {
         b: FileSpanned<String>,
         span: InFile<Span>,
     },
-    UnknownLocal {
+    UnknownVariable {
         name: FileSpanned<String>,
     },
     UnknownFunction {
         path: FileSpanned<String>,
     },
     UnknownStruct {
+        path: FileSpanned<String>,
+    },
+    UnknownType {
         path: FileSpanned<String>,
     },
 }
@@ -45,13 +48,13 @@ impl ToDiagnostic for TypeError {
                     b.clone(),
                 ],
             ),
-            Self::UnknownLocal { name } => Diagnostic::error(
+            Self::UnknownVariable { name } => Diagnostic::error(
                 name.map_ref(|span| span.span.range.start().into()),
                 DiagnosticCode::UnknownLocal,
-                "unknown local referenced".to_string(),
+                "unknown variable referenced".to_string(),
                 vec![FileSpanned::new(
                     Spanned::new(
-                        format!("unknown local `{}` referenced", name.inner.inner),
+                        format!("unknown variable `{}` referenced", name.inner.inner),
                         name.span,
                     ),
                     name.file_id,
@@ -76,6 +79,18 @@ impl ToDiagnostic for TypeError {
                 vec![FileSpanned::new(
                     Spanned::new(
                         format!("unknown struct `{}` referenced", path.inner.inner),
+                        path.span,
+                    ),
+                    path.file_id,
+                )],
+            ),
+            Self::UnknownType { path } => Diagnostic::error(
+                path.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnknownStruct,
+                "unknown type referenced".to_string(),
+                vec![FileSpanned::new(
+                    Spanned::new(
+                        format!("unknown type `{}` referenced", path.inner.inner),
                         path.span,
                     ),
                     path.file_id,

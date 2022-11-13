@@ -1,5 +1,6 @@
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileId, FileSpanned, InFile, Span, Spanned};
+use flux_span::{ToSpan, WithSpan};
 use flux_syntax::ast;
 use flux_syntax::{ast::AstNode, SyntaxToken};
 use flux_typesystem as ts;
@@ -8,7 +9,7 @@ use lasso::ThreadedRodeo;
 use text_size::TextRange;
 use ts::{ConcreteKind, TChecker, TypeId, TypeKind};
 
-use crate::hir::{Name, Path, Type, TypeIdx};
+use crate::hir::{Name, Path, Type, TypeIdx, Visibility};
 use crate::{diagnostics::LoweringDiagnostic, hir::Expr};
 
 mod apply_decl;
@@ -16,10 +17,12 @@ mod enum_decl;
 mod expr;
 pub(crate) mod fn_decl;
 mod generic;
+mod mod_decl;
 mod stmt;
 mod struct_decl;
 mod trait_decl;
 mod r#type;
+mod use_decl;
 
 static POISONED_STRING_VALUE: &str = "poisoned";
 
@@ -163,6 +166,13 @@ impl LoweringCtx {
         Path::from_syntax_tokens(segments)
     }
 
+    fn lower_visibility(&self, visibility: ast::Visibility) -> Visibility {
+        match visibility.public() {
+            Some(_) => Visibility::Public,
+            None => Visibility::Private,
+        }
+    }
+
     pub(crate) fn to_ts_ty(&self, idx: TypeIdx) -> Spanned<ts::Type> {
         self.types[idx].map_ref(|ty| {
             let (kind, params) = match ty {
@@ -171,7 +181,7 @@ impl LoweringCtx {
                     Some(args.iter().map(|arg| self.to_ts_tykind(*arg).inner)),
                 ),
                 Type::Tuple(ids) => (TypeKind::Concrete(ConcreteKind::Tuple(ids.clone())), None),
-                Type::Generic => (TypeKind::Generic, None),
+                Type::Generic(_) => (TypeKind::Generic, None),
                 Type::Error => (TypeKind::Unknown, None),
             };
             match params {
@@ -187,7 +197,7 @@ impl LoweringCtx {
                 TypeKind::Concrete(ConcreteKind::Path(path.get_unspanned_spurs()))
             }
             Type::Tuple(ids) => TypeKind::Concrete(ConcreteKind::Tuple(ids.clone())),
-            Type::Generic => TypeKind::Generic,
+            Type::Generic(_) => TypeKind::Generic,
             Type::Error => TypeKind::Unknown,
         })
     }

@@ -1,37 +1,8 @@
-/*
-struct Spanned<T>
-    where T is Clone
-{
-    inner T,
-    span Span
-}
-
-enum Result<T, E> {
-    Ok -> T,
-    Err -> E,
-    UB,
-}
-
-trait Foo<F, E>
-    where F is Clone, E is Foo
-{
-    type T;
-
-    fn to_foo();
-    fn test() T;
-    fn bar<X, Y>(x X) Y
-        where X is Clone;
-}
-
-apply<A, B> Foo<A> to Spanned<B>
-    where A is Clone, B is Food
-{
-    type T = i32;
-
-    fn to_foo() {
-    }
-}
-*/
+mod foo;
+mod bar;
+mod bazz;
+mod test;
+mod hi;
 
 struct Foo {
     x i32,
@@ -44,11 +15,12 @@ struct Bar {
 }
 
 fn main() {
+    let test = 0;
     let x Foo = Foo {
-        x: 0,
-        y: 1,
-        z: Bar<X> {
-            bar_field: 100.99,
+        x: x,
+        y: 1.0,
+        z: Bar {
+            bar_field: 100,
         }
     };
 }

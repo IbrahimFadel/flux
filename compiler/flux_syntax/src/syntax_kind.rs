@@ -18,6 +18,8 @@ pub enum SyntaxKind {
     ApplyDeclMethodList,
     ApplyDeclMethod,
     ApplyDeclAssocType,
+    UseDecl,
+    ModDecl,
 
     GenericParamList,
     TypeParam,

@@ -6,10 +6,13 @@ use flux_syntax::{
 };
 use flux_typesystem::TypeId;
 use hir::{
-    ApplyDecl, EnumDecl, FnDecl, GenericParamList, Name, ParamList, StructDecl, TraitDecl, TypeIdx,
+    ApplyDecl, EnumDecl, FnDecl, FnDeclFirstPass, GenericParamList, ModDecl, Name, ParamList,
+    StructDecl, TraitDecl, TypeIdx, UseDecl,
 };
+use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 use lower::LoweringCtx;
+use tracing::{debug, info, instrument};
 
 use crate::hir::WhereClause;
 
@@ -19,6 +22,8 @@ mod lower;
 
 #[derive(Debug)]
 pub struct Module {
+    pub uses: Vec<UseDecl>,
+    pub mods: Vec<ModDecl>,
     pub functions: Vec<FnDecl>,
     pub enums: Vec<EnumDecl>,
     pub structs: Vec<StructDecl>,
@@ -29,7 +34,7 @@ pub struct Module {
 fn lower_functions(ctx: &mut LoweringCtx, root: Root, file_id: FileId) -> Vec<FnDecl> {
     let fn_signatures: Vec<(
         Name,
-        GenericParamList,
+        Spanned<GenericParamList>,
         Spanned<ParamList>,
         TypeIdx,
         WhereClause,
@@ -77,6 +82,48 @@ fn lower_functions(ctx: &mut LoweringCtx, root: Root, file_id: FileId) -> Vec<Fn
         .collect()
 }
 
+#[derive(Debug, Default)]
+pub struct ItemTree {
+    pub uses: Arena<UseDecl>,
+    pub mods: Arena<ModDecl>,
+    pub enums: Arena<EnumDecl>,
+    pub structs: Arena<StructDecl>,
+    pub functions: Arena<FnDeclFirstPass>,
+}
+
+/// Since we typecheck in the same pass as typechecking, we need access to all items across all modules before we start lowering item bodies.
+/// This pass lowers items but not their bodies. ie. types, traits (with method signatures, **not** bodies), and function signatures.
+/// Using this initial pass we can then lower item bodies and typecheck without missing any information (like what the return type of a function in another file is).
+/// Furthermore, this pass will collect all the mod statements which will allow the driver to determine what files to parse and lower.
+#[instrument(level = "info", skip(root, interner, item_tree))]
+pub fn lower_items(
+    root: SyntaxNode,
+    file_id: FileId,
+    interner: &'static ThreadedRodeo,
+    item_tree: &mut ItemTree,
+) -> Vec<Idx<ModDecl>> {
+    let mut ctx = LoweringCtx::new(file_id, interner);
+    let root = Root::cast(root).expect("internal compiler error: Root node should always cast");
+    root.use_decls().for_each(|use_decl| {
+        item_tree.uses.alloc(ctx.lower_use_decl(use_decl));
+    });
+    let mods = root
+        .mod_decls()
+        .map(|mod_decl| item_tree.mods.alloc(ctx.lower_mod_decl(mod_decl)))
+        .collect();
+    root.enum_decls().for_each(|enum_decl| {
+        item_tree.enums.alloc(ctx.lower_enum_decl(enum_decl));
+    });
+    root.struct_decls().for_each(|struct_decl| {
+        item_tree.structs.alloc(ctx.lower_struct_decl(struct_decl));
+    });
+    root.fn_decls().for_each(|fn_decl| {
+        item_tree.functions.alloc(ctx.lower_fn_signature(fn_decl));
+    });
+    debug!("lowered items without bodies");
+    mods
+}
+
 pub fn lower_to_hir(
     root: SyntaxNode,
     file_id: FileId,
@@ -84,6 +131,14 @@ pub fn lower_to_hir(
 ) -> (Module, Vec<Diagnostic>) {
     let mut ctx = LoweringCtx::new(file_id, interner);
     let root = Root::cast(root).expect("internal compiler error: Root node should always cast");
+    let uses: Vec<_> = root
+        .use_decls()
+        .map(|use_decl| ctx.lower_use_decl(use_decl))
+        .collect();
+    let mods: Vec<_> = root
+        .mod_decls()
+        .map(|mod_decl| ctx.lower_mod_decl(mod_decl))
+        .collect();
     let enums: Vec<_> = root
         .enum_decls()
         .map(|enum_decl| ctx.lower_enum_decl(enum_decl))
@@ -102,6 +157,8 @@ pub fn lower_to_hir(
         .collect();
     let functions = lower_functions(&mut ctx, root, file_id);
     let module = Module {
+        uses,
+        mods,
         functions,
         enums,
         structs,

@@ -10,7 +10,7 @@ impl LoweringCtx {
         fn_decl: ast::FnDecl,
     ) -> (
         Name,
-        GenericParamList,
+        Spanned<GenericParamList>,
         Spanned<ParamList>,
         TypeIdx,
         WhereClause,
@@ -18,18 +18,21 @@ impl LoweringCtx {
         let name = self.lower_node(
             fn_decl.name(),
             |this, _| {
-                Spanned::new(
-                    this.interner.get_or_intern_static(POISONED_STRING_VALUE),
-                    this.span_node(&fn_decl),
-                )
+                this.interner
+                    .get_or_intern_static(POISONED_STRING_VALUE)
+                    .at(fn_decl.range().to_span())
             },
-            |this, name| Spanned::new(name.ident().unwrap().text_key(), this.span_node(&fn_decl)),
+            |_, name| {
+                name.ident()
+                    .unwrap()
+                    .text_key()
+                    .at(fn_decl.range().to_span())
+            },
         );
-        let generic_param_list = fn_decl
-            .generic_param_list()
-            .map_or(GenericParamList::empty(), |generic_param_list| {
-                self.lower_generic_param_list(generic_param_list)
-            });
+        let generic_param_list = fn_decl.generic_param_list().map_or(
+            GenericParamList::empty().at(name.span),
+            |generic_param_list| self.lower_generic_param_list(generic_param_list),
+        );
         let where_clause = fn_decl
             .where_clause()
             .map_or(WhereClause::EMPTY, |where_clause| {
@@ -37,14 +40,14 @@ impl LoweringCtx {
             });
         let param_list = self.lower_node(
             fn_decl.param_list(),
-            |_, _| Spanned::new(ParamList::new(vec![]), name.span),
+            |_, _| ParamList::new(vec![]).at(name.span),
             |this, param_list| this.lower_param_list(param_list, &generic_param_list),
         );
         let return_ty = if let Some(return_ty) = fn_decl.return_type() {
             self.lower_type(return_ty, &generic_param_list)
         } else {
             self.types
-                .alloc(Spanned::new(Type::Tuple(tiny_vec!()), param_list.span))
+                .alloc(Type::Tuple(tiny_vec!()).at(param_list.span))
         };
         (
             name,
@@ -59,7 +62,7 @@ impl LoweringCtx {
         &mut self,
         fn_decl: ast::FnDecl,
         name: Name,
-        generic_param_list: GenericParamList,
+        generic_param_list: Spanned<GenericParamList>,
         param_list: Spanned<ParamList>,
         return_ty: TypeIdx,
         where_clause: WhereClause,
@@ -74,29 +77,23 @@ impl LoweringCtx {
             fn_decl.body(),
             |this, _| {
                 (
-                    this.exprs.alloc(Spanned::new(Expr::Error, return_ty_span)),
-                    this.tchk.tenv.insert(this.file_spanned(Spanned::new(
-                        ts::Type::new(TypeKind::Unknown),
-                        return_ty_span,
-                    ))),
+                    this.exprs.alloc(Expr::Error.at(return_ty_span)),
+                    this.tchk.tenv.insert(
+                        ts::Type::new(TypeKind::Unknown).in_file(this.file_id, return_ty_span),
+                    ),
                 )
             },
             |this, expr| this.lower_expr(expr, &generic_param_list),
         );
 
-        let result = self
-            .tchk
-            .unify(return_ty_id, body_ty_id, self.file_span(return_ty_span));
+        let result = self.tchk.unify(
+            return_ty_id,
+            body_ty_id,
+            return_ty_span.in_file(self.file_id),
+        );
         self.maybe_emit_diagnostic(result);
 
-        FnDecl::new(
-            name,
-            generic_param_list,
-            param_list,
-            return_ty,
-            where_clause,
-            body,
-        )
+        FnDecl::new(name, param_list, return_ty, where_clause, body)
     }
 
     pub(crate) fn lower_param_list(
@@ -108,11 +105,11 @@ impl LoweringCtx {
         for param in param_list.params() {
             params.push(self.lower_param(param, generic_param_list));
         }
-        Spanned::new(ParamList::new(params), Span::new(param_list.range()))
+        ParamList::new(params).at(param_list.range().to_span())
     }
 
     fn lower_param(&mut self, param: ast::Param, generic_param_list: &GenericParamList) -> Param {
-        let span = self.span_node(&param);
+        let span = param.range().to_span();
         let name = self.unwrap_token(
             param.name(),
             "missing parameter name".to_string(),
@@ -124,13 +121,13 @@ impl LoweringCtx {
                 self.emit_diagnostic(
                     LoweringDiagnostic::Missing {
                         msg: FileSpanned::new(
-                            Spanned::new("missing parameter type".to_string(), span),
+                            "missing parameter type".to_string().at(span),
                             self.file_id,
                         ),
                     }
                     .to_diagnostic(),
                 );
-                self.types.alloc(Spanned::new(Type::Error, span))
+                self.types.alloc(Type::Error.at(span))
             }
         };
         Param { name, ty }

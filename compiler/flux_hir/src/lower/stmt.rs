@@ -25,33 +25,32 @@ impl LoweringCtx {
         let_stmt: ast::LetStmt,
         generic_param_list: &GenericParamList,
     ) -> StmtResult {
+        let span = let_stmt.range().to_span();
         let name = self.lower_node(
             let_stmt.name(),
             |this, _| {
-                Spanned::new(
-                    this.interner.get_or_intern_static(POISONED_STRING_VALUE),
-                    this.span_node(&let_stmt),
-                )
+                this.interner
+                    .get_or_intern_static(POISONED_STRING_VALUE)
+                    .at(span)
             },
-            |this, name| Spanned::new(name.ident().unwrap().text_key(), this.span_node(&let_stmt)),
+            |this, name| name.ident().unwrap().text_key().at(span),
         );
 
         let (ty_id, ty_idx) = if let Some(ty) = let_stmt.ty() {
             let ty = self.lower_type(ty, generic_param_list);
             (
-                self.tchk.tenv.insert(self.file_spanned(self.to_ts_ty(ty))),
+                self.tchk
+                    .tenv
+                    .insert(self.to_ts_ty(ty).in_file(self.file_id)),
                 ty,
             )
         } else {
             (
-                self.tchk.tenv.insert(self.file_spanned(Spanned::new(
-                    ts::Type::new(TypeKind::Unknown),
-                    self.span_node(&let_stmt),
-                ))),
-                self.types.alloc(Spanned::new(
-                    Type::Tuple(tiny_vec!()),
-                    self.span_node(&let_stmt),
-                )),
+                self.tchk.tenv.insert(
+                    ts::Type::new(TypeKind::Unknown)
+                        .in_file(self.file_id, self.span_node(&let_stmt)),
+                ),
+                self.types.alloc(Type::Tuple(tiny_vec!()).at(span)),
             )
         };
 
@@ -59,22 +58,18 @@ impl LoweringCtx {
             let_stmt.value(),
             |this, _| {
                 (
-                    this.exprs
-                        .alloc(Spanned::new(Expr::Error, this.span_node(&let_stmt))),
-                    this.tchk.tenv.insert(this.file_spanned(Spanned::new(
-                        ts::Type::new(TypeKind::Unknown),
-                        this.span_node(&let_stmt),
-                    ))),
+                    this.exprs.alloc(Expr::Error.at(span)),
+                    this.tchk
+                        .tenv
+                        .insert(ts::Type::new(TypeKind::Unknown).in_file(this.file_id, span)),
                 )
             },
             |this, expr| this.lower_expr(expr, generic_param_list),
         );
 
-        let result = self.tchk.unify(
-            ty_id,
-            value_ty_id,
-            self.file_span(self.span_node(&let_stmt)),
-        );
+        let result = self
+            .tchk
+            .unify(ty_id, value_ty_id, span.in_file(self.file_id));
         self.maybe_emit_diagnostic(result);
 
         self.tchk.tenv.insert_local_to_scope(name.inner, ty_id);
@@ -95,13 +90,15 @@ impl LoweringCtx {
         expr: ast::ExprStmt,
         generic_param_list: &GenericParamList,
     ) -> StmtResult {
+        let span = expr.range().to_span();
         let (idx, ty_id) = self.lower_node(
             expr.expr(),
             |this, _| {
-                let expr = Spanned::new(Expr::Error, this.span_node(&expr));
-                let ty_id = this.tchk.tenv.insert(
-                    this.file_spanned(Spanned::new(ts::Type::new(TypeKind::Unknown), expr.span)),
-                );
+                let expr = Expr::Error.at(span);
+                let ty_id = this
+                    .tchk
+                    .tenv
+                    .insert(ts::Type::new(TypeKind::Unknown).in_file(this.file_id, span));
                 let idx = this.exprs.alloc(expr);
                 (idx, ty_id)
             },

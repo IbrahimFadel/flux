@@ -40,11 +40,11 @@ impl LoweringCtx {
         } else if generic_param_list
             .get(path.nth(0).expect("internal compiler error: path is empty"))
         {
-            Type::Generic
+            Type::Generic(*path.get_unspanned_spurs().first().unwrap())
         } else {
             Type::Path(path, args)
         };
 
-        self.types.alloc(Spanned::new(ty, self.span_node(&path_ty)))
+        self.types.alloc(ty.at(path_ty.range().to_span()))
     }
 }

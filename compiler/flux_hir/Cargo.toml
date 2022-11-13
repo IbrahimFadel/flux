@@ -9,7 +9,10 @@ lasso = "0.6.0"
 text-size = "1.1.0"
 itertools = "0.10.5"
 tinyvec = { version = "1.6.0", features = ["alloc"] }
+tracing = "0.1.37"
+
 flux_span = { path = "../flux_span" }
 flux_syntax = { path = "../flux_syntax" }
 flux_typesystem = { path = "../flux_typesystem" }
 flux_diagnostics = { path = "../flux_diagnostics" }
+flux_proc_macros = { path = "../flux_proc_macros" }

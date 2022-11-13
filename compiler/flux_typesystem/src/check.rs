@@ -31,6 +31,23 @@ impl TChecker {
                 self.tenv.set_type(a, b_kind.inner.inner);
                 Ok(())
             }
+            (Generic, _) => {
+                /*
+                fn foo<T>(x T) {
+                }
+                foo(0); // Ok
+
+                fn foo<T: Foo>(x T) {
+                }
+                foo(0); // Check
+                Does int implement Foo?
+                Subtyping:
+                -   Does sN implement Foo?
+                -   Does uN implement Foo?
+                */
+                // let constraints = self.tenv.get_entry(a).constraints;
+                todo!()
+            },
             (Concrete(ConcreteKind::Path(path)), Int(int_id)) => match int_id {
                 Some(int_id) => self.unify(a, *int_id, unification_span),
                 None => {

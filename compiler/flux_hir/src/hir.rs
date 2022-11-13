@@ -1,6 +1,7 @@
 use std::collections::HashSet;
-
-use flux_span::{Span, Spanned};
+extern crate flux_proc_macros;
+use flux_proc_macros::Locatable;
+use flux_span::{Span, Spanned, WithSpan};
 use flux_syntax::SyntaxToken;
 use flux_typesystem::TypeId;
 use itertools::Itertools;
@@ -11,9 +12,22 @@ use tinyvec::TinyVec;
 pub type Name = Spanned<Spur>;
 
 #[derive(Debug)]
+pub enum Visibility {
+    Private,
+    Public,
+}
+
+pub type FnDeclFirstPass = (
+    Name,
+    Spanned<GenericParamList>,
+    Spanned<ParamList>,
+    TypeIdx,
+    WhereClause,
+);
+
+#[derive(Debug, Locatable)]
 pub struct FnDecl {
     name: Name,
-    generic_param_list: GenericParamList,
     param_list: Spanned<ParamList>,
     return_ty: TypeIdx,
     where_clause: WhereClause,
@@ -23,7 +37,6 @@ pub struct FnDecl {
 impl FnDecl {
     pub fn new(
         name: Name,
-        generic_param_list: GenericParamList,
         param_list: Spanned<ParamList>,
         return_ty: TypeIdx,
         where_clause: WhereClause,
@@ -31,7 +44,6 @@ impl FnDecl {
     ) -> Self {
         Self {
             name,
-            generic_param_list,
             param_list,
             return_ty,
             where_clause,
@@ -40,7 +52,7 @@ impl FnDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Locatable)]
 pub struct ParamList(Vec<Param>);
 
 impl ParamList {
@@ -61,7 +73,7 @@ pub struct Param {
 
 pub type ExprIdx = Idx<Spanned<Expr>>;
 
-#[derive(Debug)]
+#[derive(Debug, Locatable)]
 pub enum Expr {
     Path(Path),
     Block(Block),
@@ -140,7 +152,7 @@ pub struct LetStmt {
     pub value: ExprIdx,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Locatable)]
 pub struct Path(Vec<Name>);
 
 impl Path {
@@ -163,7 +175,7 @@ impl Path {
     /// Build a default path
     ///
     /// This is used for poisoned values
-    pub fn poisoned(span: Span) -> Path {
+    pub fn poisoned() -> Path {
         Self(vec![])
         // Self(Spanned::new(tiny_vec!(), span))
     }
@@ -196,11 +208,11 @@ impl Path {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Locatable)]
 pub enum Type {
     Path(Path, Vec<TypeIdx>),
     Tuple(TinyVec<[TypeId; 2]>),
-    Generic,
+    Generic(Spur),
     Error,
 }
 
@@ -209,28 +221,25 @@ pub type TypeIdx = Idx<Spanned<Type>>;
 #[derive(Debug)]
 pub struct StructDecl {
     name: Name,
-    generic_param_list: GenericParamList,
     where_clause: WhereClause,
-    field_list: StructFieldList,
+    field_list: Spanned<StructFieldList>,
 }
 
 impl StructDecl {
     pub fn new(
         name: Name,
-        generic_param_list: GenericParamList,
         where_clause: WhereClause,
-        field_list: StructFieldList,
+        field_list: Spanned<StructFieldList>,
     ) -> Self {
         Self {
             name,
-            generic_param_list,
             where_clause,
             field_list,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Locatable)]
 pub struct GenericParamList(HashSet<Name>);
 
 impl GenericParamList {
@@ -311,7 +320,7 @@ impl TypeBound {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Locatable)]
 pub struct StructFieldList(Vec<StructField>);
 
 impl StructFieldList {
@@ -343,7 +352,6 @@ impl StructField {
 #[derive(Debug)]
 pub struct TraitDecl {
     name: Name,
-    generic_param_list: GenericParamList,
     where_clause: WhereClause,
     associated_types: Vec<AssociatedType>,
     methods: Vec<TraitMethod>,
@@ -352,14 +360,12 @@ pub struct TraitDecl {
 impl TraitDecl {
     pub fn new(
         name: Name,
-        generic_param_list: GenericParamList,
         where_clause: WhereClause,
         associated_types: Vec<AssociatedType>,
         methods: Vec<TraitMethod>,
     ) -> Self {
         Self {
             name,
-            generic_param_list,
             where_clause,
             associated_types,
             methods,
@@ -372,7 +378,6 @@ pub type AssociatedType = Name;
 #[derive(Debug)]
 pub struct TraitMethod {
     name: Name,
-    generic_param_list: GenericParamList,
     param_list: Spanned<ParamList>,
     return_ty: TypeIdx,
     where_clause: WhereClause,
@@ -381,14 +386,12 @@ pub struct TraitMethod {
 impl TraitMethod {
     pub fn new(
         name: Name,
-        generic_param_list: GenericParamList,
         param_list: Spanned<ParamList>,
         return_ty: TypeIdx,
         where_clause: WhereClause,
     ) -> Self {
         Self {
             name,
-            generic_param_list,
             param_list,
             return_ty,
             where_clause,
@@ -399,21 +402,14 @@ impl TraitMethod {
 #[derive(Debug)]
 pub struct EnumDecl {
     name: Name,
-    generic_param_list: GenericParamList,
     where_clause: WhereClause,
     variants: Vec<EnumVariant>,
 }
 
 impl EnumDecl {
-    pub fn new(
-        name: Name,
-        generic_param_list: GenericParamList,
-        where_clause: WhereClause,
-        variants: Vec<EnumVariant>,
-    ) -> Self {
+    pub fn new(name: Name, where_clause: WhereClause, variants: Vec<EnumVariant>) -> Self {
         Self {
             name,
-            generic_param_list,
             where_clause,
             variants,
         }
@@ -462,5 +458,23 @@ pub struct AssociatedTypeDef((Name, TypeIdx));
 impl AssociatedTypeDef {
     pub fn new(name: Name, ty: TypeIdx) -> Self {
         Self((name, ty))
+    }
+}
+
+#[derive(Debug)]
+pub struct UseDecl((Path, Option<Name>));
+
+impl UseDecl {
+    pub fn new(path: Path, alias: Option<Name>) -> Self {
+        Self((path, alias))
+    }
+}
+
+#[derive(Debug)]
+pub struct ModDecl(pub (Visibility, Name));
+
+impl ModDecl {
+    pub fn new(visibility: Visibility, name: Name) -> Self {
+        Self((visibility, name))
     }
 }

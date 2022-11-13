@@ -3,6 +3,7 @@ mod constraint;
 pub mod diagnostics;
 mod env;
 mod intern;
+mod name_res;
 pub mod r#type;
 
 pub use check::TChecker;

@@ -4,15 +4,17 @@ use flux_syntax::SyntaxKind;
 use crate::{parser::Parser, token_set::TokenSet};
 
 use self::{
-    apply_decl::apply_decl, enum_decl::enum_decl, fn_decl::fn_decl, struct_decl::struct_decl,
-    trait_decl::trait_decl,
+    apply_decl::apply_decl, enum_decl::enum_decl, fn_decl::fn_decl, mod_decl::mod_decl,
+    struct_decl::struct_decl, trait_decl::trait_decl, use_decl::use_decl,
 };
 
 mod apply_decl;
 mod enum_decl;
 mod fn_decl;
+mod mod_decl;
 mod struct_decl;
 mod trait_decl;
+mod use_decl;
 
 const ITEM_RECOVERY_SET: TokenSet = TokenSet::new(&[
     TokenKind::Fn,
@@ -40,16 +42,11 @@ pub(crate) fn item(p: &mut Parser) {
         trait_decl(p, m);
     } else if p.at(TokenKind::Apply) {
         apply_decl(p, m);
+    } else if p.at(TokenKind::Use) {
+        use_decl(p);
+    } else if p.at(TokenKind::Mod) {
+        mod_decl(p, m);
     } else {
-        // TokenKind::Type => {
-        //     type_decl_list(p, m);
-        // }
-        // TokenKind::Trait => {
-        //     trait_decl(p, m);
-        // }
-        // TokenKind::Apply => {
-        //     apply_decl(p, m);
-        // }
         p.err_and_bump("expected item");
     }
 }

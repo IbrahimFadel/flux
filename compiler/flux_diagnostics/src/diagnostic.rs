@@ -30,6 +30,7 @@ pub struct Diagnostic {
     code: DiagnosticCode,
     msg: String,
     labels: Vec<FileSpanned<String>>,
+    help: Option<String>,
 }
 
 impl Diagnostic {
@@ -46,6 +47,7 @@ impl Diagnostic {
             code,
             msg,
             labels,
+            help: None,
         }
     }
 
@@ -61,6 +63,7 @@ impl Diagnostic {
             code,
             msg,
             labels,
+            help: None,
         }
     }
 
@@ -73,7 +76,13 @@ impl Diagnostic {
             code,
             msg,
             labels: vec![],
+            help: None,
         }
+    }
+
+    pub fn with_help(mut self, help: String) -> Self {
+        self.help = Some(help);
+        self
     }
 
     pub(crate) fn to_report(&self) -> Report<FileSpan> {
@@ -101,12 +110,19 @@ impl Diagnostic {
             }))
         }
 
+        if let Some(help) = &self.help {
+            builder.set_help(help);
+        }
+
         builder.finish()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
+    CouldNotFindEntryFile,
+    CouldNotReadDir,
+    CouldNotFindSubmodule,
     ParserExpected,
     HirMissing,
     TypeMismatch,
@@ -115,6 +131,7 @@ pub enum DiagnosticCode {
     UnknownFunction,
     UnknownStruct,
     IncorrectNumberOfArgsInCall,
+    UnusedGenericParams,
     // CouldNotInitializeCacheDir,
     // UnexpectedToken,
     // Expected,
