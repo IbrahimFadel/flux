@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{parser::Parser, token_set::TokenSet};
 
-use super::generic_args::opt_generic_arg_list;
+use super::{generic_args::opt_generic_arg_list, name};
 
 pub(super) fn opt_generic_param_list(p: &mut Parser) {
     if p.at(TokenKind::CmpLt) {
@@ -27,9 +27,7 @@ fn generic_param_list(p: &mut Parser) {
 
 fn generic_param(p: &mut Parser) {
     let m = p.start();
-    if !p.eat(TokenKind::Ident) {
-        p.err_and_bump("expected type parameter");
-    };
+    name(p, TokenSet::new(&[TokenKind::CmpGt]));
     m.complete(p, SyntaxKind::TypeParam);
 }
 
@@ -38,20 +36,6 @@ fn generic_param(p: &mut Parser) {
 /// Stops consuming tokens when it reaches a [`TokenKind`] included in `ending_tokens`
 ///
 /// Does not consume ending token
-///
-/// ```
-/// use lasso::ThreadedRodeo;
-/// use flux_lexer::Lexer;
-/// use flux_span::FileId;
-/// use flux_parser::source::Source;
-
-/// let rodeo = ThreadedRodeo::new();
-/// let file_id = FileId(rodeo.get_or_intern("main.flx"));
-/// let tokens: Vec<_> = Lexer::new(src).collect();
-/// let source = Source::new(&tokens, file_id);
-/// let parser = Parser::new(source);
-/// let events = parser.parse();
-/// ```
 pub(super) fn opt_where_clause(p: &mut Parser, ending_tokens: TokenSet) {
     if !p.at(TokenKind::Where) {
         return;
@@ -73,7 +57,7 @@ pub(super) fn opt_where_clause(p: &mut Parser, ending_tokens: TokenSet) {
 
 fn where_predicate(p: &mut Parser) {
     let m = p.start();
-    p.bump(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Is]));
     if p.at(TokenKind::Is) {
         bounds(p);
     } else {
@@ -95,7 +79,7 @@ fn bounds(p: &mut Parser) {
 
 fn type_bound(p: &mut Parser) -> bool {
     let m = p.start();
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::CmpLt]));
     opt_generic_arg_list(p);
     m.complete(p, SyntaxKind::TypeBound);
     true

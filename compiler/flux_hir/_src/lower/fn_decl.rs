@@ -1,20 +1,13 @@
 use tinyvec::tiny_vec;
 
-use crate::hir::{FnDecl, GenericParamList, Name, Param, ParamList, Type, WhereClause};
+use crate::hir::{
+    FnDecl, FnDeclFirstPass, GenericParamList, Name, Param, ParamList, Type, WhereClause,
+};
 
 use super::*;
 
 impl LoweringCtx {
-    pub(crate) fn lower_fn_signature(
-        &mut self,
-        fn_decl: ast::FnDecl,
-    ) -> (
-        Name,
-        Spanned<GenericParamList>,
-        Spanned<ParamList>,
-        TypeIdx,
-        WhereClause,
-    ) {
+    pub(crate) fn lower_fn_signature(&mut self, fn_decl: ast::FnDecl) -> FnDeclFirstPass {
         let name = self.lower_node(
             fn_decl.name(),
             |this, _| {
@@ -55,23 +48,18 @@ impl LoweringCtx {
             param_list,
             return_ty,
             where_clause,
+            fn_decl,
         )
     }
 
-    pub(crate) fn lower_fn_decl(
-        &mut self,
-        fn_decl: ast::FnDecl,
-        name: Name,
-        generic_param_list: Spanned<GenericParamList>,
-        param_list: Spanned<ParamList>,
-        return_ty: TypeIdx,
-        where_clause: WhereClause,
-    ) -> FnDecl {
+    pub(crate) fn lower_fn_decl(&mut self, fn_decl: &FnDeclFirstPass) -> FnDecl {
+        let (name, generic_param_list, param_list, return_ty, where_clause, fn_decl) = fn_decl;
+
         let return_ty_id = self
             .tchk
             .tenv
-            .insert(self.file_spanned(self.to_ts_ty(return_ty)));
-        let return_ty_span = self.types[return_ty].span;
+            .insert(self.file_spanned(self.to_ts_ty(*return_ty)));
+        let return_ty_span = self.types[*return_ty].span;
 
         let (body, body_ty_id) = self.lower_node(
             fn_decl.body(),
@@ -93,7 +81,7 @@ impl LoweringCtx {
         );
         self.maybe_emit_diagnostic(result);
 
-        FnDecl::new(name, param_list, return_ty, where_clause, body)
+        FnDecl::new(*name, *param_list, *return_ty, *where_clause, body)
     }
 
     pub(crate) fn lower_param_list(

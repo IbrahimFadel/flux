@@ -39,6 +39,11 @@ pub(crate) fn fn_decl(p: &mut Parser, visibility: CompletedMarker) {
 pub(crate) fn fn_params(p: &mut Parser) {
     let m = p.start();
     p.expect(TokenKind::LParen);
+    if p.at(TokenKind::LBrace) {
+        p.error("expected `)` in parameter list");
+        m.complete(p, SyntaxKind::ParamList);
+        return;
+    }
     if !p.at(TokenKind::RParen) {
         fn_param(p);
     }

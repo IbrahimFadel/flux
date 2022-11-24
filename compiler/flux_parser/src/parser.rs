@@ -67,7 +67,7 @@ impl<'a, 'src> Parser<'a, 'src> {
     }
 
     pub(crate) fn error<T: Into<String>>(&mut self, msg: T) {
-        let range = self.peek_range().unwrap();
+        let range = self.peek_range().unwrap_or_default();
         let msg = msg.into();
         self.events.push(Event::Error(ParserDiagnostic::Unxpected {
             expected: FileSpanned::new(Spanned::new(msg, Span::new(range)), self.source.file_id),
@@ -105,7 +105,7 @@ impl<'a, 'src> Parser<'a, 'src> {
     }
 
     pub(crate) fn current(&mut self) -> TokenKind {
-        self.source.peek_kind().unwrap()
+        self.source.peek_kind().unwrap_or(TokenKind::Error)
     }
 
     fn peek(&mut self) -> Option<TokenKind> {

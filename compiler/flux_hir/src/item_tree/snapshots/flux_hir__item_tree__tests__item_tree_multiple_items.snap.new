@@ -1,0 +1,9 @@
+---
+source: compiler/flux_hir/src/item_tree/tests.rs
+assertion_line: 41
+expression: s
+---
+[32m-- Function --[39m
+	[33mname[39m [34m->[39m [35mtest[39m
+	[33mvisibility[39m [34m->[39m [35mPrivate[39m
+

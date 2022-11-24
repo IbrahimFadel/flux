@@ -1,11 +1,8 @@
-use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::{prelude::*, Registry};
+use tracing_tree::HierarchicalLayer;
 
 fn main() {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::TRACE)
-        .compact()
-        .finish();
+    let subscriber = Registry::default().with(HierarchicalLayer::new(2));
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     flux::build();
 }

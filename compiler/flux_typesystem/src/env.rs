@@ -16,23 +16,6 @@ use crate::{
     r#type::{ConcreteKind, StructConcreteKind, Type, TypeId, TypeKind},
 };
 
-#[derive(Debug)]
-struct Scope(HashMap<Spur, TypeId>);
-
-impl Scope {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn insert_local(&mut self, name: Spur, id: TypeId) {
-        self.0.insert(name, id);
-    }
-
-    pub fn get_local_typeid(&mut self, name: Spur) -> Option<TypeId> {
-        self.0.get(&name).cloned()
-    }
-}
-
 /// A `flux_typesystem` path
 ///
 /// In the `flux_hir` paths are represented as vectors of [`Spur`]s
@@ -62,7 +45,7 @@ pub struct TEnv {
     type_interner: Interner,
     string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
-    name_resolver: NameResolver,
+    pub name_resolver: NameResolver,
     /// Scopes of the current [`TEnv`]
     ///
     /// Holds types of locals. Furthermore, the first element in the vector represents the global scope (outside of the current function / type environment).

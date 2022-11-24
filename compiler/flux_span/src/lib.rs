@@ -1,6 +1,7 @@
 use std::{borrow::Borrow, hash::Hash, ops::Deref};
 
-use lasso::Spur;
+use itertools::Itertools;
+use lasso::{Spur, ThreadedRodeo};
 use text_size::TextRange;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -266,6 +267,13 @@ pub trait ToSpan: Into<TextRange> {
 }
 
 impl ToSpan for TextRange {}
+
+pub fn spur_iter_to_spur<'a>(
+    spurs: impl Iterator<Item = &'a Spur>,
+    interner: &'static ThreadedRodeo,
+) -> Spur {
+    interner.get_or_intern(spurs.map(|spur| interner.resolve(spur)).join("::"))
+}
 
 // #[macro_export]
 // macro_rules! can_be_spanned {

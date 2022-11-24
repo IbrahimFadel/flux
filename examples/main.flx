@@ -1,8 +1,6 @@
 mod foo;
 mod bar;
 mod bazz;
-mod test;
-mod hi;
 
 struct Foo {
     x i32,

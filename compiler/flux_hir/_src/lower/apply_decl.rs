@@ -80,16 +80,8 @@ impl LoweringCtx {
     ) -> Vec<FnDecl> {
         methods
             .map(|fn_decl| {
-                let (name, generic_param_list, param_list, return_ty, where_clause) =
-                    self.lower_fn_signature(fn_decl.clone());
-                self.lower_fn_decl(
-                    fn_decl,
-                    name,
-                    generic_param_list,
-                    param_list,
-                    return_ty,
-                    where_clause,
-                )
+                let fn_decl_first_pass = self.lower_fn_signature(fn_decl.clone());
+                self.lower_fn_decl(&fn_decl_first_pass)
             })
             .collect()
     }

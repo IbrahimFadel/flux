@@ -6,7 +6,7 @@ use lasso::{Spur, ThreadedRodeo};
 use crate::{diagnostics::TypeError, TypeId};
 
 #[derive(Debug)]
-pub(crate) struct NameResolver {
+pub struct NameResolver {
     /// Path and alias
     uses: Vec<(Spur, Option<Spur>)>,
     variables: Vec<Scope>,

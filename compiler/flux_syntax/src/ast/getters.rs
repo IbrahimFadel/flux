@@ -99,6 +99,7 @@ getters! {
     }
     StructDecl {
         name -> node(Name);
+        visibility -> node(Visibility);
         generic_param_list -> node(GenericParamList);
         where_clause -> node(WhereClause);
         field_list -> node(StructDeclFieldList);
@@ -114,20 +115,20 @@ getters! {
         type_params -> nodes(TypeParam);
     }
     TypeParam {
-        name -> tok(Ident);
+        name -> node(Name);
     }
     WhereClause {
         predicates -> nodes(WherePredicate);
     }
     WherePredicate {
-        name -> tok(Ident);
+        name -> node(Name);
         type_bound_list -> node(TypeBoundList);
     }
     TypeBoundList {
         type_bounds -> nodes(TypeBound);
     }
     TypeBound {
-        trait_name -> tok(Ident);
+        trait_name -> node(Name);
         generic_arg_list -> node(GenericArgList);
     }
     GenericArgList {

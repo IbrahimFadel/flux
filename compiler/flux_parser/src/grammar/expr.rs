@@ -48,6 +48,23 @@ pub(crate) fn expr_no_blocks(p: &mut Parser) {
 }
 
 fn current_op_prec(p: &mut Parser) -> u8 {
+    // if p.at(TokenKind::Eq) {
+    //     2
+    // } else if p.at(TokenKind::CmpEq)
+    //     || p.at(TokenKind::CmpNeq)
+    //     || p.at(TokenKind::CmpLt)
+    //     || p.at(TokenKind::CmpGt)
+    //     || p.at(TokenKind::CmpLte)
+    //     || p.at(TokenKind::CmpGte)
+    // {
+    //     3
+    // } else if p.at(TokenKind::Plus) || p.at(TokenKind::Minus) {
+    //     4
+    // } else if p.at(TokenKind::Star) || p.at(TokenKind::Slash) {
+    //     5
+    // } else {
+    //     0
+    // }
     match p.current() {
         TokenKind::Eq => 2,
         TokenKind::CmpEq
