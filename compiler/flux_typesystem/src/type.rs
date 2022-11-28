@@ -117,7 +117,7 @@ impl Display for TypeKind {
 pub enum ConcreteKind {
     Ptr(TypeId),
     Path(Vec<Spur>),
-    Tuple(TinyVec<[TypeId; 2]>),
+    Tuple(Vec<TypeId>),
     /// A vec of all the fields and their types
     /// We hold on to the field names because its necessary for checking if the field names are correct in struct initialization expressions
     Struct(StructConcreteKind),

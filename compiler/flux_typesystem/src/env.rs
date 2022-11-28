@@ -152,7 +152,7 @@ impl TEnv {
     pub fn insert_unit(&mut self, span: InFile<Span>) -> TypeId {
         self.insert(FileSpanned::new(
             Spanned::new(
-                Type::new(TypeKind::Concrete(ConcreteKind::Tuple(tiny_vec!()))),
+                Type::new(TypeKind::Concrete(ConcreteKind::Tuple(vec![]))),
                 span.inner,
             ),
             span.file_id,
@@ -471,7 +471,7 @@ mod tests {
         let fmt = tenv.fmt_ty_id(id);
         assert_eq!(fmt, "float");
         let other_id = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Tuple(tiny_vec!()),
+            ConcreteKind::Tuple(vec![]),
         ))));
         let id = tenv.insert(file_spanned(Type::new(TypeKind::Ref(other_id))));
         let fmt = tenv.fmt_ty_id(id);
@@ -489,7 +489,7 @@ mod tests {
             ConcreteKind::Ptr(a),
         ))));
         let id = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Tuple(tiny_vec!(a, b, c)),
+            ConcreteKind::Tuple(vec![a, b, c]),
         ))));
         let fmt = tenv.fmt_ty_id(id);
         assert_eq!(fmt, "(test, test::foo, *test)");

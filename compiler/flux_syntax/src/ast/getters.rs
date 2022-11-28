@@ -33,7 +33,7 @@ getters! {
     }
     Param {
         ty -> node(Type);
-        name -> tok(Ident);
+        name -> node(Name);
     }
     PathType {
         path -> node(Path);

@@ -3,13 +3,18 @@ use std::hash::{Hash, Hasher};
 use std::ops::Index;
 use std::{fmt, marker::PhantomData};
 
-use flux_span::FileId;
+use flux_diagnostics::Diagnostic;
+use flux_span::{FileId, Spanned};
 use flux_syntax::ast::{self, AstNode};
 use flux_syntax::SyntaxNode;
+use flux_typesystem::TEnv;
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 
-use crate::hir::{Name, Path, UseAlias, Visibility};
+use crate::hir::{
+    GenericParamList, Name, ParamList, Path, StructFieldList, Type, TypeIdx, UseAlias, Visibility,
+    WhereClause,
+};
 
 use self::lower::Context;
 
@@ -24,11 +29,11 @@ pub struct ItemTree {
     data: ItemTreeData,
 }
 
-pub(super) fn generate_item_tree(
+pub fn generate_item_tree(
     file_id: FileId,
     root: SyntaxNode,
     interner: &'static ThreadedRodeo,
-) -> ItemTree {
+) -> (ItemTree, Vec<Diagnostic>, Arena<Spanned<Type>>) {
     let ctx = Context::new(file_id, interner);
     let root =
         ast::Root::cast(root).expect("internal compiler error: root node should always cast");
@@ -37,6 +42,7 @@ pub(super) fn generate_item_tree(
 
 #[derive(Default, Debug, Eq, PartialEq)]
 struct ItemTreeData {
+    mods: Arena<Mod>,
     uses: Arena<Use>,
     functions: Arena<Function>,
     structs: Arena<Struct>,
@@ -153,6 +159,7 @@ macro_rules! mod_items {
 mod_items! {
     Function in functions -> ast::FnDecl,
     Struct in structs -> ast::StructDecl,
+    Mod in mods -> ast::ModDecl,
     // TypeAlias in type_aliases -> ast::TypeAliasDef,
     Use in uses -> ast::UseDecl,
 }
@@ -173,24 +180,35 @@ pub struct Use {
     pub ast: ast::UseDecl,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mod {
+    pub name: Name,
+    pub ast: ast::ModDecl,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Function {
-    pub name: Name,
     pub visibility: Visibility,
-    // pub params: Box<[TypeRef]>,
-    // pub ret_type: TypeRef,
+    pub name: Name,
+    pub generic_param_list: GenericParamList,
+    pub params: ParamList,
+    pub ret_type: TypeIdx,
+    pub where_clause: WhereClause,
     pub ast: ast::FnDecl,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Struct {
-    pub name: Name,
     pub visibility: Visibility,
+    pub name: Name,
+    pub generic_param_list: GenericParamList,
+    pub where_clause: WhereClause,
+    pub field_list: StructFieldList,
     pub ast: ast::StructDecl,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Type {
-    Path(Path),
-    Generic(Name),
-}
+// #[derive(Debug, Clone, Eq, PartialEq)]
+// pub enum Type {
+//     Path(Path),
+//     Generic(Name),
+// }

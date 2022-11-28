@@ -201,7 +201,8 @@ impl Driver {
 
         // let module_data = ModuleData::new()
 
-        flux_hir::test(file_id, root, &INTERNER);
+        let (_tree, diagnostics, _types) = flux_hir::generate_item_tree(file_id, root, &INTERNER);
+        self.file_cache.report_diagnostics(&diagnostics);
 
         // let module_name = self.interner.resolve(module_path.last().unwrap());
         // let parent_module_name = if module_path.len() >= 2 {

@@ -60,7 +60,7 @@ pub(crate) fn fn_params(p: &mut Parser) {
 
 fn fn_param(p: &mut Parser) {
     let m = p.start();
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::RParen]));
     type_(p);
     m.complete(p, SyntaxKind::Param);
 }

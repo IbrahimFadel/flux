@@ -17,11 +17,13 @@ impl<'a> Context<'a> {
     }
 
     pub fn lower_bodies(&mut self) {
+        println!("{:#?}", self.item_tree.top_level);
         for mod_item in &self.item_tree.top_level {
             match mod_item {
                 ModItem::Function(function) => self.handle_function(function),
                 ModItem::Use(uze) => todo!(),
                 ModItem::Struct(strukt) => todo!(),
+                ModItem::Mod(m) => todo!(),
             }
         }
     }
