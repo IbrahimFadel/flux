@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
+use flux_proc_macros::Locatable;
 use flux_span::WithSpan;
 use lasso::Spur;
-use tinyvec::TinyVec;
 
 /// A `flux_typesystem` type
 ///
@@ -11,10 +11,8 @@ use tinyvec::TinyVec;
 /// The type `Foo<i32, T, Bar>` has the constructor `Foo` and parameters `[i32, T, Bar]`
 ///
 /// Types always have a constructor, but not always parameters, as such we can store all the information in one vector rather than two to save memory.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Locatable)]
 pub struct Type(Vec<TypeKind>);
-
-impl WithSpan for Type {}
 
 impl Type {
     /// Create a new [`Type`] with only a constructor
@@ -116,7 +114,7 @@ impl Display for TypeKind {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConcreteKind {
     Ptr(TypeId),
-    Path(Vec<Spur>),
+    Path(Spur),
     Tuple(Vec<TypeId>),
     /// A vec of all the fields and their types
     /// We hold on to the field names because its necessary for checking if the field names are correct in struct initialization expressions

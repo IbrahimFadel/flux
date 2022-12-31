@@ -1,46 +1,49 @@
-use std::collections::HashMap;
-
+use crate::{
+    hir::{
+        Expr, FnDecl, GenericParamList, ModDecl, Module, Name, Param, ParamList, Path, StructDecl,
+        StructField, StructFieldList, Type, TypeBound, TypeBoundList, Visibility, WhereClause,
+        WherePredicate,
+    },
+    type_interner::{TypeIdx, TypeInterner},
+};
 use flux_diagnostics::Diagnostic;
-use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
+use flux_span::{Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{
-    ast::{self, AstNode, Root},
+    ast::{self, AstNode},
     SyntaxToken,
 };
-use flux_typesystem::{ConcreteKind, TEnv, TypeId, TypeKind};
-use la_arena::{Arena, Idx};
+
+use la_arena::Arena;
 use lasso::ThreadedRodeo;
 
-use crate::hir::{
-    GenericParamList, Name, Param, ParamList, Path, StructField, StructFieldList, Type, TypeBound,
-    TypeBoundList, TypeIdx, Visibility, WhereClause, WherePredicate,
-};
-
-use super::{Function, ItemTree, ItemTreeData, LocalItemTreeId, Mod, Struct};
-
-pub(super) struct Context {
-    interner: &'static ThreadedRodeo,
-    file_id: FileId,
-    data: ItemTreeData,
-    pub diagnostics: Vec<Diagnostic>,
-    types: Arena<Spanned<Type>>,
-    /// Maps from arena index to typesystem typeid
-    type_to_id: HashMap<TypeIdx, TypeId>,
-    tenv: TEnv,
-}
+mod expr;
 
 const POISONED_NAME: &str = "POISONED";
 
+pub(super) struct Context {
+    interner: &'static ThreadedRodeo,
+    diagnostics: Vec<Diagnostic>,
+    type_interner: TypeInterner,
+    exprs: Arena<Spanned<Expr>>,
+}
+
 impl Context {
-    pub fn new(file_id: FileId, interner: &'static ThreadedRodeo) -> Self {
+    pub fn new(interner: &'static ThreadedRodeo) -> Self {
         Self {
             interner,
-            file_id,
-            data: ItemTreeData::default(),
             diagnostics: vec![],
-            types: Arena::new(),
-            type_to_id: HashMap::new(),
-            tenv: TEnv::new(interner),
+            type_interner: TypeInterner::new(interner),
+            exprs: Arena::new(),
         }
+    }
+
+    pub(super) fn lower(&mut self, root: ast::Root) -> Module {
+        let mut module = Module::default();
+        root.fn_decls().for_each(|fn_decl| {
+            let f = self.lower_fn_decl(fn_decl);
+            module.functions.alloc(f);
+        });
+        module
     }
 
     /// Lower an AST node to its HIR equivalent
@@ -72,74 +75,6 @@ impl Context {
         }
     }
 
-    pub(super) fn lower_module_items(
-        mut self,
-        root: Root,
-    ) -> (ItemTree, Vec<Diagnostic>, Arena<Spanned<Type>>) {
-        let mut top_level: Vec<_> = root
-            .fn_decls()
-            .map(|fn_decl| self.lower_fn_decl(fn_decl))
-            .map(Into::into)
-            .collect();
-        let mut structs: Vec<_> = root
-            .struct_decls()
-            .map(|struct_decl| self.lower_struct_decl(struct_decl))
-            .map(Into::into)
-            .collect();
-        let mut mods: Vec<_> = root
-            .mod_decls()
-            .map(|m| self.lower_mod_decl(m))
-            .map(Into::into)
-            .collect();
-        top_level.append(&mut structs);
-        top_level.append(&mut mods);
-        (
-            ItemTree {
-                file_id: self.file_id,
-                top_level,
-                data: self.data,
-            },
-            self.diagnostics,
-            self.types,
-        )
-    }
-
-    fn to_ts_ty(&self, idx: TypeIdx) -> Spanned<flux_typesystem::Type> {
-        self.types[idx].map_ref(|ty| {
-            let (kind, params) = match ty {
-                Type::Path(path, args) => (
-                    TypeKind::Concrete(ConcreteKind::Path(path.get_unspanned_spurs())),
-                    Some(args.iter().map(|arg| self.to_ts_tykind(*arg).inner)),
-                ),
-                Type::Tuple(ids) => (
-                    TypeKind::Concrete(ConcreteKind::Tuple(
-                        ids.iter().map(|idx| self.type_to_id[idx]).collect(),
-                    )),
-                    None,
-                ),
-                Type::Generic(_) => (TypeKind::Generic, None),
-                Type::Unknown => (TypeKind::Unknown, None),
-            };
-            match params {
-                Some(params) => flux_typesystem::Type::with_params(kind, params),
-                None => flux_typesystem::Type::new(kind),
-            }
-        })
-    }
-
-    fn to_ts_tykind(&self, idx: TypeIdx) -> Spanned<TypeKind> {
-        self.types[idx].map_ref(|ty| match ty {
-            Type::Path(path, _) => {
-                TypeKind::Concrete(ConcreteKind::Path(path.get_unspanned_spurs()))
-            }
-            Type::Tuple(ids) => TypeKind::Concrete(ConcreteKind::Tuple(
-                ids.iter().map(|idx| self.type_to_id[idx]).collect(),
-            )),
-            Type::Generic(_) => TypeKind::Generic,
-            Type::Unknown => TypeKind::Unknown,
-        })
-    }
-
     fn lower_name(&mut self, name: Option<ast::Name>) -> Name {
         self.lower_node(
             name,
@@ -149,7 +84,7 @@ impl Context {
                     .at(name.range().to_span())
             },
             |_, name| {
-               name.ident().expect("internal compiler error: name did not contain identifier but was not marked poisoned").text_key().at(name.range().to_span())
+                name.ident().expect("internal compiler error: name did not contain identifier but was not marked poisoned").text_key().at(name.range().to_span())
             },
         )
     }
@@ -245,7 +180,7 @@ impl Context {
         &mut self,
         generic_arg_list: Option<ast::GenericArgList>,
         generic_params_list: &GenericParamList,
-    ) -> Vec<TypeIdx> {
+    ) -> Vec<Spanned<TypeIdx>> {
         if let Some(generic_arg_list) = generic_arg_list {
             generic_arg_list
                 .args()
@@ -264,10 +199,11 @@ impl Context {
         ty: Option<ast::Type>,
         generic_param_list: &GenericParamList,
         fallback_span: Span,
-    ) -> TypeIdx {
+    ) -> Spanned<TypeIdx> {
         self.lower_node(
             ty,
-            |this, ty| this.types.alloc(Type::Unknown.at(fallback_span)),
+            // |this, _| this.types.alloc(Type::Unknown.at(fallback_span)),
+            |this, _| todo!(),
             |this, ty| match ty {
                 ast::Type::PathType(path_type) => {
                     this.lower_path_or_generic_type(path_type, generic_param_list)
@@ -281,7 +217,7 @@ impl Context {
         &mut self,
         path_ty: ast::PathType,
         generic_param_list: &GenericParamList,
-    ) -> TypeIdx {
+    ) -> Spanned<TypeIdx> {
         let path = path_ty
             .path()
             .expect("internal compiler error: path type does not contain path");
@@ -297,9 +233,7 @@ impl Context {
             Type::Path(path, args)
         };
 
-        self.types.alloc(ty.at(path_ty.range().to_span()))
-        // let ty = self.to_ts_ty(idx);
-        // self.tenv.insert(ty.in_file(self.file_id))
+        self.type_interner.intern(ty).at(path_ty.range().to_span())
     }
 
     fn lower_struct_field_list(
@@ -363,42 +297,37 @@ impl Context {
         ty: Option<ast::Type>,
         generic_param_list: &GenericParamList,
         fallback_span: Span,
-    ) -> TypeIdx {
+    ) -> Spanned<TypeIdx> {
         if let Some(ty) = ty {
             self.lower_type(Some(ty), generic_param_list, fallback_span)
         } else {
-            self.types.alloc(Type::Tuple(vec![]).at(fallback_span))
+            self.type_interner.unit().at(fallback_span)
+            // self.types.alloc(Type::Tuple(vec![]).at(fallback_span))
         }
     }
 
-    fn lower_mod_decl(&mut self, mod_decl: ast::ModDecl) -> LocalItemTreeId<Mod> {
+    fn lower_mod_decl(&mut self, mod_decl: ast::ModDecl) -> ModDecl {
         let name = self.lower_name(mod_decl.name());
-        let m = Mod {
-            name,
-            ast: mod_decl,
-        };
-        self.data.mods.alloc(m).into()
+        ModDecl::new(name)
     }
 
-    fn lower_struct_decl(&mut self, struct_decl: ast::StructDecl) -> LocalItemTreeId<Struct> {
+    fn lower_struct_decl(&mut self, struct_decl: ast::StructDecl) -> StructDecl {
         let name = self.lower_name(struct_decl.name());
         let visibility = self.lower_visibility(struct_decl.visibility());
         let generic_param_list = self.lower_generic_param_list(struct_decl.generic_param_list());
         let where_clause = self.lower_where_clause(struct_decl.where_clause(), &generic_param_list);
         let field_list =
             self.lower_struct_field_list(struct_decl.field_list(), &generic_param_list);
-        let strukt = Struct {
+        StructDecl::new(
             visibility,
             name,
             generic_param_list,
             where_clause,
             field_list,
-            ast: struct_decl,
-        };
-        self.data.structs.alloc(strukt).into()
+        )
     }
 
-    fn lower_fn_decl(&mut self, fn_decl: ast::FnDecl) -> LocalItemTreeId<Function> {
+    fn lower_fn_decl(&mut self, fn_decl: ast::FnDecl) -> FnDecl {
         let name = self.lower_name(fn_decl.name());
         let visibility = self.lower_visibility(fn_decl.visibility());
         let generic_param_list = self.lower_generic_param_list(fn_decl.generic_param_list());
@@ -409,15 +338,15 @@ impl Context {
             &generic_param_list,
             fn_decl.range().to_span(),
         );
-        let function = Function {
+        let body = self.lower_expr(fn_decl.body());
+        FnDecl::new(
             visibility,
             name,
             generic_param_list,
             params,
             ret_type,
             where_clause,
-            ast: fn_decl,
-        };
-        self.data.functions.alloc(function).into()
+            body,
+        )
     }
 }

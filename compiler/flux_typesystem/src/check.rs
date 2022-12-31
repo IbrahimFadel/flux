@@ -1,19 +1,39 @@
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
-use lasso::ThreadedRodeo;
-use tinyvec::tiny_vec;
+use tracing::trace;
 
-use crate::{diagnostics::TypeError, ConcreteKind, TEnv, TypeId, TypeKind};
+use crate::{diagnostics::TypeError, ConcreteKind, Constraint, TEnv, TypeId, TypeKind};
 
 #[derive(Debug)]
 pub struct TChecker {
     pub tenv: TEnv,
+    constraints: Vec<Constraint>,
 }
 
 impl TChecker {
-    pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
+    pub fn new(tenv: TEnv) -> Self {
         Self {
-            tenv: TEnv::new(string_interner),
+            tenv,
+            constraints: vec![],
+        }
+    }
+
+    pub fn add_constraint(&mut self, constraint: Constraint) {
+        trace!("adding constraint {}", self.fmt_constraint(&constraint));
+        self.constraints.push(constraint);
+    }
+
+    fn fmt_constraint(&self, constraint: &Constraint) -> String {
+        match constraint {
+            Constraint::TypeEq(a, b) => format!("{a} == {b}"),
+            Constraint::FieldAccess {
+                struct_ty,
+                field,
+                field_ty,
+            } => format!(
+                "{struct_ty} has field with name {} of type {field_ty}",
+                self.tenv.string_interner.resolve(field)
+            ),
         }
     }
 
@@ -47,11 +67,11 @@ impl TChecker {
                 */
                 // let constraints = self.tenv.get_entry(a).constraints;
                 todo!()
-            },
+            }
             (Concrete(ConcreteKind::Path(path)), Int(int_id)) => match int_id {
                 Some(int_id) => self.unify(a, *int_id, unification_span),
                 None => {
-                    if self.tenv.int_paths.get(&path[0]).is_some() {
+                    if self.tenv.int_paths.get(&path).is_some() {
                         self.tenv.set_type(b, TypeKind::Int(Some(a)));
                         Ok(())
                     } else {
@@ -62,7 +82,7 @@ impl TChecker {
             (Int(int_id), Concrete(ConcreteKind::Path(path))) => match int_id {
                 Some(int_id) => self.unify(*int_id, a, unification_span),
                 None => {
-                    if self.tenv.int_paths.get(&path[0]).is_some() {
+                    if self.tenv.int_paths.get(&path).is_some() {
                         self.tenv.set_type(a, TypeKind::Int(Some(b)));
                         Ok(())
                     } else {
@@ -73,7 +93,7 @@ impl TChecker {
             (Concrete(ConcreteKind::Path(path)), Float(float_id)) => match float_id {
                 Some(float_id) => self.unify(a, *float_id, unification_span),
                 None => {
-                    if self.tenv.float_paths.get(&path[0]).is_some() {
+                    if self.tenv.float_paths.get(&path).is_some() {
                         self.tenv.set_type(b, TypeKind::Float(Some(a)));
                         Ok(())
                     } else {
@@ -84,7 +104,7 @@ impl TChecker {
             (Float(float_id), Concrete(ConcreteKind::Path(path))) => match float_id {
                 Some(float_id) => self.unify(*float_id, a, unification_span),
                 None => {
-                    if self.tenv.float_paths.get(&path[0]).is_some() {
+                    if self.tenv.float_paths.get(&path).is_some() {
                         self.tenv.set_type(a, TypeKind::Float(Some(b)));
                         Ok(())
                     } else {

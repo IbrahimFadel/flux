@@ -14,6 +14,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "ariadne"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -120,6 +131,7 @@ dependencies = [
  "flux_hir",
  "flux_parser",
  "flux_span",
+ "flux_typesystem",
  "itertools",
  "la-arena",
  "lasso",
@@ -147,7 +159,7 @@ dependencies = [
  "flux_proc_macros",
  "flux_span",
  "flux_syntax",
- "flux_typesystem",
+ "hashbrown 0.13.1",
  "insta",
  "itertools",
  "la-arena",
@@ -210,6 +222,7 @@ name = "flux_typesystem"
 version = "0.1.0"
 dependencies = [
  "flux_diagnostics",
+ "flux_proc_macros",
  "flux_span",
  "hashbrown 0.12.3",
  "itertools",
@@ -218,6 +231,7 @@ dependencies = [
  "owo-colors",
  "text-size",
  "tinyvec",
+ "tracing",
 ]
 
 [[package]]
@@ -252,7 +266,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
 ]
 
 [[package]]
@@ -261,7 +275,16 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ff8ae62cd3a9102e5637afc8452c55acf3844001bd5374e0b0bd7b6616c038"
+dependencies = [
+ "ahash 0.8.2",
 ]
 
 [[package]]

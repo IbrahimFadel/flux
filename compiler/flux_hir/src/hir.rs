@@ -1,18 +1,101 @@
+#[derive(Debug, Default)]
+pub struct Module {
+    pub functions: Arena<FnDecl>,
+}
+
 use std::{collections::HashSet, fmt::Display};
 
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, ToSpan, WithSpan};
 use flux_syntax::SyntaxToken;
 use itertools::Itertools;
-use la_arena::Idx;
+use la_arena::{Arena, Idx};
 use lasso::{Spur, ThreadedRodeo};
 
+use crate::type_interner::TypeIdx;
+
 pub type Name = Spanned<Spur>;
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct ModDecl {
+    name: Name,
+}
+
+impl ModDecl {
+    pub fn new(name: Name) -> Self {
+        Self { name }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct StructDecl {
+    visibility: Visibility,
+    name: Name,
+    generic_param_list: GenericParamList,
+    where_clause: WhereClause,
+    field_list: StructFieldList,
+}
+
+impl StructDecl {
+    pub fn new(
+        visibility: Visibility,
+        name: Name,
+        generic_param_list: GenericParamList,
+        where_clause: WhereClause,
+        field_list: StructFieldList,
+    ) -> Self {
+        Self {
+            visibility,
+            name,
+            generic_param_list,
+            where_clause,
+            field_list,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct FnDecl {
+    visibility: Visibility,
+    name: Name,
+    generic_param_list: GenericParamList,
+    params: ParamList,
+    ret_type: Spanned<TypeIdx>,
+    where_clause: WhereClause,
+    body: ExprIdx,
+}
+
+impl FnDecl {
+    pub fn new(
+        visibility: Visibility,
+        name: Name,
+        generic_param_list: GenericParamList,
+        params: ParamList,
+        ret_type: Spanned<TypeIdx>,
+        where_clause: WhereClause,
+        body: ExprIdx,
+    ) -> Self {
+        Self {
+            visibility,
+            name,
+            generic_param_list,
+            params,
+            ret_type,
+            where_clause,
+            body,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Locatable)]
 pub struct Path(Vec<Name>);
 
 impl Path {
+    /// Builds a [`Path`] from a `&str`
+    pub fn from_str_static(s: Spanned<&'static str>, interner: &'static ThreadedRodeo) -> Self {
+        Self(vec![s.map(|s| interner.get_or_intern_static(s))])
+    }
+
     /// Builds a [`Path`] from an iterator over the [`SyntaxToken`]s that compose it
     ///
     /// Panics if the [`Path`] has no segments, which is considered an ICE
@@ -62,6 +145,11 @@ impl Path {
 
     pub fn iter(&self) -> impl Iterator<Item = &Spanned<Spur>> {
         self.0.iter()
+    }
+
+    /// Joins resolved segments into string separated by `::` then interns full path
+    pub fn to_spur(&self, interner: &'static ThreadedRodeo) -> Spur {
+        interner.get_or_intern(self.0.iter().map(|spur| interner.resolve(spur)).join("::"))
     }
 }
 
@@ -170,7 +258,7 @@ impl TypeBoundList {
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct TypeBound {
     pub name: Name,
-    pub args: Vec<TypeIdx>,
+    pub args: Vec<Spanned<TypeIdx>>,
 }
 
 impl TypeBound {
@@ -178,17 +266,15 @@ impl TypeBound {
         Self { name, args: vec![] }
     }
 
-    pub fn with_args(name: Name, args: Vec<TypeIdx>) -> Self {
+    pub fn with_args(name: Name, args: Vec<Spanned<TypeIdx>>) -> Self {
         Self { name, args }
     }
 }
 
-pub type TypeIdx = Idx<Spanned<Type>>;
-
-#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Locatable)]
 pub enum Type {
-    Path(Path, Vec<TypeIdx>),
-    Tuple(Vec<TypeIdx>),
+    Path(Path, Vec<Spanned<TypeIdx>>),
+    Tuple(Vec<Spanned<TypeIdx>>),
     Generic(Spur),
     Unknown,
 }
@@ -213,11 +299,11 @@ impl StructFieldList {
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct StructField {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: Spanned<TypeIdx>,
 }
 
 impl StructField {
-    pub fn new(name: Name, ty: TypeIdx) -> Self {
+    pub fn new(name: Name, ty: Spanned<TypeIdx>) -> Self {
         Self { name, ty }
     }
 }
@@ -242,11 +328,44 @@ impl ParamList {
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct Param {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: Spanned<TypeIdx>,
 }
 
 impl Param {
-    pub fn new(name: Name, ty: TypeIdx) -> Self {
+    pub fn new(name: Name, ty: Spanned<TypeIdx>) -> Self {
         Self { name, ty }
+    }
+}
+
+pub type ExprIdx = Idx<Spanned<Expr>>;
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub enum Expr {
+    Block(Block),
+    Int(u64),
+    Tuple(Vec<ExprIdx>),
+    Let(Let),
+    Poisoned,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct Block(Vec<ExprIdx>);
+
+impl Block {
+    pub fn new(exprs: Vec<ExprIdx>) -> Self {
+        Self(exprs)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct Let {
+    name: Name,
+    ty: Spanned<TypeIdx>,
+    val: ExprIdx,
+}
+
+impl Let {
+    pub fn new(name: Name, ty: Spanned<TypeIdx>, val: ExprIdx) -> Self {
+        Self { name, ty, val }
     }
 }

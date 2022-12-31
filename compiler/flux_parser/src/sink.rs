@@ -2,7 +2,7 @@ use cstree::{GreenNodeBuilder, Language};
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_lexer::Token;
 use flux_syntax::{FluxLanguage, SyntaxKind};
-use lasso::{Resolver, ThreadedRodeo};
+use lasso::ThreadedRodeo;
 
 use crate::{event::Event, Parse};
 

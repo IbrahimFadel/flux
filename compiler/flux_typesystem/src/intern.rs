@@ -5,11 +5,11 @@ use itertools::Itertools;
 use lasso::ThreadedRodeo;
 use owo_colors::OwoColorize;
 
-use crate::{ConcreteKind, TypeId, TypeKind};
+use crate::{ConcreteKind, TypeKind};
 
 macro_rules! path_kind {
     ($interner:expr, $path:expr) => {
-        TypeKind::Concrete(ConcreteKind::Path(vec![$interner.get_or_intern($path)]))
+        TypeKind::Concrete(ConcreteKind::Path($interner.get_or_intern($path)))
     };
 }
 
@@ -19,10 +19,6 @@ pub struct Key(u32);
 impl Key {
     pub(crate) fn new(key: u32) -> Self {
         Self(key)
-    }
-
-    pub(crate) fn into_type_id(&self) -> TypeId {
-        TypeId::new(self.0 as usize)
     }
 }
 
@@ -125,9 +121,9 @@ impl Display for Interner {
                             format!(
                                 " {} {}",
                                 "->".purple(),
-                                path.iter()
-                                    .map(|spur| self.string_interner.resolve(spur))
-                                    .join("::")
+                                self.string_interner.resolve(path) // path.iter()
+                                                                   //     .map(|spur| self.string_interner.resolve(spur))
+                                                                   //     .join("::")
                             )
                         }
                         _ => String::new(),
@@ -141,7 +137,6 @@ impl Display for Interner {
 mod tests {
     use lasso::ThreadedRodeo;
     use once_cell::sync::Lazy;
-    use tinyvec::tiny_vec;
 
     use crate::{intern::Key, ConcreteKind, TypeKind};
 

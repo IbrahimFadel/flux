@@ -2,6 +2,8 @@ mod foo;
 mod bar;
 mod bazz;
 
+use foo::bar::test_method;
+
 struct Foo {
     x i32,
     y f32,
@@ -12,8 +14,23 @@ struct Bar {
     bar_field u64
 }
 
-fn main() {
+enum Result<O, E> {
+    Ok -> O,
+    Err -> E,
+}
+
+trait SomeTrait {
+    fn do_stuff();
+}
+
+apply SomeTrait to Bar {
+    fn do_stuff() {
+    }
+}
+
+fn main() -> i8 {
     let test = 0;
+    /*
     let x Foo = Foo {
         x: x,
         y: 1.0,
@@ -21,4 +38,5 @@ fn main() {
             bar_field: 100,
         }
     };
+    */
 }

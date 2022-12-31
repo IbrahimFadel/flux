@@ -268,6 +268,7 @@ impl WithSpan for String {}
 impl<'a> WithSpan for &'a str {}
 impl WithSpan for Spur {}
 impl WithSpan for usize {}
+impl WithSpan for u32 {}
 impl<T> WithSpan for Vec<T> {}
 impl<T, F> WithSpan for std::iter::Map<T, F> {}
 // impl<I, T> WithSpan for I where I: Iterator<Item = T> {}
@@ -287,22 +288,11 @@ pub fn spur_iter_to_spur<'a>(
     interner.get_or_intern(spurs.map(|spur| interner.resolve(spur)).join("::"))
 }
 
-// #[macro_export]
-// macro_rules! can_be_spanned {
-//     ($($name:ident)*) => {
-//         $( $name );*
-//         // $($name),+,
-//     };
-// }
-// macro_rules! can_be_spanned {
-//     (
-//         $name:ident,
-//         $($rest:tt)*
-//     ) => {
-//         $(impl WithSpan for $name {})*
-//         can_be_spanned! {
-//             $($rest)*
-//         }
-//     };
-//     () => {}
-// }
+pub fn spanned_spur_iter_to_spanned_spur<'a>(
+    spurs: impl Iterator<Item = Spanned<Spur>>,
+    interner: &'static ThreadedRodeo,
+) -> Spanned<Spur> {
+    let strings: Spanned<Vec<&str>> =
+        Spanned::spanned_iter_with(spurs, |spur| interner.resolve(&spur)).unwrap();
+    strings.map(|strings| interner.get_or_intern(strings.join("::")))
+}

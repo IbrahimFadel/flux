@@ -6,26 +6,15 @@ use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
-use tinyvec::tiny_vec;
+use tracing::trace;
 
 use crate::{
-    constraint::Constraint,
     diagnostics::TypeError,
     intern::{Interner, Key},
     name_res::NameResolver,
     r#type::{ConcreteKind, StructConcreteKind, Type, TypeId, TypeKind},
 };
 
-/// A `flux_typesystem` path
-///
-/// In the `flux_hir` paths are represented as vectors of [`Spur`]s
-/// However inserting / getting paths from a hashmap with that representation would suck
-/// So instead, hir paths are resolved, joined with `::` and interned, then inserted into the typesystem
-///
-/// `[Spur1, Spur2, Spur3]` -> `["ResolvedSpur1", "ResolvedSpur2", "ResolvedSpur3"]` -> `"ResolvedSpur1::ResolvedSpur2::ResolvedSpur3"` -> `Spur`
-///
-/// I haven't benchmarked it but I would be extremely surprised if a few calls to the string interner would be slower than repeatedly hashing a vector
-type Path = Spur;
 type FunctionSignature = (FileSpanned<Vec<TypeId>>, FileSpanned<TypeId>);
 type FunctionSignatureMap = HashMap<Vec<Spur>, FunctionSignature>;
 
@@ -43,7 +32,7 @@ use lookup table
 #[derive(Debug)]
 pub struct TEnv {
     type_interner: Interner,
-    string_interner: &'static ThreadedRodeo,
+    pub string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
     pub name_resolver: NameResolver,
     /// Scopes of the current [`TEnv`]
@@ -144,7 +133,7 @@ impl TEnv {
         entry.map_ref(|spanned| spanned.span)
     }
 
-    pub fn get_call_return_type(&self, path: &[Spur]) -> TypeId {
+    pub fn get_call_return_type(&self, _path: &[Spur]) -> TypeId {
         todo!()
     }
 
@@ -175,7 +164,9 @@ impl TEnv {
         let key = self.type_interner.intern(ty.constr());
         let idx = self.entries.len();
         self.entries.push(ty.map_inner_ref(|_| TEntry::new(key)));
-        TypeId::new(idx)
+        let id = TypeId::new(idx);
+        trace!("inserting type inference var {}", id);
+        id
     }
 
     /// Insert a `Spanned<Type>` with trait constraints into the type environment
@@ -309,10 +300,7 @@ impl TEnv {
     fn fmt_concrete_kind(&self, kind: &ConcreteKind) -> String {
         match kind {
             ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty_id(*id)),
-            ConcreteKind::Path(spurs) => spurs
-                .iter()
-                .map(|spur| self.string_interner.resolve(spur))
-                .join("::"),
+            ConcreteKind::Path(spur) => self.string_interner.resolve(spur).to_string(),
             ConcreteKind::Tuple(ids) => {
                 format!("({})", ids.iter().map(|id| self.fmt_ty_id(*id)).join(", "))
             }
@@ -428,23 +416,12 @@ impl Display for ConcreteKind {
     }
 }
 
-impl Display for Constraint {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
-        // match self {
-        //     Self::HasField(field) => write!(f, "has field {:?}", field),
-        //     Self::ImplementsTrait(trt) => write!(f, "has trait {:?}", trt),
-        // }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use flux_span::{FileId, FileSpanned, Span, Spanned};
     use lasso::{Spur, ThreadedRodeo};
     use once_cell::sync::Lazy;
     use text_size::TextRange;
-    use tinyvec::tiny_vec;
 
     use crate::{ConcreteKind, TEnv, Type, TypeKind};
 
@@ -477,13 +454,10 @@ mod tests {
         let fmt = tenv.fmt_ty_id(id);
         assert_eq!(fmt, "()");
         let a = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Path(vec![STRING_INTERNER.get_or_intern("test")]),
+            ConcreteKind::Path(STRING_INTERNER.get_or_intern("test")),
         ))));
         let b = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
-            ConcreteKind::Path(vec![
-                STRING_INTERNER.get_or_intern("test"),
-                STRING_INTERNER.get_or_intern("foo"),
-            ]),
+            ConcreteKind::Path(STRING_INTERNER.get_or_intern("test::foo")),
         ))));
         let c = tenv.insert(file_spanned(Type::new(TypeKind::Concrete(
             ConcreteKind::Ptr(a),

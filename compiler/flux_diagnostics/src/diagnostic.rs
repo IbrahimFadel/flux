@@ -1,5 +1,5 @@
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_span::{FileId, FileSpanned, InFile, Span};
+use flux_span::{FileId, FileSpanned, InFile};
 use lasso::Spur;
 
 use crate::reporting::FileSpan;

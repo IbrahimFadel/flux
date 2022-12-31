@@ -48,7 +48,7 @@ impl NameResolver {
             }
         }
 
-        for (use_path, use_alias) in &self.uses {
+        for (_use_path, use_alias) in &self.uses {
             if let Some(alias) = use_alias {
                 if path.inner.inner == *alias {
                     todo!()
