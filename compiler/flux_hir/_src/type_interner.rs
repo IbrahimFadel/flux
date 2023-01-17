@@ -3,7 +3,6 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use dashmap::DashMap;
 use hashbrown::{hash_map::RawEntryMut, HashMap};
 use lasso::ThreadedRodeo;
 
@@ -12,15 +11,15 @@ use flux_span::{Span, WithSpan};
 
 #[derive(Debug, Default)]
 pub struct TypeInterner {
-    ty_to_key: DashMap<Type, TypeIdx>,
-    key_to_ty: DashMap<TypeIdx, Type>,
+    ty_to_key: HashMap<Type, TypeIdx>,
+    key_to_ty: HashMap<TypeIdx, Type>,
 }
 
 impl TypeInterner {
     pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
         let mut interner = Self {
-            ty_to_key: DashMap::new(),
-            key_to_ty: DashMap::new(),
+            ty_to_key: HashMap::new(),
+            key_to_ty: HashMap::new(),
         };
         interner.intern(Type::Unknown);
         interner.intern(Type::Tuple(vec![]));
@@ -59,44 +58,31 @@ impl TypeInterner {
         interner
     }
 
-    pub fn intern(&self, ty: Type) -> TypeIdx {
+    pub fn intern(&mut self, ty: Type) -> TypeIdx {
         let len = self.ty_to_key.len();
-        if let Some(key) = self.ty_to_key.get(&ty) {
-            *key
-        } else {
-            let make_new_key = || TypeIdx::new(len.try_into().unwrap());
-            let key = *self
-                .ty_to_key
-                .entry(ty)
-                .or_insert_with(make_new_key)
-                .value();
-            key
+        let hash = hash_ty(self.ty_to_key.hasher(), &ty);
+        match self
+            .ty_to_key
+            .raw_entry_mut()
+            .from_key_hashed_nocheck(hash, &ty)
+        {
+            RawEntryMut::Occupied(entry) => *entry.get(),
+            RawEntryMut::Vacant(entry) => {
+                let key = TypeIdx::new(len.try_into().unwrap());
+                entry.insert_hashed_nocheck(hash, ty.clone(), key);
+                self.key_to_ty.insert(key, ty);
+                key
+            }
         }
     }
 
-    // pub fn intern(&self, ty: Type) -> TypeIdx {
-    //     let len = self.ty_to_key.len();
-    //     let hash = hash_ty(self.ty_to_key.hasher(), &ty);
-    //     let res = self.ty_to_key.get_mut(&ty);
-    //     match res {
-    //         Some(res) => *res.value(),
-    //         None => {
-    //             let key = TypeIdx::new(len.try_into().unwrap());
-    //             self.ty_to_key.insert(ty.clone(), key);
-    //             // res.insert_hashed_nocheck(hash, ty.clone(), key);
-    //             self.key_to_ty.insert(key, ty);
-    //             key
-    //         }
-    //     }
-    // }
-
-    // pub fn resolve<'a>(&'a self, key: TypeIdx) -> &'a Type {
-    //     assert!((key.0 as usize) < self.ty_to_key.len());
-    //     assert!((key.0 as usize) < self.key_to_ty.len());
-    //     self.key_to_ty.get(&key).expect("").value()
-    //     // todo!()
-    //     // .expect("internal compiler error: invalid type index")
-    // }
+    pub fn resolve(&self, key: TypeIdx) -> &Type {
+        assert!((key.0 as usize) < self.ty_to_key.len());
+        assert!((key.0 as usize) < self.key_to_ty.len());
+        self.key_to_ty
+            .get(&key)
+            .expect("internal compiler error: invalid type index")
+    }
 }
 
 fn hash_ty<S: BuildHasher>(hash_builder: &S, ty: &Type) -> u64 {

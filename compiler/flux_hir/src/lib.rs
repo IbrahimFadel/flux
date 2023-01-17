@@ -1,18 +1,8 @@
-use flux_syntax::{
-    ast::{self, AstNode},
-    SyntaxNode,
-};
-use hir::Module;
-use lasso::ThreadedRodeo;
-use lower::Context;
+pub mod hir;
+// mod package_defs;
+pub(crate) mod type_interner;
 
-mod hir;
 mod lower;
-mod type_interner;
-
-pub fn lower_ast_to_hir(root: SyntaxNode, interner: &'static ThreadedRodeo) -> Module {
-    let root =
-        ast::Root::cast(root).expect("internal compiler error: root node should always cast");
-    let mut ctx = Context::new(interner);
-    ctx.lower(root)
-}
+pub use lower::{lower_ast_to_hir, lower_hir_item_bodies};
+// pub use package_defs::{ModuleID, PackageDefs};
+pub use type_interner::TypeInterner;

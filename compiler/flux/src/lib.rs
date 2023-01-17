@@ -1,29 +1,54 @@
 use std::{
+    cell::RefCell,
+    collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
 };
 
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
-use flux_hir::lower_ast_to_hir;
+use flux_hir::{
+    hir::{self, FunctionId, ItemDefinitionId, Module, ModuleId},
+    lower_ast_to_hir, lower_hir_item_bodies, TypeInterner,
+};
 use flux_parser::parse;
-use flux_span::{InFile, Span, Spanned, WithSpan};
+use flux_span::{FileId, InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
+use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 use once_cell::sync::Lazy;
 use tracing::{debug, info, instrument, trace, warn};
 
 mod diagnostics;
 
-pub static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
+pub static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
+pub static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&STRING_INTERNER));
 const ENTRY_MODULE_NAME: &str = "pkg";
 const FILE_EXT: &str = ".flx";
+
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// pub enum ItemDefinitionId {
+//     ModuleId(Idx<hir::ModDecl>),
+//     FunctionId(FunctionId),
+//     StructId(StructId),
+//     UseId(UseId),
+// }
+
+// type FunctionId = Idx<hir::FnDecl>;
+// type StructId = Idx<hir::StructDecl>;
+// type UseId = Idx<hir::UseDecl>;
 
 struct Driver {
     file_cache: FileCache,
     project_dir: PathBuf,
     interner: &'static ThreadedRodeo,
     diagnostics: Vec<Diagnostic>,
+    // package_defs: PackageDefs,
+    modules: Arena<Module>,
+    mod_namespace: HashMap<Spur, ModuleId>,
+    function_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
+    // struct_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
+    // hir_modules: HashMap<FileId, (Module, Arena<Spanned<hir::Expr>>, TypeInterner)>,
 }
 
 impl Driver {
@@ -33,6 +58,10 @@ impl Driver {
             project_dir,
             interner,
             diagnostics: vec![],
+            // package_defs: PackageDefs::new(),
+            modules: Arena::new(),
+            function_namespace: HashMap::new(),
+            mod_namespace: HashMap::new(),
         }
     }
 
@@ -167,8 +196,13 @@ impl Driver {
     //     module_path: &[Spur],
     //     module_name_span: Option<InFile<Span>>,
     //     parent_module_dir: &Path,
-    // ) {
-    //     let module_name = self.interner.resolve(module_path.last().unwrap());
+    //     parent_module_id: Option<ModuleID>,
+    // ) -> Option<ModuleID> {
+    //     let module_name = self.interner.resolve(
+    //         module_path
+    //             .last()
+    //             .expect("internal compiler error: module path should never be empty"),
+    //     );
     //     let parent_module_name = if module_path.len() >= 2 {
     //         module_path
     //             .get(module_path.len() - 2)
@@ -184,62 +218,71 @@ impl Driver {
     //         Ok(content) => content,
     //         Err(diagnostic) => {
     //             self.diagnostics.push(diagnostic.to_diagnostic());
-    //             return;
+    //             return None;
     //         }
     //     };
 
+    //     let module_path_str = module_path
+    //         .iter()
+    //         .map(|spur| self.interner.resolve(spur))
+    //         .join("::");
     //     let file_id = self
     //         .file_cache
     //         .add_file(file_path.to_str().unwrap(), &file_content);
     //     let result = parse(&file_content, file_id, &INTERNER);
     //     let (root, diagnostics) = (result.syntax(), result.diagnostics);
     //     self.file_cache.report_diagnostics(&diagnostics);
-    //     info!(diagnostics = diagnostics.len(), "parsed file");
+    //     debug!(module_path = module_path_str, "parsed file");
 
-    //     let (tree, diagnostics, types, tchk) =
-    //         flux_hir::generate_item_tree(file_id, root, &INTERNER);
-    //     self.file_cache.report_diagnostics(&diagnostics);
+    //     let hir_module = lower_ast_to_hir(root, self.interner);
+    //     debug!(module_path = module_path_str, "generated HIR module");
+
+    //     let module_name_spur = self.interner.get_or_intern(module_name);
+    //     let module_id = if module_path.len() == 1 {
+    //         self.package_defs
+    //             .add_root_module(hir_module, module_name_spur, file_id)
+    //     } else {
+    //         self.package_defs.add_module(
+    //             hir_module,
+    //             module_name_spur,
+    //             parent_module_id
+    //                 .expect("internal compiler error: parent module id should not be None"),
+    //             file_id,
+    //         )
+    //     };
 
     //     let cur_dir = file_path.parent().unwrap();
-    //     for (_, m) in tree.data.mods.iter() {
+    //     let module = self.package_defs.get_item_scope(module_id);
+    //     for (_, m) in module.mods.clone().iter() {
+    //         let m = match m {
+    //             ItemDefinitionId::ModuleId(mod_id) => *mod_id,
+    //             _ => unreachable!(),
+    //         };
+    //         let m = self.package_defs.get_module_data(module_id).module.mods[m].clone();
     //         let module_name = &m.name;
     //         let name = self.interner.resolve(module_name);
-    //         self.parse_module(
+    //         let child_module_id = self.parse_module(
     //             &[module_path, &[self.interner.get_or_intern(name)]].concat(),
     //             Some(InFile::new(module_name.span, file_id)),
     //             cur_dir,
+    //             Some(module_id),
     //         );
+    //         if let Some(child_module_id) = child_module_id {
+    //             self.package_defs
+    //                 .add_child_module(module_id, module_name.inner, child_module_id);
+    //         }
     //     }
-
-    //     let module_path_spur = self.interner.get_or_intern(
-    //         module_path
-    //             .iter()
-    //             .map(|spur| self.interner.resolve(spur))
-    //             .join("::"),
-    //     );
-    //     self.module_item_trees
-    //         .insert(module_path_spur, (tree, types, tchk, file_id));
-    //     debug!(
-    //         module_path = self.interner.resolve(&module_path_spur),
-    //         "inserting module's item tree to context"
-    //     );
+    //     Some(module_id)
     // }
 
-    // fn hir_lowering_second_pass(&mut self) {
-    //     for (path, (item_tree, types, tenv, file_id)) in self.module_item_trees.iter_mut() {
-    //         // lower_item_bodies(item_tree, types, tenv, *file_id, self.interner);
-    //     }
-    //     // for (path, module) in &self.module_tree {
-    //     //     let file_id = self.path_to_fileid[path];
-    //     // }
-    // }
-
+    #[instrument(level = "info", name = "Driver::parse_file", skip(self))]
     fn parse_module(
         &mut self,
         module_path: &[Spur],
         module_name_span: Option<InFile<Span>>,
         parent_module_dir: &Path,
-    ) {
+        parent_module_id: Option<ModuleId>,
+    ) -> Option<ModuleId> {
         let module_name = self.interner.resolve(
             module_path
                 .last()
@@ -256,11 +299,11 @@ impl Driver {
             self.possible_submodule_paths(module_name, parent_module_dir, &parent_module_name);
         let file_content_result =
             self.get_module_file_content(module_name, module_name_span, &path1, &path2);
-        let (file_content, _file_path) = match file_content_result {
+        let (file_content, file_path) = match file_content_result {
             Ok(content) => content,
             Err(diagnostic) => {
                 self.diagnostics.push(diagnostic.to_diagnostic());
-                return;
+                return None;
             }
         };
 
@@ -268,43 +311,39 @@ impl Driver {
             .iter()
             .map(|spur| self.interner.resolve(spur))
             .join("::");
-        let file_id = self.file_cache.add_file(&module_path_str, &file_content);
-        let result = parse(&file_content, file_id, &INTERNER);
+        let file_id = self
+            .file_cache
+            .add_file(file_path.to_str().unwrap(), &file_content);
+        let result = parse(&file_content, file_id, &STRING_INTERNER);
         let (root, diagnostics) = (result.syntax(), result.diagnostics);
         self.file_cache.report_diagnostics(&diagnostics);
         debug!(module_path = module_path_str, "parsed file");
 
-        let hir_module = lower_ast_to_hir(root, self.interner);
-        println!("{:#?}", hir_module);
+        let module_id = self.modules.alloc(Module::default());
+        let hir_module = lower_ast_to_hir(
+            root,
+            module_path.to_vec(),
+            module_id,
+            self.interner,
+            &TYPE_INTERNER,
+            &mut self.mod_namespace,
+            &mut self.function_namespace,
+        );
+        self.modules[module_id] = hir_module;
+        debug!(module_path = module_path_str, "generated HIR module");
 
-        // let (tree, diagnostics, types) = flux_hir::generate_item_tree(file_id, root, &INTERNER);
-        // self.file_cache.report_diagnostics(&diagnostics);
-        // debug!(module_path = module_path_str, "generated item tree");
-
-        // let cur_dir = file_path.parent().unwrap();
-        // for (_, m) in tree.data.mods.iter() {
-        //     let module_name = &m.name;
-        //     let name = self.interner.resolve(module_name);
-        //     self.parse_module(
-        //         &[module_path, &[self.interner.get_or_intern(name)]].concat(),
-        //         Some(InFile::new(module_name.span, file_id)),
-        //         cur_dir,
-        //     );
-        // }
-
-        // self.module_item_trees.insert(file_id, (tree, types));
+        let cur_dir = file_path.parent().unwrap();
+        for (_, m) in self.modules[module_id].mods.clone().iter() {
+            let module_name = &m.name;
+            self.parse_module(
+                &[module_path, &[module_name.inner]].concat(),
+                Some(InFile::new(module_name.span, file_id)),
+                cur_dir,
+                Some(module_id),
+            );
+        }
+        Some(module_id)
     }
-
-    // fn hir_lowering_second_pass(&mut self) {
-    //     for (file_id, (tree, types)) in self.module_item_trees.iter_mut() {
-    //         let diagnostics = lower_item_bodies(tree, types, *file_id, self.interner);
-    //         self.file_cache.report_diagnostics(&diagnostics);
-    //         debug!(
-    //             file_id = self.interner.resolve(&file_id.0),
-    //             "lowered item bodies"
-    //         );
-    //     }
-    // }
 
     fn build(&mut self) {
         let entry_path = match self.find_entry_file() {
@@ -315,9 +354,33 @@ impl Driver {
             &[self.interner.get_or_intern_static(ENTRY_MODULE_NAME)],
             None,
             entry_path.parent().unwrap(),
+            None,
         );
         self.file_cache.report_diagnostics(&self.diagnostics);
-        // self.hir_lowering_second_pass();
+
+        for (path, module_id) in &self.mod_namespace {
+            let path = self.interner.resolve(path);
+            println!("{path} -> Module({})", module_id.into_raw());
+        }
+
+        for (path, (function_id, module_id)) in &self.function_namespace {
+            let path = self.interner.resolve(path);
+            println!(
+                "{path} -> Function({}) in Module({})",
+                function_id.into_raw(),
+                module_id.into_raw()
+            );
+        }
+
+        for (_, module) in self.modules.iter_mut() {
+            lower_hir_item_bodies(
+                module,
+                self.interner,
+                &TYPE_INTERNER,
+                &self.mod_namespace,
+                &self.function_namespace,
+            );
+        }
     }
 }
 
@@ -330,37 +393,6 @@ pub fn build() {
     } else {
         env::current_dir().unwrap()
     };
-    let mut driver = Driver::new(path, &INTERNER);
+    let mut driver = Driver::new(path, &STRING_INTERNER);
     driver.build();
 }
-
-/*
-
-    "foo": {
-        submodules: [
-
-        ],
-        functions: [idx1, idx2, idx3],
-        structs: [idx4],
-    },
-    "bar": {
-        submodules: [
-            "foo": {
-                submodules: [],
-                functions: [idx5, idx6]
-            }
-        ],
-        functions: [],
-        structs: []
-    }
-]
-
-ModuleTree: Vec<HashMap<Spur, Module>>,
-Module: Struct {
-    submodules: Vec<Module>,
-    functions: Vec<Idx<Function>>,
-    structs: Vec<Idx<Struct>,
-    // etc...
-}
-
-*/

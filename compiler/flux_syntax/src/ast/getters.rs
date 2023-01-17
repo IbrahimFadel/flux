@@ -84,7 +84,7 @@ getters! {
         fields -> nodes(StructExprField);
     }
     StructExprField {
-        name -> tok(Ident);
+        name -> node(Name);
         val -> node(Expr);
     }
 

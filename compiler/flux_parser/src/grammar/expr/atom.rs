@@ -1,7 +1,12 @@
 use flux_lexer::TokenKind;
 use flux_syntax::SyntaxKind;
 
-use crate::{grammar::generic_args::opt_generic_arg_list, marker::CompletedMarker, parser::Parser};
+use crate::{
+    grammar::{generic_args::opt_generic_arg_list, name},
+    marker::CompletedMarker,
+    parser::Parser,
+    token_set::TokenSet,
+};
 
 use super::{expr, stmt, ExprRestrictions};
 
@@ -123,7 +128,7 @@ fn struct_expr_field_list(p: &mut Parser) {
 
 fn struct_expr_field(p: &mut Parser) {
     let m = p.start();
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Colon]));
     p.expect(TokenKind::Colon);
     expr(p);
     m.complete(p, SyntaxKind::StructExprField);

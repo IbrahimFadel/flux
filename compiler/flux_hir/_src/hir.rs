@@ -2,27 +2,26 @@ use std::{collections::HashSet, fmt::Display};
 
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, ToSpan, WithSpan};
-use flux_syntax::{ast, SyntaxToken};
+use flux_syntax::SyntaxToken;
 use itertools::Itertools;
 use la_arena::{Arena, Idx};
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::type_interner::{TypeIdx, TypeInterner};
+use crate::{type_interner::TypeIdx, TypeInterner};
 
 pub type Name = Spanned<Spur>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ItemDefinitionId {
-    ModuleId(ModuleId),
+    ModuleId(Idx<ModDecl>),
     FunctionId(FunctionId),
     StructId(StructId),
     UseId(UseId),
 }
 
-pub type ModuleId = Idx<Module>;
-pub type FunctionId = Idx<FnDecl>;
-pub type StructId = Idx<StructDecl>;
-pub type UseId = Idx<UseDecl>;
+type FunctionId = Idx<FnDecl>;
+type StructId = Idx<StructDecl>;
+type UseId = Idx<UseDecl>;
 
 #[derive(Debug, Default)]
 pub struct Module {
@@ -31,6 +30,7 @@ pub struct Module {
     pub uses: Arena<UseDecl>,
     pub structs: Arena<StructDecl>,
     pub exprs: Arena<Spanned<Expr>>,
+    pub types: TypeInterner,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
@@ -90,8 +90,7 @@ pub struct FnDecl {
     pub params: ParamList,
     pub ret_type: Spanned<TypeIdx>,
     where_clause: WhereClause,
-    // pub body: Typed<ExprIdx>,
-    pub ast: ast::FnDecl,
+    pub body: Typed<ExprIdx>,
 }
 
 impl FnDecl {
@@ -102,8 +101,7 @@ impl FnDecl {
         params: ParamList,
         ret_type: Spanned<TypeIdx>,
         where_clause: WhereClause,
-        // body: Typed<ExprIdx>,
-        ast: ast::FnDecl,
+        body: Typed<ExprIdx>,
     ) -> Self {
         Self {
             visibility,
@@ -112,7 +110,7 @@ impl FnDecl {
             params,
             ret_type,
             where_clause,
-            ast, // body,
+            body,
         }
     }
 }

@@ -16,6 +16,11 @@ impl Span {
         Self { range }
     }
 
+    pub fn combine(a: Span, b: Span) -> Self {
+        assert!(a.range.start() < b.range.end());
+        Span::new(a.range.start().into()..b.range.end().into())
+    }
+
     /// Convert an iterator of spanned items into a span of all the items
     ///
     /// `[Span]` -> `Span`
@@ -188,7 +193,7 @@ impl<T> Deref for Spanned<T> {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FileId(pub Spur);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InFile<T> {
     pub inner: T,
     pub file_id: FileId,
