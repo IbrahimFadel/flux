@@ -132,6 +132,7 @@ pub enum DiagnosticCode {
     UnknownStruct,
     IncorrectNumberOfArgsInCall,
     UnusedGenericParams,
+    UninitializedFieldsInStructExpr,
     // CouldNotInitializeCacheDir,
     // UnexpectedToken,
     // Expected,

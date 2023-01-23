@@ -1,20 +1,21 @@
 use std::collections::HashMap;
 
-use flux_span::{Span, Spanned, ToSpan, WithSpan};
+use flux_diagnostics::Diagnostic;
+use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{
     ast::{self, AstNode, Root},
     SyntaxNode,
 };
 use itertools::Itertools;
-use la_arena::Arena;
+use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     hir::{
         Block, Expr, ExprIdx, FnDecl, FunctionId, GenericParamList, ItemDefinitionId, Let, ModDecl,
-        Module, ModuleId, Name, Param, ParamList, Path, Struct, StructDecl, StructField,
-        StructFieldList, Type, TypeBound, TypeBoundList, UseDecl, Visibility, WhereClause,
-        WherePredicate, WithType,
+        Module, ModuleId, Name, Param, ParamList, Path, Struct, StructDecl, StructDeclField,
+        StructDeclFieldList, StructId, Type, TypeBound, TypeBoundList, UseDecl, Visibility,
+        WhereClause, WherePredicate, WithType,
     },
     type_interner::{TypeIdx, TypeInterner},
 };
@@ -31,6 +32,7 @@ struct Context<'a> {
     type_interner: &'static TypeInterner,
     exprs: Arena<Spanned<Expr>>,
     function_namespace: &'a mut HashMap<Spur, (FunctionId, ModuleId)>,
+    struct_namespace: &'a mut HashMap<Spur, (StructId, ModuleId)>,
 }
 
 impl<'a> Context<'a> {
@@ -39,6 +41,7 @@ impl<'a> Context<'a> {
         string_interner: &'static ThreadedRodeo,
         type_interner: &'static TypeInterner,
         function_namespace: &'a mut HashMap<Spur, (FunctionId, ModuleId)>,
+        struct_namespace: &'a mut HashMap<Spur, (StructId, ModuleId)>,
     ) -> Self {
         Self {
             module_path,
@@ -46,6 +49,7 @@ impl<'a> Context<'a> {
             type_interner,
             exprs: Arena::new(),
             function_namespace,
+            struct_namespace,
         }
     }
 
@@ -321,16 +325,16 @@ impl<'a> Context<'a> {
         &mut self,
         field_list: Option<ast::StructDeclFieldList>,
         generic_param_list: &GenericParamList,
-    ) -> StructFieldList {
+    ) -> Spanned<StructDeclFieldList> {
         lower_node(
             field_list,
-            |_| StructFieldList::empty(),
+            |field_list| StructDeclFieldList::empty().at(field_list.range().to_span()),
             |field_list| {
                 let fields = field_list
                     .fields()
                     .map(|field| self.lower_struct_field(field, generic_param_list))
                     .collect();
-                StructFieldList::new(fields)
+                StructDeclFieldList::new(fields).at(field_list.range().to_span())
             },
         )
     }
@@ -339,7 +343,7 @@ impl<'a> Context<'a> {
         &mut self,
         field: ast::StructDeclField,
         generic_param_list: &GenericParamList,
-    ) -> StructField {
+    ) -> StructDeclField {
         let ty = lower_type(
             field.ty(),
             generic_param_list,
@@ -348,7 +352,7 @@ impl<'a> Context<'a> {
             self.type_interner,
         );
         let name = lower_name(field.name(), self.string_interner);
-        StructField::new(name, ty)
+        StructDeclField::new(name, ty)
     }
 
     fn lower_fn_param_list(
@@ -457,8 +461,13 @@ impl<'a> Context<'a> {
         )
     }
 
-    fn lower_item_declarations(mut self, root: Root, module_id: ModuleId) -> Module {
-        let mut module = Module::default();
+    fn lower_item_declarations(
+        mut self,
+        root: Root,
+        module_id: ModuleId,
+        file_id: FileId,
+    ) -> Module {
+        let mut module = Module::new(file_id, self.module_path.clone());
         root.mod_decls().for_each(|m| {
             module.mods.alloc(self.lower_mod_decl(m));
         });
@@ -467,6 +476,17 @@ impl<'a> Context<'a> {
             self.module_path.push(f.name.inner);
             let idx = module.functions.alloc(f);
             self.function_namespace.insert(
+                join_spurs(&self.module_path, self.string_interner),
+                (idx, module_id),
+            );
+            self.module_path.pop();
+        });
+        root.struct_decls().for_each(|s| {
+            println!("HI");
+            let s = self.lower_struct_decl(s);
+            self.module_path.push(s.name.inner);
+            let idx = module.structs.alloc(s);
+            self.struct_namespace.insert(
                 join_spurs(&self.module_path, self.string_interner),
                 (idx, module_id),
             );
@@ -719,6 +739,8 @@ pub fn lower_ast_to_hir(
     type_interner: &'static TypeInterner,
     mod_namespace: &mut HashMap<Spur, ModuleId>,
     function_namespace: &mut HashMap<Spur, (FunctionId, ModuleId)>,
+    struct_namespace: &mut HashMap<Spur, (StructId, ModuleId)>,
+    file_id: FileId,
 ) -> Module {
     let root =
         ast::Root::cast(root).expect("internal compiler error: root node should always cast");
@@ -728,23 +750,66 @@ pub fn lower_ast_to_hir(
         string_interner,
         type_interner,
         function_namespace,
+        struct_namespace,
     );
-    ctx.lower_item_declarations(root, module_id)
+    ctx.lower_item_declarations(root, module_id, file_id)
 }
 
 pub fn lower_hir_item_bodies(
-    module: &mut Module,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
+    modules: &mut Arena<Module>,
     mod_namespace: &HashMap<Spur, ModuleId>,
     function_namespace: &HashMap<Spur, (FunctionId, ModuleId)>,
-) {
-    let mut ctx = ModuleBodyContext::new(
-        module,
-        string_interner,
-        type_interner,
-        mod_namespace,
-        function_namespace,
-    );
-    ctx.lower_bodies();
+    struct_namespace: &HashMap<Spur, (StructId, ModuleId)>,
+) -> Vec<Diagnostic> {
+    let mut diagnostics = vec![];
+    for i in 0..modules.len() {
+        let mut ctx = ModuleBodyContext::new(
+            Idx::from_raw(RawIdx::from(i as u32)),
+            modules,
+            string_interner,
+            type_interner,
+            mod_namespace,
+            function_namespace,
+            struct_namespace,
+        );
+        ctx.lower_bodies();
+        diagnostics.append(&mut ctx.diagnostics);
+    }
+    // for (module_id, _) in modules.iter_mut() {
+    //     let mut ctx = ModuleBodyContext::new(
+    //         module,
+    //         string_interner,
+    //         type_interner,
+    //         mod_namespace,
+    //         function_namespace,
+    //         struct_namespace,
+    //     );
+    //     ctx.lower_bodies();
+    //     // ctx.diagnostics
+    //     diagnostics.append(&mut ctx.diagnostics);
+    // }
+    diagnostics
 }
+
+// pub fn lower_hir_item_bodies(
+//     module: &mut Module,
+//     string_interner: &'static ThreadedRodeo,
+//     type_interner: &'static TypeInterner,
+//     modules: &Arena<Module>,
+//     mod_namespace: &HashMap<Spur, ModuleId>,
+//     function_namespace: &HashMap<Spur, (FunctionId, ModuleId)>,
+//     struct_namespace: &HashMap<Spur, (StructId, ModuleId)>,
+// ) -> Vec<Diagnostic> {
+//     let mut ctx = ModuleBodyContext::new(
+//         module,
+//         string_interner,
+//         type_interner,
+//         mod_namespace,
+//         function_namespace,
+//         struct_namespace,
+//     );
+//     ctx.lower_bodies();
+//     ctx.diagnostics
+// }

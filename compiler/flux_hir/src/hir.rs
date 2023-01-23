@@ -1,13 +1,14 @@
 use std::{collections::HashSet, fmt::Display};
 
 use flux_proc_macros::Locatable;
-use flux_span::{Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, Spanned, ToSpan, WithSpan};
 use flux_syntax::{ast, SyntaxToken};
+use flux_typesystem::TypeId;
 use itertools::Itertools;
 use la_arena::{Arena, Idx};
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::type_interner::{TypeIdx, TypeInterner};
+use crate::type_interner::TypeIdx;
 
 pub type Name = Spanned<Spur>;
 
@@ -24,13 +25,29 @@ pub type FunctionId = Idx<FnDecl>;
 pub type StructId = Idx<StructDecl>;
 pub type UseId = Idx<UseDecl>;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Module {
     pub functions: Arena<FnDecl>,
     pub mods: Arena<ModDecl>,
     pub uses: Arena<UseDecl>,
     pub structs: Arena<StructDecl>,
     pub exprs: Arena<Spanned<Expr>>,
+    pub file_id: FileId,
+    pub absolute_path: Vec<Spur>,
+}
+
+impl Module {
+    pub fn new(file_id: FileId, absolute_path: Vec<Spur>) -> Self {
+        Self {
+            functions: Arena::new(),
+            mods: Arena::new(),
+            uses: Arena::new(),
+            structs: Arena::new(),
+            exprs: Arena::new(),
+            file_id,
+            absolute_path,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
@@ -61,7 +78,7 @@ pub struct StructDecl {
     pub name: Name,
     generic_param_list: GenericParamList,
     where_clause: WhereClause,
-    field_list: StructFieldList,
+    pub field_list: Spanned<StructDeclFieldList>,
 }
 
 impl StructDecl {
@@ -70,7 +87,7 @@ impl StructDecl {
         name: Name,
         generic_param_list: GenericParamList,
         where_clause: WhereClause,
-        field_list: StructFieldList,
+        field_list: Spanned<StructDeclFieldList>,
     ) -> Self {
         Self {
             visibility,
@@ -304,29 +321,33 @@ pub enum Type {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
-pub struct StructFieldList(Vec<StructField>);
+pub struct StructDeclFieldList(Vec<StructDeclField>);
 
-impl StructFieldList {
+impl StructDeclFieldList {
     pub fn empty() -> Self {
         Self(vec![])
     }
 
-    pub fn new(fields: Vec<StructField>) -> Self {
+    pub fn new(fields: Vec<StructDeclField>) -> Self {
         Self(fields)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &StructField> {
+    pub fn iter(&self) -> impl Iterator<Item = &StructDeclField> {
         self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
-pub struct StructField {
+pub struct StructDeclField {
     pub name: Name,
     pub ty: Spanned<TypeIdx>,
 }
 
-impl StructField {
+impl StructDeclField {
     pub fn new(name: Name, ty: Spanned<TypeIdx>) -> Self {
         Self { name, ty }
     }
@@ -396,14 +417,14 @@ pub enum Expr {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
-pub struct Block(Vec<ExprIdx>);
+pub struct Block(Vec<(ExprIdx, TypeId)>);
 
 impl Block {
-    pub fn new(exprs: Vec<ExprIdx>) -> Self {
+    pub fn new(exprs: Vec<(ExprIdx, TypeId)>) -> Self {
         Self(exprs)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &ExprIdx> {
+    pub fn iter(&self) -> impl Iterator<Item = &(ExprIdx, TypeId)> {
         self.0.iter()
     }
 }
@@ -412,11 +433,11 @@ impl Block {
 pub struct Let {
     pub name: Name,
     pub ty: Spanned<TypeIdx>,
-    pub val: Typed<ExprIdx>,
+    pub val: ExprIdx,
 }
 
 impl Let {
-    pub fn new(name: Name, ty: Spanned<TypeIdx>, val: Typed<ExprIdx>) -> Self {
+    pub fn new(name: Name, ty: Spanned<TypeIdx>, val: ExprIdx) -> Self {
         Self { name, ty, val }
     }
 }
@@ -424,11 +445,43 @@ impl Let {
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct Struct {
     pub path: Path,
-    pub fields: Vec<(Name, ExprIdx)>,
+    pub field_list: StructFieldList,
 }
 
 impl Struct {
-    pub fn new(path: Path, fields: Vec<(Name, ExprIdx)>) -> Self {
-        Self { path, fields }
+    pub fn new(path: Path, field_list: StructFieldList) -> Self {
+        Self { path, field_list }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct StructFieldList(Vec<StructField>);
+
+impl StructFieldList {
+    pub const EMPTY: Self = Self(vec![]);
+
+    pub fn new(field_list: Vec<StructField>) -> Self {
+        Self(field_list)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &StructField> {
+        self.0.iter()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct StructField {
+    pub name: Name,
+    val: ExprIdx,
+    pub ty: TypeId,
+}
+
+impl StructField {
+    pub fn new(name: Name, val: ExprIdx, ty: TypeId) -> Self {
+        Self { name, val, ty }
     }
 }

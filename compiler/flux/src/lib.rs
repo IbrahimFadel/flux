@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
@@ -8,13 +7,13 @@ use std::{
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_hir::{
-    hir::{self, FunctionId, ItemDefinitionId, Module, ModuleId},
+    hir::{self, FunctionId, Module, ModuleId, StructId},
     lower_ast_to_hir, lower_hir_item_bodies, TypeInterner,
 };
 use flux_parser::parse;
-use flux_span::{FileId, InFile, Span, Spanned, WithSpan};
+use flux_span::{InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
-use la_arena::{Arena, Idx, RawIdx};
+use la_arena::Arena;
 use lasso::{Spur, ThreadedRodeo};
 use once_cell::sync::Lazy;
 use tracing::{debug, info, instrument, trace, warn};
@@ -47,6 +46,7 @@ struct Driver {
     modules: Arena<Module>,
     mod_namespace: HashMap<Spur, ModuleId>,
     function_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
+    struct_namespace: HashMap<Spur, (StructId, ModuleId)>,
     // struct_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
     // hir_modules: HashMap<FileId, (Module, Arena<Spanned<hir::Expr>>, TypeInterner)>,
 }
@@ -62,6 +62,7 @@ impl Driver {
             modules: Arena::new(),
             function_namespace: HashMap::new(),
             mod_namespace: HashMap::new(),
+            struct_namespace: HashMap::new(),
         }
     }
 
@@ -319,7 +320,9 @@ impl Driver {
         self.file_cache.report_diagnostics(&diagnostics);
         debug!(module_path = module_path_str, "parsed file");
 
-        let module_id = self.modules.alloc(Module::default());
+        let module_id = self
+            .modules
+            .alloc(Module::new(file_id, module_path.to_vec()));
         let hir_module = lower_ast_to_hir(
             root,
             module_path.to_vec(),
@@ -328,6 +331,8 @@ impl Driver {
             &TYPE_INTERNER,
             &mut self.mod_namespace,
             &mut self.function_namespace,
+            &mut self.struct_namespace,
+            file_id,
         );
         self.modules[module_id] = hir_module;
         debug!(module_path = module_path_str, "generated HIR module");
@@ -372,27 +377,38 @@ impl Driver {
             );
         }
 
-        for (_, module) in self.modules.iter_mut() {
-            lower_hir_item_bodies(
-                module,
-                self.interner,
-                &TYPE_INTERNER,
-                &self.mod_namespace,
-                &self.function_namespace,
+        for (path, (struct_id, module_id)) in &self.struct_namespace {
+            let path = self.interner.resolve(path);
+            println!(
+                "{path} -> Struct({}) in Module({})",
+                struct_id.into_raw(),
+                module_id.into_raw()
             );
         }
+
+        // for (_, module) in self.modules.iter_mut() {
+        let diagnostics = lower_hir_item_bodies(
+            self.interner,
+            &TYPE_INTERNER,
+            &mut self.modules,
+            &self.mod_namespace,
+            &self.function_namespace,
+            &self.struct_namespace,
+        );
+        self.file_cache.report_diagnostics(&diagnostics);
+        // }
     }
 }
 
 pub fn build() {
     let args: Vec<_> = env::args().collect();
-    let path = if args.len() > 1 {
+    let project_dir = if args.len() > 1 {
         let mut buf = PathBuf::new();
         buf.push(&args[1]);
         buf
     } else {
         env::current_dir().unwrap()
     };
-    let mut driver = Driver::new(path, &STRING_INTERNER);
+    let mut driver = Driver::new(project_dir, &STRING_INTERNER);
     driver.build();
 }

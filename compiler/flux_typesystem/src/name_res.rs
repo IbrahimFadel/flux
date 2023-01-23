@@ -3,7 +3,7 @@ use flux_span::FileSpanned;
 use hashbrown::HashMap;
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::{diagnostics::TypeError, TypeId};
+use crate::{diagnostics::TypeError, scope::Scope, TypeId};
 
 #[derive(Debug)]
 pub struct NameResolver {
@@ -74,22 +74,5 @@ impl NameResolver {
             .to_diagnostic()),
             Ok,
         )
-    }
-}
-
-#[derive(Debug)]
-struct Scope(HashMap<Spur, TypeId>);
-
-impl Scope {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn insert_local(&mut self, name: Spur, id: TypeId) {
-        self.0.insert(name, id);
-    }
-
-    pub fn get_local_typeid(&self, name: Spur) -> Option<TypeId> {
-        self.0.get(&name).cloned()
     }
 }

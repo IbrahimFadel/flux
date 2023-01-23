@@ -11,8 +11,9 @@ use tracing::trace;
 use crate::{
     diagnostics::TypeError,
     intern::{Interner, Key},
-    name_res::NameResolver,
+    // name_res::NameResolver,
     r#type::{ConcreteKind, StructConcreteKind, Type, TypeId, TypeKind},
+    scope::Scope,
 };
 
 type FunctionSignature = (FileSpanned<Vec<TypeId>>, FileSpanned<TypeId>);
@@ -34,11 +35,12 @@ pub struct TEnv {
     type_interner: Interner,
     pub string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
-    pub name_resolver: NameResolver,
+    // pub name_resolver: NameResolver,
+    pub locals: Vec<Scope>,
     /// Scopes of the current [`TEnv`]
     ///
     /// Holds types of locals. Furthermore, the first element in the vector represents the global scope (outside of the current function / type environment).
-    function_signatures: FunctionSignatureMap,
+    // function_signatures: FunctionSignatureMap,
     pub(super) int_paths: HashSet<Spur>,
     pub(super) float_paths: HashSet<Spur>,
 }
@@ -76,9 +78,10 @@ impl TEnv {
             type_interner: Interner::new(string_interner),
             string_interner,
             entries: vec![],
-            name_resolver: NameResolver::new(),
-            // Global scope, and function scope
-            function_signatures: HashMap::new(),
+            // name_resolver: NameResolver::new(),
+            // Global scope
+            locals: vec![Scope::new()],
+            // function_signatures: HashMap::new(),
             int_paths: HashSet::from([
                 string_interner.get_or_intern_static("u8"),
                 string_interner.get_or_intern_static("u16"),
@@ -192,12 +195,15 @@ impl TEnv {
 
     /// Insert a local to the current [`Scope`]
     pub fn insert_local_to_scope(&mut self, name: Spur, id: TypeId) {
-        self.name_resolver.insert_local_to_current_scope(name, id);
+        self.locals
+            .last_mut()
+            .expect("internal compiler error: no active scope in type environment")
+            .insert_local(name, id);
     }
 
-    pub fn insert_function_signature(&mut self, path: Vec<Spur>, signature: FunctionSignature) {
-        self.function_signatures.insert(path, signature);
-    }
+    // pub fn insert_function_signature(&mut self, path: Vec<Spur>, signature: FunctionSignature) {
+    //     self.function_signatures.insert(path, signature);
+    // }
 
     fn hir_path_to_spur(&self, path: impl Iterator<Item = Spur>) -> Spur {
         let path_string = path
@@ -206,64 +212,71 @@ impl TEnv {
         self.string_interner.get_or_intern(path_string)
     }
 
-    pub fn insert_struct_type(&mut self, path: impl Iterator<Item = Spur>, struct_ty: TypeId) {
-        let spur = self.hir_path_to_spur(path);
-        self.name_resolver.insert_type(spur, struct_ty);
-    }
+    // pub fn get_function_signature(
+    //     &mut self,
+    //     path: &FileSpanned<Vec<Spur>>,
+    // ) -> Result<FunctionSignature, Diagnostic> {
+    //     self.function_signatures
+    //         .get(&path.inner.inner)
+    //         .map_or_else(
+    //             || {
+    //                 Err(TypeError::UnknownFunction {
+    //                     path: path.map_inner_ref(|path| {
+    //                         path.iter()
+    //                             .map(|spur| self.string_interner.resolve(spur))
+    //                             .join("::")
+    //                     }),
+    //                 }
+    //                 .to_diagnostic())
+    //             },
+    //             Ok,
+    //         )
+    //         .cloned()
+    // }
 
-    pub fn get_function_signature(
+    // pub fn get_struct_field_types(
+    //     &self,
+    //     path: FileSpanned<impl Iterator<Item = Spur>>,
+    // ) -> Result<(StructConcreteKind, InFile<Span>), Diagnostic> {
+    //     let (file_id, span) = (path.file_id, path.span);
+    //     let spur = path.map_inner(|path| self.hir_path_to_spur(path));
+    //     let struct_type_id = self
+    //         .name_resolver
+    //         .resolve_type(spur.clone(), self.string_interner)?;
+    //     let typekind = self.get_typekind_with_id(struct_type_id);
+    //     let filespan = InFile::new(typekind.span, typekind.file_id);
+    //     match typekind.inner.inner {
+    //         TypeKind::Concrete(ConcreteKind::Struct(fields)) => Ok((fields, filespan)),
+    //         _ => Err(TypeError::UnknownStruct {
+    //             path: FileSpanned::new(
+    //                 Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
+    //                 file_id,
+    //             ),
+    //         }
+    //         .to_diagnostic()),
+    //     }
+    // }
+
+    /// Get the [`TypeId`] of a path in any currently accessible [`Scope`]
+    pub fn get_local_typeid(
         &mut self,
-        path: &FileSpanned<Vec<Spur>>,
-    ) -> Result<FunctionSignature, Diagnostic> {
-        self.function_signatures
-            .get(&path.inner.inner)
+        name: FileSpanned<Spur>,
+        // path: FileSpanned<impl Iterator<Item = Spur>>,
+    ) -> Result<TypeId, Diagnostic> {
+        self.locals
+            .last()
+            .expect("internal compiler error: no active scope in type environment")
+            .try_get_local(&name)
             .map_or_else(
                 || {
-                    Err(TypeError::UnknownFunction {
-                        path: path.map_inner_ref(|path| {
-                            path.iter()
-                                .map(|spur| self.string_interner.resolve(spur))
-                                .join("::")
-                        }),
+                    Err(TypeError::UnknownVariable {
+                        name: name
+                            .map_inner_ref(|spur| self.string_interner.resolve(spur).to_string()),
                     }
                     .to_diagnostic())
                 },
                 Ok,
             )
-            .cloned()
-    }
-
-    pub fn get_struct_field_types(
-        &self,
-        path: FileSpanned<impl Iterator<Item = Spur>>,
-    ) -> Result<(StructConcreteKind, InFile<Span>), Diagnostic> {
-        let (file_id, span) = (path.file_id, path.span);
-        let spur = path.map_inner(|path| self.hir_path_to_spur(path));
-        let struct_type_id = self
-            .name_resolver
-            .resolve_type(spur.clone(), self.string_interner)?;
-        let typekind = self.get_typekind_with_id(struct_type_id);
-        let filespan = InFile::new(typekind.span, typekind.file_id);
-        match typekind.inner.inner {
-            TypeKind::Concrete(ConcreteKind::Struct(fields)) => Ok((fields, filespan)),
-            _ => Err(TypeError::UnknownStruct {
-                path: FileSpanned::new(
-                    Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
-                    file_id,
-                ),
-            }
-            .to_diagnostic()),
-        }
-    }
-
-    /// Get the [`TypeId`] of a path in any currently accessible [`Scope`]
-    pub fn get_path_typeid(
-        &mut self,
-        path: FileSpanned<impl Iterator<Item = Spur>>,
-    ) -> Result<TypeId, Diagnostic> {
-        let spur = path.map_inner(|path| self.hir_path_to_spur(path));
-        self.name_resolver
-            .resolve_variable(spur, self.string_interner)
     }
 
     /// Format a `flux_typesystem` [`TypeId`] to a `String`
@@ -299,6 +312,7 @@ impl TEnv {
     /// tuples, as well as types which require access to the string interner, such as paths.
     fn fmt_concrete_kind(&self, kind: &ConcreteKind) -> String {
         match kind {
+            ConcreteKind::Array(ty, n) => format!("[{}; {}]", self.fmt_ty_id(*ty), n),
             ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty_id(*id)),
             ConcreteKind::Path(spur) => self.string_interner.resolve(spur).to_string(),
             ConcreteKind::Tuple(ids) => {
@@ -408,6 +422,7 @@ impl Display for Type {
 impl Display for ConcreteKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Array(ty, n) => write!(f, "['{}; {}]", ty, n),
             Self::Path(path) => write!(f, "{:?}", path),
             Self::Ptr(ptr) => write!(f, "*'{}", ptr),
             Self::Tuple(_) => write!(f, "()"),

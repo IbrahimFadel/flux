@@ -3,8 +3,7 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use dashmap::DashMap;
-use hashbrown::{hash_map::RawEntryMut, HashMap};
+use dashmap::{mapref::one::Ref, DashMap};
 use lasso::ThreadedRodeo;
 
 use crate::hir::{Path, Type};
@@ -67,11 +66,20 @@ impl TypeInterner {
             let make_new_key = || TypeIdx::new(len.try_into().unwrap());
             let key = *self
                 .ty_to_key
-                .entry(ty)
+                .entry(ty.clone())
                 .or_insert_with(make_new_key)
                 .value();
+            self.key_to_ty.insert(key, ty);
             key
         }
+    }
+
+    pub fn resolve<'a>(&'a self, key: TypeIdx) -> Ref<TypeIdx, Type> {
+        assert!((key.0 as usize) < self.ty_to_key.len());
+        assert!((key.0 as usize) < self.key_to_ty.len());
+        self.key_to_ty
+            .get(&key)
+            .expect("internal compiler error: invalid type index")
     }
 
     // pub fn intern(&self, ty: Type) -> TypeIdx {

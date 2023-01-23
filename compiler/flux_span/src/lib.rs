@@ -259,6 +259,12 @@ impl<T> Deref for InFile<T> {
 
 pub type FileSpanned<T> = InFile<Spanned<T>>;
 
+impl<T> InFile<Spanned<T>> {
+    pub fn to_filespan(&self) -> InFile<Span> {
+        InFile::new(self.span, self.file_id)
+    }
+}
+
 pub trait WithSpan: Sized {
     fn at(self, span: Span) -> Spanned<Self> {
         Spanned::new(self, span)

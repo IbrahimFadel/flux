@@ -113,6 +113,7 @@ impl Display for TypeKind {
 /// The kind of [`TypeKind::Concrete`]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ConcreteKind {
+    Array(TypeId, u32),
     Ptr(TypeId),
     Path(Spur),
     Tuple(Vec<TypeId>),

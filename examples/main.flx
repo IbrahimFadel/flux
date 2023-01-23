@@ -5,9 +5,9 @@ mod bazz;
 use foo::bar::test_method;
 
 struct Foo {
-    x i32,
+    x i4g,
     y f32,
-    z Bar,
+    z pkg::Bar,
 }
 
 struct Bar {
@@ -32,12 +32,13 @@ fn main() -> i8 {
     let test = 0;
     let x i32 = 0;
     let y i8 = x;
-    let x Foo = Foo {
-        x: x,
-        y: 1.0,
-        z: Bar {
+    let x pkg::Foo = pkg::Foo {
+        // x: x,
+        // y: 1.0,
+        z: pkg::Bar {
             bar_field: 100,
-        }
+        },
+        test: test,
     };
 }
 
