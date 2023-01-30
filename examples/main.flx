@@ -34,12 +34,14 @@ fn main() -> i8 {
     let y i8 = x;
     let x pkg::Foo = pkg::Foo {
         // x: x,
-        // y: 1.0,
+        y: 1,
         z: pkg::Bar {
-            bar_field: 100,
+            bar_field: 10.0,
         },
         test: test,
     };
+    let new = foo::inside_foo();
+    let another_one i32 = new;
 }
 
 fn foo<T>() -> ([T; 3], i8**) {

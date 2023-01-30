@@ -407,6 +407,7 @@ impl WithType for ExprIdx {}
 #[derive(Debug, Clone, PartialEq, Locatable)]
 pub enum Expr {
     Block(Block),
+    Call(Call),
     Float(f64),
     Int(u64),
     Tuple(Vec<ExprIdx>),
@@ -426,6 +427,18 @@ impl Block {
 
     pub fn iter(&self) -> impl Iterator<Item = &(ExprIdx, TypeId)> {
         self.0.iter()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct Call {
+    path: ExprIdx,
+    args: Vec<ExprIdx>,
+}
+
+impl Call {
+    pub fn new(path: ExprIdx, args: Vec<ExprIdx>) -> Self {
+        Self { path, args }
     }
 }
 
@@ -484,4 +497,13 @@ impl StructField {
     pub fn new(name: Name, val: ExprIdx, ty: TypeId) -> Self {
         Self { name, val, ty }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ExpectedPathType {
+    Any,
+    Local,
+    Variable,
+    Function,
+    Struct,
 }

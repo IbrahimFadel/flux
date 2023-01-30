@@ -46,8 +46,8 @@ impl ToDiagnostic for LowerError {
                     unnecessary_fields.inner.span.range.start().into(),
                     unnecessary_fields.file_id,
                 ),
-                DiagnosticCode::UninitializedFieldsInStructExpr,
-                "uninitialized fields in struct expression".to_string(),
+                DiagnosticCode::UnnecessaryFieldsInStructExpr,
+                "unnecessary fields in struct expression".to_string(),
                 vec![
                     unnecessary_fields.map_inner_ref(|list| {
                         format!(

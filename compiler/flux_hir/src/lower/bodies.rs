@@ -7,7 +7,7 @@ use ts::{ConcreteKind, TypeKind};
 
 use crate::{
     diagnostics::LowerError,
-    hir::{StructField, StructFieldList, StructId},
+    hir::{Call, ExpectedPathType, StructField, StructFieldList, StructId},
 };
 
 use super::*;
@@ -57,25 +57,30 @@ impl<'a> ModuleBodyContext<'a> {
         &mut self.modules[self.module_id]
     }
 
-    fn hir_ty_to_ts_ty(&mut self, idx: &Spanned<TypeIdx>) -> TypeId {
+    fn hir_ty_to_ts_ty(&mut self, idx: &Spanned<TypeIdx>, file_id: FileId) -> TypeId {
         let ty = match self.type_interner.resolve(idx.inner).value() {
             Type::Array(ty, n) => {
-                let ty = self.hir_ty_to_ts_ty(ty);
+                let ty = self.hir_ty_to_ts_ty(ty, file_id);
                 TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
             }
             Type::Generic(name) => TypeKind::Generic,
             Type::Path(path, params) => {
                 TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
             }
-            Type::Ptr(ty) => TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(ty))),
+            Type::Ptr(ty) => {
+                TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(ty, file_id)))
+            }
             Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
-                types.iter().map(|idx| self.hir_ty_to_ts_ty(idx)).collect(),
+                types
+                    .iter()
+                    .map(|idx| self.hir_ty_to_ts_ty(idx, file_id))
+                    .collect(),
             )),
             Type::Unknown => TypeKind::Unknown,
         };
         self.tchk
             .tenv
-            .insert(ts::Type::new(ty).in_file(self.this_module().file_id, idx.span))
+            .insert(ts::Type::new(ty).in_file(file_id, idx.span))
     }
 
     pub fn lower_expr(&mut self, expr: Option<ast::Expr>) -> ExprResult {
@@ -92,9 +97,10 @@ impl<'a> ModuleBodyContext<'a> {
         } else {
             match expr {
                 ast::Expr::BlockExpr(block) => self.lower_block_expr(block),
+                ast::Expr::CallExpr(call) => self.lower_call_expr(call),
                 ast::Expr::FloatExpr(float) => self.lower_float_expr(float),
                 ast::Expr::IntExpr(int) => self.lower_int_expr(int),
-                ast::Expr::PathExpr(path) => self.lower_path_expr(path),
+                ast::Expr::PathExpr(path) => self.lower_path_expr(path, ExpectedPathType::Any),
                 ast::Expr::StructExpr(strukt) => self.lower_struct_expr(strukt),
                 _ => todo!(
                     "internal compiler error: unhandled expression type: {:#?}",
@@ -142,6 +148,39 @@ impl<'a> ModuleBodyContext<'a> {
                 .tenv
                 .insert_unit(span.in_file(self.this_module().file_id)),
         )
+    }
+
+    // TODO: figure out the lower_node api this is retarded
+    fn lower_call_expr(&mut self, call: ast::CallExpr) -> ExprResult {
+        let path_expr = call
+            .path()
+            .expect("internal compiler error: missing node that should always be emitted");
+        let (path_expr, path_ty) = if path_expr.is_poisoned() {
+            let span = path_expr.range().to_span();
+            (
+                self.this_module_mut()
+                    .exprs
+                    .alloc(Expr::Path(Path::poisoned()).at(span)),
+                self.tchk
+                    .tenv
+                    .insert_unknown(span.in_file(self.this_module().file_id)),
+            )
+        } else {
+            self.lower_path_expr(path_expr, ExpectedPathType::Function)
+        };
+        let args = call
+            .args()
+            .expect("internal compiler error: missing node that should always be emitted");
+        let args = if args.is_poisoned() {
+            vec![]
+        } else {
+            args.args()
+                .map(|arg| self.lower_expr(Some(arg)).0)
+                .collect()
+        };
+        let call = Expr::Call(Call::new(path_expr, args)).at(call.range().to_span());
+        let idx = self.this_module_mut().exprs.alloc(call);
+        (idx, path_ty)
     }
 
     fn lower_float_expr(&mut self, float: ast::FloatExpr) -> ExprResult {
@@ -204,41 +243,91 @@ impl<'a> ModuleBodyContext<'a> {
         )
     }
 
-    fn lower_path_expr(&mut self, path: ast::PathExpr) -> ExprResult {
+    fn lower_path_expr(&mut self, path: ast::PathExpr, expecting: ExpectedPathType) -> ExprResult {
         let span = path.range().to_span();
         let segments = path
             .segments()
             .map(|segment| segment.text_key().at(segment.text_range().to_span()));
         let path = Path::from_segments(segments);
 
-        let ty = if path.len() == 1 {
-            self.tchk
-                .tenv
-                .get_local_typeid(
-                    path.nth(0)
-                        .cloned()
-                        .unwrap()
-                        .in_file(self.this_module().file_id),
-                )
-                .unwrap_or_else(|err| {
-                    self.diagnostics.push(err);
+        let ty = match expecting {
+            ExpectedPathType::Any => {
+                if path.len() == 1 {
+                    self.tchk
+                        .tenv
+                        .get_local_typeid(
+                            path.nth(0)
+                                .cloned()
+                                .unwrap()
+                                .in_file(self.this_module().file_id),
+                        )
+                        .unwrap_or_else(|_| {
+                            self.resolve_function_type(&path).unwrap_or_else(|| todo!())
+                        })
+                } else {
                     self.tchk
                         .tenv
                         .insert_unknown(span.in_file(self.this_module().file_id))
-                })
-        } else {
-            todo!()
+                }
+            }
+            ExpectedPathType::Function => {
+                self.resolve_function_type(&path).unwrap_or_else(|| todo!())
+            }
+            ExpectedPathType::Local => todo!(),
+            ExpectedPathType::Struct => todo!(),
+            ExpectedPathType::Variable => todo!(),
         };
+        // match
+        // let ty = if path.len() == 1 {
+        //     self.tchk
+        //         .tenv
+        //         .get_local_typeid(
+        //             path.nth(0)
+        //                 .cloned()
+        //                 .unwrap()
+        //                 .in_file(self.this_module().file_id),
+        //         )
+        //         .unwrap_or_else(|err| {
+        //             self.diagnostics.push(err);
+        //             self.tchk
+        //                 .tenv
+        //                 .insert_unknown(span.in_file(self.this_module().file_id))
+        //         })
+        // } else {
+        //     todo!()
+        // };
 
         let expr = Expr::Path(path);
 
         (self.this_module_mut().exprs.alloc(expr.at(span)), ty)
     }
 
+    fn resolve_function_type(&mut self, path: &Path) -> Option<TypeId> {
+        let path_as_spur = path.to_spur(self.string_interner);
+        println!("{}", self.string_interner.resolve(&path_as_spur));
+        let f_and_mod = self.function_namespace.get(&path_as_spur).or_else(|| {
+            let mut module_path = self.this_module().absolute_path.clone();
+            module_path.append(&mut path.get_unspanned_spurs().collect());
+            let full_path_as_spur = self.string_interner.get_or_intern(
+                module_path
+                    .iter()
+                    .map(|spur| self.string_interner.resolve(spur))
+                    .join("::"),
+            );
+            self.function_namespace.get(&full_path_as_spur)
+        });
+        f_and_mod.map(|(f_idx, mod_idx)| {
+            let m = &self.modules[*mod_idx];
+            let file_id = m.file_id;
+            let f = &m.functions[*f_idx];
+            let ret_ty = &f.ret_type;
+            self.hir_ty_to_ts_ty(&ret_ty.clone(), file_id)
+        })
+    }
+
     fn lower_struct_expr(&mut self, strukt: ast::StructExpr) -> ExprResult {
         let span = strukt.range().to_span();
         let path = lower_path(strukt.path());
-        println!("TEST: {:?}", strukt.field_list());
         let field_list = lower_node(
             strukt.field_list(),
             |strukt| {
@@ -304,8 +393,10 @@ impl<'a> ModuleBodyContext<'a> {
         let mut initialized_fields_that_dont_exist = vec![];
         let mut fields_expected_to_be_initialized = HashMap::new();
         for field in struct_decl_field_list.iter() {
-            fields_expected_to_be_initialized
-                .insert(field.name.inner, self.hir_ty_to_ts_ty(&field.ty));
+            fields_expected_to_be_initialized.insert(
+                field.name.inner,
+                self.hir_ty_to_ts_ty(&field.ty, struct_decl_field_list.file_id),
+            );
         }
         for field in struct_expr_field_list.iter() {
             initialized_fields.insert(field.name.inner);
@@ -383,7 +474,7 @@ impl<'a> ModuleBodyContext<'a> {
                 )
             },
         );
-        let lhs_ty_id = self.hir_ty_to_ts_ty(&lhs_ty);
+        let lhs_ty_id = self.hir_ty_to_ts_ty(&lhs_ty, self.this_module().file_id);
         let (expr, expr_id) = self.lower_expr(let_expr.value());
         self.tchk
             .unify(
