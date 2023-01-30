@@ -3,6 +3,15 @@ use flux_span::{FileSpanned, InFile, Span, WithSpan};
 
 #[derive(Debug)]
 pub(crate) enum LowerError {
+    CouldNotResolveFunction {
+        path: FileSpanned<String>,
+    },
+    CouldNotResolvePath {
+        path: FileSpanned<String>,
+    },
+    CouldNotResolveStruct {
+        path: FileSpanned<String>,
+    },
     UninitializedFieldsInStructExpr {
         struct_name: String,
         missing_fields: FileSpanned<String>,
@@ -18,6 +27,24 @@ pub(crate) enum LowerError {
 impl ToDiagnostic for LowerError {
     fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
         match self {
+            Self::CouldNotResolveFunction { path } => Diagnostic::error(
+                path.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::CouldNotResolveFunction,
+                "could not resolve function".to_string(),
+                vec![path.map_inner_ref(|path| format!("could not resolve function `{}`", path))],
+            ),
+            Self::CouldNotResolvePath { path } => Diagnostic::error(
+                path.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::CouldNotResolvePath,
+                "could not resolve path".to_string(),
+                vec![path.map_inner_ref(|path| format!("could not resolve path `{}`", path))],
+            ),
+            Self::CouldNotResolveStruct { path } => Diagnostic::error(
+                path.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::CouldNotResolveStruct,
+                "could not resolve struct".to_string(),
+                vec![path.map_inner_ref(|path| format!("could not resolve struct `{}`", path))],
+            ),
             Self::UninitializedFieldsInStructExpr {
                 struct_name,
                 missing_fields,

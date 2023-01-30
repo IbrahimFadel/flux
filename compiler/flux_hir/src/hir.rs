@@ -163,7 +163,7 @@ impl Path {
         Self(vec![])
     }
 
-    /// Get the `TinyVec` of `Spur`s that represent the [`Path`]
+    /// Get an iterator over the `Spur`s that represent the [`Path`]
     pub fn get_unspanned_spurs(&self) -> impl Iterator<Item = Spur> + '_ {
         self.0.iter().map(|name| name.inner)
     }
@@ -174,6 +174,10 @@ impl Path {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn last(&self) -> Option<&Name> {
+        self.0.last()
     }
 
     pub fn push(&mut self, name: Name) {
@@ -499,11 +503,10 @@ impl StructField {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ExpectedPathType {
     Any,
     Local,
     Variable,
     Function,
-    Struct,
 }

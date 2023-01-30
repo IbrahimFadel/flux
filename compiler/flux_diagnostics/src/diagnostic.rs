@@ -134,6 +134,9 @@ pub enum DiagnosticCode {
     UnusedGenericParams,
     UninitializedFieldsInStructExpr,
     UnnecessaryFieldsInStructExpr,
+    CouldNotResolveFunction,
+    CouldNotResolvePath,
+    CouldNotResolveStruct,
 }
 
 impl std::fmt::Display for DiagnosticCode {

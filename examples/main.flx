@@ -2,7 +2,7 @@ mod foo;
 mod bar;
 mod bazz;
 
-use foo::bar::test_method;
+use foo::inside_foo;
 
 struct Foo {
     x i4g,
@@ -32,7 +32,7 @@ fn main() -> i8 {
     let test = 0;
     let x i32 = 0;
     let y i8 = x;
-    let x pkg::Foo = pkg::Foo {
+    let x Foo = Foo {
         // x: x,
         y: 1,
         z: pkg::Bar {
@@ -40,8 +40,15 @@ fn main() -> i8 {
         },
         test: test,
     };
-    let new = foo::inside_foo();
+    let new = inside_foo();
     let another_one i32 = new;
+
+    let hmmm = BazzStruct {
+
+    };
+    let hmmm = bazz::BazzStruct {
+
+    };
 }
 
 fn foo<T>() -> ([T; 3], i8**) {
