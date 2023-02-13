@@ -35,6 +35,7 @@ basic_node!(IdxExpr);
 
 basic_node!(LetStmt);
 basic_node!(ExprStmt);
+basic_node!(TerminatorExprStmt);
 
 enum_node!(
     Expr: PathExpr,
@@ -56,7 +57,7 @@ basic_node!(TupleType);
 basic_node!(ArrayType);
 basic_node!(PtrType);
 
-enum_node!(Stmt: LetStmt, ExprStmt);
+enum_node!(Stmt: LetStmt, ExprStmt, TerminatorExprStmt);
 
 basic_node!(Path);
 basic_node!(Name);

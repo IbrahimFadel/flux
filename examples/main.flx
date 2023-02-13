@@ -1,3 +1,18 @@
+fn main() {
+
+}
+
+trait Foo<T, X> {
+    fn bar<X, Z>();
+}
+
+fn foo<T>(x T) -> T
+    where T is Foo
+{
+    0
+}
+
+/*
 mod foo;
 mod bar;
 mod bazz;
@@ -49,8 +64,14 @@ fn main() -> i8 {
     let hmmm = bazz::BazzStruct {
 
     };
+
+    let fee i8 = test;
+    let fi i32 = 0;
+    let fo = fee;
+    let fum i32 = fo;
 }
 
 fn foo<T>() -> ([T; 3], i8**) {
     let foo = 0;
 }
+*/

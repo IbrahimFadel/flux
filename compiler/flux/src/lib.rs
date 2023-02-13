@@ -7,7 +7,7 @@ use std::{
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_hir::{
-    hir::{self, FunctionId, Module, ModuleId, StructId},
+    hir::{self, FunctionId, Module, ModuleId, StructId, TraitId},
     lower_ast_to_hir, lower_hir_item_bodies, TypeInterner,
 };
 use flux_parser::parse;
@@ -47,6 +47,7 @@ struct Driver {
     mod_namespace: HashMap<Spur, ModuleId>,
     function_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: HashMap<Spur, (StructId, ModuleId)>,
+    trait_namespace: HashMap<Spur, (TraitId, ModuleId)>,
     // struct_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
     // hir_modules: HashMap<FileId, (Module, Arena<Spanned<hir::Expr>>, TypeInterner)>,
 }
@@ -63,6 +64,7 @@ impl Driver {
             function_namespace: HashMap::new(),
             mod_namespace: HashMap::new(),
             struct_namespace: HashMap::new(),
+            trait_namespace: HashMap::new(),
         }
     }
 
@@ -323,7 +325,7 @@ impl Driver {
         let module_id = self
             .modules
             .alloc(Module::new(file_id, module_path.to_vec()));
-        let hir_module = lower_ast_to_hir(
+        let (hir_module, diagnostics) = lower_ast_to_hir(
             root,
             module_path.to_vec(),
             module_id,
@@ -332,8 +334,10 @@ impl Driver {
             &mut self.mod_namespace,
             &mut self.function_namespace,
             &mut self.struct_namespace,
+            &mut self.trait_namespace,
             file_id,
         );
+        self.file_cache.report_diagnostics(&diagnostics);
         self.modules[module_id] = hir_module;
         debug!(module_path = module_path_str, "generated HIR module");
 
@@ -394,6 +398,7 @@ impl Driver {
             &self.mod_namespace,
             &self.function_namespace,
             &self.struct_namespace,
+            &self.trait_namespace,
         );
         self.file_cache.report_diagnostics(&diagnostics);
         // }

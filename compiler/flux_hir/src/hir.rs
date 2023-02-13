@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt::Display};
 
 use flux_proc_macros::Locatable;
-use flux_span::{FileId, Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{ast, SyntaxToken};
 use flux_typesystem::TypeId;
 use itertools::Itertools;
@@ -17,12 +17,14 @@ pub enum ItemDefinitionId {
     ModuleId(ModuleId),
     FunctionId(FunctionId),
     StructId(StructId),
+    TraitId(TraitId),
     UseId(UseId),
 }
 
 pub type ModuleId = Idx<Module>;
 pub type FunctionId = Idx<FnDecl>;
 pub type StructId = Idx<StructDecl>;
+pub type TraitId = Idx<TraitDecl>;
 pub type UseId = Idx<UseDecl>;
 
 #[derive(Debug)]
@@ -31,6 +33,7 @@ pub struct Module {
     pub mods: Arena<ModDecl>,
     pub uses: Arena<UseDecl>,
     pub structs: Arena<StructDecl>,
+    pub traits: Arena<TraitDecl>,
     pub exprs: Arena<Spanned<Expr>>,
     pub file_id: FileId,
     pub absolute_path: Vec<Spur>,
@@ -43,6 +46,7 @@ impl Module {
             mods: Arena::new(),
             uses: Arena::new(),
             structs: Arena::new(),
+            traits: Arena::new(),
             exprs: Arena::new(),
             file_id,
             absolute_path,
@@ -100,13 +104,75 @@ impl StructDecl {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct TraitDecl {
+    visibility: Visibility,
+    pub name: Name,
+    associated_types: Vec<AssociatedTypeDecl>,
+    methods: MethodList,
+}
+
+impl TraitDecl {
+    pub fn new(
+        visibility: Visibility,
+        name: Name,
+        associated_types: Vec<AssociatedTypeDecl>,
+        methods: MethodList,
+    ) -> Self {
+        Self {
+            visibility,
+            name,
+            associated_types,
+            methods,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct MethodList(Vec<Method>);
+
+impl MethodList {
+    pub fn new(methods: Vec<Method>) -> Self {
+        Self(methods)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct Method {
+    name: Name,
+    generic_param_list: GenericParamList,
+    param_list: ParamList,
+    return_type: TypeIdx,
+    pub ast: ast::TraitMethodDecl,
+}
+
+impl Method {
+    pub fn new(
+        name: Name,
+        generic_param_list: GenericParamList,
+        param_list: ParamList,
+        return_type: TypeIdx,
+        ast: ast::TraitMethodDecl,
+    ) -> Self {
+        Self {
+            name,
+            generic_param_list,
+            param_list,
+            return_type,
+            ast,
+        }
+    }
+}
+
+pub type AssociatedTypeDecl = Name;
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct FnDecl {
     pub visibility: Visibility,
     pub name: Name,
     generic_param_list: GenericParamList,
     pub params: ParamList,
     pub ret_type: Spanned<TypeIdx>,
-    where_clause: WhereClause,
+    pub where_clause: WhereClause,
     // pub body: Typed<ExprIdx>,
     pub ast: ast::FnDecl,
 }
@@ -214,18 +280,18 @@ impl Display for Visibility {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
-pub struct GenericParamList(HashSet<Name>);
+pub struct GenericParamList(HashSet<Spur>);
 
 impl GenericParamList {
     pub fn empty() -> Self {
         Self(HashSet::new())
     }
 
-    pub fn new(params: HashSet<Name>) -> Self {
+    pub fn new(params: HashSet<Spur>) -> Self {
         Self(params)
     }
 
-    pub fn get(&self, path: &Name) -> bool {
+    pub fn get(&self, path: &Spur) -> bool {
         self.0.contains(path)
     }
 
@@ -233,8 +299,18 @@ impl GenericParamList {
         self.0.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Name> {
+    pub fn iter(&self) -> impl Iterator<Item = &Spur> {
         self.0.iter()
+    }
+
+    pub fn combine(a: &GenericParamList, b: &GenericParamList) -> Result<Self, Vec<Spur>> {
+        let x = a.0.union(&b.0).cloned().collect();
+        let duplicates: Vec<_> = a.0.intersection(&b.0).cloned().collect();
+        if duplicates.is_empty() {
+            Ok(Self(x))
+        } else {
+            Err(duplicates)
+        }
     }
 }
 

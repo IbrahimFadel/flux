@@ -51,6 +51,7 @@ pub enum SyntaxKind {
     PathExpr,
 
     ExprStmt,
+    TerminatorExprStmt,
 
     TupleType,
     PathType,

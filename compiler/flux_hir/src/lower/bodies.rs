@@ -3,7 +3,7 @@ use flux_span::FileSpanned;
 use flux_typesystem::{self as ts, TChecker, TEnv, TypeId};
 use hashbrown::HashSet;
 use la_arena::{Idx, RawIdx};
-use ts::{ConcreteKind, TypeKind};
+use ts::{ConcreteKind, TraitRestriction, TypeKind};
 
 use crate::{
     diagnostics::LowerError,
@@ -57,30 +57,78 @@ impl<'a> ModuleBodyContext<'a> {
         &mut self.modules[self.module_id]
     }
 
-    fn hir_ty_to_ts_ty(&mut self, idx: &Spanned<TypeIdx>, file_id: FileId) -> TypeId {
+    fn hir_ty_to_ts_ty(
+        &mut self,
+        idx: &Spanned<TypeIdx>,
+        where_clause: Option<&WhereClause>,
+        file_id: FileId,
+    ) -> TypeId {
         let ty = match self.type_interner.resolve(idx.inner).value() {
             Type::Array(ty, n) => {
-                let ty = self.hir_ty_to_ts_ty(ty, file_id);
+                let ty = self.hir_ty_to_ts_ty(ty, where_clause, file_id);
                 TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
             }
-            Type::Generic(_) => TypeKind::Generic,
+            Type::Generic(generic_name) => {
+                if let Some(where_clause) = where_clause {
+                    let restrictions = where_clause
+                        .iter()
+                        .filter_map(|where_predicate| {
+                            if where_predicate.generic.inner == *generic_name {
+                                let arr: Vec<TraitRestriction> = where_predicate
+                                    .trait_restrictions
+                                    .iter()
+                                    .map(|restriction| {
+                                        TraitRestriction::new(
+                                            restriction.name.clone().in_file(file_id),
+                                            restriction
+                                                .args
+                                                .iter()
+                                                .map(|idx| {
+                                                    self.hir_ty_to_ts_ty(
+                                                        idx,
+                                                        Some(where_clause),
+                                                        file_id,
+                                                    )
+                                                })
+                                                .collect(),
+                                        )
+                                    })
+                                    .collect();
+                                Some(arr)
+                            } else {
+                                None
+                            }
+                        })
+                        .flatten()
+                        .collect();
+
+                    let ty = ts::Type::new(TypeKind::Generic, &mut self.tchk.tenv.type_interner);
+                    return self
+                        .tchk
+                        .tenv
+                        .insert_with_constraints(ty.in_file(file_id, idx.span), restrictions);
+                } else {
+                    TypeKind::Generic
+                }
+            }
             Type::Path(path, _) => {
                 TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
             }
-            Type::Ptr(ty) => {
-                TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(ty, file_id)))
-            }
+            Type::Ptr(ty) => TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(
+                ty,
+                where_clause,
+                file_id,
+            ))),
             Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
                 types
                     .iter()
-                    .map(|idx| self.hir_ty_to_ts_ty(idx, file_id))
+                    .map(|idx| self.hir_ty_to_ts_ty(idx, where_clause, file_id))
                     .collect(),
             )),
             Type::Unknown => TypeKind::Unknown,
         };
-        self.tchk
-            .tenv
-            .insert(ts::Type::new(ty).in_file(file_id, idx.span))
+        let ty = ts::Type::new(ty, &mut self.tchk.tenv.type_interner);
+        self.tchk.tenv.insert(ty.in_file(file_id, idx.span))
     }
 
     pub fn lower_path(
@@ -199,24 +247,39 @@ impl<'a> ModuleBodyContext<'a> {
     }
 
     fn lower_block_expr(&mut self, block: ast::BlockExpr) -> ExprResult {
+        let file_id = self.this_module().file_id;
         let span = block.range().to_span();
-        let exprs: Vec<_> = block
-            .stmts()
-            .map(|stmt| match stmt {
+        let mut exprs = vec![];
+        let stmts = block.stmts().collect::<Vec<_>>();
+        let mut block_type = self.tchk.tenv.insert_unit(span.in_file(file_id));
+        let stmts_len = stmts.len();
+        for i in 0..stmts_len {
+            let expr = match &stmts[i] {
                 ast::Stmt::ExprStmt(expr) => self.lower_expr(expr.expr()),
                 ast::Stmt::LetStmt(let_expr) => self.lower_let_expr(let_expr),
-            })
-            .collect();
+                ast::Stmt::TerminatorExprStmt(expr) => {
+                    let (e, id) = self.lower_expr(expr.expr());
+                    block_type = id;
+                    if i < stmts_len - 1 {
+                        self.diagnostics.push(
+                            LowerError::StmtFollowingTerminatorExpr {
+                                terminator: expr.range().to_span().in_file(file_id),
+                                following_expr: stmts[i + 1].range().to_span().in_file(file_id),
+                            }
+                            .to_diagnostic(),
+                        );
+                    }
+                    exprs.push((e, id));
+                    break;
+                }
+            };
+            exprs.push(expr);
+        }
         let block = self
             .this_module_mut()
             .exprs
             .alloc(Expr::Block(Block::new(exprs)).at(span));
-        (
-            block,
-            self.tchk
-                .tenv
-                .insert_unit(span.in_file(self.this_module().file_id)),
-        )
+        (block, block_type)
     }
 
     // TODO: figure out the lower_node api this is retarded
@@ -257,7 +320,7 @@ impl<'a> ModuleBodyContext<'a> {
         let float_ty = self
             .tchk
             .tenv
-            .insert(ts::Type::new(TypeKind::Float(None)).in_file(self.this_module().file_id, span));
+            .insert_float(span.in_file(self.this_module().file_id));
         let value_str = match float.v() {
             Some(v) => self
                 .string_interner
@@ -287,7 +350,7 @@ impl<'a> ModuleBodyContext<'a> {
         let int_ty = self
             .tchk
             .tenv
-            .insert(ts::Type::new(TypeKind::Int(None)).in_file(self.this_module().file_id, span));
+            .insert_int(span.in_file(self.this_module().file_id));
         let value_str = match int.v() {
             Some(v) => self
                 .string_interner
@@ -403,7 +466,7 @@ impl<'a> ModuleBodyContext<'a> {
                     let file_id = m.file_id;
                     let f = &m.functions[*f_idx];
                     let ret_ty = &f.ret_type;
-                    self.hir_ty_to_ts_ty(&ret_ty.clone(), file_id)
+                    self.hir_ty_to_ts_ty(&ret_ty.clone(), None, file_id)
                 })
             }
             ExpectedPathType::Local => self
@@ -411,60 +474,10 @@ impl<'a> ModuleBodyContext<'a> {
                 .tenv
                 .get_local_typeid(path.clone().in_file(self.this_module().file_id))
                 .ok(),
-            ExpectedPathType::Variable => todo!(),
+            ExpectedPathType::Variable => None,
         }
     }
 
-    fn resolve_function_type(&mut self, path: &Path) -> Option<TypeId> {
-        let path_as_spur = path.to_spur(self.string_interner);
-        println!("{}", self.string_interner.resolve(&path_as_spur));
-
-        let f_and_mod = self
-            .function_namespace
-            .get(&path_as_spur)
-            .or_else(|| {
-                let mut module_path = self.this_module().absolute_path.clone();
-                module_path.append(&mut path.get_unspanned_spurs().collect());
-                let full_path_as_spur = self.string_interner.get_or_intern(
-                    module_path
-                        .iter()
-                        .map(|spur| self.string_interner.resolve(spur))
-                        .join("::"),
-                );
-                self.function_namespace.get(&full_path_as_spur)
-            })
-            .or_else(|| {
-                for (_, use_decl) in self.this_module().uses.iter() {
-                    let path = &use_decl.path;
-                    let use_path_spur = path.to_spur(self.string_interner);
-                    if let Some(res) = self.function_namespace.get(&use_path_spur) {
-                        return Some(res);
-                    } else {
-                        let mut module_path = self.this_module().absolute_path.clone();
-                        module_path.append(&mut path.get_unspanned_spurs().collect());
-                        let full_path_as_spur = self.string_interner.get_or_intern(
-                            module_path
-                                .iter()
-                                .map(|spur| self.string_interner.resolve(spur))
-                                .join("::"),
-                        );
-                        if let Some(res) = self.function_namespace.get(&full_path_as_spur) {
-                            return Some(res);
-                        }
-                    }
-                }
-                None
-            });
-        f_and_mod.map(|(f_idx, mod_idx)| {
-            let m = &self.modules[*mod_idx];
-            let file_id = m.file_id;
-            let f = &m.functions[*f_idx];
-            let ret_ty = &f.ret_type;
-            self.hir_ty_to_ts_ty(&ret_ty.clone(), file_id)
-        })
-    }
-
-    // TODO: wtf is the difference between Path and PathExpr?? did i have a reason?
     fn lower_struct_expr(&mut self, strukt: ast::StructExpr) -> ExprResult {
         let file_id = self.this_module().file_id;
         let span = strukt.range().to_span();
@@ -485,12 +498,12 @@ impl<'a> ModuleBodyContext<'a> {
                 .at(strukt.range().to_span())
             },
         );
-        let ty = self.tchk.tenv.insert(
-            ts::Type::new(TypeKind::Concrete(ConcreteKind::Path(
-                path.to_spur(self.string_interner),
-            )))
-            .in_file(file_id, span),
-        );
+        let ty = ts::Type::new(
+            TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner))),
+            &mut self.tchk.tenv.type_interner,
+        )
+        .in_file(file_id, span);
+        let ty = self.tchk.tenv.insert(ty);
         let struct_path_spur = path.to_spur(self.string_interner);
         if let Some((s_idx, mod_idx)) = path_item_def_id {
             // When the field list is poisoned, we initialize it as empty which makes typechecking not just useless, but wrong. It gives weird diagnostics (like incorrect number of fields)
@@ -546,7 +559,7 @@ impl<'a> ModuleBodyContext<'a> {
         for field in struct_decl_field_list.iter() {
             fields_expected_to_be_initialized.insert(
                 field.name.inner,
-                self.hir_ty_to_ts_ty(&field.ty, struct_decl_field_list.file_id),
+                self.hir_ty_to_ts_ty(&field.ty, None, struct_decl_field_list.file_id),
             );
         }
         for field in struct_expr_field_list.iter() {
@@ -610,7 +623,7 @@ impl<'a> ModuleBodyContext<'a> {
         StructField::new(name, val, val_id)
     }
 
-    fn lower_let_expr(&mut self, let_expr: ast::LetStmt) -> ExprResult {
+    fn lower_let_expr(&mut self, let_expr: &ast::LetStmt) -> ExprResult {
         let span = let_expr.range().to_span();
         let name = lower_name(let_expr.name(), self.string_interner);
         let lhs_ty = let_expr.ty().map_or(
@@ -625,7 +638,7 @@ impl<'a> ModuleBodyContext<'a> {
                 )
             },
         );
-        let lhs_ty_id = self.hir_ty_to_ts_ty(&lhs_ty, self.this_module().file_id);
+        let lhs_ty_id = self.hir_ty_to_ts_ty(&lhs_ty, None, self.this_module().file_id);
         let (expr, expr_id) = self.lower_expr(let_expr.value());
         self.tchk
             .unify(
@@ -645,9 +658,24 @@ impl<'a> ModuleBodyContext<'a> {
     }
 
     pub fn lower_bodies(&mut self) {
+        let file_id = self.this_module().file_id;
         for i in 0..self.this_module().functions.len() {
-            let f = &self.this_module().functions[Idx::from_raw(RawIdx::from(i as u32))];
-            self.lower_expr(f.ast.body());
+            let f = self.this_module().functions[Idx::from_raw(RawIdx::from(i as u32))].clone();
+
+            for param in f.params.clone().iter() {
+                let ty = self.hir_ty_to_ts_ty(&param.ty, Some(&f.where_clause), file_id);
+                self.tchk.tenv.insert_local_to_scope(param.name.inner, ty);
+            }
+
+            let body = f.ast.body();
+            let ret_ty = f.ret_type;
+            let (_, body_tyid) = self.lower_expr(body);
+            let ret_tyid = self.hir_ty_to_ts_ty(&ret_ty, Some(&f.where_clause), file_id);
+            self.tchk
+                .unify(ret_tyid, body_tyid, ret_ty.span.in_file(file_id))
+                .unwrap_or_else(|err| {
+                    self.diagnostics.push(err);
+                });
         }
     }
 }

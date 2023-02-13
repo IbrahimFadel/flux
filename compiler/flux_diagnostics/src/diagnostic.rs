@@ -137,6 +137,10 @@ pub enum DiagnosticCode {
     CouldNotResolveFunction,
     CouldNotResolvePath,
     CouldNotResolveStruct,
+    ConflictingTraitImplementations,
+    TraitInTraitRestrictionDoesNotExist,
+    StmtFollowingTerminatorExpr,
+    TraitMethodGenericsAlreadyDeclaredInTraitDecl,
 }
 
 impl std::fmt::Display for DiagnosticCode {

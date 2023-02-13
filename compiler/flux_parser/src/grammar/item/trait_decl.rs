@@ -42,7 +42,7 @@ fn trait_method_or_assoc_type_decl(p: &mut Parser) {
 fn assoc_type_decl(p: &mut Parser) {
     let m = p.start();
     p.bump(TokenKind::Type);
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::SemiColon]));
     p.expect(TokenKind::SemiColon);
     m.complete(p, SyntaxKind::TraitAssocTypeDecl);
 }

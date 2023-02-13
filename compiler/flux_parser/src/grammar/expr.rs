@@ -194,8 +194,11 @@ fn stmt(p: &mut Parser) {
     } else {
         let m = p.start();
         expr(p);
-        p.eat(TokenKind::SemiColon);
-        m.complete(p, SyntaxKind::ExprStmt);
+        if p.eat(TokenKind::SemiColon) {
+            m.complete(p, SyntaxKind::ExprStmt);
+        } else {
+            m.complete(p, SyntaxKind::TerminatorExprStmt);
+        };
     }
 }
 

@@ -4,6 +4,8 @@ use flux_proc_macros::Locatable;
 use flux_span::WithSpan;
 use lasso::Spur;
 
+use crate::intern::{Interner, Key};
+
 /// A `flux_typesystem` type
 ///
 /// Types consist of a constructor and parameters
@@ -12,32 +14,53 @@ use lasso::Spur;
 ///
 /// Types always have a constructor, but not always parameters, as such we can store all the information in one vector rather than two to save memory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Locatable)]
-pub struct Type(Vec<TypeKind>);
+pub struct Type(Vec<Key>);
 
 impl Type {
     /// Create a new [`Type`] with only a constructor
     ///
     /// Stores the constructor as the first element in the vector
-    pub fn new(constr: TypeKind) -> Self {
-        let types = vec![constr; 1];
+    pub fn new(constr: TypeKind, type_interner: &mut Interner) -> Self {
+        let types = vec![type_interner.intern(constr); 1];
         Self(types)
     }
 
     /// Create a new [`Type`] with a constructor and parameters
     ///
     /// Stores the constructor as the first element in the vector, and fills the rest of the vector with the parameters
-    pub fn with_params(constr: TypeKind, params: impl Iterator<Item = TypeKind>) -> Self {
-        let types = std::iter::once(constr).chain(params).collect();
+    pub fn with_params(
+        constr: TypeKind,
+        params: impl Iterator<Item = TypeKind>,
+        type_interner: &mut Interner,
+    ) -> Self {
+        let types = std::iter::once(constr)
+            .chain(params)
+            .map(|kind| type_interner.intern(kind))
+            .collect();
+        Self(types)
+    }
+
+    /// Create a new [`Type`] with a constructor and parameters
+    ///
+    /// Stores the constructor as the first element in the vector, and fills the rest of the vector with the parameters
+    pub fn with_params_as_keys(
+        constr: TypeKind,
+        params: impl Iterator<Item = Key>,
+        type_interner: &mut Interner,
+    ) -> Self {
+        let types = std::iter::once(type_interner.intern(constr))
+            .chain(params)
+            .collect();
         Self(types)
     }
 
     /// Get a [`Type`]'s type constructor (the first element in the vector)
-    pub fn constr(&self) -> TypeKind {
+    pub fn constr(&self) -> Key {
         self.0[0].clone()
     }
 
     /// Get a [`Type`]'s type parameters (everything following the first element in the vector)
-    pub fn params(&self) -> Option<&[TypeKind]> {
+    pub fn params(&self) -> Option<&[Key]> {
         self.0.get(1..)
     }
 }
@@ -91,6 +114,7 @@ pub enum TypeKind {
     Int(Option<TypeId>),
     Float(Option<TypeId>),
     Ref(TypeId),
+    // Generic(Vec<(Spur, Vec<TypeId>)>),
     Generic,
     Unknown,
 }

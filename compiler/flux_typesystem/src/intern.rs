@@ -29,7 +29,7 @@ impl Display for Key {
 }
 
 #[derive(Debug)]
-pub(crate) struct Interner {
+pub struct Interner {
     ty_to_key: HashMap<TypeKind, Key>,
     key_to_ty: HashMap<Key, TypeKind>,
     string_interner: &'static ThreadedRodeo,

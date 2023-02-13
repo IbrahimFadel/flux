@@ -95,7 +95,9 @@ getters! {
     }
     ExprStmt {
         expr -> node(Expr);
-        semicolon -> tok(SemiColon);
+    }
+    TerminatorExprStmt {
+        expr -> node(Expr);
     }
     StructDecl {
         name -> node(Name);
@@ -135,6 +137,7 @@ getters! {
         args -> nodes(Type);
     }
     TraitDecl {
+        visibility -> node(Visibility);
         name -> node(Name);
         generic_param_list -> node(GenericParamList);
         where_clause -> node(WhereClause);
@@ -142,7 +145,7 @@ getters! {
         method_decls -> nodes(TraitMethodDecl);
     }
     TraitAssocTypeDecl {
-        name -> tok(Ident);
+        name -> node(Name);
     }
     TraitMethodDecl {
         name -> node(Name);

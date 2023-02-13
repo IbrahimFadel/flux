@@ -1,7 +1,18 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
-use flux_span::{FileSpanned, InFile, Span, Spanned};
+use flux_span::{FileId, FileSpanned, InFile, Span, Spanned, WithSpan};
 
 pub enum TypeError {
+    ConflictingTraitImplementations {
+        implementation_a_file_id: FileId,
+        implementation_b_file_id: FileId,
+        impl_a_trt: String,
+        impl_a_ty: Spanned<String>,
+        impl_b_trt: String,
+        impl_b_ty: Spanned<String>,
+    },
+    TraitInTraitRestrictionDoesNotExist {
+        trait_name: FileSpanned<String>,
+    },
     /// A type mismatch
     ///
     /// `a` and `b` are both formatted to `String`, where
@@ -10,10 +21,9 @@ pub enum TypeError {
     TypeMismatch {
         a: FileSpanned<String>,
         b: FileSpanned<String>,
+        // a_got_from_list: Vec<InFile<Span>>,
+        // b_got_from_list: Vec<InFile<Span>>,
         span: InFile<Span>,
-    },
-    UnknownVariable {
-        name: FileSpanned<String>,
     },
     UnknownFunction {
         path: FileSpanned<String>,
@@ -24,16 +34,57 @@ pub enum TypeError {
     UnknownType {
         path: FileSpanned<String>,
     },
+    UnknownVariable {
+        name: FileSpanned<String>,
+    },
 }
 
 impl ToDiagnostic for TypeError {
     fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
         match self {
-            Self::TypeMismatch { a, b, span } => Diagnostic::error(
-                span.map_ref(|span| span.range.start().into()),
-                DiagnosticCode::TypeMismatch,
-                "type mismatch".to_string(),
+            Self::ConflictingTraitImplementations {
+                implementation_a_file_id,
+                implementation_b_file_id,
+                impl_a_trt,
+                impl_a_ty,
+                impl_b_trt,
+                impl_b_ty,
+            } => Diagnostic::error(
+                InFile::new(
+                    impl_a_ty.span.range.start().into(),
+                    *implementation_a_file_id,
+                ),
+                DiagnosticCode::ConflictingTraitImplementations,
+                "conflicting trait implementations".to_string(),
                 vec![
+                    FileSpanned::new(
+                        impl_a_ty.map_ref(|ty| {
+                            format!("type `{}` implements trait `{}` here", ty, impl_a_trt)
+                        }),
+                        *implementation_a_file_id,
+                    ),
+                    FileSpanned::new(
+                        impl_b_ty.map_ref(|ty| {
+                            format!("type `{}` implements trait `{}` here", ty, impl_b_trt)
+                        }),
+                        *implementation_b_file_id,
+                    ),
+                ],
+            ),
+            Self::TraitInTraitRestrictionDoesNotExist { trait_name } => Diagnostic::error(
+                trait_name.map_ref(|name| name.span.range.start().into()),
+                DiagnosticCode::ConflictingTraitImplementations,
+                "trait does not exist".to_string(),
+                vec![trait_name.map_inner_ref(|name| format!("trait `{}` does not exist", name))],
+            ),
+            Self::TypeMismatch {
+                a,
+                b,
+                span,
+                // a_got_from_list,
+                // b_got_from_list,
+            } => {
+                let mut labels = vec![
                     InFile::new(
                         Spanned::new(
                             format!(
@@ -46,8 +97,22 @@ impl ToDiagnostic for TypeError {
                     ),
                     a.clone(),
                     b.clone(),
-                ],
-            ),
+                ];
+                // a_got_from_list.iter().for_each(|a| {
+                //     let label = FileSpanned::new("from".to_string().at(a.inner), a.file_id);
+                //     labels.push(label);
+                // });
+                // b_got_from_list.iter().for_each(|b| {
+                //     let label = FileSpanned::new("from".to_string().at(b.inner), b.file_id);
+                //     labels.push(label);
+                // });
+                Diagnostic::error(
+                    span.map_ref(|span| span.range.start().into()),
+                    DiagnosticCode::TypeMismatch,
+                    "type mismatch".to_string(),
+                    labels,
+                )
+            }
             Self::UnknownVariable { name } => Diagnostic::error(
                 name.map_ref(|span| span.span.range.start().into()),
                 DiagnosticCode::UnknownLocal,
