@@ -247,12 +247,12 @@ impl TEnv {
     //     self.function_signatures.insert(path, signature);
     // }
 
-    fn hir_path_to_spur(&self, path: impl Iterator<Item = Spur>) -> Spur {
-        let path_string = path
-            .map(|spur| self.string_interner.resolve(&spur))
-            .join("::");
-        self.string_interner.get_or_intern(path_string)
-    }
+    // fn hir_path_to_spur(&self, path: impl Iterator<Item = Spur>) -> Spur {
+    //     let path_string = path
+    //         .map(|spur| self.string_interner.resolve(&spur))
+    //         .join("::");
+    //     self.string_interner.get_or_intern(path_string)
+    // }
 
     // pub fn get_function_signature(
     //     &mut self,
@@ -393,7 +393,7 @@ impl TEnv {
             self.string_interner
                 .resolve(&trait_restriction.name.inner.inner),
             if trait_restriction.args.is_empty() {
-                format!("")
+                "".to_string()
             } else {
                 format!(
                     "<{}>",
@@ -463,10 +463,7 @@ impl Display for TEntry {
             },
             self.restrictions
                 .iter()
-                .format_with(", ", |constraint, f| f(&format_args!(
-                    "{:?}",
-                    self.restrictions
-                )))
+                .format_with(", ", |_, f| f(&format_args!("{:?}", self.restrictions)))
         )
     }
 }
@@ -494,9 +491,9 @@ impl Display for Type {
 impl Display for ConcreteKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Array(ty, n) => write!(f, "['{}; {}]", ty, n),
-            Self::Path(path) => write!(f, "{:?}", path),
-            Self::Ptr(ptr) => write!(f, "*'{}", ptr),
+            Self::Array(ty, n) => write!(f, "['{ty}; {n}]"),
+            Self::Path(path) => write!(f, "{path:?}"),
+            Self::Ptr(ptr) => write!(f, "*'{ptr}"),
             Self::Tuple(_) => write!(f, "()"),
             Self::Struct(_) => write!(f, "todo (lazy pos)"),
         }

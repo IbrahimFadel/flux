@@ -299,7 +299,7 @@ pub fn spur_iter_to_spur<'a>(
     interner.get_or_intern(spurs.map(|spur| interner.resolve(spur)).join("::"))
 }
 
-pub fn spanned_spur_iter_to_spanned_spur<'a>(
+pub fn spanned_spur_iter_to_spanned_spur(
     spurs: impl Iterator<Item = Spanned<Spur>>,
     interner: &'static ThreadedRodeo,
 ) -> Spanned<Spur> {

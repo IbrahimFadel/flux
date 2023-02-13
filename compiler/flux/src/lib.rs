@@ -7,7 +7,7 @@ use std::{
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_hir::{
-    hir::{self, FunctionId, Module, ModuleId, StructId, TraitId},
+    hir::{FunctionId, Module, ModuleId, StructId, TraitId},
     lower_ast_to_hir, lower_hir_item_bodies, TypeInterner,
 };
 use flux_parser::parse;
@@ -25,31 +25,16 @@ pub static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&S
 const ENTRY_MODULE_NAME: &str = "pkg";
 const FILE_EXT: &str = ".flx";
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum ItemDefinitionId {
-//     ModuleId(Idx<hir::ModDecl>),
-//     FunctionId(FunctionId),
-//     StructId(StructId),
-//     UseId(UseId),
-// }
-
-// type FunctionId = Idx<hir::FnDecl>;
-// type StructId = Idx<hir::StructDecl>;
-// type UseId = Idx<hir::UseDecl>;
-
 struct Driver {
     file_cache: FileCache,
     project_dir: PathBuf,
     interner: &'static ThreadedRodeo,
     diagnostics: Vec<Diagnostic>,
-    // package_defs: PackageDefs,
     modules: Arena<Module>,
     mod_namespace: HashMap<Spur, ModuleId>,
     function_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: HashMap<Spur, (StructId, ModuleId)>,
     trait_namespace: HashMap<Spur, (TraitId, ModuleId)>,
-    // struct_namespace: HashMap<Spur, (FunctionId, ModuleId)>,
-    // hir_modules: HashMap<FileId, (Module, Arena<Spanned<hir::Expr>>, TypeInterner)>,
 }
 
 impl Driver {
@@ -59,7 +44,6 @@ impl Driver {
             project_dir,
             interner,
             diagnostics: vec![],
-            // package_defs: PackageDefs::new(),
             modules: Arena::new(),
             function_namespace: HashMap::new(),
             mod_namespace: HashMap::new(),
@@ -77,10 +61,10 @@ impl Driver {
         if let Some(parent_mod_name) = parent_mod_name {
             if *parent_mod_name == ENTRY_MODULE_NAME {
                 let mut path1 = PathBuf::from(dir);
-                path1.push(format!("{}{}", module_name, FILE_EXT));
+                path1.push(format!("{module_name}{FILE_EXT}"));
                 let mut path2 = PathBuf::from(dir);
                 path2.push(module_name);
-                path2.push(format!("{}{}", module_name, FILE_EXT));
+                path2.push(format!("{module_name}{FILE_EXT}"));
                 (path1, path2)
             } else {
                 let mut path1 = PathBuf::from(dir);
@@ -94,10 +78,10 @@ impl Driver {
             }
         } else {
             let mut path1 = PathBuf::from(dir);
-            path1.push(format!("main{}", FILE_EXT));
+            path1.push(format!("main{FILE_EXT}"));
             let mut path2 = PathBuf::from(dir);
             path2.push(module_name);
-            path2.push(format!("main{}", FILE_EXT));
+            path2.push(format!("main{FILE_EXT}"));
             (path1, path2)
         }
     }
@@ -113,13 +97,13 @@ impl Driver {
     fn find_entry_file(&self) -> Result<PathBuf, DriverError> {
         let project_dir_str = self.project_dir.to_str().unwrap();
         let dir_entries = fs::read_dir(&self.project_dir).map_err(|_| {
-            warn!("could not read directory `{}`", project_dir_str);
-            DriverError::ReadDir(format!("could not read directory `{}`", project_dir_str))
+            warn!("could not read directory `{project_dir_str}`");
+            DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
         })?;
         for entry in dir_entries {
             let entry = entry.map_err(|e| {
                 warn!("could not read entry `{}`", e);
-                DriverError::ReadDir(format!("could not read directory `{}`", project_dir_str))
+                DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
             })?;
             let name = entry.file_name();
             if name == "main.flx" {
@@ -127,7 +111,7 @@ impl Driver {
                 return Ok(entry.path());
             }
         }
-        warn!("could not find entry file `{}`", project_dir_str);
+        warn!("could not find entry file `{project_dir_str}`");
         Err(DriverError::FindEntryFile)
     }
 
@@ -395,7 +379,6 @@ impl Driver {
             self.interner,
             &TYPE_INTERNER,
             &mut self.modules,
-            &self.mod_namespace,
             &self.function_namespace,
             &self.struct_namespace,
             &self.trait_namespace,

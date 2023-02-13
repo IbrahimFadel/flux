@@ -1,9 +1,7 @@
-use flux_diagnostics::Diagnostic;
-use flux_span::{InFile, Span};
 use hashbrown::HashMap;
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 
-use crate::{diagnostics::TypeError, TypeId};
+use crate::TypeId;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub(crate) struct TraitImplementation {
@@ -12,27 +10,27 @@ pub(crate) struct TraitImplementation {
 }
 
 impl TraitImplementation {
-    pub fn new(trait_params: Vec<TypeId>, impltr_params: Vec<TypeId>) -> Self {
-        Self {
-            trait_params,
-            impltr_params,
-        }
-    }
+    // pub fn new(trait_params: Vec<TypeId>, impltr_params: Vec<TypeId>) -> Self {
+    //     Self {
+    //         trait_params,
+    //         impltr_params,
+    //     }
+    // }
 }
 
 #[derive(Debug)]
 pub(crate) struct TraitImplementationTable {
     /// Trait Name -> (Implementor Name -> Implementation)
     pub table: HashMap<Spur, HashMap<Spur, Vec<TraitImplementation>>>,
-    /// Spans of types
-    spans: HashMap<Spur, HashMap<Spur, HashMap<TraitImplementation, InFile<Span>>>>,
+    // Spans of types
+    // spans: HashMap<Spur, HashMap<Spur, HashMap<TraitImplementation, InFile<Span>>>>,
 }
 
 impl TraitImplementationTable {
     pub fn new() -> Self {
         Self {
             table: HashMap::new(),
-            spans: HashMap::new(),
+            // spans: HashMap::new(),
         }
     }
 
@@ -70,34 +68,34 @@ impl TraitImplementationTable {
     //     Ok(())
     // }
 
-    pub(crate) fn get_type_span(
-        &self,
-        trt: &Spur,
-        impltr: &Spur,
-        implementation: &TraitImplementation,
-    ) -> InFile<Span> {
-        self.spans
-            .get(trt)
-            .expect("internal compiler error: span isn't stored for trait implementation")
-            .get(impltr)
-            .expect("internal compiler error: span isn't stored for trait implementation")
-            .get(implementation)
-            .cloned()
-            .expect("internal compiler error: span isn't stored for trait implementation")
-    }
+    // pub(crate) fn get_type_span(
+    //     &self,
+    //     trt: &Spur,
+    //     impltr: &Spur,
+    //     implementation: &TraitImplementation,
+    // ) -> InFile<Span> {
+    //     self.spans
+    //         .get(trt)
+    //         .expect("internal compiler error: span isn't stored for trait implementation")
+    //         .get(impltr)
+    //         .expect("internal compiler error: span isn't stored for trait implementation")
+    //         .get(implementation)
+    //         .cloned()
+    //         .expect("internal compiler error: span isn't stored for trait implementation")
+    // }
 }
 
 #[derive(Debug)]
 pub(crate) struct TraitSolver {
     pub implementation_table: TraitImplementationTable,
-    cache: HashMap<Spur, Spur>,
+    // cache: HashMap<Spur, Spur>,
 }
 
 impl TraitSolver {
     pub fn new() -> Self {
         Self {
             implementation_table: TraitImplementationTable::new(),
-            cache: HashMap::new(),
+            // cache: HashMap::new(),
         }
     }
 }

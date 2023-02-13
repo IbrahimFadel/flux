@@ -42,19 +42,19 @@ impl ToDiagnostic for LowerError {
                 path.map_ref(|span| span.span.range.start().into()),
                 DiagnosticCode::CouldNotResolveFunction,
                 "could not resolve function".to_string(),
-                vec![path.map_inner_ref(|path| format!("could not resolve function `{}`", path))],
+                vec![path.map_inner_ref(|path| format!("could not resolve function `{path}`"))],
             ),
             Self::CouldNotResolvePath { path } => Diagnostic::error(
                 path.map_ref(|span| span.span.range.start().into()),
                 DiagnosticCode::CouldNotResolvePath,
                 "could not resolve path".to_string(),
-                vec![path.map_inner_ref(|path| format!("could not resolve path `{}`", path))],
+                vec![path.map_inner_ref(|path| format!("could not resolve path `{path}`"))],
             ),
             Self::CouldNotResolveStruct { path } => Diagnostic::error(
                 path.map_ref(|span| span.span.range.start().into()),
                 DiagnosticCode::CouldNotResolveStruct,
                 "could not resolve struct".to_string(),
-                vec![path.map_inner_ref(|path| format!("could not resolve struct `{}`", path))],
+                vec![path.map_inner_ref(|path| format!("could not resolve struct `{path}`"))],
             ),
             Self::StmtFollowingTerminatorExpr {
                 terminator,
@@ -86,33 +86,25 @@ impl ToDiagnostic for LowerError {
                     method_generics.file_id,
                 ),
                 DiagnosticCode::TraitMethodGenericsAlreadyDeclaredInTraitDecl,
-                format!("duplicate generics in trait `{}`", trait_name),
+                format!("duplicate generics in trait `{trait_name}`"),
                 vec![
                     trait_generics.map_inner_ref(|generics| {
                         format!(
                             "trait generic{} {} declared here",
-                            if generics.len() <= 1 {
-                                format!("")
-                            } else {
-                                format!("s")
-                            },
+                            if generics.len() <= 1 { "" } else { "s" },
                             generics
                                 .iter()
-                                .map(|generic| { format!("`{}`", generic) })
+                                .map(|generic| { format!("`{generic}`") })
                                 .join(", ")
                         )
                     }),
                     method_generics.map_inner_ref(|generics| {
                         format!(
                             "method generic{} {} declared here",
-                            if generics.len() <= 1 {
-                                format!("")
-                            } else {
-                                format!("s")
-                            },
+                            if generics.len() <= 1 { "" } else { "s" },
                             generics
                                 .iter()
-                                .map(|generic| { format!("`{}`", generic) })
+                                .map(|generic| { format!("`{generic}`") })
                                 .join(", ")
                         )
                     }),
@@ -120,14 +112,11 @@ impl ToDiagnostic for LowerError {
             )
             .with_help(format!(
                 "{} {} in either the trait generic list or the method generic list",
-                duplicates
-                    .iter()
-                    .map(|name| format!("`{}`", name))
-                    .join(", "),
+                duplicates.iter().map(|name| format!("`{name}`")).join(", "),
                 if duplicates.len() <= 1 {
-                    format!("is a duplicate, change the name")
+                    "is a duplicate, change the name".to_string()
                 } else {
-                    format!("are duplicates, change the names")
+                    "are duplicates, change the names".to_string()
                 },
             )),
             Self::UninitializedFieldsInStructExpr {
@@ -143,9 +132,9 @@ impl ToDiagnostic for LowerError {
                 "uninitialized fields in struct expression".to_string(),
                 vec![
                     missing_fields.map_inner_ref(|list| {
-                        format!("struct `{}` missing fields `{}`", struct_name, list)
+                        format!("struct `{struct_name}` missing fields `{list}`")
                     }),
-                    format!("`{}` fields declared here", struct_name)
+                    format!("`{struct_name}` fields declared here")
                         .in_file(declaration_span.file_id, declaration_span.inner),
                 ],
             ),
@@ -162,12 +151,9 @@ impl ToDiagnostic for LowerError {
                 "unnecessary fields in struct expression".to_string(),
                 vec![
                     unnecessary_fields.map_inner_ref(|list| {
-                        format!(
-                            "unnecessary fields `{}` initialized in struct `{}`",
-                            list, struct_name
-                        )
+                        format!("unnecessary fields `{list}` initialized in struct `{struct_name}`")
                     }),
-                    format!("`{}` fields declared here", struct_name)
+                    format!("`{struct_name}` fields declared here")
                         .in_file(declaration_span.file_id, declaration_span.inner),
                 ],
             ),

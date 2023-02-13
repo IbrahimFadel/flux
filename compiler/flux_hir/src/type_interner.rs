@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    hash::{BuildHasher, Hash},
-};
+use std::{fmt::Display, hash::Hash};
 
 use dashmap::{mapref::one::Ref, DashMap};
 use lasso::ThreadedRodeo;
@@ -17,7 +14,7 @@ pub struct TypeInterner {
 
 impl TypeInterner {
     pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
-        let mut interner = Self {
+        let interner = Self {
             ty_to_key: DashMap::new(),
             key_to_ty: DashMap::new(),
         };
@@ -74,7 +71,7 @@ impl TypeInterner {
         }
     }
 
-    pub fn resolve<'a>(&'a self, key: TypeIdx) -> Ref<TypeIdx, Type> {
+    pub fn resolve(&self, key: TypeIdx) -> Ref<TypeIdx, Type> {
         assert!((key.0 as usize) < self.ty_to_key.len());
         assert!((key.0 as usize) < self.key_to_ty.len());
         self.key_to_ty
@@ -107,29 +104,13 @@ impl TypeInterner {
     // }
 }
 
-fn hash_ty<S: BuildHasher>(hash_builder: &S, ty: &Type) -> u64 {
-    use core::hash::Hasher;
-    let mut state = hash_builder.build_hasher();
-    match ty {
-        // Type::Path(path, params) => {
-        //     path.get_unspanned_spurs().hash(&mut state);
-        //     params.iter().for_each(|idx| idx.inner.hash(&mut state));
-        // }
-        // Type::Tuple(ids) => {
-        //     ids.iter().for_each(|idx| idx.inner.hash(&mut state));
-        // }
-        // Type::Array(ty, n) => {
-        //     ty.inner.hash(&mut state);
-        //     n.inner.hash(&mut state);
-        // }
-        // Type::Ptr(ty) => {
-        //     ty.inner.hash(&mut state);
-        // }
-        _ => ty.hash(&mut state),
-    }
-    let hash = state.finish();
-    hash
-}
+// fn hash_ty<S: BuildHasher>(hash_builder: &S, ty: &Type) -> u64 {
+//     use core::hash::Hasher;
+//     let mut state = hash_builder.build_hasher();
+//     ty.hash(&mut state);
+//     let hash = state.finish();
+//     hash
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeIdx(u32);

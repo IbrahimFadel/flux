@@ -232,9 +232,6 @@ impl<'a> Context<'a> {
         let method_generic_param_list =
             lower_generic_param_list(method.generic_param_list(), self.string_interner, name.span);
 
-        println!("{:?}", trait_generic_param_list.span);
-        println!("{:?}", method_generic_param_list.span);
-
         let generic_param_list =
             GenericParamList::combine(trait_generic_param_list, &method_generic_param_list)
                 .map_err(
@@ -242,17 +239,17 @@ impl<'a> Context<'a> {
                         trait_name: self.string_interner.resolve(trait_name).to_string(),
                         trait_generics: trait_generic_param_list
                             .iter()
-                            .map(|generic| self.string_interner.resolve(&generic).to_string())
+                            .map(|generic| self.string_interner.resolve(generic).to_string())
                             .collect::<Vec<_>>()
                             .in_file(self.file_id, trait_generic_param_list.span),
                         method_generics: method_generic_param_list
                             .iter()
-                            .map(|generic| self.string_interner.resolve(&generic).to_string())
+                            .map(|generic| self.string_interner.resolve(generic).to_string())
                             .collect::<Vec<_>>()
                             .in_file(self.file_id, method_generic_param_list.span),
                         duplicates: duplicates
                             .iter()
-                            .map(|name| self.string_interner.resolve(&name).to_string())
+                            .map(|name| self.string_interner.resolve(name).to_string())
                             .collect::<Vec<_>>(),
                     },
                 )
@@ -683,10 +680,9 @@ pub fn lower_hir_item_bodies(
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
     modules: &mut Arena<Module>,
-    mod_namespace: &HashMap<Spur, ModuleId>,
     function_namespace: &HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: &HashMap<Spur, (StructId, ModuleId)>,
-    trait_namespace: &HashMap<Spur, (TraitId, ModuleId)>,
+    _trait_namespace: &HashMap<Spur, (TraitId, ModuleId)>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = vec![];
     for i in 0..modules.len() {
@@ -695,7 +691,6 @@ pub fn lower_hir_item_bodies(
             modules,
             string_interner,
             type_interner,
-            mod_namespace,
             function_namespace,
             struct_namespace,
         );

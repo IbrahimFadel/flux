@@ -1,15 +1,11 @@
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
-use hashbrown::HashMap;
 use itertools::Itertools;
-use lasso::Spur;
 use tracing::{info, trace};
 
 use crate::{
-    diagnostics::TypeError,
-    env::TraitRestriction,
-    trait_solver::{TraitImplementation, TraitSolver},
-    ConcreteKind, Constraint, TEnv, Type, TypeId, TypeKind,
+    diagnostics::TypeError, env::TraitRestriction, trait_solver::TraitSolver, ConcreteKind,
+    Constraint, TEnv, Type, TypeId, TypeKind,
 };
 
 #[derive(Debug)]
@@ -68,46 +64,46 @@ impl TChecker {
         }
     }
 
-    fn add_new_implementation(
-        &mut self,
-        trt: Spur,
-        trait_params: Vec<TypeId>,
-        impltr: TypeId,
-        span: InFile<Span>,
-    ) -> Result<(), Diagnostic> {
-        let entry = self
-            .trait_solver
-            .implementation_table
-            .table
-            .entry(trt)
-            .or_insert_with(|| HashMap::new());
-        let tykind = self.tenv.get_entry(impltr);
-        // let name = tykind.inner.inner.
+    // fn add_new_implementation(
+    //     &mut self,
+    //     trt: Spur,
+    //     trait_params: Vec<TypeId>,
+    //     impltr: TypeId,
+    //     span: InFile<Span>,
+    // ) -> Result<(), Diagnostic> {
+    //     let entry = self
+    //         .trait_solver
+    //         .implementation_table
+    //         .table
+    //         .entry(trt)
+    //         .or_insert_with(HashMap::new);
+    //     let tykind = self.tenv.get_entry(impltr);
+    //     // let name = tykind.inner.inner.
 
-        // let entry = self.trait_solver.implementation_table.table
-        //     .entry(trt)
-        //     .or_insert_with(|| HashMap::new())
-        //     .entry(impltr)
-        //     .or_insert_with(|| vec![]);
+    //     // let entry = self.trait_solver.implementation_table.table
+    //     //     .entry(trt)
+    //     //     .or_insert_with(|| HashMap::new())
+    //     //     .entry(impltr)
+    //     //     .or_insert_with(|| vec![]);
 
-        // let new_trait_impl = TraitImplementation::new(trait_params, impltr_params);
-        // entry
-        //     .iter()
-        //     .find(|trait_impl| **trait_impl == new_trait_impl)
-        //     .cloned()
-        //     .and_then(|conflicting_trait_impl| {
-        //         //
-        //         let span = self.trait_solver.implementation_table.get_type_span(&trt, &impltr, &conflicting_trait_impl);
-        //         let diagnostic = TypeError::ConflictingTraitImplementations { implementation_a_file_id: span.file_id, implementation_b_file_id: span.file_id, impl_a_trt: format!("{}{}", self.tenv.string_interner.resolve(&trt), if trait_params.is_empty() {
-        //             format!("")
-        //         } else {
-        //             format!("<{}>", trait_params.iter().map(|id| self.tenv.fmt_ty_id(*id)).join(", "))
-        //         }), impl_a_ty: , impl_b_trt: (), impl_b_ty: () }
-        //         Some(())
-        //     });
+    //     // let new_trait_impl = TraitImplementation::new(trait_params, impltr_params);
+    //     // entry
+    //     //     .iter()
+    //     //     .find(|trait_impl| **trait_impl == new_trait_impl)
+    //     //     .cloned()
+    //     //     .and_then(|conflicting_trait_impl| {
+    //     //         //
+    //     //         let span = self.trait_solver.implementation_table.get_type_span(&trt, &impltr, &conflicting_trait_impl);
+    //     //         let diagnostic = TypeError::ConflictingTraitImplementations { implementation_a_file_id: span.file_id, implementation_b_file_id: span.file_id, impl_a_trt: format!("{}{}", self.tenv.string_interner.resolve(&trt), if trait_params.is_empty() {
+    //     //             format!("")
+    //     //         } else {
+    //     //             format!("<{}>", trait_params.iter().map(|id| self.tenv.fmt_ty_id(*id)).join(", "))
+    //     //         }), impl_a_ty: , impl_b_trt: (), impl_b_ty: () }
+    //     //         Some(())
+    //     //     });
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn check_if_type_implements_restrictions(
         &self,
@@ -190,7 +186,7 @@ impl TChecker {
             (Concrete(ConcreteKind::Path(path)), Int(int_id)) => match int_id {
                 Some(int_id) => self.unify(a, *int_id, unification_span),
                 None => {
-                    if self.tenv.int_paths.get(&path).is_some() {
+                    if self.tenv.int_paths.get(path).is_some() {
                         let ty = Type::new(TypeKind::Int(Some(a)), &mut self.tenv.type_interner);
                         self.tenv.set_type(b, ty);
                         Ok(())
@@ -202,7 +198,7 @@ impl TChecker {
             (Int(int_id), Concrete(ConcreteKind::Path(path))) => match int_id {
                 Some(int_id) => self.unify(*int_id, a, unification_span),
                 None => {
-                    if self.tenv.int_paths.get(&path).is_some() {
+                    if self.tenv.int_paths.get(path).is_some() {
                         let ty = Type::new(TypeKind::Int(Some(b)), &mut self.tenv.type_interner);
                         self.tenv.set_type(a, ty);
                         Ok(())
@@ -214,7 +210,7 @@ impl TChecker {
             (Concrete(ConcreteKind::Path(path)), Float(float_id)) => match float_id {
                 Some(float_id) => self.unify(a, *float_id, unification_span),
                 None => {
-                    if self.tenv.float_paths.get(&path).is_some() {
+                    if self.tenv.float_paths.get(path).is_some() {
                         let ty = Type::new(TypeKind::Float(Some(a)), &mut self.tenv.type_interner);
                         self.tenv.set_type(b, ty);
                         Ok(())
@@ -226,7 +222,7 @@ impl TChecker {
             (Float(float_id), Concrete(ConcreteKind::Path(path))) => match float_id {
                 Some(float_id) => self.unify(*float_id, a, unification_span),
                 None => {
-                    if self.tenv.float_paths.get(&path).is_some() {
+                    if self.tenv.float_paths.get(path).is_some() {
                         let ty = Type::new(TypeKind::Float(Some(b)), &mut self.tenv.type_interner);
                         self.tenv.set_type(a, ty);
                         Ok(())

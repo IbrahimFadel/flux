@@ -90,7 +90,7 @@ pub enum TypeKind {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Concrete(concrete) => write!(f, "{}", concrete),
+            Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
             Self::Generic(name) => write!(f, "generic<{:?}>", name),
             Self::Int(_) => write!(f, "int"),

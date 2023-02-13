@@ -56,7 +56,7 @@ impl Type {
 
     /// Get a [`Type`]'s type constructor (the first element in the vector)
     pub fn constr(&self) -> Key {
-        self.0[0].clone()
+        self.0[0]
     }
 
     /// Get a [`Type`]'s type parameters (everything following the first element in the vector)
@@ -122,7 +122,7 @@ pub enum TypeKind {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Concrete(concrete) => write!(f, "{}", concrete),
+            Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
             Self::Generic => write!(f, "generic"),
             Self::Int(_) => write!(f, "int"),

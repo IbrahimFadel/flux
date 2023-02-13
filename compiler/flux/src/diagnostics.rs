@@ -32,11 +32,10 @@ impl ToDiagnostic for DriverError {
                 submodule.map_ref(|m| m.span.range.start().into()),
                 DiagnosticCode::CouldNotFindSubmodule,
                 format!("could not find submodule `{}`", submodule.inner.inner),
-                vec![submodule.map_inner_ref(|m| format!("could not find submodule `{}`", m))],
+                vec![submodule.map_inner_ref(|m| format!("could not find submodule `{m}`"))],
             )
             .with_help(format!(
-                "make sure that either `{}` or `{}` exist",
-                path1, path2
+                "make sure that either `{path1}` or `{path2}` exist"
             )),
         }
     }

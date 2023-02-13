@@ -1,5 +1,5 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
-use flux_span::{FileId, FileSpanned, InFile, Span, Spanned, WithSpan};
+use flux_span::{FileId, FileSpanned, InFile, Span, Spanned};
 
 pub enum TypeError {
     ConflictingTraitImplementations {
@@ -59,13 +59,13 @@ impl ToDiagnostic for TypeError {
                 vec![
                     FileSpanned::new(
                         impl_a_ty.map_ref(|ty| {
-                            format!("type `{}` implements trait `{}` here", ty, impl_a_trt)
+                            format!("type `{ty}` implements trait `{impl_a_trt}` here")
                         }),
                         *implementation_a_file_id,
                     ),
                     FileSpanned::new(
                         impl_b_ty.map_ref(|ty| {
-                            format!("type `{}` implements trait `{}` here", ty, impl_b_trt)
+                            format!("type `{ty}` implements trait `{impl_b_trt}` here")
                         }),
                         *implementation_b_file_id,
                     ),
@@ -75,7 +75,7 @@ impl ToDiagnostic for TypeError {
                 trait_name.map_ref(|name| name.span.range.start().into()),
                 DiagnosticCode::ConflictingTraitImplementations,
                 "trait does not exist".to_string(),
-                vec![trait_name.map_inner_ref(|name| format!("trait `{}` does not exist", name))],
+                vec![trait_name.map_inner_ref(|name| format!("trait `{name}` does not exist"))],
             ),
             Self::TypeMismatch {
                 a,
@@ -84,7 +84,7 @@ impl ToDiagnostic for TypeError {
                 // a_got_from_list,
                 // b_got_from_list,
             } => {
-                let mut labels = vec![
+                let labels = vec![
                     InFile::new(
                         Spanned::new(
                             format!(

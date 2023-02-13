@@ -20,7 +20,6 @@ pub struct ModuleBodyContext<'a> {
     modules: &'a mut Arena<Module>,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
-    mod_namespace: &'a HashMap<Spur, ModuleId>,
     function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
     pub(super) diagnostics: Vec<Diagnostic>,
@@ -32,7 +31,6 @@ impl<'a> ModuleBodyContext<'a> {
         modules: &'a mut Arena<Module>,
         string_interner: &'static ThreadedRodeo,
         type_interner: &'static TypeInterner,
-        mod_namespace: &'a HashMap<Spur, ModuleId>,
         function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
         struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
     ) -> Self {
@@ -42,7 +40,6 @@ impl<'a> ModuleBodyContext<'a> {
             modules,
             string_interner,
             type_interner,
-            mod_namespace,
             function_namespace,
             struct_namespace,
             diagnostics: vec![],
@@ -590,7 +587,7 @@ impl<'a> ModuleBodyContext<'a> {
             .join(", ");
 
         let struct_name = self.string_interner.resolve(struct_name).to_string();
-        if uninitialized_fields.len() > 0 {
+        if !uninitialized_fields.is_empty() {
             self.diagnostics.push(
                 LowerError::UninitializedFieldsInStructExpr {
                     struct_name: struct_name.clone(),
@@ -601,7 +598,7 @@ impl<'a> ModuleBodyContext<'a> {
                 .to_diagnostic(),
             )
         }
-        if initialized_fields_that_dont_exist.len() > 0 {
+        if !initialized_fields_that_dont_exist.is_empty() {
             self.diagnostics.push(
                 LowerError::UnnecessaryFieldsInitializedInStructExpr {
                     struct_name,

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt::Display};
 
 use flux_proc_macros::Locatable;
-use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, Spanned, ToSpan, WithSpan};
 use flux_syntax::{ast, SyntaxToken};
 use flux_typesystem::TypeId;
 use itertools::Itertools;
@@ -242,6 +242,10 @@ impl Path {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn last(&self) -> Option<&Name> {
         self.0.last()
     }
@@ -299,6 +303,10 @@ impl GenericParamList {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Spur> {
         self.0.iter()
     }
@@ -326,6 +334,10 @@ impl WhereClause {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &WherePredicate> {
@@ -367,6 +379,10 @@ impl TypeBoundList {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &TypeBound> {
@@ -418,6 +434,10 @@ impl StructDeclFieldList {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -559,6 +579,10 @@ impl StructFieldList {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &StructField> {

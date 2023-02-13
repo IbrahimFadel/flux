@@ -42,7 +42,7 @@ impl<'a, 'src> Parser<'a, 'src> {
         if self.eat(kind) {
             return true;
         }
-        self.error(format!("expected {}", kind));
+        self.error(format!("expected {kind}"));
         false
     }
 
