@@ -1,78 +1,27 @@
-use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::FileSpanned;
-use hashbrown::HashMap;
-use lasso::{Spur, ThreadedRodeo};
-
-use crate::{diagnostics::TypeError, scope::Scope, TypeId};
+use flux_span::Spanned;
+use lasso::Spur;
+use std::collections::HashMap;
 
 #[derive(Debug)]
-pub struct NameResolver {
-    /// Path and alias
-    uses: Vec<(Spur, Option<Spur>)>,
-    variables: Vec<Scope>,
-    types: HashMap<Spur, TypeId>,
+pub struct NameResolver<'a> {
+    // fn id, mod id
+    function_namespace: &'a HashMap<Spur, (u32, u32)>,
+    // struct id, mod id
+    struct_namespace: &'a HashMap<Spur, (u32, u32)>,
 }
 
-impl NameResolver {
-    pub fn new() -> Self {
+impl<'a> NameResolver<'a> {
+    pub fn new(
+        function_namespace: &'a HashMap<Spur, (u32, u32)>,
+        struct_namespace: &'a HashMap<Spur, (u32, u32)>,
+    ) -> Self {
         Self {
-            uses: vec![],
-            variables: vec![Scope::new()],
-            types: HashMap::new(),
+            function_namespace,
+            struct_namespace,
         }
     }
 
-    pub fn insert_use(&mut self, path: Spur, alias: Option<Spur>) {
-        self.uses.push((path, alias));
-    }
-
-    pub fn insert_local_to_current_scope(&mut self, name: Spur, id: TypeId) {
-        self.variables
-            .last_mut()
-            .expect("internal compiler error: no current scope in name resolver")
-            .insert_local(name, id);
-    }
-
-    pub fn insert_type(&mut self, path: Spur, id: TypeId) {
-        self.types.insert(path, id);
-    }
-
-    pub fn resolve_variable(
-        &self,
-        path: FileSpanned<Spur>,
-        string_interner: &'static ThreadedRodeo,
-    ) -> Result<TypeId, Diagnostic> {
-        for scope in self.variables.iter().rev() {
-            if let Some(id) = scope.get_local_typeid(path.inner.inner) {
-                return Ok(id);
-            }
-        }
-
-        for (_use_path, use_alias) in &self.uses {
-            if let Some(alias) = use_alias {
-                if path.inner.inner == *alias {
-                    todo!()
-                }
-            }
-        }
-
-        Err(TypeError::UnknownVariable {
-            name: path.map_inner_ref(|spur| string_interner.resolve(spur).to_string()),
-        }
-        .to_diagnostic())
-    }
-
-    pub fn resolve_type(
-        &self,
-        path: FileSpanned<Spur>,
-        string_interner: &'static ThreadedRodeo,
-    ) -> Result<TypeId, Diagnostic> {
-        self.types.get(&path).cloned().map_or(
-            Err(TypeError::UnknownType {
-                path: path.map_inner_ref(|spur| string_interner.resolve(spur).to_string()),
-            }
-            .to_diagnostic()),
-            Ok,
-        )
+    pub(super) fn resolve_function_path(&self, path: &Spanned<Spur>) -> Option<(u32, u32)> {
+        self.function_namespace.get(path).copied()
     }
 }

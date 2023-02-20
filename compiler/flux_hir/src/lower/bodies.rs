@@ -3,11 +3,11 @@ use flux_span::FileSpanned;
 use flux_typesystem::{self as ts, TChecker, TEnv, TypeId};
 use hashbrown::HashSet;
 use la_arena::{Idx, RawIdx};
-use ts::{ConcreteKind, TraitRestriction, TypeKind};
+use ts::{ConcreteKind, ExpectedPathType, TraitRestriction, TypeKind};
 
 use crate::{
     diagnostics::LowerError,
-    hir::{Call, ExpectedPathType, ItemDefinitionId, StructField, StructFieldList, StructId},
+    hir::{Call, ItemDefinitionId, StructField, StructFieldList, StructId},
 };
 
 use super::*;
@@ -22,6 +22,7 @@ pub struct ModuleBodyContext<'a> {
     type_interner: &'static TypeInterner,
     function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
+    trait_namespace: &'a HashMap<Spur, (TraitId, ModuleId)>,
     pub(super) diagnostics: Vec<Diagnostic>,
 }
 
@@ -33,15 +34,25 @@ impl<'a> ModuleBodyContext<'a> {
         type_interner: &'static TypeInterner,
         function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
         struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
+        trait_namespace: &'a HashMap<Spur, (TraitId, ModuleId)>,
     ) -> Self {
+        let mut tchk = TChecker::new(
+            TEnv::new(string_interner),
+            // function_namespace,
+            // struct_namespace,
+        );
+        for (name, _) in trait_namespace.iter() {
+            tchk.add_trait_to_context(*name);
+        }
         Self {
-            tchk: TChecker::new(TEnv::new(string_interner)),
+            tchk,
             module_id,
             modules,
             string_interner,
             type_interner,
             function_namespace,
             struct_namespace,
+            trait_namespace,
             diagnostics: vec![],
         }
     }
@@ -52,6 +63,31 @@ impl<'a> ModuleBodyContext<'a> {
 
     fn this_module_mut(&mut self) -> &mut Module {
         &mut self.modules[self.module_id]
+    }
+
+    fn path_to_absolute(&self, path: &Spur) -> Spur {
+        let mut segments: Vec<_> = self.string_interner.resolve(path).split("::").collect();
+        let first = segments.first().unwrap();
+        let module_path = &self.this_module().absolute_path;
+        let module_name = self.string_interner.resolve(module_path.last().unwrap());
+        if first == &"pkg" {
+            *path
+        } else if first == &module_name {
+            let rest = segments.get(1..).unwrap();
+            let mut result = module_path
+                .iter()
+                .map(|spur| self.string_interner.resolve(spur))
+                .collect::<Vec<_>>();
+            result.append(&mut rest.to_vec());
+            self.string_interner.get_or_intern(result.join("::"))
+        } else {
+            let mut result = module_path
+                .iter()
+                .map(|spur| self.string_interner.resolve(spur))
+                .collect::<Vec<_>>();
+            result.append(&mut segments);
+            self.string_interner.get_or_intern(result.join("::"))
+        }
     }
 
     fn hir_ty_to_ts_ty(
@@ -76,7 +112,10 @@ impl<'a> ModuleBodyContext<'a> {
                                     .iter()
                                     .map(|restriction| {
                                         TraitRestriction::new(
-                                            restriction.name.clone().in_file(file_id),
+                                            self.path_to_absolute(
+                                                &restriction.path.to_spur(self.string_interner),
+                                            )
+                                            .in_file(file_id, restriction.path.span),
                                             restriction
                                                 .args
                                                 .iter()

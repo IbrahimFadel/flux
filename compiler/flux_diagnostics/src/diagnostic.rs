@@ -141,6 +141,7 @@ pub enum DiagnosticCode {
     TraitInTraitRestrictionDoesNotExist,
     StmtFollowingTerminatorExpr,
     TraitMethodGenericsAlreadyDeclaredInTraitDecl,
+    TraitNotImplementedForType,
 }
 
 impl std::fmt::Display for DiagnosticCode {

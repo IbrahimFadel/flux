@@ -6,6 +6,10 @@ trait Foo<T, X> {
     fn bar<X, Z>();
 }
 
+apply<A, B> Foo<A, B> to i32 {
+    
+}
+
 fn foo<T>(x T) -> T
     where T is Foo
 {

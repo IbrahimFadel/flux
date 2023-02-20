@@ -130,7 +130,7 @@ getters! {
         type_bounds -> nodes(TypeBound);
     }
     TypeBound {
-        trait_name -> node(Name);
+        trait_path -> node(Path);
         generic_arg_list -> node(GenericArgList);
     }
     GenericArgList {

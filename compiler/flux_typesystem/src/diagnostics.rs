@@ -13,6 +13,10 @@ pub enum TypeError {
     TraitInTraitRestrictionDoesNotExist {
         trait_name: FileSpanned<String>,
     },
+    TraitNotImplementedForType {
+        restriction: FileSpanned<String>,
+        type_supposed_to_implement_trait: FileSpanned<String>,
+    },
     /// A type mismatch
     ///
     /// `a` and `b` are both formatted to `String`, where
@@ -73,9 +77,26 @@ impl ToDiagnostic for TypeError {
             ),
             Self::TraitInTraitRestrictionDoesNotExist { trait_name } => Diagnostic::error(
                 trait_name.map_ref(|name| name.span.range.start().into()),
-                DiagnosticCode::ConflictingTraitImplementations,
+                DiagnosticCode::TraitInTraitRestrictionDoesNotExist,
                 "trait does not exist".to_string(),
                 vec![trait_name.map_inner_ref(|name| format!("trait `{name}` does not exist"))],
+            ),
+            Self::TraitNotImplementedForType {
+                restriction,
+                type_supposed_to_implement_trait,
+            } => Diagnostic::error(
+                type_supposed_to_implement_trait.map_ref(|name| name.span.range.start().into()),
+                DiagnosticCode::TraitNotImplementedForType,
+                "type does not implement trait".to_string(),
+                vec![
+                    type_supposed_to_implement_trait.map_inner_ref(|name| {
+                        format!(
+                            "trait `{}` is not implemented for `{name}`",
+                            restriction.inner.inner
+                        )
+                    }),
+                    restriction.map_inner_ref(|_| format!("trait restriction occurs here")),
+                ],
             ),
             Self::TypeMismatch {
                 a,

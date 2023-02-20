@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
-use hashbrown::HashSet;
 use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
+use std::collections::HashSet;
 use tracing::trace;
 
 use crate::{
@@ -333,6 +333,48 @@ impl TEnv {
     pub fn fmt_ty_id(&self, id: TypeId) -> String {
         let typekind = self.get_typekind_with_id(id);
         self.fmt_typekind(&typekind.inner.inner)
+    }
+
+    pub fn fmt_ty_id_constr(&self, id: TypeId) -> String {
+        let typekind = self.get_typekind_with_id(id);
+        self.fmt_typekind_constr(&typekind.inner.inner)
+    }
+
+    pub fn fmt_typekind_constr(&self, kind: &TypeKind) -> String {
+        match kind {
+            TypeKind::Generic => "generic".to_string(),
+            TypeKind::Unknown => "unknown".to_string(),
+            TypeKind::Int(_) => "int".to_string(),
+            TypeKind::Float(_) => "float".to_string(),
+            TypeKind::Ref(id) => self.fmt_ty_id_constr(*id),
+            TypeKind::Concrete(concrete) => self.fmt_concrete_kind_constr(concrete),
+        }
+    }
+
+    fn fmt_concrete_kind_constr(&self, kind: &ConcreteKind) -> String {
+        match kind {
+            ConcreteKind::Array(ty, n) => format!("[{}; {}]", self.fmt_ty_id_constr(*ty), n),
+            ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty_id_constr(*id)),
+            ConcreteKind::Path(spur) => self.string_interner.resolve(spur).to_string(),
+            ConcreteKind::Tuple(ids) => {
+                format!(
+                    "({})",
+                    ids.iter().map(|id| self.fmt_ty_id_constr(*id)).join(", ")
+                )
+            }
+            ConcreteKind::Struct(strukt) => format!(
+                "{{{}}}",
+                strukt
+                    .fields
+                    .iter()
+                    .map(|(name, ty)| format!(
+                        "{}: {}",
+                        self.string_interner.resolve(name),
+                        self.fmt_ty_id_constr(*ty)
+                    ))
+                    .join(",\n"),
+            ),
+        }
     }
 
     pub fn fmt_typekind(&self, kind: &TypeKind) -> String {

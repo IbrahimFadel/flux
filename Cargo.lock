@@ -239,7 +239,6 @@ dependencies = [
  "flux_diagnostics",
  "flux_proc_macros",
  "flux_span",
- "hashbrown 0.12.3",
  "itertools",
  "lasso",
  "once_cell",
@@ -289,9 +288,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-dependencies = [
- "ahash 0.7.6",
-]
 
 [[package]]
 name = "hashbrown"

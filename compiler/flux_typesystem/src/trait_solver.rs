@@ -1,5 +1,5 @@
-use hashbrown::HashMap;
 use lasso::Spur;
+use std::collections::HashMap;
 
 use crate::TypeId;
 

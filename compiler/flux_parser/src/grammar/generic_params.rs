@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{parser::Parser, token_set::TokenSet};
 
-use super::{generic_args::opt_generic_arg_list, name};
+use super::{generic_args::opt_generic_arg_list, name, path};
 
 pub(super) fn opt_generic_param_list(p: &mut Parser) {
     if p.at(TokenKind::CmpLt) {
@@ -79,7 +79,7 @@ fn bounds(p: &mut Parser) {
 
 fn type_bound(p: &mut Parser) -> bool {
     let m = p.start();
-    name(p, TokenSet::new(&[TokenKind::CmpLt]));
+    path(p);
     opt_generic_arg_list(p);
     m.complete(p, SyntaxKind::TypeBound);
     true

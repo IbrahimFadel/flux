@@ -104,6 +104,9 @@ impl StructDecl {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
+pub struct ApplyDecl {}
+
+#[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct TraitDecl {
     visibility: Visibility,
     pub name: Name,
@@ -392,17 +395,17 @@ impl TypeBoundList {
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct TypeBound {
-    pub name: Name,
+    pub path: Spanned<Path>,
     pub args: Vec<Spanned<TypeIdx>>,
 }
 
 impl TypeBound {
-    pub fn new(name: Name) -> Self {
-        Self { name, args: vec![] }
+    pub fn new(path: Spanned<Path>) -> Self {
+        Self { path, args: vec![] }
     }
 
-    pub fn with_args(name: Name, args: Vec<Spanned<TypeIdx>>) -> Self {
-        Self { name, args }
+    pub fn with_args(path: Spanned<Path>, args: Vec<Spanned<TypeIdx>>) -> Self {
+        Self { path, args }
     }
 }
 
@@ -601,12 +604,4 @@ impl StructField {
     pub fn new(name: Name, val: ExprIdx, ty: TypeId) -> Self {
         Self { name, val, ty }
     }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ExpectedPathType {
-    Any,
-    Local,
-    Variable,
-    Function,
 }

@@ -13,8 +13,8 @@ use lasso::{Spur, ThreadedRodeo};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Block, Expr, ExprIdx, FnDecl, FunctionId, GenericParamList, Let, Method, MethodList,
-        ModDecl, Module, ModuleId, Name, Param, ParamList, Path, Struct, StructDecl,
+        ApplyDecl, Block, Expr, ExprIdx, FnDecl, FunctionId, GenericParamList, Let, Method,
+        MethodList, ModDecl, Module, ModuleId, Name, Param, ParamList, Path, Struct, StructDecl,
         StructDeclField, StructDeclFieldList, StructId, TraitDecl, TraitId, Type, TypeBound,
         TypeBoundList, UseDecl, Visibility, WhereClause, WherePredicate,
     },
@@ -113,14 +113,14 @@ impl<'a> Context<'a> {
         type_bound: ast::TypeBound,
         generic_params_list: &GenericParamList,
     ) -> TypeBound {
-        let name = lower_name(type_bound.trait_name(), self.string_interner);
+        let path = lower_path(type_bound.trait_path());
         let generic_arg_list = lower_generic_arg_list(
             type_bound.generic_arg_list(),
             generic_params_list,
             self.string_interner,
             self.type_interner,
         );
-        TypeBound::with_args(name, generic_arg_list)
+        TypeBound::with_args(path, generic_arg_list)
     }
 
     fn lower_struct_field_list(
@@ -365,6 +365,10 @@ impl<'a> Context<'a> {
         )
     }
 
+    fn lower_apply_decl(&mut self, apply: ast::ApplyDecl) -> ApplyDecl {
+        todo!()
+    }
+
     fn lower_item_declarations(
         mut self,
         root: Root,
@@ -408,6 +412,9 @@ impl<'a> Context<'a> {
                 (idx, module_id),
             );
             self.module_path.pop();
+        });
+        root.apply_decls().for_each(|apply| {
+            let a = self.lower_apply_decl(apply);
         });
         module.exprs = self.exprs;
         (module, self.diagnostics)
@@ -682,7 +689,7 @@ pub fn lower_hir_item_bodies(
     modules: &mut Arena<Module>,
     function_namespace: &HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: &HashMap<Spur, (StructId, ModuleId)>,
-    _trait_namespace: &HashMap<Spur, (TraitId, ModuleId)>,
+    trait_namespace: &HashMap<Spur, (TraitId, ModuleId)>,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = vec![];
     for i in 0..modules.len() {
@@ -693,6 +700,7 @@ pub fn lower_hir_item_bodies(
             type_interner,
             function_namespace,
             struct_namespace,
+            trait_namespace,
         );
         ctx.lower_bodies();
         diagnostics.append(&mut ctx.diagnostics);

@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
+use lasso::Spur;
 use tracing::{info, trace};
 
 use crate::{
@@ -8,11 +11,20 @@ use crate::{
     Constraint, TEnv, Type, TypeId, TypeKind,
 };
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ExpectedPathType {
+    Any,
+    Local,
+    Variable,
+    Function,
+}
+
 #[derive(Debug)]
 pub struct TChecker {
     pub tenv: TEnv,
     trait_solver: TraitSolver,
     constraints: Vec<Constraint>,
+    // name_res: NameResolver<'a>,
 }
 
 /*
@@ -37,11 +49,16 @@ apply<T> From<T> to Bar<T> {}
 */
 
 impl TChecker {
-    pub fn new(tenv: TEnv) -> Self {
+    pub fn new(
+        tenv: TEnv,
+        // function_namespace: &'a HashMap<Spur, (u32, u32)>,
+        // struct_namespace: &'a HashMap<Spur, (u32, u32)>,
+    ) -> Self {
         Self {
             tenv,
             trait_solver: TraitSolver::new(),
             constraints: vec![],
+            // name_res: NameResolver::new(function_namespace, struct_namespace),
         }
     }
 
@@ -63,6 +80,50 @@ impl TChecker {
             ),
         }
     }
+
+    // pub fn resolve_path(
+    //     &mut self,
+    //     path: &Spanned<Spur>,
+    //     expecting: ExpectedPathType,
+    // ) -> Option<(u32, u32)> {
+    //     match expecting {
+    //         ExpectedPathType::Any => self
+    //             .resolve_path(path, ExpectedPathType::Local)
+    //             .or_else(|| self.resolve_path(path, ExpectedPathType::Variable))
+    //             .or_else(|| self.resolve_path(path, ExpectedPathType::Function)),
+    //         ExpectedPathType::Function => self.name_res.resolve_function_path(path),
+    //         ExpectedPathType::Local => None,
+    //         ExpectedPathType::Variable => None,
+    //     }
+    // }
+
+    // fn resolve_path_expr(
+    //     &mut self,
+    //     path: &Spanned<Spur>,
+    //     expecting: ExpectedPathType,
+    // ) -> Option<TypeId> {
+    //     match expecting {
+    //         ExpectedPathType::Any => self
+    //             .resolve_path_expr(path, ExpectedPathType::Local)
+    //             .or_else(|| self.resolve_path_expr(path, ExpectedPathType::Variable))
+    //             .or_else(|| self.resolve_path_expr(path, ExpectedPathType::Function)),
+    //         ExpectedPathType::Function => {
+    //             self.function_namespace.get(path).map(|(f_idx, mod_idx)| {
+    //                 let m = &self.modules[*mod_idx];
+    //                 let file_id = m.file_id;
+    //                 let f = &m.functions[*f_idx];
+    //                 let ret_ty = &f.ret_type;
+    //                 self.hir_ty_to_ts_ty(&ret_ty.clone(), None, file_id)
+    //             })
+    //         }
+    //         ExpectedPathType::Local => self
+    //             .tchk
+    //             .tenv
+    //             .get_local_typeid(path.clone().in_file(self.this_module().file_id))
+    //             .ok(),
+    //         ExpectedPathType::Variable => None,
+    //     }
+    // }
 
     // fn add_new_implementation(
     //     &mut self,
@@ -105,6 +166,13 @@ impl TChecker {
     //     Ok(())
     // }
 
+    pub fn add_trait_to_context(&mut self, trait_name: Spur) {
+        self.trait_solver
+            .implementation_table
+            .table
+            .insert(trait_name, HashMap::new());
+    }
+
     fn check_if_type_implements_restrictions(
         &self,
         ty: TypeId,
@@ -118,9 +186,13 @@ impl TChecker {
                 .map(|restriction| format!("`{}`", self.tenv.fmt_trait_restriction(restriction)))
                 .join(", ")
         );
+        let impltr_name_str = self.tenv.fmt_ty_id(ty);
+        let impltr_name = self.tenv.string_interner.get_or_intern(&impltr_name_str);
+        let impltr_filespan = self.tenv.get_type_filespan(ty);
         for restriction in restrictions {
             let trait_name = restriction.name.inner.inner;
-            self.trait_solver
+            let trt_implementations = self
+                .trait_solver
                 .implementation_table
                 .table
                 .get(&trait_name)
@@ -132,6 +204,23 @@ impl TChecker {
                             .resolve(&trait_name)
                             .to_string()
                             .in_file(restriction.name.file_id, restriction.name.span),
+                    }
+                    .to_diagnostic()
+                })?;
+
+            println!("looking at {:#?}", trt_implementations);
+            let implementations_for_ty =
+                trt_implementations.get(&impltr_name).ok_or_else(|| {
+                    TypeError::TraitNotImplementedForType {
+                        restriction: self
+                            .tenv
+                            .string_interner
+                            .resolve(&trait_name)
+                            .to_string()
+                            .in_file(restriction.name.file_id, restriction.name.span),
+                        type_supposed_to_implement_trait: impltr_name_str
+                            .clone()
+                            .in_file(impltr_filespan.file_id, impltr_filespan.inner),
                     }
                     .to_diagnostic()
                 })?;

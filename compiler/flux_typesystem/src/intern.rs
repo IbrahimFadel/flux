@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use hashbrown::{hash_map::Entry, HashMap};
 use itertools::Itertools;
 use lasso::ThreadedRodeo;
 use owo_colors::OwoColorize;
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::{ConcreteKind, TypeKind};
 
