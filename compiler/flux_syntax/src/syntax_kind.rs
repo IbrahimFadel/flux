@@ -135,7 +135,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::Pub => SyntaxKind::Pub,
             TokenKind::Fn => SyntaxKind::Fn,
             TokenKind::Type => SyntaxKind::Type,
-            TokenKind::Apply => SyntaxKind::ApplyDecl,
+            TokenKind::Apply => SyntaxKind::Apply,
             TokenKind::To => SyntaxKind::To,
             TokenKind::Where => SyntaxKind::Where,
             TokenKind::Is => SyntaxKind::Is,

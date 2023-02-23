@@ -165,8 +165,10 @@ getters! {
         ty -> node(Type);
     }
     ApplyDecl {
+        apply_kw -> tok(Apply);
         generic_param_list -> node(GenericParamList);
         trt -> node(ApplyDeclTrait);
+        to_kw -> tok(To);
         to_ty -> node(ApplyDeclType);
         where_clause -> node(WhereClause);
         associated_types -> nodes(ApplyDeclAssocType);
@@ -180,7 +182,8 @@ getters! {
         ty -> node(Type);
     }
     ApplyDeclAssocType {
-        name -> tok(Ident);
+        name -> node(Name);
+        eq -> tok(Eq);
         ty -> node(Type);
     }
     UseDecl {

@@ -115,7 +115,7 @@ pub enum TypeKind {
     Float(Option<TypeId>),
     Ref(TypeId),
     // Generic(Vec<(Spur, Vec<TypeId>)>),
-    Generic,
+    Generic(Spur),
     Unknown,
 }
 
@@ -124,7 +124,7 @@ impl Display for TypeKind {
         match self {
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
-            Self::Generic => write!(f, "generic"),
+            Self::Generic(name) => write!(f, "{:?}", name),
             Self::Int(_) => write!(f, "int"),
             Self::Ref(id) => write!(f, "Ref({id}"),
             Self::Unknown => write!(f, "unknown"),

@@ -3,15 +3,23 @@ fn main() {
 }
 
 trait Foo<T, X> {
+    type X;
+
     fn bar<X, Z>();
 }
 
+trait Bar {}
+
 apply<A, B> Foo<A, B> to i32 {
-    
+    type X = f32;
 }
 
-fn foo<T>(x T) -> T
-    where T is Foo
+apply<C, D> Foo<C, X> to i32 {
+    type X = f32;
+}
+
+fn foo<A, B>(x A) -> A
+    where A is Foo<A, B> + Bar
 {
     0
 }

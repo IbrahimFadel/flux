@@ -22,7 +22,6 @@ pub struct ModuleBodyContext<'a> {
     type_interner: &'static TypeInterner,
     function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
     struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
-    trait_namespace: &'a HashMap<Spur, (TraitId, ModuleId)>,
     pub(super) diagnostics: Vec<Diagnostic>,
 }
 
@@ -52,7 +51,6 @@ impl<'a> ModuleBodyContext<'a> {
             type_interner,
             function_namespace,
             struct_namespace,
-            trait_namespace,
             diagnostics: vec![],
         }
     }
@@ -90,6 +88,38 @@ impl<'a> ModuleBodyContext<'a> {
         }
     }
 
+    fn hir_ty_to_ts_ty_where_clause(
+        &mut self,
+        idx: &Spanned<TypeIdx>,
+        where_clause: Option<&WhereClause>,
+        file_id: FileId,
+    ) -> TypeId {
+        let ty = match self.type_interner.resolve(idx.inner).value() {
+            Type::Array(ty, n) => {
+                let ty = self.hir_ty_to_ts_ty(ty, where_clause, file_id);
+                TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
+            }
+            Type::Generic(generic_name) => TypeKind::Generic(*generic_name),
+            Type::Path(path, _) => {
+                TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
+            }
+            Type::Ptr(ty) => TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(
+                ty,
+                where_clause,
+                file_id,
+            ))),
+            Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
+                types
+                    .iter()
+                    .map(|idx| self.hir_ty_to_ts_ty(idx, where_clause, file_id))
+                    .collect(),
+            )),
+            Type::Unknown => TypeKind::Unknown,
+        };
+        let ty = ts::Type::new(ty, &mut self.tchk.tenv.type_interner);
+        self.tchk.tenv.insert(ty.in_file(file_id, idx.span))
+    }
+
     fn hir_ty_to_ts_ty(
         &mut self,
         idx: &Spanned<TypeIdx>,
@@ -120,7 +150,7 @@ impl<'a> ModuleBodyContext<'a> {
                                                 .args
                                                 .iter()
                                                 .map(|idx| {
-                                                    self.hir_ty_to_ts_ty(
+                                                    self.hir_ty_to_ts_ty_where_clause(
                                                         idx,
                                                         Some(where_clause),
                                                         file_id,
@@ -138,13 +168,16 @@ impl<'a> ModuleBodyContext<'a> {
                         .flatten()
                         .collect();
 
-                    let ty = ts::Type::new(TypeKind::Generic, &mut self.tchk.tenv.type_interner);
+                    let ty = ts::Type::new(
+                        TypeKind::Generic(*generic_name),
+                        &mut self.tchk.tenv.type_interner,
+                    );
                     return self
                         .tchk
                         .tenv
                         .insert_with_constraints(ty.in_file(file_id, idx.span), restrictions);
                 } else {
-                    TypeKind::Generic
+                    TypeKind::Generic(*generic_name)
                 }
             }
             Type::Path(path, _) => {
@@ -695,6 +728,32 @@ impl<'a> ModuleBodyContext<'a> {
 
     pub fn lower_bodies(&mut self) {
         let file_id = self.this_module().file_id;
+
+        for i in 0..self.this_module().applies.len() {
+            let a = self.this_module().applies[Idx::from_raw(RawIdx::from(i as u32))].clone();
+
+            if let Some((trt_path, trt_args)) = &a.trt {
+                let trt_name = trt_path.to_spur(self.string_interner).at(trt_path.span);
+                let trt_args: Vec<_> = trt_args
+                    .iter()
+                    .map(|arg| self.hir_ty_to_ts_ty(arg, Some(&a.where_clause), file_id))
+                    .collect();
+
+                let impltor = self.hir_ty_to_ts_ty(&a.impltor, Some(&a.where_clause), file_id);
+
+                let trt_name = self.path_to_absolute(&trt_name.inner).at(trt_name.span);
+                self.tchk
+                    .add_trait_application_to_context(
+                        &trt_name.in_file(file_id),
+                        &trt_args,
+                        impltor,
+                    )
+                    .unwrap_or_else(|err| {
+                        self.diagnostics.push(err);
+                    });
+            }
+        }
+
         for i in 0..self.this_module().functions.len() {
             let f = self.this_module().functions[Idx::from_raw(RawIdx::from(i as u32))].clone();
 

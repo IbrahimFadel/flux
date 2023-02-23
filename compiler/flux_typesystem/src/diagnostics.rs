@@ -1,21 +1,23 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
-use flux_span::{FileId, FileSpanned, InFile, Span, Spanned};
+use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
 
 pub enum TypeError {
     ConflictingTraitImplementations {
-        implementation_a_file_id: FileId,
-        implementation_b_file_id: FileId,
-        impl_a_trt: String,
-        impl_a_ty: Spanned<String>,
-        impl_b_trt: String,
-        impl_b_ty: Spanned<String>,
+        trait_name: String,
+        impltor: String,
+        implementation_a: InFile<Span>,
+        implementation_b: InFile<Span>,
     },
-    TraitInTraitRestrictionDoesNotExist {
+    TraitDoesNotExist {
         trait_name: FileSpanned<String>,
     },
     TraitNotImplementedForType {
         restriction: FileSpanned<String>,
         type_supposed_to_implement_trait: FileSpanned<String>,
+    },
+    TraitRestrictionsNotMet {
+        ty: FileSpanned<String>,
+        unmet_restrictions: Vec<String>,
     },
     /// A type mismatch
     ///
@@ -47,35 +49,31 @@ impl ToDiagnostic for TypeError {
     fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
         match self {
             Self::ConflictingTraitImplementations {
-                implementation_a_file_id,
-                implementation_b_file_id,
-                impl_a_trt,
-                impl_a_ty,
-                impl_b_trt,
-                impl_b_ty,
+                trait_name,
+                impltor,
+                implementation_a,
+                implementation_b,
             } => Diagnostic::error(
                 InFile::new(
-                    impl_a_ty.span.range.start().into(),
-                    *implementation_a_file_id,
+                    implementation_a.inner.range.start().into(),
+                    implementation_a.file_id,
                 ),
                 DiagnosticCode::ConflictingTraitImplementations,
                 "conflicting trait implementations".to_string(),
                 vec![
                     FileSpanned::new(
-                        impl_a_ty.map_ref(|ty| {
-                            format!("type `{ty}` implements trait `{impl_a_trt}` here")
-                        }),
-                        *implementation_a_file_id,
+                        format!("type `{impltor}` implements trait `{trait_name}` here")
+                            .at(implementation_a.inner),
+                        implementation_a.file_id,
                     ),
                     FileSpanned::new(
-                        impl_b_ty.map_ref(|ty| {
-                            format!("type `{ty}` implements trait `{impl_b_trt}` here")
-                        }),
-                        *implementation_b_file_id,
+                        format!("and type `{impltor}` also implements trait `{trait_name}` here")
+                            .at(implementation_b.inner),
+                        implementation_b.file_id,
                     ),
                 ],
             ),
-            Self::TraitInTraitRestrictionDoesNotExist { trait_name } => Diagnostic::error(
+            Self::TraitDoesNotExist { trait_name } => Diagnostic::error(
                 trait_name.map_ref(|name| name.span.range.start().into()),
                 DiagnosticCode::TraitInTraitRestrictionDoesNotExist,
                 "trait does not exist".to_string(),
@@ -97,6 +95,17 @@ impl ToDiagnostic for TypeError {
                     }),
                     restriction.map_inner_ref(|_| format!("trait restriction occurs here")),
                 ],
+            ),
+            Self::TraitRestrictionsNotMet {
+                ty,
+                unmet_restrictions,
+            } => Diagnostic::error(
+                ty.map_ref(|ty| ty.span.range.start().into()),
+                DiagnosticCode::TraitRestrictionsNotMet,
+                "trait restrictions not met".to_string(),
+                vec![ty.map_inner_ref(|ty| {
+                    format!("trait restrictions `{}` not met for type `{ty}`", unmet_restrictions.join(", "))
+                })],
             ),
             Self::TypeMismatch {
                 a,

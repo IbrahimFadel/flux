@@ -34,6 +34,7 @@ pub struct Module {
     pub uses: Arena<UseDecl>,
     pub structs: Arena<StructDecl>,
     pub traits: Arena<TraitDecl>,
+    pub applies: Arena<ApplyDecl>,
     pub exprs: Arena<Spanned<Expr>>,
     pub file_id: FileId,
     pub absolute_path: Vec<Spur>,
@@ -47,6 +48,7 @@ impl Module {
             uses: Arena::new(),
             structs: Arena::new(),
             traits: Arena::new(),
+            applies: Arena::new(),
             exprs: Arena::new(),
             file_id,
             absolute_path,
@@ -104,7 +106,34 @@ impl StructDecl {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
-pub struct ApplyDecl {}
+pub struct ApplyDecl {
+    generic_param_list: GenericParamList,
+    pub trt: Option<(Spanned<Path>, Vec<Spanned<TypeIdx>>)>,
+    pub impltor: Spanned<TypeIdx>,
+    pub where_clause: Spanned<WhereClause>,
+    assoc_types: Vec<(Name, Spanned<TypeIdx>)>,
+    methods: Vec<FunctionId>,
+}
+
+impl ApplyDecl {
+    pub fn new(
+        generic_param_list: GenericParamList,
+        trt: Option<(Spanned<Path>, Vec<Spanned<TypeIdx>>)>,
+        impltor: Spanned<TypeIdx>,
+        where_clause: Spanned<WhereClause>,
+        assoc_types: Vec<(Name, Spanned<TypeIdx>)>,
+        methods: Vec<FunctionId>,
+    ) -> Self {
+        Self {
+            generic_param_list,
+            trt,
+            impltor,
+            where_clause,
+            assoc_types,
+            methods,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Locatable)]
 pub struct TraitDecl {

@@ -4,7 +4,7 @@ use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{
     ast::{self, AstNode, Root},
-    SyntaxNode,
+    SyntaxNode, SyntaxToken,
 };
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
@@ -365,8 +365,126 @@ impl<'a> Context<'a> {
         )
     }
 
-    fn lower_apply_decl(&mut self, apply: ast::ApplyDecl) -> ApplyDecl {
-        todo!()
+    fn lower_apply_decl_trait(
+        &mut self,
+        trt: Option<ast::ApplyDeclTrait>,
+        generic_param_list: &Spanned<GenericParamList>,
+    ) -> Option<(Spanned<Path>, Vec<Spanned<TypeIdx>>)> {
+        trt.map(|trt| {
+            let path = lower_path(trt.path());
+            let generic_args = trt.generic_arg_list().map_or_else(
+                || vec![],
+                |arg_list| {
+                    arg_list
+                        .args()
+                        .map(|arg| {
+                            lower_type(
+                                Some(arg),
+                                &generic_param_list,
+                                path.span,
+                                self.string_interner,
+                                self.type_interner,
+                            )
+                        })
+                        .collect()
+                },
+            );
+            (path, generic_args)
+        })
+    }
+
+    fn lower_apply_decl_impltor(
+        &mut self,
+        impltr: Option<ast::ApplyDeclType>,
+        to_kw: Option<&SyntaxToken>,
+        trait_being_applied: &Option<(Spanned<Path>, Vec<Spanned<TypeIdx>>)>,
+        generic_param_list: &Spanned<GenericParamList>,
+    ) -> Spanned<TypeIdx> {
+        lower_node(
+            impltr,
+            |impltor| {
+                self.type_interner
+                    .intern(Type::Unknown)
+                    .at(impltor.range().to_span())
+            },
+            |impltor| {
+                let fallback_span = if let Some(to) = to_kw {
+                    to.text_range().to_span()
+                } else if let Some((trt_path, args)) = trait_being_applied {
+                    if !args.is_empty() {
+                        args.last().unwrap().span
+                    } else {
+                        trt_path.span
+                    }
+                } else {
+                    generic_param_list.span
+                };
+                lower_type(
+                    impltor.ty(),
+                    &generic_param_list,
+                    fallback_span,
+                    self.string_interner,
+                    self.type_interner,
+                )
+            },
+        )
+    }
+
+    fn lower_apply_decl(&mut self, apply: ast::ApplyDecl, module: &mut Module) -> ApplyDecl {
+        let generic_param_list = lower_generic_param_list(
+            apply.generic_param_list(),
+            self.string_interner,
+            apply
+                .apply_kw()
+                .expect("internal compiler error: apply missing apply keyword")
+                .text_range()
+                .to_span(),
+        );
+        let trait_being_applied = self.lower_apply_decl_trait(apply.trt(), &generic_param_list);
+        let impltor = self.lower_apply_decl_impltor(
+            apply.to_ty(),
+            apply.to_kw(),
+            &trait_being_applied,
+            &generic_param_list,
+        );
+        let where_clause =
+            self.lower_where_clause(apply.where_clause(), &generic_param_list, impltor.span);
+        let assoc_types: Vec<_> = apply
+            .associated_types()
+            .map(|ty| {
+                let name = lower_name(ty.name(), self.string_interner);
+                let fallback_span = if let Some(eq) = ty.eq() {
+                    eq.text_range().to_span()
+                } else {
+                    name.span
+                };
+                let ty = lower_type(
+                    ty.ty(),
+                    &generic_param_list,
+                    fallback_span,
+                    self.string_interner,
+                    self.type_interner,
+                );
+                (name, ty)
+            })
+            .collect();
+
+        let methods: Vec<_> = apply
+            .methods()
+            .map(|method| {
+                let f = self.lower_fn_decl(method);
+                module.functions.alloc(f)
+            })
+            .collect();
+
+        ApplyDecl::new(
+            generic_param_list.inner,
+            trait_being_applied,
+            impltor,
+            where_clause,
+            assoc_types,
+            methods,
+        )
     }
 
     fn lower_item_declarations(
@@ -414,7 +532,8 @@ impl<'a> Context<'a> {
             self.module_path.pop();
         });
         root.apply_decls().for_each(|apply| {
-            let a = self.lower_apply_decl(apply);
+            let a = self.lower_apply_decl(apply, &mut module);
+            module.applies.alloc(a);
         });
         module.exprs = self.exprs;
         (module, self.diagnostics)

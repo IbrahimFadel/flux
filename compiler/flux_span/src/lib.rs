@@ -21,6 +21,12 @@ impl Span {
         Span::new(a.range.start().into()..b.range.end().into())
     }
 
+    pub fn poisoned() -> Self {
+        Self {
+            range: TextRange::new(0.into(), 0.into()),
+        }
+    }
+
     /// Convert an iterator of spanned items into a span of all the items
     ///
     /// `[Span]` -> `Span`
@@ -192,6 +198,12 @@ impl<T> Deref for Spanned<T> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FileId(pub Spur);
+
+impl FileId {
+    pub fn poisoned() -> Self {
+        Self(Spur::default())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InFile<T> {

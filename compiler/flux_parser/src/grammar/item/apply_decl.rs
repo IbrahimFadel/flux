@@ -5,7 +5,7 @@ use crate::{
     grammar::{
         generic_args::opt_generic_arg_list,
         generic_params::{opt_generic_param_list, opt_where_clause},
-        path,
+        name, path,
         r#type::type_,
     },
     marker::CompletedMarker,
@@ -62,7 +62,7 @@ fn apply_decl_assoc_type_or_method(p: &mut Parser) {
 fn apply_decl_assoc_type(p: &mut Parser) {
     let m = p.start();
     p.bump(TokenKind::Type);
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Eq]));
     p.expect(TokenKind::Eq);
     type_(p);
     p.expect(TokenKind::SemiColon);

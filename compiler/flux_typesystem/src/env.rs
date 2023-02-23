@@ -6,7 +6,6 @@ use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
 use std::collections::HashSet;
-use tracing::trace;
 
 use crate::{
     diagnostics::TypeError,
@@ -204,7 +203,6 @@ impl TEnv {
         let idx = self.entries.len();
         self.entries.push(ty.map_inner_ref(|_| TEntry::new(key)));
         let id = TypeId::new(idx);
-        trace!("inserting type inference var {}", id);
         id
     }
 
@@ -342,7 +340,7 @@ impl TEnv {
 
     pub fn fmt_typekind_constr(&self, kind: &TypeKind) -> String {
         match kind {
-            TypeKind::Generic => "generic".to_string(),
+            TypeKind::Generic(name) => self.string_interner.resolve(name).to_string(),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),
@@ -379,7 +377,7 @@ impl TEnv {
 
     pub fn fmt_typekind(&self, kind: &TypeKind) -> String {
         match kind {
-            TypeKind::Generic => "todo: how to format generics?".to_string(),
+            TypeKind::Generic(name) => self.string_interner.resolve(name).to_string(),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),

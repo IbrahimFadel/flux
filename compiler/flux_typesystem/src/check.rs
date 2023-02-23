@@ -1,14 +1,14 @@
-use std::collections::HashMap;
-
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
+use flux_span::{FileId, FileSpanned, InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
 use lasso::Spur;
 use tracing::{info, trace};
 
 use crate::{
-    diagnostics::TypeError, env::TraitRestriction, trait_solver::TraitSolver, ConcreteKind,
-    Constraint, TEnv, Type, TypeId, TypeKind,
+    diagnostics::TypeError,
+    env::TraitRestriction,
+    trait_solver::{TraitImplementation, TraitSolver},
+    ConcreteKind, Constraint, TEnv, Type, TypeId, TypeKind,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -24,41 +24,15 @@ pub struct TChecker {
     pub tenv: TEnv,
     trait_solver: TraitSolver,
     constraints: Vec<Constraint>,
-    // name_res: NameResolver<'a>,
 }
 
-/*
-
-Trait Name ->
-    Root type of implementor ->
-        [Implementations]
-
-
-From ->
-    Foo ->
-        { trait_params: [i32], impltor_params: [T] },
-        { trait_params: [i32], impltor_params: [i32] }
-    Bar ->
-        { trait_params: [T], impltor_params: [T] }
-
-
-apply<T> From<i32> to Foo<T> {}
-apply From<i32> to Foo<i32> {}
-apply<T> From<T> to Bar<T> {}
-
-*/
-
 impl TChecker {
-    pub fn new(
-        tenv: TEnv,
-        // function_namespace: &'a HashMap<Spur, (u32, u32)>,
-        // struct_namespace: &'a HashMap<Spur, (u32, u32)>,
-    ) -> Self {
+    pub fn new(tenv: TEnv) -> Self {
+        let trait_solver = TraitSolver::new(tenv.string_interner);
         Self {
             tenv,
-            trait_solver: TraitSolver::new(),
+            trait_solver,
             constraints: vec![],
-            // name_res: NameResolver::new(function_namespace, struct_namespace),
         }
     }
 
@@ -81,100 +55,218 @@ impl TChecker {
         }
     }
 
-    // pub fn resolve_path(
-    //     &mut self,
-    //     path: &Spanned<Spur>,
-    //     expecting: ExpectedPathType,
-    // ) -> Option<(u32, u32)> {
-    //     match expecting {
-    //         ExpectedPathType::Any => self
-    //             .resolve_path(path, ExpectedPathType::Local)
-    //             .or_else(|| self.resolve_path(path, ExpectedPathType::Variable))
-    //             .or_else(|| self.resolve_path(path, ExpectedPathType::Function)),
-    //         ExpectedPathType::Function => self.name_res.resolve_function_path(path),
-    //         ExpectedPathType::Local => None,
-    //         ExpectedPathType::Variable => None,
-    //     }
-    // }
-
-    // fn resolve_path_expr(
-    //     &mut self,
-    //     path: &Spanned<Spur>,
-    //     expecting: ExpectedPathType,
-    // ) -> Option<TypeId> {
-    //     match expecting {
-    //         ExpectedPathType::Any => self
-    //             .resolve_path_expr(path, ExpectedPathType::Local)
-    //             .or_else(|| self.resolve_path_expr(path, ExpectedPathType::Variable))
-    //             .or_else(|| self.resolve_path_expr(path, ExpectedPathType::Function)),
-    //         ExpectedPathType::Function => {
-    //             self.function_namespace.get(path).map(|(f_idx, mod_idx)| {
-    //                 let m = &self.modules[*mod_idx];
-    //                 let file_id = m.file_id;
-    //                 let f = &m.functions[*f_idx];
-    //                 let ret_ty = &f.ret_type;
-    //                 self.hir_ty_to_ts_ty(&ret_ty.clone(), None, file_id)
-    //             })
-    //         }
-    //         ExpectedPathType::Local => self
-    //             .tchk
-    //             .tenv
-    //             .get_local_typeid(path.clone().in_file(self.this_module().file_id))
-    //             .ok(),
-    //         ExpectedPathType::Variable => None,
-    //     }
-    // }
-
-    // fn add_new_implementation(
-    //     &mut self,
-    //     trt: Spur,
-    //     trait_params: Vec<TypeId>,
-    //     impltr: TypeId,
-    //     span: InFile<Span>,
-    // ) -> Result<(), Diagnostic> {
-    //     let entry = self
-    //         .trait_solver
-    //         .implementation_table
-    //         .table
-    //         .entry(trt)
-    //         .or_insert_with(HashMap::new);
-    //     let tykind = self.tenv.get_entry(impltr);
-    //     // let name = tykind.inner.inner.
-
-    //     // let entry = self.trait_solver.implementation_table.table
-    //     //     .entry(trt)
-    //     //     .or_insert_with(|| HashMap::new())
-    //     //     .entry(impltr)
-    //     //     .or_insert_with(|| vec![]);
-
-    //     // let new_trait_impl = TraitImplementation::new(trait_params, impltr_params);
-    //     // entry
-    //     //     .iter()
-    //     //     .find(|trait_impl| **trait_impl == new_trait_impl)
-    //     //     .cloned()
-    //     //     .and_then(|conflicting_trait_impl| {
-    //     //         //
-    //     //         let span = self.trait_solver.implementation_table.get_type_span(&trt, &impltr, &conflicting_trait_impl);
-    //     //         let diagnostic = TypeError::ConflictingTraitImplementations { implementation_a_file_id: span.file_id, implementation_b_file_id: span.file_id, impl_a_trt: format!("{}{}", self.tenv.string_interner.resolve(&trt), if trait_params.is_empty() {
-    //     //             format!("")
-    //     //         } else {
-    //     //             format!("<{}>", trait_params.iter().map(|id| self.tenv.fmt_ty_id(*id)).join(", "))
-    //     //         }), impl_a_ty: , impl_b_trt: (), impl_b_ty: () }
-    //     //         Some(())
-    //     //     });
-
-    //     Ok(())
-    // }
-
     pub fn add_trait_to_context(&mut self, trait_name: Spur) {
         self.trait_solver
             .implementation_table
             .table
-            .insert(trait_name, HashMap::new());
+            .insert(trait_name, vec![]);
+    }
+
+    fn get_trait_implementation_span(
+        &mut self,
+        trt: &Spur,
+        implementation: &TraitImplementation,
+    ) -> InFile<Span> {
+        let impltrs = self
+            .trait_solver
+            .implementation_table
+            .spans
+            .get(trt)
+            .expect("internal compiler error: span isn't stored for trait implementation")
+            .clone();
+
+        for (implementation_b, span) in impltrs {
+            if self.are_trait_implementations_equal(implementation, &implementation_b) {
+                return span.clone();
+            }
+        }
+        panic!("internal compiler error: span not stored for trait implementation")
+    }
+
+    pub fn add_trait_application_to_context(
+        &mut self,
+        trait_name: &FileSpanned<Spur>,
+        trait_args: &[TypeId],
+        impltor: TypeId,
+    ) -> Result<(), Diagnostic> {
+        let trait_implementors = self
+            .trait_solver
+            .implementation_table
+            .table
+            .get(trait_name)
+            .ok_or_else(|| {
+                TypeError::TraitDoesNotExist {
+                    trait_name: trait_name
+                        .map_inner_ref(|spur| self.tenv.string_interner.resolve(spur).to_string()),
+                }
+                .to_diagnostic()
+            })?
+            .clone();
+
+        let impltor_name = self
+            .tenv
+            .string_interner
+            .get_or_intern(&self.tenv.fmt_ty_id_constr(impltor));
+
+        let implementations_for_trait_by_impltr: Vec<_> = trait_implementors
+            .iter()
+            .filter(|implementor| {
+                self.unify(
+                    implementor.get_impltor(),
+                    impltor,
+                    Span::poisoned().in_file(FileId::poisoned()),
+                )
+                .is_ok()
+            })
+            .collect();
+
+        let impltor_filespan = self.tenv.get_type_filespan(impltor);
+        let impltor_arg_keys = self
+            .tenv
+            .get_entry(impltor)
+            .get_params()
+            .map(|keys| keys.to_vec())
+            .unwrap_or(vec![]);
+        let impltor_args = impltor_arg_keys
+            .iter()
+            .map(|key| {
+                let kind = self.tenv.type_interner.resolve(*key);
+                let ty = Type::new(kind.clone(), &mut self.tenv.type_interner);
+                self.tenv
+                    .insert(ty.in_file(impltor_filespan.file_id, impltor_filespan.inner))
+            })
+            .collect();
+
+        let trait_implementation =
+            TraitImplementation::new(trait_args.to_vec(), impltor, impltor_args);
+
+        for implementation in &implementations_for_trait_by_impltr {
+            if self.are_trait_implementations_equal(implementation, &trait_implementation) {
+                let implementation_a_span =
+                    self.get_trait_implementation_span(trait_name, implementation);
+                return Err(TypeError::ConflictingTraitImplementations {
+                    trait_name: self
+                        .tenv
+                        .string_interner
+                        .resolve(&trait_name.inner.inner)
+                        .to_string(),
+                    impltor: self.tenv.string_interner.resolve(&impltor_name).to_string(),
+                    implementation_a: implementation_a_span,
+                    implementation_b: trait_name.to_filespan(),
+                }
+                .to_diagnostic());
+            }
+        }
+
+        self.trait_solver.implementation_table.set_type_span(
+            trait_name.inner.inner,
+            trait_implementation.clone(),
+            trait_name.to_filespan(),
+        );
+        let trait_implementors = self
+            .trait_solver
+            .implementation_table
+            .table
+            .get_mut(trait_name)
+            .unwrap();
+        trait_implementors.push(trait_implementation);
+
+        Ok(())
+    }
+
+    fn are_trait_implementations_equal(
+        &mut self,
+        impl_a: &TraitImplementation,
+        impl_b: &TraitImplementation,
+    ) -> bool {
+        if impl_a.get_trait_params().len() != impl_b.get_trait_params().len() {
+            return false;
+        }
+        if impl_a.get_impltor_params().len() != impl_b.get_impltor_params().len() {
+            return false;
+        }
+
+        if self
+            .unify(
+                impl_a.get_impltor(),
+                impl_b.get_impltor(),
+                Span::poisoned().in_file(FileId::poisoned()),
+            )
+            .is_err()
+        {
+            return false;
+        };
+
+        let num_ok_unifications = impl_a
+            .get_trait_params()
+            .iter()
+            .zip(impl_b.get_trait_params().iter())
+            .filter_map(|(a, b)| {
+                self.unify(*a, *b, Span::poisoned().in_file(FileId::poisoned()))
+                    .ok()
+            })
+            .count();
+
+        let trait_params_equal = if num_ok_unifications == impl_a.get_trait_params().len() {
+            true
+        } else {
+            false
+        };
+
+        let num_ok_unifications = impl_a
+            .get_impltor_params()
+            .iter()
+            .zip(impl_b.get_impltor_params().iter())
+            .filter_map(|(a, b)| {
+                self.unify(*a, *b, Span::poisoned().in_file(FileId::poisoned()))
+                    .ok()
+            })
+            .count();
+
+        let impltor_params_equal = if num_ok_unifications == impl_a.get_impltor_params().len() {
+            true
+        } else {
+            false
+        };
+
+        trait_params_equal && impltor_params_equal
+    }
+
+    fn get_implementations(
+        &mut self,
+        trt: &FileSpanned<Spur>,
+        impltor: TypeId,
+    ) -> Result<Vec<TraitImplementation>, Diagnostic> {
+        let impls = self
+            .trait_solver
+            .implementation_table
+            .table
+            .get(trt)
+            .ok_or_else(|| {
+                TypeError::TraitDoesNotExist {
+                    trait_name: trt
+                        .map_inner_ref(|spur| self.tenv.string_interner.resolve(spur).to_string()),
+                }
+                .to_diagnostic()
+            })?
+            .clone();
+        let impls = impls
+            .iter()
+            .filter(|implementation| {
+                self.unify(
+                    impltor,
+                    implementation.get_impltor(),
+                    Span::poisoned().in_file(FileId::poisoned()),
+                )
+                .is_ok()
+            })
+            .cloned()
+            .collect();
+        Ok(impls)
     }
 
     fn check_if_type_implements_restrictions(
-        &self,
+        &mut self,
         ty: TypeId,
         restrictions: &[TraitRestriction],
     ) -> Result<(), Diagnostic> {
@@ -186,46 +278,51 @@ impl TChecker {
                 .map(|restriction| format!("`{}`", self.tenv.fmt_trait_restriction(restriction)))
                 .join(", ")
         );
-        let impltr_name_str = self.tenv.fmt_ty_id(ty);
-        let impltr_name = self.tenv.string_interner.get_or_intern(&impltr_name_str);
         let impltr_filespan = self.tenv.get_type_filespan(ty);
-        for restriction in restrictions {
-            let trait_name = restriction.name.inner.inner;
-            let trt_implementations = self
-                .trait_solver
-                .implementation_table
-                .table
-                .get(&trait_name)
-                .ok_or_else(|| {
-                    TypeError::TraitInTraitRestrictionDoesNotExist {
-                        trait_name: self
-                            .tenv
-                            .string_interner
-                            .resolve(&trait_name)
-                            .to_string()
-                            .in_file(restriction.name.file_id, restriction.name.span),
-                    }
-                    .to_diagnostic()
-                })?;
 
-            println!("looking at {:#?}", trt_implementations);
-            let implementations_for_ty =
-                trt_implementations.get(&impltr_name).ok_or_else(|| {
-                    TypeError::TraitNotImplementedForType {
-                        restriction: self
-                            .tenv
-                            .string_interner
-                            .resolve(&trait_name)
-                            .to_string()
-                            .in_file(restriction.name.file_id, restriction.name.span),
-                        type_supposed_to_implement_trait: impltr_name_str
-                            .clone()
-                            .in_file(impltr_filespan.file_id, impltr_filespan.inner),
+        let mut unimplemented_restrictions = vec![];
+
+        for restriction in restrictions {
+            println!(
+                "checking restriction: {}",
+                self.tenv.fmt_trait_restriction(restriction)
+            );
+            let implementations_for_ty = self.get_implementations(&restriction.name, ty)?.to_vec();
+            let mut found_valid_impl = false;
+            for implementation in implementations_for_ty {
+                if implementation.get_trait_params().len() == restriction.args.len() {
+                    let num_ok_unifications = implementation
+                        .get_trait_params()
+                        .iter()
+                        .zip(restriction.args.iter())
+                        .filter_map(|(a, b)| {
+                            self.unify(*a, *b, Span::poisoned().in_file(FileId::poisoned()))
+                                .ok()
+                        })
+                        .count();
+                    if num_ok_unifications == implementation.get_trait_params().len() {
+                        found_valid_impl = true;
                     }
-                    .to_diagnostic()
-                })?;
+                }
+            }
+
+            if !found_valid_impl {
+                unimplemented_restrictions.push(self.tenv.fmt_trait_restriction(restriction));
+            }
         }
-        Ok(())
+
+        if !unimplemented_restrictions.is_empty() {
+            Err(TypeError::TraitRestrictionsNotMet {
+                ty: self
+                    .tenv
+                    .fmt_ty_id(ty)
+                    .in_file(impltr_filespan.file_id, impltr_filespan.inner),
+                unmet_restrictions: unimplemented_restrictions,
+            }
+            .to_diagnostic())
+        } else {
+            Ok(())
+        }
     }
 
     pub fn unify(
@@ -253,7 +350,7 @@ impl TChecker {
                 }
                 Ok(())
             }
-            (Generic, _) => {
+            (Generic(_), _) => {
                 /*
                 fn foo<T>(x T) {
                 }
@@ -267,8 +364,8 @@ impl TChecker {
                 -   Does sN implement Foo?
                 -   Does uN implement Foo?
                 */
-                let entry = &self.tenv.get_entry(a);
-                self.check_if_type_implements_restrictions(b, &entry.restrictions)?;
+                let restrictions = self.tenv.get_entry(a).restrictions.clone();
+                self.check_if_type_implements_restrictions(b, &restrictions)?;
                 // todo!()
                 Ok(())
             }
