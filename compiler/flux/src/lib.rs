@@ -351,30 +351,6 @@ impl Driver {
         );
         self.file_cache.report_diagnostics(&self.diagnostics);
 
-        for (path, module_id) in &self.mod_namespace {
-            let path = self.interner.resolve(path);
-            println!("{path} -> Module({})", module_id.into_raw());
-        }
-
-        for (path, (function_id, module_id)) in &self.function_namespace {
-            let path = self.interner.resolve(path);
-            println!(
-                "{path} -> Function({}) in Module({})",
-                function_id.into_raw(),
-                module_id.into_raw()
-            );
-        }
-
-        for (path, (struct_id, module_id)) in &self.struct_namespace {
-            let path = self.interner.resolve(path);
-            println!(
-                "{path} -> Struct({}) in Module({})",
-                struct_id.into_raw(),
-                module_id.into_raw()
-            );
-        }
-
-        // for (_, module) in self.modules.iter_mut() {
         let diagnostics = lower_hir_item_bodies(
             self.interner,
             &TYPE_INTERNER,
@@ -384,7 +360,6 @@ impl Driver {
             &self.trait_namespace,
         );
         self.file_cache.report_diagnostics(&diagnostics);
-        // }
     }
 }
 

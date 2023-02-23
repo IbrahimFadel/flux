@@ -124,7 +124,7 @@ impl Display for TypeKind {
         match self {
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
-            Self::Generic(name) => write!(f, "{:?}", name),
+            Self::Generic(name) => write!(f, "{name:?}"),
             Self::Int(_) => write!(f, "int"),
             Self::Ref(id) => write!(f, "Ref({id}"),
             Self::Unknown => write!(f, "unknown"),

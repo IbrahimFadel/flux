@@ -64,53 +64,6 @@ impl<'a> TChecker<'a> {
     }
 
     pub fn check_module(&mut self) {
-        // println!(
-        //     "{}",
-        //     self.name_resolver
-        //         .use_paths
-        //         .iter()
-        //         .map(|(m_id, path)| {
-        //             format!(
-        //                 "Module {:?} uses {}",
-        //                 m_id,
-        //                 self.string_interner.resolve(path)
-        //             )
-        //         })
-        //         .join("\n")
-        // );
-        // println!(
-        //     "{}",
-        //     self.name_resolver
-        //         .absolute_path_map
-        //         .iter()
-        //         .map(|(path, (module_id, item_id))| {
-        //             format!(
-        //                 "{} -> {:?} {:?}",
-        //                 self.string_interner.resolve(path),
-        //                 module_id,
-        //                 item_id
-        //             )
-        //         })
-        //         .join("\n")
-        // );
-        // for (module_data_idx, item_scope) in self.package_defs.modules.iter() {
-        //     self.mod_idx = module_data_idx;
-        //     let module_data = self.package_defs.get_module_data(module_data_idx);
-        //     for (_, f) in module_data.module.functions.iter() {
-        //         let sig = self.get_fn_signature(f);
-        //         let file_id = self.module.file_id;
-        //         // println!("{} {:#?}", self.string_interner.resolve(&file_id.0), sig);
-        //     }
-        // }
-
-        // for (module_data_idx, item_scope) in self.package_defs.modules.iter() {
-        //     self.mod_idx = module_data_idx;
-        //     let module_data = self.package_defs.get_module_data(module_data_idx);
-        //     for (_, f) in module_data.module.functions.iter() {
-        //         self.check_function(f);
-        //     }
-        // }
-
         for (_, f) in self.module.module.functions.iter() {
             self.check_function(f);
         }

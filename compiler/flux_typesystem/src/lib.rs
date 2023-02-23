@@ -3,7 +3,7 @@ mod constraint;
 pub mod diagnostics;
 mod env;
 mod intern;
-mod name_res;
+// mod name_res;
 mod scope;
 mod trait_solver;
 pub mod r#type;

@@ -93,7 +93,7 @@ impl ToDiagnostic for TypeError {
                             restriction.inner.inner
                         )
                     }),
-                    restriction.map_inner_ref(|_| format!("trait restriction occurs here")),
+                    restriction.map_inner_ref(|_| "trait restriction occurs here".to_string()),
                 ],
             ),
             Self::TraitRestrictionsNotMet {
@@ -104,7 +104,10 @@ impl ToDiagnostic for TypeError {
                 DiagnosticCode::TraitRestrictionsNotMet,
                 "trait restrictions not met".to_string(),
                 vec![ty.map_inner_ref(|ty| {
-                    format!("trait restrictions `{}` not met for type `{ty}`", unmet_restrictions.join(", "))
+                    format!(
+                        "trait restrictions `{}` not met for type `{ty}`",
+                        unmet_restrictions.join(", ")
+                    )
                 })],
             ),
             Self::TypeMismatch {

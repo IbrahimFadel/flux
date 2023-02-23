@@ -553,10 +553,7 @@ impl<'a> ModuleBodyContext<'a> {
         let (path, path_item_def_id) = self.lower_path(strukt.path());
         let field_list = lower_node(
             strukt.field_list(),
-            |strukt| {
-                println!("POISONED");
-                StructFieldList::EMPTY.at(strukt.range().to_span())
-            },
+            |strukt| StructFieldList::EMPTY.at(strukt.range().to_span()),
             |strukt| {
                 StructFieldList::new(
                     strukt

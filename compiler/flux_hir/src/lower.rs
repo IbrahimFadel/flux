@@ -373,14 +373,14 @@ impl<'a> Context<'a> {
         trt.map(|trt| {
             let path = lower_path(trt.path());
             let generic_args = trt.generic_arg_list().map_or_else(
-                || vec![],
+                Vec::new,
                 |arg_list| {
                     arg_list
                         .args()
                         .map(|arg| {
                             lower_type(
                                 Some(arg),
-                                &generic_param_list,
+                                generic_param_list,
                                 path.span,
                                 self.string_interner,
                                 self.type_interner,
@@ -421,7 +421,7 @@ impl<'a> Context<'a> {
                 };
                 lower_type(
                     impltor.ty(),
-                    &generic_param_list,
+                    generic_param_list,
                     fallback_span,
                     self.string_interner,
                     self.type_interner,

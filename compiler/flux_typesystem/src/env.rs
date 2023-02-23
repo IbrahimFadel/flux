@@ -202,8 +202,7 @@ impl TEnv {
         let key = ty.constr();
         let idx = self.entries.len();
         self.entries.push(ty.map_inner_ref(|_| TEntry::new(key)));
-        let id = TypeId::new(idx);
-        id
+        TypeId::new(idx)
     }
 
     /// Insert a `Spanned<Type>` with trait constraints into the type environment

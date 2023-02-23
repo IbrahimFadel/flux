@@ -28,10 +28,9 @@ pub struct TChecker {
 
 impl TChecker {
     pub fn new(tenv: TEnv) -> Self {
-        let trait_solver = TraitSolver::new(tenv.string_interner);
         Self {
             tenv,
-            trait_solver,
+            trait_solver: TraitSolver::new(),
             constraints: vec![],
         }
     }
@@ -77,7 +76,7 @@ impl TChecker {
 
         for (implementation_b, span) in impltrs {
             if self.are_trait_implementations_equal(implementation, &implementation_b) {
-                return span.clone();
+                return span;
             }
         }
         panic!("internal compiler error: span not stored for trait implementation")
@@ -207,11 +206,7 @@ impl TChecker {
             })
             .count();
 
-        let trait_params_equal = if num_ok_unifications == impl_a.get_trait_params().len() {
-            true
-        } else {
-            false
-        };
+        let trait_params_equal = num_ok_unifications == impl_a.get_trait_params().len();
 
         let num_ok_unifications = impl_a
             .get_impltor_params()
@@ -223,11 +218,7 @@ impl TChecker {
             })
             .count();
 
-        let impltor_params_equal = if num_ok_unifications == impl_a.get_impltor_params().len() {
-            true
-        } else {
-            false
-        };
+        let impltor_params_equal = num_ok_unifications == impl_a.get_impltor_params().len();
 
         trait_params_equal && impltor_params_equal
     }
@@ -283,10 +274,6 @@ impl TChecker {
         let mut unimplemented_restrictions = vec![];
 
         for restriction in restrictions {
-            println!(
-                "checking restriction: {}",
-                self.tenv.fmt_trait_restriction(restriction)
-            );
             let implementations_for_ty = self.get_implementations(&restriction.name, ty)?.to_vec();
             let mut found_valid_impl = false;
             for implementation in implementations_for_ty {
@@ -431,20 +418,6 @@ impl TChecker {
     fn type_mismatch(&self, a: TypeId, b: TypeId, unification_span: InFile<Span>) -> TypeError {
         let a_span = self.tenv.get_type_filespan(a);
         let b_span = self.tenv.get_type_filespan(b);
-
-        // let mut a_got_from_list = vec![];
-        // let mut a_inner = a;
-        // while let TypeKind::Ref(id) = &self.tenv.get_typekind_with_id(a_inner).inner.inner {
-        //     a_got_from_list.push(self.tenv.get_type_filespan(*id));
-        //     a_inner = *id;
-        // }
-        // println!("{:?}", self.tenv.get_typekind_with_id(b).inner.inner);
-        // let mut b_got_from_list = vec![];
-        // let mut b_inner = b;
-        // while let TypeKind::Ref(id) = &self.tenv.get_typekind_with_id(b_inner).inner.inner {
-        //     b_got_from_list.push(self.tenv.get_type_filespan(*id));
-        //     b_inner = *id;
-        // }
 
         TypeError::TypeMismatch {
             a: FileSpanned::new(

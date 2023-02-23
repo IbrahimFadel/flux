@@ -1,5 +1,5 @@
 use flux_span::{InFile, Span};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::Spur;
 use std::collections::HashMap;
 
 use crate::TypeId;
@@ -46,15 +46,13 @@ pub(crate) struct TraitImplementationTable {
     pub table: HashMap<Spur, Vec<TraitImplementation>>,
     // Spans of types
     pub spans: HashMap<Spur, Vec<(TraitImplementation, InFile<Span>)>>,
-    string_interner: &'static ThreadedRodeo,
 }
 
 impl TraitImplementationTable {
-    pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
+    pub fn new() -> Self {
         Self {
             table: HashMap::new(),
             spans: HashMap::new(),
-            string_interner,
         }
     }
 
@@ -66,7 +64,7 @@ impl TraitImplementationTable {
     ) {
         self.spans
             .entry(trt)
-            .or_insert_with(|| vec![])
+            .or_insert_with(Vec::new)
             .push((implementation, span));
     }
 }
@@ -78,9 +76,9 @@ pub(crate) struct TraitSolver {
 }
 
 impl TraitSolver {
-    pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
+    pub fn new() -> Self {
         Self {
-            implementation_table: TraitImplementationTable::new(string_interner),
+            implementation_table: TraitImplementationTable::new(),
             // cache: HashMap::new(),
         }
     }

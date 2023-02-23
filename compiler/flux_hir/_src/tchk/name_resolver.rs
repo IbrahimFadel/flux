@@ -173,10 +173,7 @@ fn foo() -> i32 {
             foo_module_id,
         );
 
-        println!("{}", package_defs.fmt(&INTERNER));
-
         let name_resolver = NameResolver::from_package_defs(&package_defs, &INTERNER);
-        println!("{:#?}", name_resolver);
 
         let res = name_resolver.resolve_absolute_path_in_module(
             foo_module_id,
@@ -193,7 +190,6 @@ fn foo() -> i32 {
         //     root_module_id,
         //     &Path::from_str_static("pkg::foo::foo".at(Span::new(0..0)), &INTERNER),
         // );
-        // println!("{:?}", res);
 
         todo!()
     }
