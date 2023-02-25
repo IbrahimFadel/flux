@@ -4,6 +4,7 @@ use crate::getters;
 // stupidly unnecessary macro syntax, but... pretty? prettier i guess
 getters! {
     Root {
+        items -> nodes(Item);
         fn_decls -> nodes(FnDecl);
         struct_decls -> nodes(StructDecl);
         enum_decls -> nodes(EnumDecl);
@@ -37,7 +38,6 @@ getters! {
     }
     PathType {
         path -> node(Path);
-        generic_arg_list -> node(GenericArgList);
     }
     TupleType {
         types -> nodes(Type);
@@ -77,7 +77,6 @@ getters! {
     }
     StructExpr {
         path -> node(Path);
-        // generic_arg_list -> node(GenericArgList);
         field_list -> node(StructExprFieldList);
     }
     StructExprFieldList {
@@ -131,7 +130,6 @@ getters! {
     }
     TypeBound {
         trait_path -> node(Path);
-        generic_arg_list -> node(GenericArgList);
     }
     GenericArgList {
         args -> nodes(Type);
@@ -176,7 +174,6 @@ getters! {
     }
     ApplyDeclTrait {
         path -> node(Path);
-        generic_arg_list -> node(GenericArgList);
     }
     ApplyDeclType {
         ty -> node(Type);

@@ -37,8 +37,7 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 
 fn path_type(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
-    type_path(p);
-    opt_generic_arg_list(p);
+    path(p);
     m.complete(p, SyntaxKind::PathType)
 }
 
@@ -51,9 +50,4 @@ fn array_type(p: &mut Parser) -> CompletedMarker {
     }
     p.expect(TokenKind::RSquare);
     m.complete(p, SyntaxKind::ArrayType)
-}
-
-fn type_path(p: &mut Parser) {
-    path(p);
-    opt_generic_arg_list(p);
 }

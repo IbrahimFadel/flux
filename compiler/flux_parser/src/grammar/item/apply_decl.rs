@@ -3,7 +3,6 @@ use flux_syntax::SyntaxKind;
 
 use crate::{
     grammar::{
-        generic_args::opt_generic_arg_list,
         generic_params::{opt_generic_param_list, opt_where_clause},
         name, path,
         r#type::type_,
@@ -27,7 +26,6 @@ pub(crate) fn apply_decl(p: &mut Parser, visibility: CompletedMarker) {
     } else {
         let m = p.start();
         path(p);
-        opt_generic_arg_list(p);
         m.complete(p, SyntaxKind::ApplyDeclTrait);
 
         p.expect(TokenKind::To);

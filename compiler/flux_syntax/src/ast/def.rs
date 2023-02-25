@@ -19,6 +19,15 @@ basic_node!(ApplyDeclAssocType);
 basic_node!(UseDecl);
 basic_node!(ModDecl);
 
+enum_node!(
+    Item: ApplyDecl,
+    EnumDecl,
+    FnDecl,
+    ModDecl,
+    StructDecl,
+    TraitDecl
+);
+
 basic_node!(PathExpr);
 basic_node!(ParenExpr);
 basic_node!(FloatExpr);

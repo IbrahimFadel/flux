@@ -17,13 +17,227 @@ type ExprResult = (ExprIdx, TypeId);
 pub struct ModuleBodyContext<'a> {
     tchk: TChecker,
     module_id: ModuleId,
-    modules: &'a mut Arena<Module>,
+    // modules: &'a mut Arena<Module>,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
-    function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
-    struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
+    name_res_ctx: NameResolutionContext<'a>,
+    // function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
+    // struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
     pub(super) diagnostics: Vec<Diagnostic>,
 }
+
+struct NameResolutionContext<'a> {
+    modules: &'a mut Arena<Module>,
+    function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
+    struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
+}
+
+impl<'a> NameResolutionContext<'a> {
+    fn new(
+        modules: &'a mut Arena<Module>,
+        function_namespace: &'a HashMap<Spur, (FunctionId, ModuleId)>,
+        struct_namespace: &'a HashMap<Spur, (StructId, ModuleId)>,
+    ) -> Self {
+        Self {
+            modules,
+            function_namespace,
+            struct_namespace,
+        }
+    }
+
+    fn get_mod(&self, idx: ModuleId) -> &Module {
+        &self.modules[idx]
+    }
+
+    fn get_mod_mut(&self, idx: ModuleId) -> &mut Module {
+        &mut self.modules[idx]
+    }
+
+    fn resolve_path(&self, path: &Spur) -> Option<(ItemDefinitionId, ModuleId)> {
+        self.struct_namespace
+            .get(path)
+            .map(|(s_idx, mod_idx)| (ItemDefinitionId::StructId(*s_idx), *mod_idx))
+    }
+
+    fn resolve_path_expr(
+        &mut self,
+        path: &Spanned<Spur>,
+        mod_id: ModuleId,
+        expecting: ExpectedPathType,
+        tchk: &mut TChecker,
+    ) -> Option<TypeId> {
+        match expecting {
+            ExpectedPathType::Any => self
+                .resolve_path_expr(path, mod_id, ExpectedPathType::Local, tchk)
+                .or_else(|| self.resolve_path_expr(path, mod_id, ExpectedPathType::Variable, tchk))
+                .or_else(|| self.resolve_path_expr(path, mod_id, ExpectedPathType::Function, tchk)),
+            ExpectedPathType::Function => {
+                self.function_namespace.get(path).map(|(f_idx, mod_idx)| {
+                    let m = &self.modules[*mod_idx];
+                    let file_id = m.file_id;
+                    let f = &m.functions[*f_idx];
+                    let ret_ty = &f.ret_type;
+                    todo!()
+                    // self.hir_ty_to_ts_ty(&ret_ty.clone(), None, file_id)
+                })
+            }
+            ExpectedPathType::Local => tchk
+                .tenv
+                .get_local_typeid(path.clone().in_file(self.get_mod(mod_id).file_id))
+                .ok(),
+            ExpectedPathType::Variable => None,
+        }
+    }
+}
+
+// fn hir_ty_to_ts_ty_where_clause(
+//     &mut self,
+//     idx: &Spanned<TypeIdx>,
+//     where_clause: Option<&WhereClause>,
+//     file_id: FileId,
+// ) -> TypeId {
+//     let ty = match self.type_interner.resolve(idx.inner).value() {
+//         Type::Array(ty, n) => {
+//             let ty = self.hir_ty_to_ts_ty(ty, where_clause, file_id);
+//             TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
+//         }
+//         Type::Generic(generic_name) => TypeKind::Generic(*generic_name),
+//         Type::Path(path, _) => {
+//             TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
+//         }
+//         Type::Ptr(ty) => TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(
+//             ty,
+//             where_clause,
+//             file_id,
+//         ))),
+//         Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
+//             types
+//                 .iter()
+//                 .map(|idx| self.hir_ty_to_ts_ty(idx, where_clause, file_id))
+//                 .collect(),
+//         )),
+//         Type::Unknown => TypeKind::Unknown,
+//     };
+//     let ty = ts::Type::new(ty, &mut self.tchk.tenv.type_interner);
+//     self.tchk.tenv.insert(ty.in_file(file_id, idx.span))
+// }
+
+// fn hir_ty_to_ts_ty(
+//     idx: &Spanned<TypeIdx>,
+//     where_clause: Option<&WhereClause>,
+//     file_id: FileId,
+//     string_interner: &'static ThreadedRodeo,
+//     type_interner: &'static mut TypeInterner,
+//     tchk: &mut TChecker,
+// ) -> TypeId {
+//     let ty = match type_interner.resolve(idx.inner).value() {
+//         Type::Array(ty, n) => {
+//             let ty = hir_ty_to_ts_ty(
+//                 ty,
+//                 where_clause,
+//                 file_id,
+//                 string_interner,
+//                 type_interner,
+//                 tchk,
+//             );
+//             TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
+//         }
+//         Type::Generic(generic_name) => {
+//             if let Some(where_clause) = where_clause {
+//                 let restrictions = where_clause
+//                     .iter()
+//                     .filter_map(|where_predicate| {
+//                         if where_predicate.generic.inner == *generic_name {
+//                             let arr: Vec<TraitRestriction> = where_predicate
+//                                 .trait_restrictions
+//                                 .iter()
+//                                 .map(|restriction| {
+//                                     TraitRestriction::new(
+//                                         path_to_absolute(
+//                                             &restriction.path.to_spur(string_interner),
+//                                         )
+//                                         .in_file(file_id, restriction.path.span),
+//                                         restriction
+//                                             .args
+//                                             .iter()
+//                                             .map(|idx| {
+//                                                 self.hir_ty_to_ts_ty_where_clause(
+//                                                     idx,
+//                                                     Some(where_clause),
+//                                                     file_id,
+//                                                 )
+//                                             })
+//                                             .collect(),
+//                                     )
+//                                 })
+//                                 .collect();
+//                             Some(arr)
+//                         } else {
+//                             None
+//                         }
+//                     })
+//                     .flatten()
+//                     .collect();
+
+//                 let ty = ts::Type::new(
+//                     TypeKind::Generic(*generic_name),
+//                     &mut tchk.tenv.type_interner,
+//                 );
+//                 return tchk
+//                     .tenv
+//                     .insert_with_constraints(ty.in_file(file_id, idx.span), restrictions);
+//             } else {
+//                 TypeKind::Generic(*generic_name)
+//             }
+//         }
+//         Type::Path(path, _) => {
+//             TypeKind::Concrete(ConcreteKind::Path(path.to_spur(string_interner)))
+//         }
+//         Type::Ptr(ty) => TypeKind::Concrete(ConcreteKind::Ptr(self.hir_ty_to_ts_ty(
+//             ty,
+//             where_clause,
+//             file_id,
+//         ))),
+//         Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
+//             types
+//                 .iter()
+//                 .map(|idx| self.hir_ty_to_ts_ty(idx, where_clause, file_id))
+//                 .collect(),
+//         )),
+//         Type::Unknown => TypeKind::Unknown,
+//     };
+//     let ty = ts::Type::new(ty, &mut self.tchk.tenv.type_interner);
+//     self.tchk.tenv.insert(ty.in_file(file_id, idx.span))
+// }
+
+// fn path_to_absolute(
+//     path: &Spur,
+//     module_path: &[Spur],
+//     string_interner: &'static ThreadedRodeo,
+// ) -> Spur {
+//     let mut segments: Vec<_> = string_interner.resolve(path).split("::").collect();
+//     let first = segments.first().unwrap();
+//     // let module_path = &name_res_ctx.get_mod(self.module_id).absolute_path;
+//     let module_name = string_interner.resolve(module_path.last().unwrap());
+//     if first == &"pkg" {
+//         *path
+//     } else if first == &module_name {
+//         let rest = segments.get(1..).unwrap();
+//         let mut result = module_path
+//             .iter()
+//             .map(|spur| string_interner.resolve(spur))
+//             .collect::<Vec<_>>();
+//         result.append(&mut rest.to_vec());
+//         string_interner.get_or_intern(result.join("::"))
+//     } else {
+//         let mut result = module_path
+//             .iter()
+//             .map(|spur| string_interner.resolve(spur))
+//             .collect::<Vec<_>>();
+//         result.append(&mut segments);
+//         string_interner.get_or_intern(result.join("::"))
+//     }
+// }
 
 impl<'a> ModuleBodyContext<'a> {
     pub fn new(
@@ -46,27 +260,28 @@ impl<'a> ModuleBodyContext<'a> {
         Self {
             tchk,
             module_id,
-            modules,
+            // modules,
             string_interner,
             type_interner,
-            function_namespace,
-            struct_namespace,
+            // function_namespace,
+            // struct_namespace,
+            name_res_ctx: NameResolutionContext::new(modules, function_namespace, struct_namespace),
             diagnostics: vec![],
         }
     }
 
-    fn this_module(&self) -> &Module {
-        &self.modules[self.module_id]
-    }
+    // fn this_module(&self) -> &Module {
+    //     &self.modules[self.module_id]
+    // }
 
-    fn this_module_mut(&mut self) -> &mut Module {
-        &mut self.modules[self.module_id]
-    }
+    // fn this_module_mut(&mut self) -> &mut Module {
+    //     &mut self.modules[self.module_id]
+    // }
 
     fn path_to_absolute(&self, path: &Spur) -> Spur {
         let mut segments: Vec<_> = self.string_interner.resolve(path).split("::").collect();
         let first = segments.first().unwrap();
-        let module_path = &self.this_module().absolute_path;
+        let module_path = &self.name_res_ctx.get_mod(self.module_id).absolute_path;
         let module_name = self.string_interner.resolve(module_path.last().unwrap());
         if first == &"pkg" {
             *path
@@ -217,10 +432,14 @@ impl<'a> ModuleBodyContext<'a> {
         );
         let path_spur = path.to_spur(self.string_interner);
 
-        let item_def_id = match self.resolve_path(&path_spur) {
+        let item_def_id = match self.name_res_ctx.resolve_path(&path_spur) {
             Some(id) => Some(id),
             None => {
-                let mut module_path = self.this_module().absolute_path.clone();
+                let mut module_path = self
+                    .name_res_ctx
+                    .get_mod(self.module_id)
+                    .absolute_path
+                    .clone();
                 module_path.append(&mut path.get_unspanned_spurs().collect());
                 let full_path_as_spur = self.string_interner.get_or_intern(
                     module_path
@@ -228,18 +447,28 @@ impl<'a> ModuleBodyContext<'a> {
                         .map(|spur| self.string_interner.resolve(spur))
                         .join("::"),
                 );
-                match self.resolve_path(&full_path_as_spur) {
+                match self.name_res_ctx.resolve_path(&full_path_as_spur) {
                     Some(id) => Some(id),
                     None => {
                         let mut v = None;
-                        for (_, use_decl) in self.this_module().uses.clone().iter() {
+                        for (_, use_decl) in self
+                            .name_res_ctx
+                            .get_mod(self.module_id)
+                            .uses
+                            .clone()
+                            .iter()
+                        {
                             let path = &use_decl.path;
                             let use_path_spur = path.to_spur(self.string_interner);
-                            if let Some(res) = self.resolve_path(&use_path_spur) {
+                            if let Some(res) = self.name_res_ctx.resolve_path(&use_path_spur) {
                                 v = Some(res);
                                 break;
                             } else {
-                                let mut module_path = self.this_module().absolute_path.clone();
+                                let mut module_path = self
+                                    .name_res_ctx
+                                    .get_mod(self.module_id)
+                                    .absolute_path
+                                    .clone();
                                 module_path.append(&mut path.get_unspanned_spurs().collect());
                                 let full_path_as_spur = self.string_interner.get_or_intern(
                                     module_path
@@ -247,7 +476,9 @@ impl<'a> ModuleBodyContext<'a> {
                                         .map(|spur| self.string_interner.resolve(spur))
                                         .join("::"),
                                 );
-                                if let Some(res) = self.resolve_path(&full_path_as_spur) {
+                                if let Some(res) =
+                                    self.name_res_ctx.resolve_path(&full_path_as_spur)
+                                {
                                     v = Some(res);
                                     break;
                                 }
@@ -263,11 +494,11 @@ impl<'a> ModuleBodyContext<'a> {
     }
 
     // TODO: enums
-    fn resolve_path(&self, path: &Spur) -> Option<(ItemDefinitionId, ModuleId)> {
-        self.struct_namespace
-            .get(path)
-            .map(|(s_idx, mod_idx)| (ItemDefinitionId::StructId(*s_idx), *mod_idx))
-    }
+    // fn resolve_path(&self, path: &Spur) -> Option<(ItemDefinitionId, ModuleId)> {
+    //     self.struct_namespace
+    //         .get(path)
+    //         .map(|(s_idx, mod_idx)| (ItemDefinitionId::StructId(*s_idx), *mod_idx))
+    // }
 
     pub fn lower_expr(&mut self, expr: Option<ast::Expr>) -> ExprResult {
         let expr =
@@ -275,10 +506,13 @@ impl<'a> ModuleBodyContext<'a> {
         if expr.is_poisoned() {
             let span = expr.range().to_span();
             (
-                self.this_module_mut().exprs.alloc(Expr::Poisoned.at(span)),
-                self.tchk
-                    .tenv
-                    .insert_unknown(span.in_file(self.this_module().file_id)),
+                self.name_res_ctx
+                    .get_mod_mut(self.module_id)
+                    .exprs
+                    .alloc(Expr::Poisoned.at(span)),
+                self.tchk.tenv.insert_unknown(
+                    span.in_file(self.name_res_ctx.get_mod(self.module_id).file_id),
+                ),
             )
         } else {
             match expr {
@@ -316,7 +550,7 @@ impl<'a> ModuleBodyContext<'a> {
     }
 
     fn lower_block_expr(&mut self, block: ast::BlockExpr) -> ExprResult {
-        let file_id = self.this_module().file_id;
+        let file_id = self.name_res_ctx.get_mod(self.module_id).file_id;
         let span = block.range().to_span();
         let mut exprs = vec![];
         let stmts = block.stmts().collect::<Vec<_>>();
@@ -345,7 +579,8 @@ impl<'a> ModuleBodyContext<'a> {
             exprs.push(expr);
         }
         let block = self
-            .this_module_mut()
+            .name_res_ctx
+            .get_mod_mut(self.module_id)
             .exprs
             .alloc(Expr::Block(Block::new(exprs)).at(span));
         (block, block_type)
@@ -359,12 +594,13 @@ impl<'a> ModuleBodyContext<'a> {
         let (path_expr, path_ty) = if path_expr.is_poisoned() {
             let span = path_expr.range().to_span();
             (
-                self.this_module_mut()
+                self.name_res_ctx
+                    .get_mod_mut(self.module_id)
                     .exprs
                     .alloc(Expr::Path(Path::poisoned()).at(span)),
-                self.tchk
-                    .tenv
-                    .insert_unknown(span.in_file(self.this_module().file_id)),
+                self.tchk.tenv.insert_unknown(
+                    span.in_file(self.name_res_ctx.get_mod(self.module_id).file_id),
+                ),
             )
         } else {
             self.lower_path_expr(path_expr, ExpectedPathType::Function)
@@ -380,7 +616,11 @@ impl<'a> ModuleBodyContext<'a> {
                 .collect()
         };
         let call = Expr::Call(Call::new(path_expr, args)).at(call.range().to_span());
-        let idx = self.this_module_mut().exprs.alloc(call);
+        let idx = self
+            .name_res_ctx
+            .get_mod_mut(self.module_id)
+            .exprs
+            .alloc(call);
         (idx, path_ty)
     }
 
@@ -389,7 +629,7 @@ impl<'a> ModuleBodyContext<'a> {
         let float_ty = self
             .tchk
             .tenv
-            .insert_float(span.in_file(self.this_module().file_id));
+            .insert_float(span.in_file(self.name_res_ctx.get_mod(self.module_id).file_id));
         let value_str = match float.v() {
             Some(v) => self
                 .string_interner
@@ -397,7 +637,10 @@ impl<'a> ModuleBodyContext<'a> {
                 .at(v.text_range().to_span()),
             None => {
                 return (
-                    self.this_module_mut().exprs.alloc(Expr::Poisoned.at(span)),
+                    self.name_res_ctx
+                        .get_mod_mut(self.module_id)
+                        .exprs
+                        .alloc(Expr::Poisoned.at(span)),
                     float_ty,
                 )
             }
@@ -407,7 +650,8 @@ impl<'a> ModuleBodyContext<'a> {
             Err(_) => todo!(),
         });
         (
-            self.this_module_mut()
+            self.name_res_ctx
+                .get_mod_mut(self.module_id)
                 .exprs
                 .alloc(Expr::Float(value.inner).at(span)),
             float_ty,
@@ -419,7 +663,7 @@ impl<'a> ModuleBodyContext<'a> {
         let int_ty = self
             .tchk
             .tenv
-            .insert_int(span.in_file(self.this_module().file_id));
+            .insert_int(span.in_file(self.name_res_ctx.get_mod(self.module_id).file_id));
         let value_str = match int.v() {
             Some(v) => self
                 .string_interner
@@ -427,7 +671,10 @@ impl<'a> ModuleBodyContext<'a> {
                 .at(v.text_range().to_span()),
             None => {
                 return (
-                    self.this_module_mut().exprs.alloc(Expr::Poisoned.at(span)),
+                    self.name_res_ctx
+                        .get_mod_mut(self.module_id)
+                        .exprs
+                        .alloc(Expr::Poisoned.at(span)),
                     int_ty,
                 )
             }
@@ -437,7 +684,8 @@ impl<'a> ModuleBodyContext<'a> {
             Err(_) => todo!(),
         });
         (
-            self.this_module_mut()
+            self.name_res_ctx
+                .get_mod_mut(self.module_id)
                 .exprs
                 .alloc(Expr::Int(value.inner).at(span)),
             int_ty,
@@ -445,7 +693,7 @@ impl<'a> ModuleBodyContext<'a> {
     }
 
     fn lower_path_expr(&mut self, path: ast::PathExpr, expecting: ExpectedPathType) -> ExprResult {
-        let file_id = self.this_module().file_id;
+        let file_id = self.name_res_ctx.get_mod(self.module_id).file_id;
         let span = path.range().to_span();
         let segments = path
             .segments()
@@ -456,7 +704,11 @@ impl<'a> ModuleBodyContext<'a> {
             match self.resolve_path_expr(&path.to_spur(self.string_interner).at(span), expecting) {
                 Some(id) => Some(id),
                 None => {
-                    let mut module_path = self.this_module().absolute_path.clone();
+                    let mut module_path = self
+                        .name_res_ctx
+                        .get_mod(self.module_id)
+                        .absolute_path
+                        .clone();
                     module_path.append(&mut path.get_unspanned_spurs().collect());
                     let full_path_as_spur = self.string_interner.get_or_intern(
                         module_path
@@ -468,7 +720,13 @@ impl<'a> ModuleBodyContext<'a> {
                         Some(id) => Some(id),
                         None => {
                             let mut v = None;
-                            for (_, use_decl) in self.this_module().uses.clone().iter() {
+                            for (_, use_decl) in self
+                                .name_res_ctx
+                                .get_mod(self.module_id)
+                                .uses
+                                .clone()
+                                .iter()
+                            {
                                 let path = &use_decl.path;
                                 let use_path_spur = path.to_spur(self.string_interner);
                                 if let Some(res) =
@@ -477,7 +735,11 @@ impl<'a> ModuleBodyContext<'a> {
                                     v = Some(res);
                                     break;
                                 } else {
-                                    let mut module_path = self.this_module().absolute_path.clone();
+                                    let mut module_path = self
+                                        .name_res_ctx
+                                        .get_mod(self.module_id)
+                                        .absolute_path
+                                        .clone();
                                     module_path.append(&mut path.get_unspanned_spurs().collect());
                                     let full_path_as_spur = self.string_interner.get_or_intern(
                                         module_path
@@ -516,7 +778,13 @@ impl<'a> ModuleBodyContext<'a> {
         });
 
         let expr = Expr::Path(path);
-        (self.this_module_mut().exprs.alloc(expr.at(span)), type_id)
+        (
+            self.name_res_ctx
+                .get_mod_mut(self.module_id)
+                .exprs
+                .alloc(expr.at(span)),
+            type_id,
+        )
     }
 
     fn resolve_path_expr(
@@ -723,32 +991,39 @@ impl<'a> ModuleBodyContext<'a> {
         (let_expr, expr_id)
     }
 
+    fn handle_apply(&mut self, apply: Idx<ApplyDecl>) {
+        let file_id = self.this_module().file_id;
+        let a = &self.this_module().applies[apply];
+
+        if let Some((trt_path, trt_args)) = &a.trt {
+            let trt_name = trt_path.to_spur(self.string_interner).at(trt_path.span);
+            let trt_args: Vec<_> = trt_args
+                .iter()
+                .map(|arg| self.hir_ty_to_ts_ty(arg, Some(&a.where_clause), file_id))
+                .collect();
+
+            let impltor = self.hir_ty_to_ts_ty(&a.impltor, Some(&a.where_clause), file_id);
+
+            let trt_name = self.path_to_absolute(&trt_name.inner).at(trt_name.span);
+            self.tchk
+                .add_trait_application_to_context(&trt_name.in_file(file_id), &trt_args, impltor)
+                .unwrap_or_else(|err| {
+                    self.diagnostics.push(err);
+                });
+        }
+    }
+
     pub fn lower_bodies(&mut self) {
         let file_id = self.this_module().file_id;
 
         for i in 0..self.this_module().applies.len() {
-            let a = self.this_module().applies[Idx::from_raw(RawIdx::from(i as u32))].clone();
-
-            if let Some((trt_path, trt_args)) = &a.trt {
-                let trt_name = trt_path.to_spur(self.string_interner).at(trt_path.span);
-                let trt_args: Vec<_> = trt_args
-                    .iter()
-                    .map(|arg| self.hir_ty_to_ts_ty(arg, Some(&a.where_clause), file_id))
-                    .collect();
-
-                let impltor = self.hir_ty_to_ts_ty(&a.impltor, Some(&a.where_clause), file_id);
-
-                let trt_name = self.path_to_absolute(&trt_name.inner).at(trt_name.span);
-                self.tchk
-                    .add_trait_application_to_context(
-                        &trt_name.in_file(file_id),
-                        &trt_args,
-                        impltor,
-                    )
-                    .unwrap_or_else(|err| {
-                        self.diagnostics.push(err);
-                    });
-            }
+            let apply_idx = Idx::from_raw(RawIdx::from(i as u32));
+            self.handle_apply(apply_idx);
+        }
+        for i in 0..self.this_module().applies.len() {
+            // let a = self.this_module().applies[Idx::from_raw(RawIdx::from(i as u32))].clone();
+            // let idx = Idx::f
+            // self.handle_apply(&a);
         }
 
         for i in 0..self.this_module().functions.len() {

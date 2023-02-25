@@ -80,7 +80,6 @@ fn bounds(p: &mut Parser) {
 fn type_bound(p: &mut Parser) -> bool {
     let m = p.start();
     path(p);
-    opt_generic_arg_list(p);
     m.complete(p, SyntaxKind::TypeBound);
     true
 }

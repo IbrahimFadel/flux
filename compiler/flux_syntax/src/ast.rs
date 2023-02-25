@@ -186,6 +186,14 @@ macro_rules! enum_node {
                         .is_empty()
                 }
 			}
+
+            $(
+                impl From<$x> for $name {
+                    fn from(value: $x) -> Self {
+                        $name::$x(value)
+                    }
+                }
+            )*
 	};
 }
 
