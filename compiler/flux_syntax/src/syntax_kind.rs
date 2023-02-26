@@ -7,6 +7,7 @@ pub enum SyntaxKind {
 
     Visibility,
     FnDecl,
+    FnReturnType,
     TypeDeclList,
     TypeDecl,
     TraitDecl,

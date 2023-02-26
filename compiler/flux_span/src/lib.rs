@@ -282,7 +282,23 @@ pub trait WithSpan: Sized {
         Spanned::new(self, span)
     }
 
-    fn in_file(self, file_id: FileId, span: Span) -> InFile<Spanned<Self>> {
+    fn in_file(self, file_id: FileId) -> InFile<Self> {
+        InFile::new(self, file_id)
+    }
+
+    fn file_span(self, file_id: FileId, span: Span) -> InFile<Spanned<Self>> {
+        InFile::new(Spanned::new(self, span), file_id)
+    }
+
+    fn at_ref(&self, span: Span) -> Spanned<&Self> {
+        Spanned::new(self, span)
+    }
+
+    fn in_file_ref(&self, file_id: FileId) -> InFile<&Self> {
+        InFile::new(self, file_id)
+    }
+
+    fn file_span_ref(&self, file_id: FileId, span: Span) -> InFile<Spanned<&Self>> {
         InFile::new(Spanned::new(self, span), file_id)
     }
 }

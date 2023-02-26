@@ -6,6 +6,7 @@ basic_node!(Root);
 basic_node!(Poisoned);
 
 basic_node!(FnDecl);
+basic_node!(FnReturnType);
 basic_node!(StructDecl);
 basic_node!(StructDeclFieldList);
 basic_node!(StructDeclField);
@@ -25,7 +26,8 @@ enum_node!(
     FnDecl,
     ModDecl,
     StructDecl,
-    TraitDecl
+    TraitDecl,
+    UseDecl
 );
 
 basic_node!(PathExpr);

@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{marker::CompletedMarker, parser::Parser, token_set::TokenSet};
 
-use super::{expr, generic_args::opt_generic_arg_list, path};
+use super::{expr, path};
 
 const TYPE_RECOVERY_SET: TokenSet = TokenSet::new(&[TokenKind::RParen, TokenKind::Comma]);
 

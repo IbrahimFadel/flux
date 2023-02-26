@@ -20,38 +20,14 @@ impl TypeInterner {
         };
         interner.intern(Type::Unknown);
         interner.intern(Type::Tuple(vec![]));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("i8".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("i16".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("i32".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("i64".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("u8".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("u16".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("u32".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
-        // interner.intern(Type::Path(
-        //     Path::from_str_static("u64".at(Span::new(0..0)), string_interner),
-        //     vec![],
-        // ));
+        interner.intern(Type::Path(Path::from_static_str("i8", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("i16", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("i32", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("i64", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("u8", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("u16", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("u32", string_interner)));
+        interner.intern(Type::Path(Path::from_static_str("u64", string_interner)));
         interner
     }
 
@@ -158,7 +134,7 @@ impl WithSpan for TypeIdx {
 //         let idx1 = type_interner.intern(Type::Tuple(vec![]));
 //         assert_eq!(idx0, idx1);
 //         let i32_idx = type_interner.intern(Type::Path(
-//             Path::from_str_static("i32".at(Span::new(0..0)), &INTERNER),
+//             Path::from_str_static("i32" &INTERNER),
 //             vec![],
 //         ));
 //         let idx1 = type_interner.intern(Type::Tuple(vec![i32_idx.at(Span::new(0..0))]));
@@ -166,7 +142,7 @@ impl WithSpan for TypeIdx {
 
 //         let len = type_interner.ty_to_key.len();
 //         let new_idx = type_interner.intern(Type::Path(
-//             Path::from_str_static("foo".at(Span::new(0..0)), &INTERNER),
+//             Path::from_str_static("foo" &INTERNER),
 //             vec![],
 //         ));
 //         assert_eq!(new_idx, TypeIdx::new(len as u32));
@@ -176,7 +152,7 @@ impl WithSpan for TypeIdx {
 //     fn interns_independently_of_spans() {
 //         let mut type_interner = TypeInterner::new(&INTERNER);
 //         let path0 = type_interner.intern(Type::Path(
-//             Path::from_str_static("foo".at(Span::new(0..0)), &INTERNER),
+//             Path::from_str_static("foo" &INTERNER),
 //             vec![],
 //         ));
 //         let path1 = type_interner.intern(Type::Path(
@@ -188,8 +164,8 @@ impl WithSpan for TypeIdx {
 //         let tuple1 = type_interner.intern(Type::Tuple(vec![path0.at(Span::new(1..2))]));
 //         assert_eq!(tuple0, tuple1);
 //         let arr0 = type_interner.intern(Type::Array(
-//             tuple0.at(Span::new(0..0)),
-//             1.at(Span::new(0..0)),
+//             tuple0
+//             1
 //         ));
 //         let arr1 = type_interner.intern(Type::Array(
 //             tuple1.at(Span::new(1..2)),

@@ -11,23 +11,21 @@ pub(crate) enum ReachedFixedPoint {
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvePathResult {
     pub(crate) resolved_def: PerNs,
-    pub(crate) segment_index: Option<usize>,
     pub(crate) reached_fixedpoint: ReachedFixedPoint,
 }
 
 impl ResolvePathResult {
     fn empty(reached_fixedpoint: ReachedFixedPoint) -> ResolvePathResult {
-        ResolvePathResult::with(PerNs::none(), reached_fixedpoint, None)
+        ResolvePathResult::with(PerNs::none(), reached_fixedpoint)
     }
 
     fn with(
         resolved_def: PerNs,
         reached_fixedpoint: ReachedFixedPoint,
-        segment_index: Option<usize>,
+        // module_id: ModuleId,
     ) -> ResolvePathResult {
         ResolvePathResult {
             resolved_def,
-            segment_index,
             reached_fixedpoint,
         }
     }
@@ -44,14 +42,16 @@ impl DefMap {
             path,
             original_module_id
         );
-        let mut segments = path.segments.iter().enumerate();
-        let mut curr_per_ns = match segments.next() {
-            Some((_, segment)) => self[original_module_id].scope.get(segment),
+        println!("currentscope {:#?}", self[original_module_id].scope);
+        let mut segments = path.segments.iter();
+        let name = match segments.next() {
+            Some(segment) => segment,
             None => return ResolvePathResult::empty(ReachedFixedPoint::Yes),
         };
+        let mut curr_per_ns = self[original_module_id].scope.get(name);
 
-        for (i, segment) in segments {
-            let (curr, vis) = match curr_per_ns.take_types_vis() {
+        for segment in segments {
+            let (curr, m, vis) = match curr_per_ns.take_types_vis() {
                 Some(r) => r,
                 None => return ResolvePathResult::empty(ReachedFixedPoint::No),
             };
@@ -60,13 +60,12 @@ impl DefMap {
                 ModuleDefId::ModuleId(m) => self[m].scope.get(segment),
                 s => {
                     return ResolvePathResult::with(
-                        PerNs::types(s, vis),
+                        PerNs::types(s, m, vis),
                         ReachedFixedPoint::Yes,
-                        Some(i),
-                    )
+                    );
                 }
             }
         }
-        ResolvePathResult::with(curr_per_ns, ReachedFixedPoint::Yes, None)
+        ResolvePathResult::with(curr_per_ns, ReachedFixedPoint::Yes)
     }
 }

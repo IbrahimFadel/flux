@@ -1,14 +1,15 @@
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, WithSpan};
 use flux_syntax::ast;
+use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
-use lasso::Spur;
+use lasso::{Spur, ThreadedRodeo};
 
-use crate::{item_tree::FileItemTreeId, type_interner::TypeIdx};
+use crate::type_interner::TypeIdx;
 
 pub type Name = Spanned<Spur>;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Locatable)]
 pub enum Visibility {
     Private,
     Public,
@@ -19,13 +20,13 @@ pub struct Apply {}
 #[derive(Debug, Clone)]
 pub struct Enum {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Locatable)]
 pub struct Function {
-    pub visibility: Visibility,
+    pub visibility: Spanned<Visibility>,
     pub name: Name,
     pub generic_params: GenericParams,
-    pub params: Vec<Param>,
-    pub ret_ty: TypeIdx,
+    pub params: Spanned<Vec<Param>>,
+    pub ret_ty: Spanned<TypeIdx>,
     pub ast: ast::FnDecl,
 }
 
@@ -41,10 +42,17 @@ pub struct Struct {}
 #[derive(Debug, Clone)]
 pub struct Trait {}
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Use {
+    pub visibility: Visibility,
+    pub path: Spanned<Path>,
+    pub alias: Option<Name>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Param {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: Spanned<TypeIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
@@ -72,23 +80,93 @@ pub struct WherePredicate {
     pub bound: Path,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct Path {
     pub segments: Vec<Spur>,
-    pub generic_args: Vec<TypeIdx>,
+    pub generic_args: Vec<Spanned<TypeIdx>>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct Expr {}
+impl Path {
+    pub fn new(segments: Vec<Spur>, generic_args: Vec<Spanned<TypeIdx>>) -> Self {
+        Self {
+            segments,
+            generic_args,
+        }
+    }
+
+    pub fn poisoned() -> Self {
+        Self {
+            segments: vec![],
+            generic_args: vec![],
+        }
+    }
+
+    pub fn from_static_str(s: &'static str, string_interner: &'static ThreadedRodeo) -> Self {
+        Self {
+            segments: s
+                .split("::")
+                .map(|s| string_interner.get_or_intern_static(s))
+                .collect(),
+            generic_args: vec![],
+        }
+    }
+
+    pub fn to_spur(&self, string_interner: &'static ThreadedRodeo) -> Spur {
+        let s = self
+            .segments
+            .iter()
+            .map(|spur| string_interner.resolve(spur))
+            .join("::");
+        string_interner.get_or_intern(s)
+    }
+
+    pub fn to_string(&self, string_interner: &'static ThreadedRodeo) -> String {
+        self.segments
+            .iter()
+            .map(|spur| string_interner.resolve(spur))
+            .join("::")
+    }
+}
 
 pub type ExprIdx = Idx<Spanned<Expr>>;
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Type {
-    Tuple(Vec<TypeIdx>),
-    Ptr(TypeIdx),
+    Tuple(Vec<Spanned<TypeIdx>>),
+    Ptr(Spanned<TypeIdx>),
     Path(Path),
     Unknown,
+}
+
+#[derive(Clone, PartialEq, Debug, Locatable)]
+pub enum Expr {
+    Block(Block),
+    Call(Call),
+    Float(f64),
+    Int(u64),
+    // Tuple(Vec<ExprIdx>),
+    Path(Path),
+    Let(Let),
+    // Struct(Struct),
+    Poisoned,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct Block {
+    pub exprs: Vec<ExprIdx>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
+pub struct Call {
+    pub path: ExprIdx,
+    pub args: Vec<ExprIdx>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct Let {
+    pub name: Name,
+    pub ty: Spanned<TypeIdx>,
+    pub val: ExprIdx,
 }
 
 // use std::{collections::HashSet, fmt::Display};

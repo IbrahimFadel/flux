@@ -132,7 +132,7 @@ impl TChecker {
                 let kind = self.tenv.type_interner.resolve(*key);
                 let ty = Type::new(kind.clone(), &mut self.tenv.type_interner);
                 self.tenv
-                    .insert(ty.in_file(impltor_filespan.file_id, impltor_filespan.inner))
+                    .insert(ty.file_span(impltor_filespan.file_id, impltor_filespan.inner))
             })
             .collect();
 
@@ -303,7 +303,7 @@ impl TChecker {
                 ty: self
                     .tenv
                     .fmt_ty_id(ty)
-                    .in_file(impltr_filespan.file_id, impltr_filespan.inner),
+                    .file_span(impltr_filespan.file_id, impltr_filespan.inner),
                 unmet_restrictions: unimplemented_restrictions,
             }
             .to_diagnostic())

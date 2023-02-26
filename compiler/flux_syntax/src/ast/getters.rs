@@ -23,8 +23,11 @@ getters! {
         where_clause -> node(WhereClause);
         visibility -> node(Visibility);
         param_list -> node(ParamList);
-        return_type -> node(Type);
+        return_type -> node(FnReturnType);
         body -> node(Expr);
+    }
+    FnReturnType {
+        ty -> node(Type);
     }
     Name {
         ident -> tok(Ident);
@@ -184,6 +187,7 @@ getters! {
         ty -> node(Type);
     }
     UseDecl {
+        visibility -> node(Visibility);
         path -> node(Path);
         alias -> node(Name);
     }

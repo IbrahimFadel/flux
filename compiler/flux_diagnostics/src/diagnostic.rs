@@ -129,6 +129,12 @@ pub enum DiagnosticCode {
     CouldNotResolveModDecl,
     UnknownGenericInWherePredicate,
 
+    StmtFollowingTerminatorExpr,
+    IncorrectNumArgsInCall,
+    TriedCallingPrivateFunction,
+    UnresolvedImport,
+    UnresolvedFunction,
+
     TypeMismatch,
     ConflictingTraitImplementations,
     TraitInTraitRestrictionDoesNotExist,

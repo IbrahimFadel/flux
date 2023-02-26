@@ -8,14 +8,14 @@ use std::{
 use flux_diagnostics::ice;
 use flux_span::FileId;
 use flux_syntax::{
-    ast::{self, AstNode, Root},
+    ast::{self, AstNode},
     SyntaxNode,
 };
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 
 use crate::{
-    hir::{Apply, Enum, Function, Mod, Struct, Trait},
+    hir::{Apply, Enum, Function, Mod, Struct, Trait, Use},
     ModuleDefId, TypeInterner,
 };
 
@@ -30,6 +30,7 @@ pub struct ItemTree {
     mods: Arena<Mod>,
     structs: Arena<Struct>,
     traits: Arena<Trait>,
+    uses: Arena<Use>,
 }
 
 impl ItemTree {
@@ -59,6 +60,12 @@ pub struct FileItemTreeId<N: ItemTreeNode> {
 impl From<FileItemTreeId<Function>> for ModuleDefId {
     fn from(value: FileItemTreeId<Function>) -> Self {
         ModuleDefId::FunctionId(value.index)
+    }
+}
+
+impl From<FileItemTreeId<Use>> for ModuleDefId {
+    fn from(value: FileItemTreeId<Use>) -> Self {
+        ModuleDefId::UseId(value.index)
     }
 }
 
@@ -153,9 +160,10 @@ mod_items! {
     Mod in mods -> ast::ModDecl,
     Struct in structs -> ast::StructDecl,
     Trait in traits -> ast::TraitDecl,
+    Use in uses -> ast::UseDecl,
 }
 
-pub fn lower_ast_to_item_tree(
+pub(crate) fn lower_ast_to_item_tree(
     root: SyntaxNode,
     file_id: FileId,
     string_interner: &'static ThreadedRodeo,

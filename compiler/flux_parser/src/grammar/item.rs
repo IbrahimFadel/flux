@@ -43,7 +43,7 @@ pub(crate) fn item(p: &mut Parser) {
     } else if p.at(TokenKind::Apply) {
         apply_decl(p, m);
     } else if p.at(TokenKind::Use) {
-        use_decl(p);
+        use_decl(p, m);
     } else if p.at(TokenKind::Mod) {
         mod_decl(p, m);
     } else {

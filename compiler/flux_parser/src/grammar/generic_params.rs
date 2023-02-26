@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{parser::Parser, token_set::TokenSet};
 
-use super::{generic_args::opt_generic_arg_list, name, path};
+use super::{name, path};
 
 pub(super) fn opt_generic_param_list(p: &mut Parser) {
     if p.at(TokenKind::CmpLt) {

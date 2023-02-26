@@ -1,9 +1,9 @@
-use crate::grammar::name;
+use crate::{grammar::name, marker::CompletedMarker};
 
 use super::*;
 
-pub(crate) fn use_decl(p: &mut Parser) {
-    let m = p.start();
+pub(crate) fn use_decl(p: &mut Parser, visibility: CompletedMarker) {
+    let m = visibility.precede(p);
     p.bump(TokenKind::Use);
 
     let path_m = p.start();

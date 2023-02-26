@@ -21,6 +21,7 @@ fn name(p: &mut Parser, _recovery: TokenSet) {
 }
 
 fn opt_return_type(p: &mut Parser) {
+    let m = p.start();
     if p.eat(TokenKind::Arrow) {
         if p.at_set(TokenSet::TYPE_BEGIN) {
             type_(p);
@@ -28,6 +29,7 @@ fn opt_return_type(p: &mut Parser) {
             p.error("expected return type following `->`");
         }
     }
+    m.complete(p, SyntaxKind::FnReturnType);
 }
 
 fn path(p: &mut Parser) {

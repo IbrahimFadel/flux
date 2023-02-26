@@ -114,34 +114,39 @@ macro_rules! basic_node {
 }
 
 fn trim_trailing_whitesapce(node: &SyntaxNode) -> TextRange {
-    let end = if let Some(last_child) = node.last_child_or_token() {
-        match last_child.as_node() {
-            Some(node) => trim_trailing_whitesapce(node).end(),
-            None => {
-                let tok = last_child.as_token().unwrap();
-                if tok.kind() == SyntaxKind::Whitespace {
-                    tok.text_range().start()
-                } else {
-                    tok.text_range().end()
-                }
-            }
-        }
-    } else {
+    let len = node.children().len();
+    if len == 0 {
         return node.text_range();
-    };
-    TextRange::new(node.text_range().start(), end)
+    }
+    let mut i = len - 1;
+    let start = node.text_range().start();
+    let mut end = node.text_range().end();
+    loop {
+        let child = node.children_with_tokens().nth(i);
+        if let Some(child) = child {
+            match child.as_node() {
+                Some(node) => {
+                    end = trim_trailing_whitesapce(node).end();
+                }
+                None => {
+                    let tok = child.as_token().unwrap();
+                    if matches!(tok.kind(), SyntaxKind::Whitespace | SyntaxKind::Comment) {
+                        end = tok.text_range().start();
+                    } else {
+                        end = tok.text_range().end();
+                        return TextRange::new(start, end);
+                    }
+                }
+            };
+            if i == 0 {
+                return TextRange::new(start, end);
+            }
+            i -= 1;
+        } else {
+            return TextRange::new(start, end);
+        }
+    }
 }
-
-// fn get_node_range(node: &SyntaxNode) -> TextRange {
-//     let children = node.children_with_tokens();
-//     if let Some(child) = children.last() {
-//         if let Some(tok) = child.as_token() {
-//             if tok.kind() == SyntaxKind::Whitespace {}
-//         }
-//     }
-
-//     todo!()
-// }
 
 #[macro_export]
 macro_rules! enum_node {

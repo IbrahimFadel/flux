@@ -1,5 +1,5 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
-use flux_span::{FileSpanned, InFile, Span, WithSpan};
+use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
 
 #[derive(Debug)]
@@ -8,41 +8,32 @@ pub(crate) enum LowerError {
         decl: FileSpanned<String>,
         candidate_paths: Vec<String>,
     },
+    IncorrectNumArgsInCall {
+        expected_number: FileSpanned<usize>,
+        got_number: FileSpanned<usize>,
+        function: String,
+    },
+    StmtFollowingTerminatorExpr {
+        terminator: InFile<Span>,
+        following_expr: InFile<Span>,
+    },
+    TriedCallingPrivateFunction {
+        function: String,
+        declared_as_private: InFile<Span>,
+        call: InFile<Span>,
+    },
     UnknownGenericInWherePredicate {
         /// The unknown generic
         generic: FileSpanned<String>,
         /// Where the generics are declared
         generic_params: InFile<Span>,
     },
-    // CouldNotResolveFunction {
-    //     path: FileSpanned<String>,
-    // },
-    // CouldNotResolvePath {
-    //     path: FileSpanned<String>,
-    // },
-    // CouldNotResolveStruct {
-    //     path: FileSpanned<String>,
-    // },
-    // StmtFollowingTerminatorExpr {
-    //     terminator: InFile<Span>,
-    //     following_expr: InFile<Span>,
-    // },
-    // TraitMethodGenericsAlreadyDeclaredInTraitDecl {
-    //     trait_name: String,
-    //     trait_generics: InFile<Spanned<Vec<String>>>,
-    //     method_generics: InFile<Spanned<Vec<String>>>,
-    //     duplicates: Vec<String>,
-    // },
-    // UninitializedFieldsInStructExpr {
-    //     struct_name: String,
-    //     missing_fields: FileSpanned<String>,
-    //     declaration_span: InFile<Span>,
-    // },
-    // UnnecessaryFieldsInitializedInStructExpr {
-    //     struct_name: String,
-    //     unnecessary_fields: FileSpanned<String>,
-    //     declaration_span: InFile<Span>,
-    // },
+    UnresolvedFunction {
+        function: FileSpanned<String>,
+    },
+    UnresolvedImport {
+        import: FileSpanned<String>,
+    },
 }
 
 impl ToDiagnostic for LowerError {
@@ -66,6 +57,54 @@ impl ToDiagnostic for LowerError {
                     .map(|path| format!("`{path}`"))
                     .join(", ")
             )),
+            Self::IncorrectNumArgsInCall {
+                expected_number,
+                got_number,
+                function,
+            } => Diagnostic::error(
+                got_number.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::IncorrectNumArgsInCall,
+                "incorrect number of arguments in function call".to_string(),
+                vec![
+                    got_number.map_inner_ref(|num| format!("got {num} arguments")),
+                    expected_number.map_inner_ref(|num| {
+                        format!("expected {num} arguments in function `{function}`")
+                    }),
+                ],
+            ),
+            Self::StmtFollowingTerminatorExpr {
+                terminator,
+                following_expr,
+            } => Diagnostic::error(
+                following_expr.map_ref(|span| span.range.start().into()),
+                DiagnosticCode::StmtFollowingTerminatorExpr,
+                "statements cannot follow a terminator expression in a block".to_string(),
+                vec![
+                    FileSpanned::new(
+                        Spanned::new("terminator expression".to_string(), terminator.inner),
+                        terminator.file_id,
+                    ),
+                    FileSpanned::new(
+                        Spanned::new("illegal statement".to_string(), following_expr.inner),
+                        following_expr.file_id,
+                    ),
+                ],
+            ),
+            Self::TriedCallingPrivateFunction {
+                function,
+                declared_as_private,
+                call,
+            } => Diagnostic::error(
+                call.map_ref(|span| span.range.start().into()),
+                DiagnosticCode::TriedCallingPrivateFunction,
+                "function is private and inaccessible".to_string(),
+                vec![
+                    format!("function `{function}` is private").file_span(call.file_id, call.inner),
+                    "declared here as private"
+                        .to_string()
+                        .file_span(declared_as_private.file_id, declared_as_private.inner),
+                ],
+            ),
             Self::UnknownGenericInWherePredicate {
                 generic,
                 generic_params,
@@ -81,125 +120,18 @@ impl ToDiagnostic for LowerError {
                         .map_ref(|span| "generic parameters declared here".to_string().at(*span)),
                 ],
             ),
-            // Self::CouldNotResolveFunction { path } => Diagnostic::error(
-            //     path.map_ref(|span| span.span.range.start().into()),
-            //     DiagnosticCode::CouldNotResolveFunction,
-            //     "could not resolve function".to_string(),
-            //     vec![path.map_inner_ref(|path| format!("could not resolve function `{path}`"))],
-            // ),
-            // Self::CouldNotResolvePath { path } => Diagnostic::error(
-            //     path.map_ref(|span| span.span.range.start().into()),
-            //     DiagnosticCode::CouldNotResolvePath,
-            //     "could not resolve path".to_string(),
-            //     vec![path.map_inner_ref(|path| format!("could not resolve path `{path}`"))],
-            // ),
-            // Self::CouldNotResolveStruct { path } => Diagnostic::error(
-            //     path.map_ref(|span| span.span.range.start().into()),
-            //     DiagnosticCode::CouldNotResolveStruct,
-            //     "could not resolve struct".to_string(),
-            //     vec![path.map_inner_ref(|path| format!("could not resolve struct `{path}`"))],
-            // ),
-            // Self::StmtFollowingTerminatorExpr {
-            //     terminator,
-            //     following_expr,
-            // } => Diagnostic::error(
-            //     following_expr.map_ref(|span| span.range.start().into()),
-            //     DiagnosticCode::StmtFollowingTerminatorExpr,
-            //     "statements cannot follow a terminator expression in a block".to_string(),
-            //     vec![
-            //         FileSpanned::new(
-            //             Spanned::new("terminator expression".to_string(), terminator.inner),
-            //             terminator.file_id,
-            //         ),
-            //         FileSpanned::new(
-            //             Spanned::new("illegal statement".to_string(), following_expr.inner),
-            //             following_expr.file_id,
-            //         ),
-            //     ],
-            // ),
-
-            // Self::TraitMethodGenericsAlreadyDeclaredInTraitDecl {
-            //     trait_name,
-            //     trait_generics,
-            //     method_generics,
-            //     duplicates,
-            // } => Diagnostic::error(
-            //     InFile::new(
-            //         method_generics.inner.span.range.start().into(),
-            //         method_generics.file_id,
-            //     ),
-            //     DiagnosticCode::TraitMethodGenericsAlreadyDeclaredInTraitDecl,
-            //     format!("duplicate generics in trait `{trait_name}`"),
-            //     vec![
-            //         trait_generics.map_inner_ref(|generics| {
-            //             format!(
-            //                 "trait generic{} {} declared here",
-            //                 if generics.len() <= 1 { "" } else { "s" },
-            //                 generics
-            //                     .iter()
-            //                     .map(|generic| { format!("`{generic}`") })
-            //                     .join(", ")
-            //             )
-            //         }),
-            //         method_generics.map_inner_ref(|generics| {
-            //             format!(
-            //                 "method generic{} {} declared here",
-            //                 if generics.len() <= 1 { "" } else { "s" },
-            //                 generics
-            //                     .iter()
-            //                     .map(|generic| { format!("`{generic}`") })
-            //                     .join(", ")
-            //             )
-            //         }),
-            //     ],
-            // )
-            // .with_help(format!(
-            //     "{} {} in either the trait generic list or the method generic list",
-            //     duplicates.iter().map(|name| format!("`{name}`")).join(", "),
-            //     if duplicates.len() <= 1 {
-            //         "is a duplicate, change the name".to_string()
-            //     } else {
-            //         "are duplicates, change the names".to_string()
-            //     },
-            // )),
-            // Self::UninitializedFieldsInStructExpr {
-            //     struct_name,
-            //     missing_fields,
-            //     declaration_span,
-            // } => Diagnostic::error(
-            //     InFile::new(
-            //         missing_fields.inner.span.range.start().into(),
-            //         missing_fields.file_id,
-            //     ),
-            //     DiagnosticCode::UninitializedFieldsInStructExpr,
-            //     "uninitialized fields in struct expression".to_string(),
-            //     vec![
-            //         missing_fields.map_inner_ref(|list| {
-            //             format!("struct `{struct_name}` missing fields `{list}`")
-            //         }),
-            //         format!("`{struct_name}` fields declared here")
-            //             .in_file(declaration_span.file_id, declaration_span.inner),
-            //     ],
-            // ),
-            // Self::UnnecessaryFieldsInitializedInStructExpr {
-            //     struct_name,
-            //     unnecessary_fields,
-            //     declaration_span,
-            // } => Diagnostic::error(
-            //     InFile::new(
-            //         unnecessary_fields.inner.span.range.start().into(),
-            //         unnecessary_fields.file_id,
-            //     ),
-            //     DiagnosticCode::UnnecessaryFieldsInStructExpr,
-            //     "unnecessary fields in struct expression".to_string(),
-            //     vec![
-            //         unnecessary_fields.map_inner_ref(|list| {
-            //             format!("unnecessary fields `{list}` initialized in struct `{struct_name}`")
-            //         }),
-            //         format!("`{struct_name}` fields declared here")
-            //             .in_file(declaration_span.file_id, declaration_span.inner),
-            //     ],
-            // ),
+            Self::UnresolvedFunction { function } => Diagnostic::error(
+                function.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnresolvedFunction,
+                "unresolved import".to_string(),
+                vec![function.map_inner_ref(|path| format!("unresolved function `{path}`"))],
+            ),
+            Self::UnresolvedImport { import } => Diagnostic::error(
+                import.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnresolvedImport,
+                "unresolved import".to_string(),
+                vec![import.map_inner_ref(|path| format!("unresolved import `{path}`"))],
+            ),
         }
     }
 }

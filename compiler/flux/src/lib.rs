@@ -51,12 +51,15 @@ impl Driver {
             Ok(path) => path,
             Err(err) => return self.file_cache.report_diagnostic(&err.to_diagnostic()),
         };
-        let (_def_map, diagnostics) = flux_hir::build_def_map(
+        let (def_map, diagnostics) = flux_hir::build_def_map(
             entry_path.to_str().unwrap(),
             &mut self.file_cache,
             &STRING_INTERNER,
             &TYPE_INTERNER,
         );
+        self.file_cache.report_diagnostics(&diagnostics);
+        let diagnostics =
+            flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
         self.file_cache.report_diagnostics(&diagnostics);
     }
 }

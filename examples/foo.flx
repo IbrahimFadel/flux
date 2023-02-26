@@ -1,3 +1,7 @@
-fn inside_foo() {
+fn inside_foo(x X, y Y) -> i32 {
+    0
+}
+
+pub some_pub_fn() {
     
 }

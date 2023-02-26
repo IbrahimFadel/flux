@@ -1,8 +1,15 @@
 mod foo;
 mod bar;
 
-fn main() {
+use foo::inside_foo;
+use bazz;
+use foo::some_pub_fn;
 
+fn main() {
+    let x u32 = foo::inside_foo(1.0);
+    let y u32 = inside_foo();
+    some_pub_fn();
+    0
 }
 
 /*

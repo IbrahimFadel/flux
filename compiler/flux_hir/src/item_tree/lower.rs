@@ -1,14 +1,15 @@
 use std::marker::PhantomData;
 
-use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_span::{FileId, Span, ToSpan, WithSpan};
+use flux_diagnostics::{Diagnostic, ToDiagnostic};
+use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
 use la_arena::Idx;
 use lasso::ThreadedRodeo;
 
 use crate::{
     diagnostics::LowerError,
-    hir::{Function, GenericParams, Mod, Name, Param, Type, Visibility, WherePredicate},
+    hir::{Function, GenericParams, Mod, Param, Type, Use, Visibility, WherePredicate},
+    lower_node,
     type_interner::TypeIdx,
     TypeInterner,
 };
@@ -22,16 +23,16 @@ fn id<N: ItemTreeNode>(index: Idx<N>) -> FileItemTreeId<N> {
     }
 }
 
-pub(super) struct Ctx {
+pub(super) struct Ctx<'a> {
     tree: ItemTree,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
-    body_ctx: crate::body::LowerCtx,
+    body_ctx: crate::body::LowerCtx<'a>,
     diagnostics: Vec<Diagnostic>,
     file_id: FileId,
 }
 
-impl Ctx {
+impl<'a> Ctx<'a> {
     pub fn new(
         file_id: FileId,
         string_interner: &'static ThreadedRodeo,
@@ -41,7 +42,7 @@ impl Ctx {
             tree: ItemTree::default(),
             string_interner,
             type_interner,
-            body_ctx: crate::body::LowerCtx::new(),
+            body_ctx: crate::body::LowerCtx::new(string_interner, type_interner),
             diagnostics: Vec::new(),
             file_id,
         }
@@ -60,12 +61,13 @@ impl Ctx {
             ast::Item::ModDecl(m) => self.lower_mod(m).into(),
             ast::Item::StructDecl(_) => todo!(),
             ast::Item::TraitDecl(_) => todo!(),
+            ast::Item::UseDecl(u) => self.lower_use(u).into(),
         }
     }
 
     fn lower_function(&mut self, function: &ast::FnDecl) -> FileItemTreeId<Function> {
         let visibility = self.lower_visibility(function.visibility());
-        let name = self.lower_name(function.name());
+        let name = self.body_ctx.lower_name(function.name());
         let generic_params = self.lower_generic_params(
             function.generic_param_list(),
             function.where_clause(),
@@ -85,37 +87,33 @@ impl Ctx {
     }
 
     fn lower_mod(&mut self, m: &ast::ModDecl) -> FileItemTreeId<Mod> {
-        let visibility = self.lower_visibility(m.visibility());
-        let name = self.lower_name(m.name());
+        let visibility = self.lower_visibility(m.visibility()).inner;
+        let name = self.body_ctx.lower_name(m.name());
         let res = Mod { visibility, name };
         id(self.tree.mods.alloc(res))
     }
 
-    fn lower_visibility(&self, visibility: Option<ast::Visibility>) -> Visibility {
+    fn lower_use(&mut self, u: &ast::UseDecl) -> FileItemTreeId<Use> {
+        let visibility = self.lower_visibility(u.visibility()).inner;
+        let path = self.body_ctx.lower_path(u.path());
+        let alias = u.alias().map(|alias| self.body_ctx.lower_name(Some(alias)));
+        let res = Use {
+            visibility,
+            path,
+            alias,
+        };
+        id(self.tree.uses.alloc(res))
+    }
+
+    fn lower_visibility(&self, visibility: Option<ast::Visibility>) -> Spanned<Visibility> {
         lower_node(
             visibility,
-            |_| Visibility::Private,
+            |visibility| Visibility::Private.at(visibility.range().to_span()),
             |visibility| {
                 visibility
                     .public()
                     .map_or(Visibility::Private, |_| Visibility::Public)
-            },
-        )
-    }
-
-    fn lower_name(&self, name: Option<ast::Name>) -> Name {
-        lower_node(
-            name,
-            |name| {
-                self.string_interner
-                    .get_or_intern_static("poisoned_name")
-                    .at(name.range().to_span())
-            },
-            |name| {
-                let name = name
-                    .ident()
-                    .unwrap_or_else(|| ice("name parsed without identifier token"));
-                name.text_key().at(name.text_range().to_span())
+                    .at(visibility.range().to_span())
             },
         )
     }
@@ -130,7 +128,7 @@ impl Ctx {
             Some(ast_generic_params) => {
                 let mut generic_params = GenericParams::default();
                 ast_generic_params.type_params().for_each(|param| {
-                    let name = self.lower_name(param.name());
+                    let name = self.body_ctx.lower_name(param.name());
                     generic_params.types.alloc(name.inner);
                 });
                 generic_params.at(ast_generic_params.range().to_span())
@@ -140,7 +138,7 @@ impl Ctx {
 
         if let Some(where_clause) = where_clause {
             where_clause.predicates().for_each(|predicate| {
-                let name = self.lower_name(predicate.name());
+                let name = self.body_ctx.lower_name(predicate.name());
                 let idx = generic_params
                     .types
                     .iter()
@@ -166,7 +164,7 @@ impl Ctx {
                             let path = self.body_ctx.lower_path(bound.trait_path());
                             generic_params.inner.where_predicates.push(WherePredicate {
                                 ty: idx,
-                                bound: path,
+                                bound: path.inner,
                             })
                         })
                     },
@@ -176,54 +174,39 @@ impl Ctx {
         generic_params.inner
     }
 
-    fn lower_params(&self, params: Option<ast::ParamList>) -> Vec<Param> {
+    fn lower_params(&self, params: Option<ast::ParamList>) -> Spanned<Vec<Param>> {
         lower_node(
             params,
-            |_| vec![],
+            |param_list| vec![].at(param_list.range().to_span()),
             |param_list| {
                 param_list
                     .params()
                     .map(|param| {
-                        let name = self.lower_name(param.name());
-                        let ty = self.lower_type(param.ty());
+                        let name = self.body_ctx.lower_name(param.name());
+                        let ty = self.body_ctx.lower_type(param.ty());
                         Param { name, ty }
                     })
-                    .collect()
+                    .collect::<Vec<_>>()
+                    .at(param_list.range().to_span())
             },
         )
     }
 
-    fn lower_return_type(&self, ty: Option<ast::Type>) -> TypeIdx {
-        ty.map_or_else(
-            || self.type_interner.intern(Type::Tuple(vec![])),
-            |ty| self.lower_type(Some(ty)),
-        )
-    }
-
-    fn lower_type(&self, ty: Option<ast::Type>) -> TypeIdx {
-        self.type_interner.intern(lower_node(
+    fn lower_return_type(&self, ty: Option<ast::FnReturnType>) -> Spanned<TypeIdx> {
+        lower_node(
             ty,
-            |_| Type::Unknown,
-            |ty| match ty {
-                ast::Type::PathType(path) => Type::Path(self.body_ctx.lower_path(path.path())),
-                ast::Type::TupleType(_) => todo!(),
-                ast::Type::ArrayType(_) => todo!(),
-                ast::Type::PtrType(_) => todo!(),
+            |ty| {
+                self.type_interner
+                    .intern(Type::Tuple(vec![]))
+                    .at(ty.range().to_span())
             },
-        ))
-    }
-}
-
-fn lower_node<N, T, P, F>(node: Option<N>, poison_function: P, normal_function: F) -> T
-where
-    N: AstNode,
-    P: FnOnce(N) -> T,
-    F: FnOnce(N) -> T,
-{
-    let n = node.unwrap_or_else(|| ice("missing node that should always be emitted"));
-    if n.is_poisoned() {
-        poison_function(n)
-    } else {
-        normal_function(n)
+            |ty| match ty.ty() {
+                Some(ty) => self.body_ctx.lower_type(Some(ty)),
+                None => self
+                    .type_interner
+                    .intern(Type::Tuple(vec![]))
+                    .at(ty.range().to_span()),
+            },
+        )
     }
 }
