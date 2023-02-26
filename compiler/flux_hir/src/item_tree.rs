@@ -5,8 +5,12 @@ use std::{
     ops::Index,
 };
 
+use flux_diagnostics::ice;
 use flux_span::FileId;
-use flux_syntax::ast::{self, AstNode, Root};
+use flux_syntax::{
+    ast::{self, AstNode, Root},
+    SyntaxNode,
+};
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 
@@ -28,7 +32,11 @@ pub struct ItemTree {
     traits: Arena<Trait>,
 }
 
-impl ItemTree {}
+impl ItemTree {
+    pub fn items(&self) -> &[ModItem] {
+        &self.top_level
+    }
+}
 
 pub trait ItemTreeNode: Clone {
     type Source: AstNode + Into<ast::Item>;
@@ -148,10 +156,11 @@ mod_items! {
 }
 
 pub fn lower_ast_to_item_tree(
-    root: &Root,
+    root: SyntaxNode,
     file_id: FileId,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
 ) -> ItemTree {
-    lower::Ctx::new(file_id, string_interner, type_interner).lower_module_items(root)
+    let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
+    lower::Ctx::new(file_id, string_interner, type_interner).lower_module_items(&root)
 }

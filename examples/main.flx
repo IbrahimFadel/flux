@@ -1,7 +1,11 @@
+mod foo;
+mod bar;
+
 fn main() {
 
 }
 
+/*
 trait Foo<T, X> {
     type X;
 
@@ -23,6 +27,7 @@ fn foo<A, B>(x A) -> A
 {
     0
 }
+*/
 
 /*
 mod foo;

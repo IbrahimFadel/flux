@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, ops::Deref};
+use std::{collections::HashMap, fmt, ops::Deref, path::PathBuf};
 
 use ariadne::Source;
 use flux_span::{FileId, InFile, Span};
@@ -66,6 +66,16 @@ impl FileCache {
         let src = Source::from(content);
         self.map.insert(id, src);
         id
+    }
+
+    pub fn get_file_path(&self, file_id: &FileId) -> &str {
+        self.interner.resolve(&file_id.0)
+    }
+
+    pub fn get_file_dir(&self, file_id: &FileId) -> String {
+        let path = self.get_file_path(file_id);
+        let buf = PathBuf::from(path);
+        buf.parent().unwrap().to_str().unwrap().to_string()
     }
 
     pub fn report_diagnostic(&self, diagnostic: &Diagnostic) {

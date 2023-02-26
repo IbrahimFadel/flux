@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_span::{FileId, ToSpan, WithSpan};
+use flux_span::{FileId, Span, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
 use la_arena::Idx;
 use lasso::ThreadedRodeo;
 
 use crate::{
     diagnostics::LowerError,
-    hir::{Function, GenericParams, Name, Param, Type, Visibility, WherePredicate},
+    hir::{Function, GenericParams, Mod, Name, Param, Type, Visibility, WherePredicate},
     type_interner::TypeIdx,
     TypeInterner,
 };
@@ -56,21 +56,23 @@ impl Ctx {
         match item {
             ast::Item::ApplyDecl(_) => todo!(),
             ast::Item::EnumDecl(_) => todo!(),
-            ast::Item::FnDecl(function) => self.lower_function(function),
-            ast::Item::ModDecl(_) => todo!(),
+            ast::Item::FnDecl(function) => self.lower_function(function).into(),
+            ast::Item::ModDecl(m) => self.lower_mod(m).into(),
             ast::Item::StructDecl(_) => todo!(),
             ast::Item::TraitDecl(_) => todo!(),
         }
-        .into()
     }
 
     fn lower_function(&mut self, function: &ast::FnDecl) -> FileItemTreeId<Function> {
         let visibility = self.lower_visibility(function.visibility());
         let name = self.lower_name(function.name());
-        let generic_params =
-            self.lower_generic_params(function.generic_param_list(), function.where_clause());
+        let generic_params = self.lower_generic_params(
+            function.generic_param_list(),
+            function.where_clause(),
+            name.span,
+        );
         let params = self.lower_params(function.param_list());
-        let ret_ty = self.lower_type(function.return_type());
+        let ret_ty = self.lower_return_type(function.return_type());
         let res = Function {
             visibility,
             name,
@@ -80,6 +82,13 @@ impl Ctx {
             ast: function.clone(),
         };
         id(self.tree.functions.alloc(res))
+    }
+
+    fn lower_mod(&mut self, m: &ast::ModDecl) -> FileItemTreeId<Mod> {
+        let visibility = self.lower_visibility(m.visibility());
+        let name = self.lower_name(m.name());
+        let res = Mod { visibility, name };
+        id(self.tree.mods.alloc(res))
     }
 
     fn lower_visibility(&self, visibility: Option<ast::Visibility>) -> Visibility {
@@ -115,19 +124,20 @@ impl Ctx {
         &mut self,
         generic_params: Option<ast::GenericParamList>,
         where_clause: Option<ast::WhereClause>,
+        fallback_span: Span,
     ) -> GenericParams {
-        let mut generic_params = lower_node(
-            generic_params,
-            |ast_generic_params| GenericParams::poisoned().at(ast_generic_params.range().to_span()),
-            |ast_generic_params| {
+        let mut generic_params = match generic_params {
+            Some(ast_generic_params) => {
                 let mut generic_params = GenericParams::default();
                 ast_generic_params.type_params().for_each(|param| {
                     let name = self.lower_name(param.name());
                     generic_params.types.alloc(name.inner);
                 });
                 generic_params.at(ast_generic_params.range().to_span())
-            },
-        );
+            }
+            None => GenericParams::poisoned().at(fallback_span),
+        };
+
         if let Some(where_clause) = where_clause {
             where_clause.predicates().for_each(|predicate| {
                 let name = self.lower_name(predicate.name());
@@ -180,6 +190,13 @@ impl Ctx {
                     })
                     .collect()
             },
+        )
+    }
+
+    fn lower_return_type(&self, ty: Option<ast::Type>) -> TypeIdx {
+        ty.map_or_else(
+            || self.type_interner.intern(Type::Tuple(vec![])),
+            |ty| self.lower_type(Some(ty)),
         )
     }
 

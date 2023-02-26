@@ -74,8 +74,8 @@ pub struct WherePredicate {
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Path {
-    segments: Vec<Spur>,
-    generic_args: Vec<TypeIdx>,
+    pub segments: Vec<Spur>,
+    pub generic_args: Vec<TypeIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]

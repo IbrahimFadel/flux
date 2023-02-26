@@ -126,6 +126,7 @@ pub enum DiagnosticCode {
 
     ParserExpected,
 
+    CouldNotResolveModDecl,
     UnknownGenericInWherePredicate,
 
     TypeMismatch,

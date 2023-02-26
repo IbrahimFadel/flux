@@ -13,6 +13,7 @@ use name_res::LocalModuleId;
 pub use type_interner::TypeInterner;
 
 use item_tree::{lower_ast_to_item_tree, FileItemTreeId};
+pub use name_res::build_def_map;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleDefId {

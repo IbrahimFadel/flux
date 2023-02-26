@@ -1,51 +1,86 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, WithSpan};
+use itertools::Itertools;
 
 #[derive(Debug)]
 pub(crate) enum LowerError {
+    CouldNotResolveModDecl {
+        decl: FileSpanned<String>,
+        candidate_paths: Vec<String>,
+    },
     UnknownGenericInWherePredicate {
         /// The unknown generic
         generic: FileSpanned<String>,
         /// Where the generics are declared
         generic_params: InFile<Span>,
-    }, // CouldNotResolveFunction {
-       //     path: FileSpanned<String>,
-       // },
-       // CouldNotResolvePath {
-       //     path: FileSpanned<String>,
-       // },
-       // CouldNotResolveStruct {
-       //     path: FileSpanned<String>,
-       // },
-       // StmtFollowingTerminatorExpr {
-       //     terminator: InFile<Span>,
-       //     following_expr: InFile<Span>,
-       // },
-       // TraitMethodGenericsAlreadyDeclaredInTraitDecl {
-       //     trait_name: String,
-       //     trait_generics: InFile<Spanned<Vec<String>>>,
-       //     method_generics: InFile<Spanned<Vec<String>>>,
-       //     duplicates: Vec<String>,
-       // },
-       // UninitializedFieldsInStructExpr {
-       //     struct_name: String,
-       //     missing_fields: FileSpanned<String>,
-       //     declaration_span: InFile<Span>,
-       // },
-       // UnnecessaryFieldsInitializedInStructExpr {
-       //     struct_name: String,
-       //     unnecessary_fields: FileSpanned<String>,
-       //     declaration_span: InFile<Span>,
-       // },
+    },
+    // CouldNotResolveFunction {
+    //     path: FileSpanned<String>,
+    // },
+    // CouldNotResolvePath {
+    //     path: FileSpanned<String>,
+    // },
+    // CouldNotResolveStruct {
+    //     path: FileSpanned<String>,
+    // },
+    // StmtFollowingTerminatorExpr {
+    //     terminator: InFile<Span>,
+    //     following_expr: InFile<Span>,
+    // },
+    // TraitMethodGenericsAlreadyDeclaredInTraitDecl {
+    //     trait_name: String,
+    //     trait_generics: InFile<Spanned<Vec<String>>>,
+    //     method_generics: InFile<Spanned<Vec<String>>>,
+    //     duplicates: Vec<String>,
+    // },
+    // UninitializedFieldsInStructExpr {
+    //     struct_name: String,
+    //     missing_fields: FileSpanned<String>,
+    //     declaration_span: InFile<Span>,
+    // },
+    // UnnecessaryFieldsInitializedInStructExpr {
+    //     struct_name: String,
+    //     unnecessary_fields: FileSpanned<String>,
+    //     declaration_span: InFile<Span>,
+    // },
 }
 
 impl ToDiagnostic for LowerError {
     fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
         match self {
-            Self::UnknownGenericInWherePredicate { generic, generic_params } => Diagnostic::error(generic.map_ref(|span| span.span.range.start().into()), DiagnosticCode::UnknownGenericInWherePredicate, "unknown generic used in where predicate".to_string(), vec![
-                generic.map_inner_ref(|generic| format!("unknown generic `{generic}` used in where predicate")),
-                generic_params.map_ref(|span| "generic parameters declared here".to_string().at(*span))
-            ])
+            Self::CouldNotResolveModDecl {
+                decl,
+                candidate_paths,
+            } => Diagnostic::error(
+                decl.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::CouldNotResolveModDecl,
+                "could not resolve module declaration".to_string(),
+                vec![decl.map_inner_ref(|name| {
+                    format!("could not resolve module declaration for `{name}`")
+                })],
+            )
+            .with_help(format!(
+                "create the module at one of the following paths: {}",
+                candidate_paths
+                    .iter()
+                    .map(|path| format!("`{path}`"))
+                    .join(", ")
+            )),
+            Self::UnknownGenericInWherePredicate {
+                generic,
+                generic_params,
+            } => Diagnostic::error(
+                generic.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnknownGenericInWherePredicate,
+                "unknown generic used in where predicate".to_string(),
+                vec![
+                    generic.map_inner_ref(|generic| {
+                        format!("unknown generic `{generic}` used in where predicate")
+                    }),
+                    generic_params
+                        .map_ref(|span| "generic parameters declared here".to_string().at(*span)),
+                ],
+            ),
             // Self::CouldNotResolveFunction { path } => Diagnostic::error(
             //     path.map_ref(|span| span.span.range.start().into()),
             //     DiagnosticCode::CouldNotResolveFunction,

@@ -33,11 +33,11 @@ impl ItemScope {
         lookup: (LocalModuleId, Spur),
         def: PerNs,
     ) {
-        if let Some(types) = def.types {
-            glob_imports.types.insert(lookup.clone());
+        if def.types.is_some() {
+            glob_imports.types.insert(lookup);
         }
-        if let Some(values) = def.values {
-            glob_imports.values.insert(lookup.clone());
+        if def.values.is_some() {
+            glob_imports.values.insert(lookup);
         }
     }
 }

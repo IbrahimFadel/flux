@@ -10,6 +10,13 @@ pub struct PerNs {
 }
 
 impl PerNs {
+    pub fn none() -> PerNs {
+        PerNs {
+            types: None,
+            values: None,
+        }
+    }
+
     pub fn values(t: ModuleDefId, v: Visibility) -> PerNs {
         PerNs {
             types: None,
@@ -36,6 +43,10 @@ impl PerNs {
             types: self.types.map(|(it, _)| (it, vis)),
             values: self.values.map(|(it, _)| (it, vis)),
         }
+    }
+
+    pub fn take_types_vis(self) -> Option<(ModuleDefId, Visibility)> {
+        self.types
     }
 }
 
