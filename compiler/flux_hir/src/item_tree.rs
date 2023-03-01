@@ -24,13 +24,13 @@ mod lower;
 #[derive(Debug, Default)]
 pub struct ItemTree {
     pub top_level: Vec<ModItem>,
-    applies: Arena<Apply>,
-    enums: Arena<Enum>,
-    functions: Arena<Function>,
-    mods: Arena<Mod>,
-    structs: Arena<Struct>,
-    traits: Arena<Trait>,
-    uses: Arena<Use>,
+    pub applies: Arena<Apply>,
+    pub enums: Arena<Enum>,
+    pub functions: Arena<Function>,
+    pub mods: Arena<Mod>,
+    pub structs: Arena<Struct>,
+    pub traits: Arena<Trait>,
+    pub uses: Arena<Use>,
 }
 
 impl ItemTree {
@@ -53,7 +53,7 @@ pub trait ItemTreeNode: Clone {
 }
 
 pub struct FileItemTreeId<N: ItemTreeNode> {
-    index: Idx<N>,
+    pub(crate) index: Idx<N>,
     _p: PhantomData<N>,
 }
 
@@ -66,6 +66,12 @@ impl From<FileItemTreeId<Function>> for ModuleDefId {
 impl From<FileItemTreeId<Use>> for ModuleDefId {
     fn from(value: FileItemTreeId<Use>) -> Self {
         ModuleDefId::UseId(value.index)
+    }
+}
+
+impl From<FileItemTreeId<Trait>> for ModuleDefId {
+    fn from(value: FileItemTreeId<Trait>) -> Self {
+        ModuleDefId::TraitId(value.index)
     }
 }
 

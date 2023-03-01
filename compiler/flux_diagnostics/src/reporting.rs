@@ -1,7 +1,13 @@
-use std::{collections::HashMap, fmt, ops::Deref, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug},
+    ops::Deref,
+    path::PathBuf,
+};
 
 use ariadne::Source;
 use flux_span::{FileId, InFile, Span};
+use itertools::Itertools;
 use lasso::ThreadedRodeo;
 
 use crate::Diagnostic;
@@ -52,6 +58,19 @@ pub struct FileCache {
     map: HashMap<FileId, Source>,
 }
 
+impl Debug for FileCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.map
+                .iter()
+                .map(|(file_id, _)| format!("{:?}", file_id))
+                .join(", ")
+        )
+    }
+}
+
 impl FileCache {
     pub fn new(interner: &'static ThreadedRodeo) -> Self {
         Self {
@@ -76,6 +95,12 @@ impl FileCache {
         let path = self.get_file_path(file_id);
         let buf = PathBuf::from(path);
         buf.parent().unwrap().to_str().unwrap().to_string()
+    }
+
+    pub fn get_by_file_path(&self, path: &str) -> (FileId, String) {
+        let file_id = FileId(self.interner.get_or_intern(path));
+        let source = &self.map[&file_id];
+        (file_id, source.chars().collect())
     }
 
     pub fn report_diagnostic(&self, diagnostic: &Diagnostic) {

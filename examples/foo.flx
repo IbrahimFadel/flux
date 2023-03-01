@@ -2,6 +2,19 @@ fn inside_foo(x X, y Y) -> i32 {
     0
 }
 
-pub some_pub_fn() {
+pub fn some_pub_fn() {
     
+}
+
+trait Foo<T, X> {
+    type X;
+
+    fn bar<X, Z>();
+}
+
+apply<A, B> Foo<A, B> to i32 {
+    type X = f32;
+
+    fn boo() -> u32 {
+    }
 }

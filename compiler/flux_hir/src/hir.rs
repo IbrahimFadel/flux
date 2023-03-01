@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, WithSpan};
 use flux_syntax::ast;
@@ -5,7 +7,10 @@ use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 
-use crate::type_interner::TypeIdx;
+use crate::{type_interner::TypeIdx, FunctionId};
+
+#[cfg(test)]
+mod pp;
 
 pub type Name = Spanned<Spur>;
 
@@ -16,7 +21,15 @@ pub enum Visibility {
 }
 
 #[derive(Debug, Clone)]
-pub struct Apply {}
+pub struct Apply {
+    pub visibility: Spanned<Visibility>,
+    pub generic_params: GenericParams,
+    pub trt: Option<Spanned<Path>>,
+    pub ty: Spanned<TypeIdx>,
+    pub assoc_types: Vec<(Name, Spanned<TypeIdx>)>,
+    pub methods: Vec<FunctionId>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Enum {}
 
@@ -25,9 +38,9 @@ pub struct Function {
     pub visibility: Spanned<Visibility>,
     pub name: Name,
     pub generic_params: GenericParams,
-    pub params: Spanned<Vec<Param>>,
+    pub params: Spanned<Params>,
     pub ret_ty: Spanned<TypeIdx>,
-    pub ast: ast::FnDecl,
+    pub ast: Option<ast::FnDecl>, // Trait methods will use this `Function` type but won't have the ast field
 }
 
 #[derive(Debug, Clone)]
@@ -40,13 +53,35 @@ pub struct Mod {
 pub struct Struct {}
 
 #[derive(Debug, Clone)]
-pub struct Trait {}
+pub struct Trait {
+    pub visibility: Spanned<Visibility>,
+    pub name: Name,
+    pub generic_params: GenericParams,
+    pub assoc_types: Vec<Name>,
+    pub methods: Vec<FunctionId>,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Use {
     pub visibility: Visibility,
     pub path: Spanned<Path>,
     pub alias: Option<Name>,
+}
+
+#[derive(Debug, Clone, Locatable)]
+pub struct Params(Vec<Param>);
+
+impl Params {
+    pub fn new(params: Vec<Param>) -> Self {
+        Self(params)
+    }
+}
+
+impl Deref for Params {
+    type Target = Vec<Param>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +163,24 @@ impl Path {
     }
 }
 
-pub type ExprIdx = Idx<Spanned<Expr>>;
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct ExprIdx(Idx<Spanned<Expr>>);
+
+impl ExprIdx {
+    pub fn new(idx: Idx<Spanned<Expr>>) -> Self {
+        Self(idx)
+    }
+
+    pub fn raw(&self) -> Idx<Spanned<Expr>> {
+        self.0
+    }
+}
+
+impl From<Idx<Spanned<Expr>>> for ExprIdx {
+    fn from(value: Idx<Spanned<Expr>>) -> Self {
+        ExprIdx(value)
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Type {

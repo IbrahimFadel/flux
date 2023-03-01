@@ -1,6 +1,7 @@
 use std::{fmt::Display, hash::Hash};
 
 use dashmap::{mapref::one::Ref, DashMap};
+use flux_diagnostics::ice;
 use lasso::ThreadedRodeo;
 
 use crate::hir::{Path, Type};
@@ -47,12 +48,16 @@ impl TypeInterner {
         }
     }
 
-    pub fn resolve(&self, key: TypeIdx) -> Ref<TypeIdx, Type> {
+    pub fn resolve(&self, key: TypeIdx) -> &'static Type {
         assert!((key.0 as usize) < self.ty_to_key.len());
         assert!((key.0 as usize) < self.key_to_ty.len());
-        self.key_to_ty
-            .get(&key)
-            .expect("internal compiler error: invalid type index")
+        unsafe {
+            let x = self
+                .key_to_ty
+                .get(&key)
+                .unwrap_or_else(|| ice("invalid type index"));
+            std::mem::transmute::<&Type, &'static Type>(&*x)
+        }
     }
 
     // pub fn intern(&self, ty: Type) -> TypeIdx {

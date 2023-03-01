@@ -42,7 +42,6 @@ impl DefMap {
             path,
             original_module_id
         );
-        println!("currentscope {:#?}", self[original_module_id].scope);
         let mut segments = path.segments.iter();
         let name = match segments.next() {
             Some(segment) => segment,

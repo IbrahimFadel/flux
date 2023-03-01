@@ -15,7 +15,7 @@ use name_res::LocalModuleId;
 pub use type_interner::TypeInterner;
 
 pub use body::lower_def_map_bodies;
-pub use name_res::build_def_map;
+pub use name_res::{build_def_map, mod_res::BasicFileResolver};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleDefId {

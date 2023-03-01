@@ -1,0 +1,46 @@
+---
+source: compiler/flux_hir/src/name_res/tests.rs
+expression: s
+---
+Module Id Map
+
+0 -> 1
+0 -> 2
+2 -> 3
+
+
+Item Tree
+
+File Id:  ./main.flx
+Module Id: 0
+
+fn main() -> i32 {
+0
+}
+
+File Id:  ./foo.flx
+Module Id: 1
+
+pub fn inside_foo() -> () {
+
+}
+
+fn also_inside_foo(x X, y i32) -> u32 {
+0
+}
+
+File Id:  ./bar.flx
+Module Id: 2
+
+fn inside_bar() -> () {
+
+}
+
+File Id:  ./bar/bazz.flx
+Module Id: 3
+
+fn inside_bazz() -> () {
+
+}
+
+

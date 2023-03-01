@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, ToDiagnostic};
-use flux_hir::TypeInterner;
+use flux_hir::{BasicFileResolver, TypeInterner};
 use lasso::ThreadedRodeo;
 use once_cell::sync::Lazy;
 use tracing::{info, warn};
@@ -56,9 +56,10 @@ impl Driver {
             &mut self.file_cache,
             &STRING_INTERNER,
             &TYPE_INTERNER,
+            &BasicFileResolver,
         );
         self.file_cache.report_diagnostics(&diagnostics);
-        let diagnostics =
+        let (exprs, diagnostics) =
             flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
         self.file_cache.report_diagnostics(&diagnostics);
     }

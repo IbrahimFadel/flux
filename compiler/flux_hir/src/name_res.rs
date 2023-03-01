@@ -13,10 +13,15 @@ use crate::{
     ModuleDefId, ModuleId, TypeInterner,
 };
 
-use self::{mod_res::ModDir, path_res::ReachedFixedPoint};
+use self::{
+    mod_res::{FileResolver, ModDir},
+    path_res::ReachedFixedPoint,
+};
 
-mod mod_res;
+pub(crate) mod mod_res;
 pub(crate) mod path_res;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug)]
 pub struct DefMap {
@@ -78,11 +83,12 @@ impl DefMap {
 }
 
 #[tracing::instrument(skip_all, name = "hir::build_def_map")]
-pub fn build_def_map(
+pub fn build_def_map<R: FileResolver>(
     entry_path: &str,
     file_cache: &mut FileCache,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
+    resolver: &R,
 ) -> (DefMap, Vec<Diagnostic>) {
     tracing::info!("building definition map for project");
     let root = ModuleData::new();
@@ -94,7 +100,13 @@ pub fn build_def_map(
         diagnostics: vec![],
         string_interner,
     };
-    collector.seed_with_entry(entry_path, file_cache, string_interner, type_interner);
+    collector.seed_with_entry(
+        entry_path,
+        file_cache,
+        string_interner,
+        type_interner,
+        resolver,
+    );
     collector.resolution_loop();
     (collector.def_map, collector.diagnostics)
 }
@@ -233,20 +245,17 @@ impl DefCollector {
         }
     }
 
-    pub fn seed_with_entry(
+    pub fn seed_with_entry<R: FileResolver>(
         &mut self,
         entry_path: &str,
         file_cache: &mut FileCache,
         string_interner: &'static ThreadedRodeo,
         type_interner: &'static TypeInterner,
+        resolver: &R,
     ) {
-        let (file_id, content) = match std::fs::read_to_string(entry_path) {
-            Ok(result) => {
-                let file_id = file_cache.add_file(entry_path, &result);
-                (file_id, result)
-            }
-            Err(_) => todo!(),
-        };
+        let (file_id, content) = resolver
+            .resolve_absolute_path(entry_path, file_cache)
+            .unwrap();
         let (item_tree, diagnostics) =
             self.build_item_tree(file_id, &content, string_interner, type_interner);
         self.diagnostics = diagnostics;
@@ -263,7 +272,8 @@ impl DefCollector {
             string_interner,
             diagnostics: vec![],
         };
-        let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, type_interner);
+        let mut diagnostics =
+            mod_collector.collect(item_tree.items(), file_cache, type_interner, resolver);
         self.def_map.item_trees.insert(module_id, item_tree);
         self.diagnostics.append(&mut diagnostics)
     }
@@ -293,11 +303,12 @@ struct ModCollector<'a> {
 }
 
 impl<'a> ModCollector<'a> {
-    fn collect(
+    fn collect<R: FileResolver>(
         mut self,
         items: &[ModItem],
         file_cache: &mut FileCache,
         type_interner: &'static TypeInterner,
+        resolver: &R,
     ) -> Vec<Diagnostic> {
         tracing::debug!(
             file_id = file_cache.get_file_path(&self.file_id),
@@ -315,7 +326,7 @@ impl<'a> ModCollector<'a> {
                 );
             };
             match item {
-                crate::item_tree::ModItem::Apply(_) => todo!(),
+                crate::item_tree::ModItem::Apply(_) => {}
                 crate::item_tree::ModItem::Enum(_) => todo!(),
                 crate::item_tree::ModItem::Function(id) => {
                     let f = &self.item_tree[id];
@@ -327,10 +338,13 @@ impl<'a> ModCollector<'a> {
                     );
                 }
                 crate::item_tree::ModItem::Mod(id) => {
-                    self.collect_module(id, file_cache, type_interner);
+                    self.collect_module(id, file_cache, type_interner, resolver);
                 }
                 crate::item_tree::ModItem::Struct(_) => todo!(),
-                crate::item_tree::ModItem::Trait(_) => todo!(),
+                crate::item_tree::ModItem::Trait(id) => {
+                    let t = &self.item_tree[id];
+                    update_def(self.def_collector, id.into(), t.name.inner, *t.visibility);
+                }
                 crate::item_tree::ModItem::Use(id) => {
                     self.def_collector.unresolved_imports.push(Import {
                         module_id: self.module_id,
@@ -343,11 +357,12 @@ impl<'a> ModCollector<'a> {
         self.diagnostics
     }
 
-    fn collect_module(
+    fn collect_module<R: FileResolver>(
         &mut self,
         module_id: FileItemTreeId<Mod>,
         file_cache: &mut FileCache,
         type_interner: &'static TypeInterner,
+        resolver: &R,
     ) {
         let module = &self.item_tree[module_id];
         let module_id = self.push_child_module(module.name.inner, module.visibility);
@@ -358,6 +373,7 @@ impl<'a> ModCollector<'a> {
                 .map_ref(|name| self.string_interner.resolve(name))
                 .in_file(self.file_id),
             file_cache,
+            resolver,
         ) {
             Ok((file_id, content, mod_dir)) => (file_id, content, mod_dir),
             Err(err) => {
@@ -384,7 +400,8 @@ impl<'a> ModCollector<'a> {
             string_interner: self.string_interner,
             diagnostics: vec![],
         };
-        let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, type_interner);
+        let mut diagnostics =
+            mod_collector.collect(item_tree.items(), file_cache, type_interner, resolver);
         self.def_collector
             .def_map
             .item_trees

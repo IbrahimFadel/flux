@@ -2,12 +2,13 @@ use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode};
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TEnv, TypeId, TypeKind};
-use la_arena::{Arena, RawIdx};
+use hashbrown::HashMap;
+use la_arena::{Arena, Idx, RawIdx};
 use lasso::ThreadedRodeo;
 
 use crate::{
     diagnostics::LowerError,
-    hir::{Block, Call, Expr, ExprIdx, Function, Let, Name, Path, Type, Visibility},
+    hir::{Apply, Block, Call, Expr, ExprIdx, Function, Let, Name, Path, Type, Visibility},
     item_tree::ItemTree,
     lower_node,
     name_res::{
@@ -15,10 +16,15 @@ use crate::{
         DefMap, LocalModuleId,
     },
     type_interner::TypeIdx,
-    TypeInterner,
+    FunctionId, ModuleDefId, ModuleId, TypeInterner,
 };
 
 type ExprResult = (ExprIdx, TypeId);
+
+pub struct LoweredBodies {
+    pub exprs: Arena<Spanned<Expr>>,
+    pub indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
+}
 
 pub(crate) struct LowerCtx<'a> {
     def_map: Option<&'a DefMap>,
@@ -28,6 +34,7 @@ pub(crate) struct LowerCtx<'a> {
     string_interner: &'static ThreadedRodeo,
     exprs: Arena<Spanned<Expr>>,
     diagnostics: Vec<Diagnostic>,
+    indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
 }
 
 impl<'a> LowerCtx<'a> {
@@ -43,7 +50,18 @@ impl<'a> LowerCtx<'a> {
             string_interner,
             exprs: Arena::new(),
             diagnostics: Vec::new(),
+            indices: HashMap::new(),
         }
+    }
+
+    pub fn finish(self) -> (LoweredBodies, Vec<Diagnostic>) {
+        (
+            LoweredBodies {
+                exprs: self.exprs,
+                indices: self.indices,
+            },
+            self.diagnostics,
+        )
     }
 
     pub fn with_def_map(
@@ -59,35 +77,129 @@ impl<'a> LowerCtx<'a> {
             string_interner,
             exprs: Arena::new(),
             diagnostics: Vec::new(),
+            indices: HashMap::new(),
         }
     }
 
     pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: LocalModuleId) {
         self.cur_module_id = module_id;
-        for mod_item in &item_tree.top_level {
-            match mod_item {
-                crate::item_tree::ModItem::Apply(_) => todo!(),
-                crate::item_tree::ModItem::Enum(_) => todo!(),
-                crate::item_tree::ModItem::Function(f) => {
-                    let f = &item_tree[*f];
-                    let (body_idx, body_tid) = self.lower_expr(f.ast.body());
-                    let ret_tid = self.insert_type_to_tenv(&f.ret_ty, self.file_id());
-                    self.tchk
-                        .unify(
-                            body_tid,
-                            ret_tid,
-                            self.exprs[body_idx].span.in_file(self.file_id()),
-                        )
-                        .unwrap_or_else(|err| {
-                            self.diagnostics.push(err);
-                        });
+        for (_, a) in item_tree.applies.iter() {
+            self.handle_apply(a, item_tree);
+        }
+        for (idx, f) in item_tree.functions.iter() {
+            let body_idx = self.handle_function(&f, item_tree);
+            self.indices
+                .insert((module_id, ModuleDefId::FunctionId(idx)), body_idx);
+        }
+        // for mod_item in &item_tree.top_level {
+        //     match mod_item {
+        //         crate::item_tree::ModItem::Apply(a) => self.handle_apply(&a.index, item_tree),
+        //         crate::item_tree::ModItem::Enum(_) => todo!(),
+        //         crate::item_tree::ModItem::Function(f) => {}
+        //         crate::item_tree::ModItem::Mod(_) => {}
+        //         crate::item_tree::ModItem::Struct(_) => todo!(),
+        //         crate::item_tree::ModItem::Trait(_) => {}
+        //         crate::item_tree::ModItem::Use(_) => {}
+        //     }
+        // }
+    }
+
+    fn handle_apply(&mut self, a: &Apply, item_tree: &ItemTree) {
+        self.handle_apply_trait(a);
+        for f in &a.methods {
+            let f = &item_tree[*f];
+            self.handle_function(f, item_tree);
+        }
+    }
+
+    fn handle_apply_trait(&mut self, a: &Apply) {
+        if let Some(trt_path) = &a.trt {
+            let trt = self
+                .def_map
+                .unwrap()
+                .resolve_path(trt_path, self.cur_module_id);
+            match trt.resolved_def.types {
+                Some((def_id, m, vis)) => {
+                    let item_tree = &self.def_map.unwrap().item_trees[m];
+                    let file_id = self.def_map.unwrap().modules[m].file_id;
+                    let trt = match def_id {
+                        ModuleDefId::TraitId(trt_idx) => {
+                            let trt = &item_tree[trt_idx];
+                            if self.cur_module_id != m && vis == Visibility::Private {
+                                self.diagnostics.push(
+                                    LowerError::TriedApplyingPrivateTrait {
+                                        trt: self
+                                            .string_interner
+                                            .resolve(&trt.name.inner)
+                                            .to_string(),
+                                        declared_as_private: trt.visibility.span.in_file(file_id),
+                                        application: trt_path.span.in_file(self.file_id()),
+                                    }
+                                    .to_diagnostic(),
+                                );
+                            }
+                            trt
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    self.check_trait_methods_with_apply_methods(&trt.methods, &a.methods);
                 }
-                crate::item_tree::ModItem::Mod(_) => {}
-                crate::item_tree::ModItem::Struct(_) => todo!(),
-                crate::item_tree::ModItem::Trait(_) => todo!(),
-                crate::item_tree::ModItem::Use(_) => {}
+                None => self.diagnostics.push(
+                    LowerError::UnresolvedTrait {
+                        trt: trt_path
+                            .map_ref(|trt_path| {
+                                trt_path.to_string(self.string_interner).to_string()
+                            })
+                            .in_file(self.file_id()),
+                    }
+                    .to_diagnostic(),
+                ),
             }
         }
+    }
+
+    fn check_trait_methods_with_apply_methods(
+        &mut self,
+        trait_methods: &[FunctionId],
+        apply_methods: &[FunctionId],
+    ) {
+        let mut unimplemented_methods = vec![];
+        for method in trait_methods {
+            if !apply_methods.contains(&method) {
+                unimplemented_methods.push(method);
+            }
+        }
+        let mut methods_that_dont_belond = vec![];
+        for method in apply_methods {
+            if !trait_methods.contains(&method) {
+                methods_that_dont_belond.push(method);
+            } else {
+                // method belongs
+            }
+        }
+    }
+
+    fn handle_function(&mut self, f: &Function, item_tree: &ItemTree) -> ExprIdx {
+        let (body_idx, body_tid) = self.lower_expr(
+            f.ast
+                .as_ref()
+                .unwrap_or_else(|| {
+                    ice("function ast should only be `None` for trait method declarations")
+                })
+                .body(),
+        );
+        let ret_tid = self.insert_type_to_tenv(&f.ret_ty, self.file_id());
+        self.tchk
+            .unify(
+                body_tid,
+                ret_tid,
+                self.exprs[body_idx.raw()].span.in_file(self.file_id()),
+            )
+            .unwrap_or_else(|err| {
+                self.diagnostics.push(err);
+            });
+        body_idx
     }
 
     fn file_id(&self) -> FileId {
@@ -95,7 +207,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn insert_type_to_tenv(&mut self, idx: &Spanned<TypeIdx>, file_id: FileId) -> TypeId {
-        let ty = match self.type_interner.resolve(idx.inner).value() {
+        let ty = match self.type_interner.resolve(idx.inner) {
             // Type::Array(ty, n) => {
             //     let ty = self.hir_ty_to_ts_ty(ty, where_clause, file_id);
             //     TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
@@ -105,7 +217,7 @@ impl<'a> LowerCtx<'a> {
                 TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
             }
             Type::Ptr(ty) => {
-                TypeKind::Concrete(ConcreteKind::Ptr(self.insert_type_to_tenv(ty, file_id)))
+                TypeKind::Concrete(ConcreteKind::Ptr(self.insert_type_to_tenv(&ty, file_id)))
             }
             Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
                 types
@@ -186,7 +298,7 @@ impl<'a> LowerCtx<'a> {
                 None => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
             }
         };
-        (idx, tid, resolved_path)
+        (idx.into(), tid, resolved_path)
     }
 
     fn lower_float_expr(&mut self, float: &ast::FloatExpr) -> ExprResult {
@@ -197,14 +309,14 @@ impl<'a> LowerCtx<'a> {
                 .string_interner
                 .resolve(&v.text_key())
                 .at(v.text_range().to_span()),
-            None => return (self.exprs.alloc(Expr::Poisoned.at(span)), float_ty),
+            None => return (self.exprs.alloc(Expr::Poisoned.at(span)).into(), float_ty),
         };
         let value: Spanned<f64> = value_str.map(|v| match v.parse() {
             Ok(v) => v,
             Err(_) => todo!(),
         });
         (
-            self.exprs.alloc(Expr::Float(value.inner).at(span)),
+            self.exprs.alloc(Expr::Float(value.inner).at(span)).into(),
             float_ty,
         )
     }
@@ -217,13 +329,16 @@ impl<'a> LowerCtx<'a> {
                 .string_interner
                 .resolve(&v.text_key())
                 .at(v.text_range().to_span()),
-            None => return (self.exprs.alloc(Expr::Poisoned.at(span)), int_ty),
+            None => return (self.exprs.alloc(Expr::Poisoned.at(span)).into(), int_ty),
         };
         let value: Spanned<u64> = value_str.map(|v| match v.parse() {
             Ok(v) => v,
             Err(_) => todo!(),
         });
-        (self.exprs.alloc(Expr::Int(value.inner).at(span)), int_ty)
+        (
+            self.exprs.alloc(Expr::Int(value.inner).at(span)).into(),
+            int_ty,
+        )
     }
 
     fn lower_call_expr(&mut self, call: &ast::CallExpr) -> ExprResult {
@@ -242,8 +357,8 @@ impl<'a> LowerCtx<'a> {
         );
 
         let function = if resolved_path.reached_fixedpoint == ReachedFixedPoint::No {
-            let function_span = self.exprs[path].span;
-            let path_string = match &self.exprs[path].inner {
+            let function_span = self.exprs[path.raw()].span;
+            let path_string = match &self.exprs[path.raw()].inner {
                 Expr::Path(path) => path.to_string(self.string_interner),
                 _ => unreachable!(),
             };
@@ -272,7 +387,7 @@ impl<'a> LowerCtx<'a> {
                                             .resolve(&f.name.inner)
                                             .to_string(),
                                         declared_as_private: f.visibility.span.in_file(file_id),
-                                        call: self.exprs[path].span.in_file(self.file_id()),
+                                        call: self.exprs[path.raw()].span.in_file(self.file_id()),
                                     }
                                     .to_diagnostic(),
                                 );
@@ -283,8 +398,8 @@ impl<'a> LowerCtx<'a> {
                     }
                 })
                 .unwrap_or_else(|| {
-                    let function_span = self.exprs[path].span;
-                    let path_string = match &self.exprs[path].inner {
+                    let function_span = self.exprs[path.raw()].span;
+                    let path_string = match &self.exprs[path.raw()].inner {
                         Expr::Path(path) => path.to_string(self.string_interner),
                         _ => unreachable!(),
                     };
@@ -310,7 +425,7 @@ impl<'a> LowerCtx<'a> {
         .at(call.range().to_span());
         let idx = self.exprs.alloc(call);
 
-        (idx, ret_tid)
+        (idx.into(), ret_tid)
     }
 
     fn check_call_args_with_function_decl(
@@ -326,14 +441,14 @@ impl<'a> LowerCtx<'a> {
                     .unify(
                         *tid,
                         param_tid,
-                        self.exprs[*idx].span.in_file(self.file_id()),
+                        self.exprs[(*idx).raw()].span.in_file(self.file_id()),
                     )
                     .unwrap_or_else(|err| {
                         self.diagnostics.push(err);
                     });
             });
         let args_len = args.len();
-        let params_len = function.params.len();
+        let params_len = function.params.inner.len();
         if args_len != params_len {
             self.diagnostics.push(
                 LowerError::IncorrectNumArgsInCall {
@@ -380,7 +495,7 @@ impl<'a> LowerCtx<'a> {
         }
         let block = Expr::Block(Block { exprs }).at(span);
         let idx = self.exprs.alloc(block);
-        (idx, block_tid)
+        (idx.into(), block_tid)
     }
 
     fn lower_let_expr(&mut self, let_expr: &ast::LetStmt) -> ExprResult {
@@ -395,14 +510,14 @@ impl<'a> LowerCtx<'a> {
             .unify(
                 declared_tid,
                 val_tid,
-                self.exprs[val].span.in_file(self.file_id()),
+                self.exprs[val.raw()].span.in_file(self.file_id()),
             )
             .unwrap_or_else(|err| {
                 self.diagnostics.push(err);
             });
         let l = Expr::Let(Let { name, ty, val }).at(let_expr.range().to_span());
         let idx = self.exprs.alloc(l);
-        (idx, declared_tid)
+        (idx.into(), declared_tid)
     }
 
     pub(crate) fn lower_path(&self, path: Option<ast::Path>) -> Spanned<Path> {
@@ -465,11 +580,11 @@ pub fn lower_def_map_bodies(
     def_map: &DefMap,
     string_interner: &'static ThreadedRodeo,
     type_interner: &'static TypeInterner,
-) -> Vec<Diagnostic> {
+) -> (LoweredBodies, Vec<Diagnostic>) {
     tracing::info!("lowering definition map bodies");
     let mut ctx = LowerCtx::with_def_map(def_map, string_interner, type_interner);
     for (module_id, item_tree) in def_map.item_trees.iter() {
         ctx.handle_item_tree(item_tree, module_id);
     }
-    ctx.diagnostics
+    ctx.finish()
 }

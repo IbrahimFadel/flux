@@ -33,7 +33,6 @@ impl ItemScope {
         lookup: (LocalModuleId, Spur),
         def: PerNs,
     ) {
-        println!("pushing: {:#?} {:#?}", lookup, def);
         if let Some(value) = def.values {
             self.values.insert(lookup.1, value);
             glob_imports.values.insert(lookup);

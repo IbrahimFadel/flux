@@ -152,7 +152,7 @@ getters! {
         name -> node(Name);
         generic_param_list -> node(GenericParamList);
         param_list -> node(ParamList);
-        return_ty -> node(Type);
+        return_ty -> node(FnReturnType);
         where_clause -> node(WhereClause);
     }
     EnumDecl {
@@ -166,6 +166,7 @@ getters! {
         ty -> node(Type);
     }
     ApplyDecl {
+        visibility -> node(Visibility);
         apply_kw -> tok(Apply);
         generic_param_list -> node(GenericParamList);
         trt -> node(ApplyDeclTrait);

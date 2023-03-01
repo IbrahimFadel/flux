@@ -17,6 +17,11 @@ pub(crate) enum LowerError {
         terminator: InFile<Span>,
         following_expr: InFile<Span>,
     },
+    TriedApplyingPrivateTrait {
+        trt: String,
+        declared_as_private: InFile<Span>,
+        application: InFile<Span>,
+    },
     TriedCallingPrivateFunction {
         function: String,
         declared_as_private: InFile<Span>,
@@ -33,6 +38,9 @@ pub(crate) enum LowerError {
     },
     UnresolvedImport {
         import: FileSpanned<String>,
+    },
+    UnresolvedTrait {
+        trt: FileSpanned<String>,
     },
 }
 
@@ -90,6 +98,22 @@ impl ToDiagnostic for LowerError {
                     ),
                 ],
             ),
+            Self::TriedApplyingPrivateTrait {
+                trt,
+                declared_as_private,
+                application,
+            } => Diagnostic::error(
+                application.map_ref(|span| span.range.start().into()),
+                DiagnosticCode::TriedApplyingPrivateTrait,
+                "trait is private and can't be applied here".to_string(),
+                vec![
+                    format!("trait `{trt}` is private")
+                        .file_span(application.file_id, application.inner),
+                    "declared here as private"
+                        .to_string()
+                        .file_span(declared_as_private.file_id, declared_as_private.inner),
+                ],
+            ),
             Self::TriedCallingPrivateFunction {
                 function,
                 declared_as_private,
@@ -131,6 +155,12 @@ impl ToDiagnostic for LowerError {
                 DiagnosticCode::UnresolvedImport,
                 "unresolved import".to_string(),
                 vec![import.map_inner_ref(|path| format!("unresolved import `{path}`"))],
+            ),
+            Self::UnresolvedTrait { trt } => Diagnostic::error(
+                trt.map_ref(|span| span.span.range.start().into()),
+                DiagnosticCode::UnresolvedTrait,
+                "unresolved import".to_string(),
+                vec![trt.map_inner_ref(|path| format!("unresolved trt `{path}`"))],
             ),
         }
     }

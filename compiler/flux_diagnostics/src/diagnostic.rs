@@ -134,6 +134,8 @@ pub enum DiagnosticCode {
     TriedCallingPrivateFunction,
     UnresolvedImport,
     UnresolvedFunction,
+    UnresolvedTrait,
+    TriedApplyingPrivateTrait,
 
     TypeMismatch,
     ConflictingTraitImplementations,
