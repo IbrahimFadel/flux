@@ -1,32 +1,44 @@
+use flux_span::{Span, Spanned};
+
 use crate::hir::Path;
 
 use super::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReachedFixedPoint {
-    Yes,
-    No,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ResolvePathError {
+    EmptyPath { path_span: Span },
+    UnresolvedModule { path: Spanned<Path>, segment: usize },
+    PrivateModule { path: Spanned<Path>, segment: usize },
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct ResolvePathResult {
-    pub(crate) resolved_def: PerNs,
-    pub(crate) reached_fixedpoint: ReachedFixedPoint,
-}
-
-impl ResolvePathResult {
-    fn empty(reached_fixedpoint: ReachedFixedPoint) -> ResolvePathResult {
-        ResolvePathResult::with(PerNs::none(), reached_fixedpoint)
-    }
-
-    fn with(
-        resolved_def: PerNs,
-        reached_fixedpoint: ReachedFixedPoint,
-        // module_id: ModuleId,
-    ) -> ResolvePathResult {
-        ResolvePathResult {
-            resolved_def,
-            reached_fixedpoint,
+impl ResolvePathError {
+    pub fn to_lower_error(
+        &self,
+        file_id: FileId,
+        string_interner: &'static ThreadedRodeo,
+    ) -> LowerError {
+        match self {
+            Self::EmptyPath { path_span } => LowerError::CouldNotResolveEmptyPath {
+                path_span: path_span.in_file(file_id),
+            },
+            Self::PrivateModule { path, segment } => LowerError::CannotAccessPrivatePathSegment {
+                path: path
+                    .map_ref(|path| path.to_string(string_interner))
+                    .in_file(file_id),
+                erroneous_segment: Path::spanned_segment(path, *segment, string_interner)
+                    .unwrap()
+                    .map(|spur| string_interner.resolve(&spur).to_string())
+                    .in_file(file_id),
+            },
+            Self::UnresolvedModule { path, segment } => LowerError::CouldNotResolveUsePath {
+                path: path
+                    .map_ref(|path| path.to_string(string_interner))
+                    .in_file(file_id),
+                erroneous_segment: Path::spanned_segment(path, *segment, string_interner)
+                    .unwrap()
+                    .map(|spur| string_interner.resolve(&spur).to_string())
+                    .in_file(file_id),
+            },
         }
     }
 }
@@ -34,37 +46,61 @@ impl ResolvePathResult {
 impl DefMap {
     pub(crate) fn resolve_path(
         &self,
-        path: &Path,
+        path: &Spanned<Path>,
         original_module_id: LocalModuleId,
-    ) -> ResolvePathResult {
-        tracing::debug!(
-            "resolving path {:?} in module {:?}",
+    ) -> Result<PerNs, ResolvePathError> {
+        tracing::trace!(
+            "resolving path {:?} in module {}",
             path,
-            original_module_id
+            original_module_id.into_raw()
         );
-        let mut segments = path.segments.iter();
+        let mut segments = path.segments.iter().enumerate();
         let name = match segments.next() {
-            Some(segment) => segment,
-            None => return ResolvePathResult::empty(ReachedFixedPoint::Yes),
+            Some((_, segment)) => segment,
+            None => {
+                return Err(ResolvePathError::EmptyPath {
+                    path_span: path.span,
+                })
+            }
         };
         let mut curr_per_ns = self[original_module_id].scope.get(name);
+        if curr_per_ns.types.is_none() && curr_per_ns.values.is_none() {
+            return Err(ResolvePathError::UnresolvedModule {
+                path: path.clone(),
+                segment: 0,
+            });
+        }
 
-        for segment in segments {
+        for (i, segment) in segments {
             let (curr, m, vis) = match curr_per_ns.take_types_vis() {
-                Some(r) => r,
-                None => return ResolvePathResult::empty(ReachedFixedPoint::No),
+                Some((curr, m, vis)) => (curr, m, vis),
+                None => {
+                    return Err(ResolvePathError::UnresolvedModule {
+                        path: path.clone(),
+                        segment: i,
+                    })
+                }
             };
 
             curr_per_ns = match curr {
                 ModuleDefId::ModuleId(m) => self[m].scope.get(segment),
                 s => {
-                    return ResolvePathResult::with(
-                        PerNs::types(s, m, vis),
-                        ReachedFixedPoint::Yes,
-                    );
+                    return Ok(PerNs::types(s, m, vis));
                 }
+            };
+            if curr_per_ns.types.is_none() && curr_per_ns.values.is_none() {
+                return Err(ResolvePathError::UnresolvedModule {
+                    path: path.clone(),
+                    segment: i,
+                });
+            } else if vis == Visibility::Private {
+                return Err(ResolvePathError::PrivateModule {
+                    path: path.clone(),
+                    segment: i,
+                });
             }
         }
-        ResolvePathResult::with(curr_per_ns, ReachedFixedPoint::Yes)
+
+        Ok(curr_per_ns)
     }
 }

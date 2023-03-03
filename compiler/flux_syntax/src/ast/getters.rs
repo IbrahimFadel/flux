@@ -144,6 +144,8 @@ getters! {
         where_clause -> node(WhereClause);
         associated_types -> nodes(TraitAssocTypeDecl);
         method_decls -> nodes(TraitMethodDecl);
+        lbrace -> tok(LBrace);
+        rbrace -> tok(RBrace);
     }
     TraitAssocTypeDecl {
         name -> node(Name);
@@ -175,6 +177,8 @@ getters! {
         where_clause -> node(WhereClause);
         associated_types -> nodes(ApplyDeclAssocType);
         methods -> nodes(FnDecl);
+        lbrace -> tok(LBrace);
+        rbrace -> tok(RBrace);
     }
     ApplyDeclTrait {
         path -> node(Path);

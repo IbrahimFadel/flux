@@ -1,4 +1,4 @@
-use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
+use flux_diagnostics::{ice, reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_span::FileId;
 use hashbrown::HashMap;
 use la_arena::{Arena, ArenaMap, Idx};
@@ -15,7 +15,7 @@ use crate::{
 
 use self::{
     mod_res::{FileResolver, ModDir},
-    path_res::ReachedFixedPoint,
+    path_res::ResolvePathError,
 };
 
 pub(crate) mod mod_res;
@@ -107,7 +107,7 @@ pub fn build_def_map<R: FileResolver>(
         type_interner,
         resolver,
     );
-    collector.resolution_loop();
+    collector.resolve_imports();
     (collector.def_map, collector.diagnostics)
 }
 
@@ -119,12 +119,10 @@ struct Import {
     status: PartialResolvedImport,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum PartialResolvedImport {
     /// None of any namespaces is resolved
-    Unresolved,
-    /// One of namespaces is resolved
-    Indeterminate(PerNs),
+    Unresolved(ResolvePathError),
     /// All namespaces are resolved, OR it comes from other crate
     Resolved(PerNs),
 }
@@ -132,8 +130,8 @@ enum PartialResolvedImport {
 impl PartialResolvedImport {
     fn namespaces(self) -> PerNs {
         match self {
-            PartialResolvedImport::Unresolved => PerNs::none(),
-            PartialResolvedImport::Indeterminate(ns) | PartialResolvedImport::Resolved(ns) => ns,
+            PartialResolvedImport::Unresolved(_) => PerNs::none(),
+            PartialResolvedImport::Resolved(ns) => ns,
         }
     }
 }
@@ -164,63 +162,46 @@ impl DefCollector {
         }
     }
 
-    fn resolution_loop(&mut self) {
-        loop {
-            if self.resolve_imports() == ReachedFixedPoint::Yes {
-                break;
-            }
-        }
-    }
-
-    fn resolve_imports(&mut self) -> ReachedFixedPoint {
-        let mut res = ReachedFixedPoint::Yes;
+    fn resolve_imports(&mut self) {
         let imports = std::mem::take(&mut self.unresolved_imports);
 
         self.unresolved_imports = imports
             .into_iter()
             .filter_map(|mut import| {
-                let u = &self.def_map.item_trees.get(import.module_id).unwrap()[import.use_decl];
                 import.status = self.resolve_import(import.module_id, &import);
-                match import.status {
-                    PartialResolvedImport::Indeterminate(_) => {
-                        let file_id = self.def_map[import.module_id].file_id;
+                match &import.status {
+                    PartialResolvedImport::Resolved(_) => {
+                        self.record_resolved_import(&import);
+                        None
+                    }
+                    PartialResolvedImport::Unresolved(err) => {
                         self.diagnostics.push(
-                            LowerError::UnresolvedImport {
-                                import: u
-                                    .path
-                                    .map_ref(|path| path.to_string(self.string_interner))
-                                    .in_file(file_id),
-                            }
+                            err.to_lower_error(
+                                self.def_map.modules[import.module_id].file_id,
+                                self.string_interner,
+                            )
                             .to_diagnostic(),
                         );
-                        res = ReachedFixedPoint::No;
-                        None
+                        Some(import)
                     }
-                    PartialResolvedImport::Resolved(per_ns) => {
-                        self.record_resolved_import(&import);
-                        res = ReachedFixedPoint::No;
-                        None
-                    }
-                    PartialResolvedImport::Unresolved => Some(import),
                 }
             })
             .collect();
-        res
     }
 
     fn resolve_import(&self, module_id: LocalModuleId, import: &Import) -> PartialResolvedImport {
         let u = &self.def_map.item_trees.get(module_id).unwrap()[import.use_decl];
         let res = self.def_map.resolve_path(&u.path, module_id);
 
-        let def = res.resolved_def;
-        if res.reached_fixedpoint == ReachedFixedPoint::No {
-            return PartialResolvedImport::Unresolved;
-        }
-
-        if def.take_types().is_some() || def.take_values().is_some() {
-            PartialResolvedImport::Resolved(def)
-        } else {
-            PartialResolvedImport::Indeterminate(def)
+        match res {
+            Err(err) => PartialResolvedImport::Unresolved(err),
+            Ok(def) => {
+                if def.take_types().is_some() || def.take_values().is_some() {
+                    PartialResolvedImport::Resolved(def)
+                } else {
+                    ice("path resolution result cannot be `Ok` with no items in the `PerNs`")
+                }
+            }
         }
     }
 
@@ -239,7 +220,7 @@ impl DefCollector {
         if let Some(name) = name {
             self.update(
                 import.module_id,
-                &[(name, import.status.namespaces())],
+                &[(name, import.status.clone().namespaces())],
                 None,
             );
         }
@@ -349,7 +330,12 @@ impl<'a> ModCollector<'a> {
                     self.def_collector.unresolved_imports.push(Import {
                         module_id: self.module_id,
                         use_decl: id,
-                        status: PartialResolvedImport::Unresolved,
+                        status: PartialResolvedImport::Unresolved(
+                            ResolvePathError::UnresolvedModule {
+                                path: self.item_tree[id].path.clone(),
+                                segment: 0,
+                            },
+                        ),
                     });
                 }
             }

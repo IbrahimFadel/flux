@@ -149,6 +149,7 @@ dependencies = [
  "flux_diagnostics",
  "flux_hir",
  "flux_parser",
+ "flux_proc_macros",
  "flux_span",
  "flux_typesystem",
  "itertools",
@@ -219,8 +220,11 @@ dependencies = [
 name = "flux_proc_macros"
 version = "0.1.0"
 dependencies = [
+ "flux_diagnostics",
+ "proc-macro2",
  "quote",
  "syn",
+ "text-size",
 ]
 
 [[package]]
@@ -524,9 +528,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.46"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e2ef8dbfc347b10c094890f778ee2e36ca9bb4262e86dc99cd217e35f3470b"
+checksum = "5d727cae5b39d21da60fa540906919ad737832fe0b1c165da3a34d6548c849d6"
 dependencies = [
  "unicode-ident",
 ]

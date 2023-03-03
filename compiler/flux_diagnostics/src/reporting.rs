@@ -64,8 +64,8 @@ impl Debug for FileCache {
             f,
             "{}",
             self.map
-                .iter()
-                .map(|(file_id, _)| format!("{:?}", file_id))
+                .keys()
+                .map(|file_id| format!("{file_id:?}"))
                 .join(", ")
         )
     }

@@ -277,6 +277,12 @@ impl<T> InFile<Spanned<T>> {
     }
 }
 
+impl InFile<Span> {
+    pub fn to_file_spanned<T>(&self, inner: T) -> FileSpanned<T> {
+        FileSpanned::new(Spanned::new(inner, self.inner), self.file_id)
+    }
+}
+
 pub trait WithSpan: Sized {
     fn at(self, span: Span) -> Spanned<Self> {
         Spanned::new(self, span)

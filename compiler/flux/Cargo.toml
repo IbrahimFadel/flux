@@ -17,3 +17,6 @@ flux_parser = { path = "../flux_parser" }
 flux_hir = { path = "../flux_hir" }
 flux_typesystem = { path = "../flux_typesystem" }
 flux_span = { path = "../flux_span" }
+
+[dev-dependencies]
+flux_proc_macros = { path = "../flux_proc_macros" }

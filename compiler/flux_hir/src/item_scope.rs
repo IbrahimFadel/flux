@@ -1,4 +1,4 @@
-use hashbrown::{hash_map::Entry, HashMap};
+use hashbrown::HashMap;
 use lasso::Spur;
 
 use crate::{

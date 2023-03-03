@@ -165,7 +165,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::FatArrow => SyntaxKind::FatArrow,
             TokenKind::LParen => SyntaxKind::LParen,
             TokenKind::RParen => SyntaxKind::RParen,
-            TokenKind::LBrace => SyntaxKind::RBrace,
+            TokenKind::LBrace => SyntaxKind::LBrace,
             TokenKind::RBrace => SyntaxKind::RBrace,
             TokenKind::Eq => SyntaxKind::Eq,
             TokenKind::SemiColon => SyntaxKind::SemiColon,

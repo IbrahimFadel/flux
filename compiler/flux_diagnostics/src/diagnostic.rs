@@ -85,6 +85,11 @@ impl Diagnostic {
         self
     }
 
+    pub fn opt_with_help(mut self, help: Option<String>) -> Self {
+        self.help = help;
+        self
+    }
+
     pub(crate) fn to_report(&self) -> Report<FileSpan> {
         let (file_id, offset) = match &self.offset {
             Some(offset) => (offset.file_id, offset.inner),
@@ -136,6 +141,12 @@ pub enum DiagnosticCode {
     UnresolvedFunction,
     UnresolvedTrait,
     TriedApplyingPrivateTrait,
+    CouldNotResolveUsePath,
+    CannotAccessPrivatePathSegment,
+    CouldNotResolveEmptyPath,
+    UnimplementedTraitMethods,
+    MethodsDontBelongInApply,
+    IncorrectNumGenericParamsInApplyMethod,
 
     TypeMismatch,
     ConflictingTraitImplementations,

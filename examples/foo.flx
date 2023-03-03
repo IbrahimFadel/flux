@@ -1,4 +1,4 @@
-fn inside_foo(x X, y Y) -> i32 {
+fn inside_foo_priv(x X, y Y) -> i32 {
     0
 }
 
@@ -6,15 +6,26 @@ pub fn some_pub_fn() {
     
 }
 
+trait Bar {
+
+}
+
 trait Foo<T, X> {
     type X;
 
-    fn bar<X, Z>();
+    fn foo<X, Z>() where X is Bar;
+    fn bar() -> u32;
+    fn bazz();
 }
 
 apply<A, B> Foo<A, B> to i32 {
     type X = f32;
 
     fn boo() -> u32 {
+        0
+    }
+
+    fn foo<A>() {
+
     }
 }

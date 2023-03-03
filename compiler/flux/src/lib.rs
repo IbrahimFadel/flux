@@ -8,6 +8,8 @@ use once_cell::sync::Lazy;
 use tracing::{info, warn};
 
 mod diagnostics;
+#[cfg(test)]
+mod tests;
 
 pub static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 pub static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&STRING_INTERNER));
@@ -59,7 +61,7 @@ impl Driver {
             &BasicFileResolver,
         );
         self.file_cache.report_diagnostics(&diagnostics);
-        let (exprs, diagnostics) =
+        let (_lowered_bodies, diagnostics) =
             flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
         self.file_cache.report_diagnostics(&diagnostics);
     }

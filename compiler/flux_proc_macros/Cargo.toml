@@ -9,6 +9,9 @@ proc-macro = true
 [dependencies]
 syn = "1.0"
 quote = "1.0"
+proc-macro2 = "1.0.51"
+text-size = "1.1.0"
+flux_diagnostics = { path = "../flux_diagnostics" }
 
 # [dependencies]
 # syn = { version = "*", features = ["extra-traits"] }

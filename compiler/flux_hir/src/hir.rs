@@ -1,11 +1,12 @@
 use std::ops::Deref;
 
 use flux_proc_macros::Locatable;
-use flux_span::{Spanned, WithSpan};
+use flux_span::{Spanned, ToSpan, WithSpan};
 use flux_syntax::ast;
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
+use text_size::{TextRange, TextSize};
 
 use crate::{type_interner::TypeIdx, FunctionId};
 
@@ -27,7 +28,7 @@ pub struct Apply {
     pub trt: Option<Spanned<Path>>,
     pub ty: Spanned<TypeIdx>,
     pub assoc_types: Vec<(Name, Spanned<TypeIdx>)>,
-    pub methods: Vec<FunctionId>,
+    pub methods: Spanned<Vec<FunctionId>>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,7 +38,7 @@ pub struct Enum {}
 pub struct Function {
     pub visibility: Spanned<Visibility>,
     pub name: Name,
-    pub generic_params: GenericParams,
+    pub generic_params: Spanned<GenericParams>,
     pub params: Spanned<Params>,
     pub ret_ty: Spanned<TypeIdx>,
     pub ast: Option<ast::FnDecl>, // Trait methods will use this `Function` type but won't have the ast field
@@ -58,7 +59,7 @@ pub struct Trait {
     pub name: Name,
     pub generic_params: GenericParams,
     pub assoc_types: Vec<Name>,
-    pub methods: Vec<FunctionId>,
+    pub methods: Spanned<Vec<FunctionId>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -112,7 +113,7 @@ impl GenericParams {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct WherePredicate {
     pub ty: Idx<Spur>,
-    pub bound: Path,
+    pub bound: Spanned<Path>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
@@ -146,6 +147,10 @@ impl Path {
         }
     }
 
+    pub fn get_segments(&self) -> impl Iterator<Item = &Spur> {
+        self.segments.iter()
+    }
+
     pub fn to_spur(&self, string_interner: &'static ThreadedRodeo) -> Spur {
         let s = self
             .segments
@@ -160,6 +165,36 @@ impl Path {
             .iter()
             .map(|spur| string_interner.resolve(spur))
             .join("::")
+    }
+
+    // i = 1
+    // foo::Foo
+    // [foo, Foo]
+    // 3 + 2
+    pub fn spanned_segment(
+        path: &Spanned<Path>,
+        idx: usize,
+        string_interner: &'static ThreadedRodeo,
+    ) -> Option<Spanned<Spur>> {
+        let mut iter = path.get_segments().peekable();
+        let mut start: usize = path.span.range.start().into();
+        for _ in 0..idx {
+            start += iter
+                .next()
+                .map(|spur| string_interner.resolve(spur).len())?;
+            if iter.peek().is_some() {
+                start += 2; // "::"
+            }
+        }
+        let (spur, end) = iter
+            .next()
+            .map(|spur| (spur, string_interner.resolve(spur).len()))?;
+        let end = start + end;
+
+        Some(Spanned::new(
+            *spur,
+            TextRange::new(TextSize::from(start as u32), TextSize::from(end as u32)).to_span(),
+        ))
     }
 }
 

@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
 
-use flux_diagnostics::{Diagnostic, ToDiagnostic};
+use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
 use la_arena::Idx;
 use lasso::ThreadedRodeo;
+use text_size::{TextRange, TextSize};
 
 use crate::{
     diagnostics::LowerError,
@@ -86,13 +87,30 @@ impl<'a> Ctx<'a> {
             |ty| self.body_ctx.lower_type(ty.ty()),
         );
         let assoc_types = self.lower_apply_assoc_types(apply.associated_types());
-        let methods: Vec<FunctionId> = apply
-            .methods()
-            .map(|method| self.lower_function(&method).index)
-            .collect();
+        let (methods, methods_end) = self.lower_apply_methods(apply.methods());
+
+        let (l, r) = match (apply.lbrace(), apply.rbrace()) {
+            (Some(lbrace), Some(rbrace)) => {
+                (lbrace.text_range().start(), rbrace.text_range().end())
+            }
+            (Some(lbrace), None) => match methods_end {
+                Some(methods_end) => (lbrace.text_range().end(), methods_end),
+                None => (lbrace.text_range().end(), lbrace.text_range().end()),
+            },
+            (None, Some(rbrace)) => (generic_params.span.range.end(), rbrace.text_range().end()),
+            (None, None) => match methods_end {
+                Some(methods_end) => (generic_params.span.range.end(), methods_end),
+                None => (
+                    generic_params.span.range.end(),
+                    generic_params.span.range.end(),
+                ),
+            },
+        };
+        let apply_methods_span = TextRange::new(l, r).to_span();
+        let methods = methods.at(apply_methods_span);
         let res = Apply {
             visibility,
-            generic_params,
+            generic_params: generic_params.inner,
             trt,
             ty,
             assoc_types,
@@ -135,11 +153,31 @@ impl<'a> Ctx<'a> {
         let generic_params =
             self.lower_generic_params(t.generic_param_list(), t.where_clause(), name.span);
         let assoc_types = self.lower_trait_assoc_types(t.associated_types());
-        let methods = self.lower_trait_methods(t.method_decls());
+        let (methods, methods_end) = self.lower_trait_methods(t.method_decls());
+
+        let (l, r) = match (t.lbrace(), t.rbrace()) {
+            (Some(lbrace), Some(rbrace)) => {
+                (lbrace.text_range().start(), rbrace.text_range().end())
+            }
+            (Some(lbrace), None) => match methods_end {
+                Some(methods_end) => (lbrace.text_range().end(), methods_end),
+                None => (lbrace.text_range().end(), lbrace.text_range().end()),
+            },
+            (None, Some(rbrace)) => (generic_params.span.range.end(), rbrace.text_range().end()),
+            (None, None) => match methods_end {
+                Some(methods_end) => (generic_params.span.range.end(), methods_end),
+                None => (
+                    generic_params.span.range.end(),
+                    generic_params.span.range.end(),
+                ),
+            },
+        };
+        let trait_methods_span = TextRange::new(l, r).to_span();
+        let methods = methods.at(trait_methods_span);
         let res = Trait {
             visibility,
             name,
-            generic_params,
+            generic_params: generic_params.inner,
             assoc_types,
             methods,
         };
@@ -176,7 +214,7 @@ impl<'a> Ctx<'a> {
         generic_params: Option<ast::GenericParamList>,
         where_clause: Option<ast::WhereClause>,
         fallback_span: Span,
-    ) -> GenericParams {
+    ) -> Spanned<GenericParams> {
         let mut generic_params = match generic_params {
             Some(ast_generic_params) => {
                 let mut generic_params = GenericParams::default();
@@ -217,14 +255,14 @@ impl<'a> Ctx<'a> {
                             let path = self.body_ctx.lower_path(bound.trait_path());
                             generic_params.inner.where_predicates.push(WherePredicate {
                                 ty: idx,
-                                bound: path.inner,
+                                bound: path,
                             })
                         })
                     },
                 );
             });
         }
-        generic_params.inner
+        generic_params
     }
 
     fn lower_trait_assoc_types(
@@ -249,11 +287,35 @@ impl<'a> Ctx<'a> {
             .collect()
     }
 
+    fn lower_apply_methods(
+        &mut self,
+        methods: impl Iterator<Item = ast::FnDecl>,
+    ) -> (Vec<FunctionId>, Option<TextSize>) {
+        let mut end = None;
+        let methods = methods
+            .map(|method| {
+                let f = self.lower_function(&method);
+                end = Some(
+                    self.tree[f]
+                        .ast
+                        .as_ref()
+                        .unwrap_or_else(|| ice("apply method should always have ast"))
+                        .range()
+                        .end(),
+                );
+                f.index
+            })
+            .collect();
+
+        (methods, end)
+    }
+
     fn lower_trait_methods(
         &mut self,
         methods: impl Iterator<Item = ast::TraitMethodDecl>,
-    ) -> Vec<FunctionId> {
-        methods
+    ) -> (Vec<FunctionId>, Option<TextSize>) {
+        let mut end = None;
+        let methods = methods
             .map(|method| {
                 let name = self.body_ctx.lower_name(method.name());
                 let generic_params = self.lower_generic_params(
@@ -263,6 +325,7 @@ impl<'a> Ctx<'a> {
                 );
                 let params = self.lower_params(method.param_list());
                 let ret_ty = self.lower_return_type(method.return_ty());
+                end = Some(ret_ty.span.range.end());
                 let f = Function {
                     visibility: Visibility::Public.at(name.span), // Arbitrary really... since theres no real concept of visibility for trait methods, but i guess they are public
                     name,
@@ -273,7 +336,8 @@ impl<'a> Ctx<'a> {
                 };
                 self.tree.functions.alloc(f)
             })
-            .collect()
+            .collect();
+        (methods, end)
     }
 
     fn lower_params(&self, params: Option<ast::ParamList>) -> Spanned<Params> {

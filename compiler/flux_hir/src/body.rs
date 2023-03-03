@@ -1,20 +1,21 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_span::{FileId, InFile, Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, FileSpanned, InFile, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode};
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TEnv, TypeId, TypeKind};
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use la_arena::{Arena, Idx, RawIdx};
-use lasso::ThreadedRodeo;
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     diagnostics::LowerError,
-    hir::{Apply, Block, Call, Expr, ExprIdx, Function, Let, Name, Path, Type, Visibility},
+    hir::{
+        Apply, Block, Call, Expr, ExprIdx, Function, GenericParams, Let, Name, Path, Type,
+        Visibility,
+    },
     item_tree::ItemTree,
     lower_node,
-    name_res::{
-        path_res::{ReachedFixedPoint, ResolvePathResult},
-        DefMap, LocalModuleId,
-    },
+    name_res::{path_res::ResolvePathError, DefMap, LocalModuleId},
+    per_ns::PerNs,
     type_interner::TypeIdx,
     FunctionId, ModuleDefId, ModuleId, TypeInterner,
 };
@@ -83,32 +84,28 @@ impl<'a> LowerCtx<'a> {
 
     pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: LocalModuleId) {
         self.cur_module_id = module_id;
-        for (_, a) in item_tree.applies.iter() {
-            self.handle_apply(a, item_tree);
+        for mod_item in &item_tree.top_level {
+            match mod_item {
+                crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
+                crate::item_tree::ModItem::Enum(_) => todo!(),
+                crate::item_tree::ModItem::Function(f) => {
+                    let body_idx = self.handle_function(f.index, item_tree);
+                    self.indices
+                        .insert((module_id, ModuleDefId::FunctionId(f.index)), body_idx);
+                }
+                crate::item_tree::ModItem::Mod(_) => {}
+                crate::item_tree::ModItem::Struct(_) => todo!(),
+                crate::item_tree::ModItem::Trait(_) => {}
+                crate::item_tree::ModItem::Use(_) => {}
+            }
         }
-        for (idx, f) in item_tree.functions.iter() {
-            let body_idx = self.handle_function(&f, item_tree);
-            self.indices
-                .insert((module_id, ModuleDefId::FunctionId(idx)), body_idx);
-        }
-        // for mod_item in &item_tree.top_level {
-        //     match mod_item {
-        //         crate::item_tree::ModItem::Apply(a) => self.handle_apply(&a.index, item_tree),
-        //         crate::item_tree::ModItem::Enum(_) => todo!(),
-        //         crate::item_tree::ModItem::Function(f) => {}
-        //         crate::item_tree::ModItem::Mod(_) => {}
-        //         crate::item_tree::ModItem::Struct(_) => todo!(),
-        //         crate::item_tree::ModItem::Trait(_) => {}
-        //         crate::item_tree::ModItem::Use(_) => {}
-        //     }
-        // }
     }
 
-    fn handle_apply(&mut self, a: &Apply, item_tree: &ItemTree) {
+    fn handle_apply(&mut self, a: Idx<Apply>, item_tree: &ItemTree) {
+        let a = &item_tree[a];
         self.handle_apply_trait(a);
-        for f in &a.methods {
-            let f = &item_tree[*f];
-            self.handle_function(f, item_tree);
+        for f in &a.methods.inner {
+            self.handle_function(*f, item_tree);
         }
     }
 
@@ -118,42 +115,49 @@ impl<'a> LowerCtx<'a> {
                 .def_map
                 .unwrap()
                 .resolve_path(trt_path, self.cur_module_id);
-            match trt.resolved_def.types {
-                Some((def_id, m, vis)) => {
-                    let item_tree = &self.def_map.unwrap().item_trees[m];
-                    let file_id = self.def_map.unwrap().modules[m].file_id;
-                    let trt = match def_id {
-                        ModuleDefId::TraitId(trt_idx) => {
-                            let trt = &item_tree[trt_idx];
-                            if self.cur_module_id != m && vis == Visibility::Private {
-                                self.diagnostics.push(
-                                    LowerError::TriedApplyingPrivateTrait {
-                                        trt: self
-                                            .string_interner
-                                            .resolve(&trt.name.inner)
-                                            .to_string(),
-                                        declared_as_private: trt.visibility.span.in_file(file_id),
-                                        application: trt_path.span.in_file(self.file_id()),
-                                    }
-                                    .to_diagnostic(),
-                                );
+            match trt {
+                Ok(per_ns) => match per_ns.types {
+                    Some((def_id, m, vis)) => {
+                        let item_tree = &self.def_map.unwrap().item_trees[m];
+                        let file_id = self.def_map.unwrap().modules[m].file_id;
+                        let trt = match def_id {
+                            ModuleDefId::TraitId(trt_idx) => {
+                                let trt = &item_tree[trt_idx];
+                                if self.cur_module_id != m && vis == Visibility::Private {
+                                    self.diagnostics.push(
+                                        LowerError::TriedApplyingPrivateTrait {
+                                            trt: self
+                                                .string_interner
+                                                .resolve(&trt.name.inner)
+                                                .to_string(),
+                                            declared_as_private: trt
+                                                .visibility
+                                                .span
+                                                .in_file(file_id),
+                                            application: trt_path.span.in_file(self.file_id()),
+                                        }
+                                        .to_diagnostic(),
+                                    );
+                                }
+                                trt
                             }
-                            trt
-                        }
-                        _ => unreachable!(),
-                    };
+                            _ => unreachable!(),
+                        };
 
-                    self.check_trait_methods_with_apply_methods(&trt.methods, &a.methods);
-                }
-                None => self.diagnostics.push(
-                    LowerError::UnresolvedTrait {
-                        trt: trt_path
-                            .map_ref(|trt_path| {
-                                trt_path.to_string(self.string_interner).to_string()
-                            })
-                            .in_file(self.file_id()),
+                        self.check_trait_methods_with_apply_methods(&trt.methods, m, &a.methods);
                     }
-                    .to_diagnostic(),
+                    None => self.diagnostics.push(
+                        LowerError::UnresolvedTrait {
+                            trt: trt_path
+                                .map_ref(|trt_path| trt_path.to_string(self.string_interner))
+                                .in_file(self.file_id()),
+                        }
+                        .to_diagnostic(),
+                    ),
+                },
+                Err(err) => self.diagnostics.push(
+                    err.to_lower_error(self.file_id(), self.string_interner)
+                        .to_diagnostic(),
                 ),
             }
         }
@@ -161,26 +165,199 @@ impl<'a> LowerCtx<'a> {
 
     fn check_trait_methods_with_apply_methods(
         &mut self,
-        trait_methods: &[FunctionId],
-        apply_methods: &[FunctionId],
+        trait_methods: &Spanned<Vec<FunctionId>>,
+        trait_module_id: ModuleId,
+        apply_methods: &Spanned<Vec<FunctionId>>,
     ) {
-        let mut unimplemented_methods = vec![];
-        for method in trait_methods {
-            if !apply_methods.contains(&method) {
-                unimplemented_methods.push(method);
+        let def_map = self.def_map.unwrap();
+
+        for apply_method in &apply_methods.inner {
+            for trait_method in &trait_methods.inner {
+                let apply_method = &def_map.item_trees[self.cur_module_id][*apply_method];
+                let trait_file_id = def_map.modules[trait_module_id].file_id;
+                let trait_method = &def_map.item_trees[trait_module_id][*trait_method];
+
+                if apply_method.name == trait_method.name {
+                    self.check_trait_method_with_apply_method(
+                        trait_method,
+                        trait_file_id,
+                        trait_module_id,
+                        apply_method,
+                    );
+                }
             }
         }
-        let mut methods_that_dont_belond = vec![];
-        for method in apply_methods {
-            if !trait_methods.contains(&method) {
-                methods_that_dont_belond.push(method);
-            } else {
-                // method belongs
-            }
-        }
+
+        // let apply_method_names: HashSet<Spur> = apply_methods
+        //     .iter()
+        //     .map(|method_id| {
+        //         def_map.item_trees[self.cur_module_id][*method_id]
+        //             .name
+        //             .inner
+        //     })
+        //     .collect();
+        // let trait_method_names: HashSet<Spur> = trait_methods
+        //     .iter()
+        //     .map(|method_id| {
+        //         def_map.item_trees[trait_module_id][*method_id]
+        //             .name
+        //             .inner
+        //     })
+        //     .collect();
+        // let methods_that_dont_belong: Vec<_> =
+        //     apply_method_names.difference(&trait_method_names).collect();
+        // let unimplemented_methods: Vec<_> =
+        //     trait_method_names.difference(&apply_method_names).collect();
+
+        // if unimplemented_methods.len() > 0 {
+        //     let trait_file_id = def_map[trait_module_id].file_id;
+        //     self.diagnostics.push(
+        //         LowerError::UnimplementedTraitMethods {
+        //             trait_methods_declared: trait_method_names
+        //                 .iter()
+        //                 .map(|spur| self.string_interner.resolve(spur).to_string())
+        //                 .collect::<Vec<_>>()
+        //                 .file_span(trait_file_id, trait_methods.span),
+        //             unimplemented_methods: unimplemented_methods
+        //                 .iter()
+        //                 .map(|spur| self.string_interner.resolve(spur).to_string())
+        //                 .collect::<Vec<_>>()
+        //                 .file_span(self.file_id(), apply_methods.span),
+        //         }
+        //         .to_diagnostic(),
+        //     );
+        // }
+
+        // if methods_that_dont_belong.len() > 0 {
+        //     let trait_file_id = def_map[trait_module_id].file_id;
+        //     self.diagnostics.push(
+        //         LowerError::MethodsDontBelongInApply {
+        //             trait_methods_declared: trait_method_names
+        //                 .iter()
+        //                 .map(|spur| self.string_interner.resolve(spur).to_string())
+        //                 .collect::<Vec<_>>()
+        //                 .file_span(trait_file_id, trait_methods.span),
+        //             methods_that_dont_belond: methods_that_dont_belong
+        //                 .iter()
+        //                 .map(|spur| self.string_interner.resolve(spur).to_string())
+        //                 .collect::<Vec<_>>()
+        //                 .file_span(self.file_id(), apply_methods.span),
+        //         }
+        //         .to_diagnostic(),
+        //     );
+        // }
     }
 
-    fn handle_function(&mut self, f: &Function, item_tree: &ItemTree) -> ExprIdx {
+    fn check_trait_method_with_apply_method(
+        &mut self,
+        trait_method: &Function,
+        trait_file_id: FileId,
+        trait_module_id: ModuleId,
+        apply_method: &Function,
+    ) {
+        self.check_trait_method_generic_params_with_apply_method_generic_params(
+            InFile::new(&trait_method.generic_params, trait_file_id),
+            trait_module_id,
+            &apply_method.generic_params,
+        );
+    }
+
+    fn check_trait_method_generic_params_with_apply_method_generic_params(
+        &mut self,
+        trait_generic_params: InFile<&Spanned<GenericParams>>,
+        trait_module_id: ModuleId,
+        apply_generic_params: &Spanned<GenericParams>,
+    ) {
+        let trait_params_len = trait_generic_params.types.len();
+        let apply_params_len = apply_generic_params.types.len();
+        if trait_params_len != apply_params_len {
+            self.diagnostics.push(
+                LowerError::IncorrectNumGenericParamsInApplyMethod {
+                    got_num: apply_params_len.file_span(self.file_id(), apply_generic_params.span),
+                    expected_num: trait_params_len
+                        .file_span(trait_generic_params.file_id, trait_generic_params.span),
+                }
+                .to_diagnostic(),
+            );
+        }
+
+        // let def_map = self.def_map.unwrap();
+        // for trait_where_predicate in &trait_generic_params.where_predicates {
+        //     let apply_where_predicate = apply_generic_params
+        //         .where_predicates
+        //         .iter()
+        //         .find(|predicate| predicate.ty == trait_where_predicate.ty);
+        //     match apply_where_predicate {
+        //         Some(apply_where_predicate) => {
+        //             let a_trait = def_map.resolve_path(a_bound, trait_module_id).map_or_else(
+        //                 |_| {
+        //                     todo!();
+        //                 },
+        //                 |res| {
+        //                     res.types.map(|(def_id, mod_id, _)| {
+        //                         let item_tree = &self.def_map.unwrap().item_trees[mod_id];
+        //                         match def_id {
+        //                             crate::ModuleDefId::TraitId(t) => &item_tree[t],
+        //                             _ => todo!(),
+        //                         }
+        //                     })
+        //                 },
+        //             );
+        //         }
+        //         None => todo!(),
+        //     }
+        // }
+
+        // trait_generic_params
+        //     .where_predicates
+        //     .iter()
+        //     .zip(apply_generic_params.where_predicates.iter())
+        //     .for_each(|(a, b)| {
+        //         let a_bound = &a.bound;
+        //         let b_bound = &b.bound;
+
+        //         let def_map = self.def_map.unwrap();
+        //         let a_trait = def_map.resolve_path(a_bound, trait_module_id).map_or_else(
+        //             |_| {
+        //                 todo!();
+        //             },
+        //             |res| {
+        //                 res.types.map(|(def_id, mod_id, _)| {
+        //                     let item_tree = &self.def_map.unwrap().item_trees[mod_id];
+        //                     match def_id {
+        //                         crate::ModuleDefId::TraitId(t) => &item_tree[t],
+        //                         _ => todo!(),
+        //                     }
+        //                 })
+        //             },
+        //         );
+        //         let b_trait = def_map.resolve_path(b_bound, trait_module_id).map_or_else(
+        //             |_| {
+        //                 todo!();
+        //             },
+        //             |res| {
+        //                 res.types.map(|(def_id, mod_id, _)| {
+        //                     let item_tree = &self.def_map.unwrap().item_trees[mod_id];
+        //                     match def_id {
+        //                         crate::ModuleDefId::TraitId(t) => &item_tree[t],
+        //                         _ => todo!(),
+        //                     }
+        //                 })
+        //             },
+        //         );
+
+        //         if let Some(a_trait) = a_trait {
+        //             if let Some(b_trait) = b_trait {
+        //                 if a_trait.name.inner != b_trait.name.inner {
+
+        //                 }
+        //             }
+        //         }
+        //     });
+    }
+
+    fn handle_function(&mut self, f: Idx<Function>, item_tree: &ItemTree) -> ExprIdx {
+        let f = &item_tree[f];
         let (body_idx, body_tid) = self.lower_expr(
             f.ast
                 .as_ref()
@@ -217,7 +394,7 @@ impl<'a> LowerCtx<'a> {
                 TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
             }
             Type::Ptr(ty) => {
-                TypeKind::Concrete(ConcreteKind::Ptr(self.insert_type_to_tenv(&ty, file_id)))
+                TypeKind::Concrete(ConcreteKind::Ptr(self.insert_type_to_tenv(ty, file_id)))
             }
             Type::Tuple(types) => TypeKind::Concrete(ConcreteKind::Tuple(
                 types
@@ -258,7 +435,7 @@ impl<'a> LowerCtx<'a> {
     fn lower_path_expr(
         &mut self,
         path: Option<ast::PathExpr>,
-    ) -> (ExprIdx, TypeId, ResolvePathResult) {
+    ) -> (ExprIdx, TypeId, Result<PerNs, ResolvePathError>) {
         let path = lower_node(
             path,
             |path| Path::poisoned().at(path.range().to_span()),
@@ -273,13 +450,11 @@ impl<'a> LowerCtx<'a> {
         let resolved_path = self
             .def_map
             .unwrap()
-            .resolve_path(&path.inner, self.cur_module_id);
+            .resolve_path(&path, self.cur_module_id);
         let path = Expr::Path(path.inner).at(span);
         let idx = self.exprs.alloc(path);
-        let tid = if resolved_path.reached_fixedpoint == ReachedFixedPoint::No {
-            self.tchk.tenv.insert_unknown(span.in_file(self.file_id()))
-        } else {
-            match resolved_path.resolved_def.values {
+        let tid = match &resolved_path {
+            Ok(per_ns) => match per_ns.values {
                 Some((def_id, m, _)) => {
                     let item_tree = &self.def_map.unwrap().item_trees[m];
                     let file_id = self.def_map.unwrap().modules[m].file_id;
@@ -296,7 +471,8 @@ impl<'a> LowerCtx<'a> {
                     }
                 }
                 None => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
-            }
+            },
+            Err(_) => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
         };
         (idx.into(), tid, resolved_path)
     }
@@ -356,22 +532,8 @@ impl<'a> LowerCtx<'a> {
             },
         );
 
-        let function = if resolved_path.reached_fixedpoint == ReachedFixedPoint::No {
-            let function_span = self.exprs[path.raw()].span;
-            let path_string = match &self.exprs[path.raw()].inner {
-                Expr::Path(path) => path.to_string(self.string_interner),
-                _ => unreachable!(),
-            };
-            self.diagnostics.push(
-                LowerError::UnresolvedFunction {
-                    function: path_string.file_span(self.file_id(), function_span),
-                }
-                .to_diagnostic(),
-            );
-            None
-        } else {
-            resolved_path
-                .resolved_def
+        let function = match resolved_path {
+            Ok(per_ns) => per_ns
                 .values
                 .map(|(def_id, m, vis)| {
                     let item_tree = &self.def_map.unwrap().item_trees[m];
@@ -410,7 +572,14 @@ impl<'a> LowerCtx<'a> {
                         .to_diagnostic(),
                     );
                     None
-                })
+                }),
+            Err(err) => {
+                self.diagnostics.push(
+                    err.to_lower_error(self.file_id(), self.string_interner)
+                        .to_diagnostic(),
+                );
+                None
+            }
         };
 
         if let Some(function) = function {

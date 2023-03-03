@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::DashMap;
 use flux_diagnostics::ice;
 use lasso::ThreadedRodeo;
 
