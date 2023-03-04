@@ -238,10 +238,10 @@ impl<'a> Ctx<'a> {
                     .unwrap_or_else(|| {
                         self.diagnostics.push(
                             LowerError::UnknownGenericInWherePredicate {
-                                generic: name
-                                    .map_ref(|spur| self.string_interner.resolve(spur).to_string())
-                                    .in_file(self.file_id),
-                                generic_params: generic_params.span.in_file(self.file_id),
+                                generic: self.string_interner.resolve(&name.inner).to_string(),
+                                generic_file_span: name.span.in_file(self.file_id),
+                                generic_params: (),
+                                generic_params_file_span: generic_params.span.in_file(self.file_id),
                             }
                             .to_diagnostic(),
                         );

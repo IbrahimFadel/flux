@@ -19,26 +19,29 @@ impl ResolvePathError {
     ) -> LowerError {
         match self {
             Self::EmptyPath { path_span } => LowerError::CouldNotResolveEmptyPath {
-                path_span: path_span.in_file(file_id),
+                path: (),
+                path_file_span: path_span.in_file(file_id),
             },
-            Self::PrivateModule { path, segment } => LowerError::CannotAccessPrivatePathSegment {
-                path: path
-                    .map_ref(|path| path.to_string(string_interner))
-                    .in_file(file_id),
-                erroneous_segment: Path::spanned_segment(path, *segment, string_interner)
-                    .unwrap()
-                    .map(|spur| string_interner.resolve(&spur).to_string())
-                    .in_file(file_id),
-            },
-            Self::UnresolvedModule { path, segment } => LowerError::CouldNotResolveUsePath {
-                path: path
-                    .map_ref(|path| path.to_string(string_interner))
-                    .in_file(file_id),
-                erroneous_segment: Path::spanned_segment(path, *segment, string_interner)
-                    .unwrap()
-                    .map(|spur| string_interner.resolve(&spur).to_string())
-                    .in_file(file_id),
-            },
+            Self::PrivateModule { path, segment } => {
+                let spanned_segment =
+                    Path::spanned_segment(path, *segment, string_interner).unwrap();
+                LowerError::CannotAccessPrivatePathSegment {
+                    path: path.inner.to_string(string_interner),
+                    path_file_span: path.span.in_file(file_id),
+                    erroneous_segment: string_interner.resolve(&spanned_segment.inner).to_string(),
+                    erroneous_segment_file_span: spanned_segment.span.in_file(file_id),
+                }
+            }
+            Self::UnresolvedModule { path, segment } => {
+                let spanned_segment =
+                    Path::spanned_segment(path, *segment, string_interner).unwrap();
+                LowerError::CouldNotResolveUsePath {
+                    path: path.inner.to_string(string_interner),
+                    path_file_span: path.span.in_file(file_id),
+                    erroneous_segment: string_interner.resolve(&spanned_segment.inner).to_string(),
+                    erroneous_segment_file_span: spanned_segment.span.in_file(file_id),
+                }
+            }
         }
     }
 }

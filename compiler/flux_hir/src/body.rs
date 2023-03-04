@@ -1,10 +1,10 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_span::{FileId, FileSpanned, InFile, Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, InFile, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode};
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TEnv, TypeId, TypeKind};
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use la_arena::{Arena, Idx, RawIdx};
-use lasso::{Spur, ThreadedRodeo};
+use lasso::ThreadedRodeo;
 
 use crate::{
     diagnostics::LowerError,
@@ -130,11 +130,15 @@ impl<'a> LowerCtx<'a> {
                                                 .string_interner
                                                 .resolve(&trt.name.inner)
                                                 .to_string(),
-                                            declared_as_private: trt
+                                            declared_as_private: (),
+                                            declared_as_private_file_span: trt
                                                 .visibility
                                                 .span
                                                 .in_file(file_id),
-                                            application: trt_path.span.in_file(self.file_id()),
+                                            application: (),
+                                            application_file_span: trt_path
+                                                .span
+                                                .in_file(self.file_id()),
                                         }
                                         .to_diagnostic(),
                                     );
@@ -148,9 +152,8 @@ impl<'a> LowerCtx<'a> {
                     }
                     None => self.diagnostics.push(
                         LowerError::UnresolvedTrait {
-                            trt: trt_path
-                                .map_ref(|trt_path| trt_path.to_string(self.string_interner))
-                                .in_file(self.file_id()),
+                            trt: trt_path.inner.to_string(self.string_interner),
+                            trt_file_span: trt_path.span.in_file(self.file_id()),
                         }
                         .to_diagnostic(),
                     ),
@@ -273,9 +276,12 @@ impl<'a> LowerCtx<'a> {
         if trait_params_len != apply_params_len {
             self.diagnostics.push(
                 LowerError::IncorrectNumGenericParamsInApplyMethod {
-                    got_num: apply_params_len.file_span(self.file_id(), apply_generic_params.span),
-                    expected_num: trait_params_len
-                        .file_span(trait_generic_params.file_id, trait_generic_params.span),
+                    got_num: apply_params_len,
+                    got_num_file_span: apply_generic_params.span.in_file(self.file_id()),
+                    expected_num: trait_params_len,
+                    expected_num_file_span: trait_generic_params
+                        .span
+                        .in_file(trait_generic_params.file_id),
                 }
                 .to_diagnostic(),
             );
@@ -548,8 +554,15 @@ impl<'a> LowerCtx<'a> {
                                             .string_interner
                                             .resolve(&f.name.inner)
                                             .to_string(),
-                                        declared_as_private: f.visibility.span.in_file(file_id),
-                                        call: self.exprs[path.raw()].span.in_file(self.file_id()),
+                                        declared_as_private: (),
+                                        declared_as_private_file_span: f
+                                            .visibility
+                                            .span
+                                            .in_file(file_id),
+                                        call: (),
+                                        call_file_span: self.exprs[path.raw()]
+                                            .span
+                                            .in_file(self.file_id()),
                                     }
                                     .to_diagnostic(),
                                 );
@@ -567,7 +580,8 @@ impl<'a> LowerCtx<'a> {
                     };
                     self.diagnostics.push(
                         LowerError::UnresolvedFunction {
-                            function: path_string.file_span(self.file_id(), function_span),
+                            function: path_string,
+                            function_file_span: function_span.in_file(self.file_id()),
                         }
                         .to_diagnostic(),
                     );
@@ -621,8 +635,10 @@ impl<'a> LowerCtx<'a> {
         if args_len != params_len {
             self.diagnostics.push(
                 LowerError::IncorrectNumArgsInCall {
-                    expected_number: params_len.file_span(function.file_id, function.params.span),
-                    got_number: args_len.file_span(self.file_id(), args.span),
+                    expected_number: params_len,
+                    expected_number_file_span: function.params.span.in_file(function.file_id),
+                    got_number: args_len,
+                    got_number_file_span: args.span.in_file(self.file_id()),
                     function: self
                         .string_interner
                         .resolve(&function.name.inner)
@@ -650,8 +666,13 @@ impl<'a> LowerCtx<'a> {
                     if i < stmts_len - 1 {
                         self.diagnostics.push(
                             LowerError::StmtFollowingTerminatorExpr {
-                                terminator: expr.range().to_span().in_file(file_id),
-                                following_expr: stmts[i + 1].range().to_span().in_file(file_id),
+                                terminator: (),
+                                terminator_file_span: expr.range().to_span().in_file(file_id),
+                                following_expr: (),
+                                following_expr_file_span: stmts[i + 1]
+                                    .range()
+                                    .to_span()
+                                    .in_file(file_id),
                             }
                             .to_diagnostic(),
                         );

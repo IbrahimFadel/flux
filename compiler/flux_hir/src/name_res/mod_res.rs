@@ -61,7 +61,8 @@ impl ModDir {
             }
         }
         Err(LowerError::CouldNotResolveModDecl {
-            decl: name.map_inner_ref(|name| name.to_string()),
+            decl: name.inner.inner.to_string(),
+            decl_file_span: name.to_filespan(),
             candidate_paths: candidate_files.to_vec(),
         }
         .to_diagnostic())

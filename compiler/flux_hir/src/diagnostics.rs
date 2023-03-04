@@ -1,30 +1,73 @@
-use flux_proc_macros::ToDiagnostic;
-use flux_span::{FileSpanned, InFile, Span};
+use flux_proc_macros::diagnostic;
 
-#[derive(Debug, Clone, ToDiagnostic)]
+trait Plural {
+    fn plural(&self, suffix: &'static str) -> &str;
+    fn singular(&self, suffix: &'static str) -> &str;
+}
+
+impl Plural for usize {
+    fn plural(&self, suffix: &'static str) -> &str {
+        if *self == 1 {
+            ""
+        } else {
+            suffix
+        }
+    }
+
+    fn singular(&self, suffix: &'static str) -> &str {
+        if *self == 1 {
+            suffix
+        } else {
+            ""
+        }
+    }
+}
+
+impl<T> Plural for Vec<T> {
+    fn plural(&self, suffix: &'static str) -> &str {
+        if self.len() == 1 {
+            ""
+        } else {
+            suffix
+        }
+    }
+
+    fn singular(&self, suffix: &'static str) -> &str {
+        if self.len() == 1 {
+            suffix
+        } else {
+            ""
+        }
+    }
+}
+
+#[diagnostic]
 pub(crate) enum LowerError {
     #[error(
-        location = [map(path)],
+        location = path,
         primary = "cannot access private path segment",
-        label = [map_inner(path)] "cannot access private path segment in path `{path}`",
-        label = [map_inner(erroneous_segment)] "private segment `{erroneous_segment}`",
+        label at path = "cannot access private path segment in path `{path}`",
+        label at erroneous_segment = "private segment `{erroneous_segment}`",
     )]
     CannotAccessPrivatePathSegment {
-        path: FileSpanned<String>,
-        erroneous_segment: FileSpanned<String>,
+        #[filespanned]
+        path: String,
+        #[filespanned]
+        erroneous_segment: String,
     },
     #[error(
-        location = [from_file_span(path_span)],
+        location = path,
         primary = "could not resolve empty path",
-        label = [from_file_span(path_span)] "could not resolve empty path",
+        label at path = "could not resolve empty path",
     )]
     CouldNotResolveEmptyPath {
-        path_span: InFile<Span>,
+        #[filespanned]
+        path: (),
     },
     #[error(
-        location = [map(decl)],
+        location = decl,
         primary = "could not resolve module declaration",
-        label = [map_inner(decl)] "could not resolve module declaration for `{decl}`",
+        label at decl = "could not resolve module declaration for `{decl}`",
         help = "create the module at one of the following paths: {}"
             with (
                 candidate_paths
@@ -34,116 +77,131 @@ pub(crate) enum LowerError {
             ),
     )]
     CouldNotResolveModDecl {
-        decl: FileSpanned<String>,
+        #[filespanned]
+        decl: String,
         candidate_paths: Vec<String>,
     },
     #[error(
-        location = [map(path)],
+        location = path,
         primary = "could not resolve use path",
-        label = [map_inner(path)] "could not resolve path `{path}`",
-        label = [map_inner(erroneous_segment)] "unresolved path segment `{erroneous_segment}`",
+        label at path = "could not resolve path `{path}`",
+        label at erroneous_segment = "unresolved path segment `{erroneous_segment}`",
     )]
     CouldNotResolveUsePath {
-        path: FileSpanned<String>,
-        erroneous_segment: FileSpanned<String>,
+        #[filespanned]
+        path: String,
+        #[filespanned]
+        erroneous_segment: String,
     },
     #[error(
-        location = [map(got_number)],
+        location = got_number,
         primary = "incorrect number of arguments in function call",
-        label = [map_inner(got_number)] "got {got_number} argument{}" with (if *got_number == 1 { "" } else { "s" }),
-        label = [map_inner(expected_number)] "expected {expected_number} arguments in function `{function}`",
+        label at got_number = "got {got_number} argument{}" with (got_number.plural("s")),
+        label at expected_number = "expected {expected_number} arguments in function `{function}`",
     )]
     IncorrectNumArgsInCall {
-        got_number: FileSpanned<usize>,
-        expected_number: FileSpanned<usize>,
+        #[filespanned]
+        got_number: usize,
+        #[filespanned]
+        expected_number: usize,
         function: String,
     },
     #[error(
-        location = [map(got_num)],
+        location = got_num,
         primary = "incorrect number of generic parameters in apply_method",
-        label = [map_inner(got_num)] "expected {got_num} generic parameter{}" with (if *got_num == 1 { "" } else { "s" }),
-        label = [map_inner(expected_num)] "expected {expected_num} generic parameter{}" with (if *expected_num == 1 { "" } else { "s" }),
+        label at got_num = "expected {got_num} generic parameter{}" with (got_num.plural("s")),
+        label at expected_num = "expected {expected_num} generic parameter{}" with (expected_num.plural("s")),
     )]
     IncorrectNumGenericParamsInApplyMethod {
-        got_num: FileSpanned<usize>,
-        expected_num: FileSpanned<usize>,
+        #[filespanned]
+        got_num: usize,
+        #[filespanned]
+        expected_num: usize,
     },
     // RestictionsInApplyMethodDoesntMatchTraitDecl {
     //     restriction_in_: FileSpanned<String>,
     //     restriction_in_trait_decl: FileSpanned<String>,
     // },
     #[error(
-        location = [map(methods_that_dont_belond)],
+        location = methods_that_dont_belond,
         primary = "methods do not belong in apply",
-        label = [map_inner(methods_that_dont_belond)] "method{} {} do{} not belong in apply"
+        label at methods_that_dont_belond = "method{} {} do{} not belong in apply"
             with (
-                if methods_that_dont_belond.len() == 1 { "" } else { "s" },
+                methods_that_dont_belond.plural("s"),
                 methods_that_dont_belond
                     .iter()
                     .map(|method| format!("`{method}`"))
                     .join(", "),
-                if methods_that_dont_belond.len() == 1 { "es" } else { "" }
+                methods_that_dont_belond.singular("es")
             ),
-        label = [map_inner(trait_methods_declared)] "trait method{} {} declared here"
+        label at trait_methods_declared = "trait method{} {} declared here"
             with (
-                if trait_methods_declared.len() == 1 { "" } else { "s" },
+                trait_methods_declared.plural("s"),
                 trait_methods_declared
                     .iter()
                     .map(|method| format!("`{method}`"))
                     .join(", ")
-                
+
             ),
     )]
     MethodsDontBelongInApply {
-        trait_methods_declared: FileSpanned<Vec<String>>,
-        methods_that_dont_belond: FileSpanned<Vec<String>>,
+        #[filespanned]
+        trait_methods_declared: Vec<String>,
+        #[filespanned]
+        methods_that_dont_belond: Vec<String>,
     },
     #[error(
-        location = [from_file_span(following_expr)],
+        location = following_expr,
         primary =  "statements cannot follow a terminator expression in a block",
-        label = [from_file_span(terminator)] "terminator expression",
-        label = [from_file_span(following_expr)] "illegal statement",
+        label at terminator = "terminator expression",
+        label at following_expr = "illegal statement",
     )]
     StmtFollowingTerminatorExpr {
-        terminator: InFile<Span>,
-        following_expr: InFile<Span>,
+        #[filespanned]
+        terminator: (),
+        #[filespanned]
+        following_expr: (),
     },
     #[error(
-        location = [from_file_span(application)],
+        location = application,
         primary = "trait is private and can't be applied here",
-        label = [from_file_span(application)] "trait `{trt}` is private",
-        label = [from_file_span(declared_as_private)] "declared here as private"
+        label at application = "trait `{trt}` is private",
+        label at declared_as_private = "declared here as private"
     )]
     TriedApplyingPrivateTrait {
         trt: String,
-        declared_as_private: InFile<Span>,
-        application: InFile<Span>,
+        #[filespanned]
+        declared_as_private: (),
+        #[filespanned]
+        application: (),
     },
     #[error(
-        location = [from_file_span(call)],
+        location = call,
         primary = "function is private and inaccessible",
-        label = [from_file_span(call)] "function `{function}` is private",
-        label = [from_file_span(declared_as_private)] "declared here as private",
+        label at call = "function `{function}` is private",
+        label at declared_as_private = "declared here as private",
     )]
     TriedCallingPrivateFunction {
         function: String,
-        declared_as_private: InFile<Span>,
-        call: InFile<Span>,
+        #[filespanned]
+        declared_as_private: (),
+        #[filespanned]
+        call: (),
     },
     #[error(
-        location = [map(unimplemented_methods)],
+        location = unimplemented_methods,
         primary = "unimplemented trait methods in apply",
-        label = [map_inner(unimplemented_methods)] "unimeplemented trait method{} {} in apply"
+        label at unimplemented_methods = "unimeplemented trait method{} {} in apply"
             with (
-                if unimplemented_methods.len() == 1 { "" } else { "s" },
+                unimplemented_methods.plural("s"),
                 unimplemented_methods
                     .iter()
                     .map(|method| format!("`{method}`"))
                     .join(", ")
             ),
-        label = [map_inner(trait_methods_declared)] "trait method{} {} declared here"
+        label at trait_methods_declared = "trait method{} {} declared here"
             with (
-                if trait_methods_declared.len() == 1 { "" } else { "s" },
+                trait_methods_declared.plural("s"),
                 trait_methods_declared
                     .iter()
                     .map(|method| format!("`{method}`"))
@@ -151,35 +209,41 @@ pub(crate) enum LowerError {
             ),
     )]
     UnimplementedTraitMethods {
-        trait_methods_declared: FileSpanned<Vec<String>>,
-        unimplemented_methods: FileSpanned<Vec<String>>,
+        #[filespanned]
+        trait_methods_declared: Vec<String>,
+        #[filespanned]
+        unimplemented_methods: Vec<String>,
     },
     #[error(
-        location = [map(generic)],
+        location = generic,
         primary = "unknown generic used in where predicate",
-        label = [map_inner(generic)] "unknown generic `{generic}` used in where predicate",
-        label = [from_file_span(generic_params)] "generic parameters declared here"
+        label at generic = "unknown generic `{generic}` used in where predicate",
+        label at generic_params = "generic parameters declared here"
     )]
     UnknownGenericInWherePredicate {
         // The unknown generic
-        generic: FileSpanned<String>,
+        #[filespanned]
+        generic: String,
         // Where the generics are declared
-        generic_params: InFile<Span>,
+        #[filespanned]
+        generic_params: (),
     },
     #[error(
-        location = [map(function)],
+        location = function,
         primary = "unresolved function",
-        label = [map_inner(function)] "unresolved function `{function}`"
+        label at function = "unresolved function `{function}`"
     )]
     UnresolvedFunction {
-        function: FileSpanned<String>,
+        #[filespanned]
+        function: String,
     },
     #[error(
-        location = [map(trt)],
+        location = trt,
         primary = "unresolved trait",
-        label = [map_inner(trt)] "unresolved trait `{trt}`"
+        label at trt = "unresolved trait `{trt}`"
     )]
     UnresolvedTrait {
-        trt: FileSpanned<String>,
+        #[filespanned]
+        trt: String,
     },
 }
