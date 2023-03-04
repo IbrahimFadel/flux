@@ -10,10 +10,17 @@ trait Bar {
 
 }
 
+trait NotBar {
+
+}
+
 trait Foo<T, X> {
     type X;
 
-    fn foo<X, Z>() where X is Bar;
+    fn foo<X, Z>()
+        where A is Bar,
+              Z is Zoo,
+              X is Bar;
     fn bar() -> u32;
     fn bazz();
 }
@@ -25,7 +32,7 @@ apply<A, B> Foo<A, B> to i32 {
         0
     }
 
-    fn foo<A>() {
+    fn foo<A, B, C>() where A is NotBar, B is NotBar {
 
     }
 }

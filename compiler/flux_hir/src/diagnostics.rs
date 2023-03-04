@@ -1,4 +1,5 @@
 use flux_proc_macros::diagnostic;
+use itertools::Itertools;
 
 trait Plural {
     fn plural(&self, suffix: &'static str) -> &str;
@@ -109,7 +110,7 @@ pub(crate) enum LowerError {
     #[error(
         location = got_num,
         primary = "incorrect number of generic parameters in apply_method",
-        label at got_num = "expected {got_num} generic parameter{}" with (got_num.plural("s")),
+        label at got_num = "got {got_num} generic parameter{}" with (got_num.plural("s")),
         label at expected_num = "expected {expected_num} generic parameter{}" with (expected_num.plural("s")),
     )]
     IncorrectNumGenericParamsInApplyMethod {
@@ -149,6 +150,18 @@ pub(crate) enum LowerError {
         trait_methods_declared: Vec<String>,
         #[filespanned]
         methods_that_dont_belond: Vec<String>,
+    },
+    #[error(
+        location = apply_decl_generic_missing_where_predicate,
+        primary = "missing where predicate in apply declaration method",
+        label at apply_decl_generic_missing_where_predicate = "generic parameter `{apply_decl_generic_missing_where_predicate}` missing where predicate `{trait_decl_where_predicate}`",
+        label at trait_decl_where_predicate = "where predicate `{trait_decl_where_predicate}` expected due to this"
+    )]
+    MissingWherePredicateInApplyMethod {
+        #[filespanned]
+        trait_decl_where_predicate: String,
+        #[filespanned]
+        apply_decl_generic_missing_where_predicate: String,
     },
     #[error(
         location = following_expr,
@@ -218,7 +231,9 @@ pub(crate) enum LowerError {
         location = generic,
         primary = "unknown generic used in where predicate",
         label at generic = "unknown generic `{generic}` used in where predicate",
-        label at generic_params = "generic parameters declared here"
+        label at generic_params = "generic parameters {} declared here" with (
+            generic_params.iter().map(|param| format!("`{param}`")).join(", ")
+        )
     )]
     UnknownGenericInWherePredicate {
         // The unknown generic
@@ -226,7 +241,7 @@ pub(crate) enum LowerError {
         generic: String,
         // Where the generics are declared
         #[filespanned]
-        generic_params: (),
+        generic_params: Vec<String>,
     },
     #[error(
         location = function,
@@ -245,5 +260,23 @@ pub(crate) enum LowerError {
     UnresolvedTrait {
         #[filespanned]
         trt: String,
+    },
+    #[error(
+        location = apply_decl_where_predicate,
+        primary = "where predicate in apply declaration method does not match trait declaration",
+        label at apply_decl_where_predicate = "where predicate in apply declaration method `{apply_decl_where_predicate}`",
+        label at trait_decl_where_predicate = "where predicate in trait declaration method `{trait_decl_where_predicate}`",
+        label at apply_generic_param = "generic parameter `{apply_generic_param}` needs the trait bound `{trait_decl_where_predicate}`",
+        label at trait_generic_param = "generic parameter `{trait_generic_param}` with trait bound `{trait_decl_where_predicate}`",
+    )]
+    WherePredicatesDontMatchInApplyMethod {
+        #[filespanned]
+        trait_decl_where_predicate: String,
+        #[filespanned]
+        apply_decl_where_predicate: String,
+        #[filespanned]
+        trait_generic_param: String,
+        #[filespanned]
+        apply_generic_param: String,
     },
 }

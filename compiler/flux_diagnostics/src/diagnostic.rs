@@ -147,6 +147,8 @@ pub enum DiagnosticCode {
     UnimplementedTraitMethods,
     MethodsDontBelongInApply,
     IncorrectNumGenericParamsInApplyMethod,
+    WherePredicatesDontMatchInApplyMethod,
+    MissingWherePredicateInApplyMethod,
 
     TypeMismatch,
     ConflictingTraitImplementations,

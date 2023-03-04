@@ -93,7 +93,7 @@ pub struct Param {
 
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
 pub struct GenericParams {
-    pub types: Arena<Spur>,
+    pub types: Arena<Spanned<Spur>>,
     pub where_predicates: Vec<WherePredicate>,
 }
 
@@ -105,14 +105,15 @@ impl GenericParams {
         }
     }
 
-    pub fn invalid_idx(&self) -> Idx<Spur> {
+    pub fn invalid_idx(&self) -> Idx<Spanned<Spur>> {
         Idx::from_raw(RawIdx::from(self.types.len() as u32))
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct WherePredicate {
-    pub ty: Idx<Spur>,
+    pub ty: Idx<Spanned<Spur>>,
+    pub name: Spanned<Spur>,
     pub bound: Spanned<Path>,
 }
 

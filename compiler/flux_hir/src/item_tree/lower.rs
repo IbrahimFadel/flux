@@ -220,7 +220,7 @@ impl<'a> Ctx<'a> {
                 let mut generic_params = GenericParams::default();
                 ast_generic_params.type_params().for_each(|param| {
                     let name = self.body_ctx.lower_name(param.name());
-                    generic_params.types.alloc(name.inner);
+                    generic_params.types.alloc(name);
                 });
                 generic_params.at(ast_generic_params.range().to_span())
             }
@@ -233,14 +233,20 @@ impl<'a> Ctx<'a> {
                 let idx = generic_params
                     .types
                     .iter()
-                    .find(|(_, n)| **n == name.inner)
+                    .find(|(_, n)| **n == name)
                     .map(|(idx, _)| idx)
                     .unwrap_or_else(|| {
                         self.diagnostics.push(
                             LowerError::UnknownGenericInWherePredicate {
                                 generic: self.string_interner.resolve(&name.inner).to_string(),
                                 generic_file_span: name.span.in_file(self.file_id),
-                                generic_params: (),
+                                generic_params: generic_params
+                                    .types
+                                    .iter()
+                                    .map(|(_, param)| {
+                                        self.string_interner.resolve(param).to_string()
+                                    })
+                                    .collect(),
                                 generic_params_file_span: generic_params.span.in_file(self.file_id),
                             }
                             .to_diagnostic(),
@@ -255,6 +261,7 @@ impl<'a> Ctx<'a> {
                             let path = self.body_ctx.lower_path(bound.trait_path());
                             generic_params.inner.where_predicates.push(WherePredicate {
                                 ty: idx,
+                                name: name.clone(),
                                 bound: path,
                             })
                         })
