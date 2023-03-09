@@ -1,0 +1,32 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.rs
+Module Id: 0
+
+
+
+Diagnostics
+
+[E0021] Error: unused generic parameters
+   ,-[ main.rs:3:10]
+   |
+ 3 | struct Bazz<T> {}
+   *          ^|^  
+   *           `--- unused generic parameters `T`
+---'
+[E0021] Error: unused generic parameters
+   ,-[ main.rs:5:8]
+   |
+ 5 | struct Bazz<A, B, C> {
+   *        ^^^^|^^^^  
+   *            `------ unused generic parameters `B`, `C`
+---'
+

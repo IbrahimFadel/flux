@@ -69,6 +69,12 @@ impl From<FileItemTreeId<Use>> for ModuleDefId {
     }
 }
 
+impl From<FileItemTreeId<Struct>> for ModuleDefId {
+    fn from(value: FileItemTreeId<Struct>) -> Self {
+        ModuleDefId::StructId(value.index)
+    }
+}
+
 impl From<FileItemTreeId<Trait>> for ModuleDefId {
     fn from(value: FileItemTreeId<Trait>) -> Self {
         ModuleDefId::TraitId(value.index)

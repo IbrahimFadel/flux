@@ -8,15 +8,44 @@ use once_cell::sync::Lazy;
 use pretty::BoxAllocator;
 
 use crate::{
-    body::LoweredBodies, hir::Function, item_tree::ItemTree, ModuleDefId, ModuleId, TypeInterner,
+    body::LoweredBodies,
+    hir::Function,
+    item_tree::ItemTree,
+    name_res::{
+        mod_res::{FileResolver, RelativePath},
+        DefMap,
+    },
+    ModuleDefId, ModuleId, TypeInterner,
 };
 
-use super::{mod_res::FileResolver, DefMap};
+mod generics;
 
 static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&STRING_INTERNER));
 
-fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>) {
+struct TestFileResolver;
+
+impl FileResolver for TestFileResolver {
+    fn resolve_absolute_path(
+        &self,
+        path: &str,
+        file_cache: &mut FileCache,
+    ) -> Option<(flux_span::FileId, String)> {
+        Some(file_cache.get_by_file_path(path))
+    }
+
+    fn resolve_relative_path(
+        &self,
+        path: RelativePath,
+        file_cache: &mut flux_diagnostics::reporting::FileCache,
+    ) -> Option<(flux_span::FileId, String)> {
+        let anchor_path = file_cache.get_file_dir(&path.anchor);
+        let absolute_path = format!("{anchor_path}/{}", path.path);
+        Some(file_cache.get_by_file_path(&absolute_path))
+    }
+}
+
+fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>, FileCache) {
     let mut file_cache = FileCache::new(&STRING_INTERNER);
     let files = content.split("//-").skip(1);
     let mut entry_file_path = None;
@@ -44,7 +73,7 @@ fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>) {
     let (lowered_bodies, mut diagnostics2) =
         crate::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
     diagnostics.append(&mut diagnostics2);
-    (def_map, lowered_bodies, diagnostics)
+    (def_map, lowered_bodies, diagnostics, file_cache)
 }
 
 fn fmt_file_id(file_id: FileId, string_interner: &'static ThreadedRodeo) -> &str {
@@ -63,6 +92,7 @@ fn fmt_function(
         .1
         .render(50, buf)
         .unwrap();
+    println!("{:#?} {:?}", lowered_bodies.indices, (module_id, f_idx));
     let body = lowered_bodies
         .indices
         .get(&(module_id, ModuleDefId::FunctionId(f_idx)))
@@ -87,13 +117,20 @@ fn fmt_item_tree(
     let allocator = BoxAllocator;
     let mut buf = BufWriter::new(Vec::new());
     item_tree.functions.iter().for_each(|(f_idx, f)| {
-        fmt_function(f, f_idx, module_id, &allocator, &mut buf, lowered_bodies);
+        if item_tree[f_idx].ast.is_some() {
+            fmt_function(f, f_idx, module_id, &allocator, &mut buf, lowered_bodies);
+        }
     });
     let bytes = buf.into_inner().unwrap();
     String::from_utf8(bytes).unwrap()
 }
 
-fn fmt_def_map(def_map: &DefMap, lowered_bodies: &LoweredBodies) -> String {
+fn fmt_def_map(
+    def_map: &DefMap,
+    lowered_bodies: &LoweredBodies,
+    diagnostics: &[Diagnostic],
+    file_cache: &FileCache,
+) -> String {
     let mut item_tree_s = String::from("Item Tree\n\n");
     let mut mod_map_s = String::from("Module Id Map\n\n");
     for (module_id, item_tree) in def_map.item_trees.iter() {
@@ -110,70 +147,42 @@ fn fmt_def_map(def_map: &DefMap, lowered_bodies: &LoweredBodies) -> String {
         );
         item_tree_s += &fmt_item_tree(module_id, item_tree, lowered_bodies);
     }
-    format!("{}\n\n{}", mod_map_s, item_tree_s)
+
+    let mut buf = BufWriter::new(Vec::new());
+    buf.write("Diagnostics\n\n".as_bytes()).unwrap();
+    file_cache.write_diagnostics_to_buffer(diagnostics, &mut buf);
+    let bytes: Vec<u8> = buf.into_inner().unwrap();
+    let diagnostics_bytes_without_ansi = strip_ansi_escapes::strip(&bytes).unwrap();
+    let diagnostics_s = String::from_utf8(diagnostics_bytes_without_ansi).unwrap();
+    format!("{mod_map_s}\n\n{item_tree_s}\n\n{diagnostics_s}")
 }
 
-fn no_errors(content: &str) {
-    let (def_map, lowered_bodies, diagnostics) = check(content);
-    assert_eq!(diagnostics.len(), 0);
-    let s = fmt_def_map(&def_map, &lowered_bodies);
-    insta::assert_snapshot!(s);
+#[macro_export]
+macro_rules! no_errors {
+    ($name:ident, $src:literal) => {
+        paste::paste! {
+            #[test]
+            fn [<no_errors_ $name>]() {
+                let (def_map, lowered_bodies, diagnostics, file_cache) = crate::tests::check($src);
+                assert_eq!(diagnostics.len(), 0);
+                let s = crate::tests::fmt_def_map(&def_map, &lowered_bodies, &diagnostics, &file_cache);
+                insta::assert_snapshot!(s);
+            }
+        }
+    };
 }
 
-#[test]
-fn basic() {
-    no_errors(
-        r#"
-//- ./main.flx
-
-mod foo;
-mod bar;
-
-fn main() -> i32 {
-    0
-}
-
-//- ./foo.flx
-
-pub fn inside_foo() {}
-
-fn also_inside_foo(x X, y i32) -> u32 {
-    0
-}
-
-//- ./bar.flx
-
-mod bazz;
-
-fn inside_bar() {}
-
-//- ./bar/bazz.flx
-
-fn inside_bazz() {
-
-}
-"#,
-    );
-}
-
-struct TestFileResolver;
-
-impl FileResolver for TestFileResolver {
-    fn resolve_absolute_path(
-        &self,
-        path: &str,
-        file_cache: &mut FileCache,
-    ) -> Option<(flux_span::FileId, String)> {
-        Some(file_cache.get_by_file_path(path))
-    }
-
-    fn resolve_relative_path(
-        &self,
-        path: super::mod_res::RelativePath,
-        file_cache: &mut flux_diagnostics::reporting::FileCache,
-    ) -> Option<(flux_span::FileId, String)> {
-        let anchor_path = file_cache.get_file_dir(&path.anchor);
-        let absolute_path = format!("{anchor_path}/{}", path.path);
-        Some(file_cache.get_by_file_path(&absolute_path))
-    }
+#[macro_export]
+macro_rules! errors {
+    ($name:ident, $src:literal) => {
+        paste::paste! {
+            #[test]
+            fn [<errors_ $name>]() {
+                let (def_map, lowered_bodies, diagnostics, file_cache) = crate::tests::check($src);
+                assert_ne!(diagnostics.len(), 0);
+                let s = crate::tests::fmt_def_map(&def_map, &lowered_bodies, &diagnostics, &file_cache);
+                insta::assert_snapshot!(s);
+            }
+        }
+    };
 }

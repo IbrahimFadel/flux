@@ -1,11 +1,12 @@
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
+    io::Write,
     ops::Deref,
     path::PathBuf,
 };
 
-use ariadne::Source;
+use ariadne::{CharSet, Config, Source};
 use flux_span::{FileId, InFile, Span};
 use itertools::Itertools;
 use lasso::ThreadedRodeo;
@@ -104,12 +105,23 @@ impl FileCache {
     }
 
     pub fn report_diagnostic(&self, diagnostic: &Diagnostic) {
-        let report = diagnostic.to_report();
+        let report = diagnostic.to_report(Config::default());
         report.eprint(self).unwrap();
     }
 
     pub fn report_diagnostics(&self, diagnostics: &[Diagnostic]) {
         diagnostics.iter().for_each(|d| self.report_diagnostic(d));
+    }
+
+    pub fn write_diagnostics_to_buffer<W: Write>(&self, diagnostics: &[Diagnostic], buf: &mut W) {
+        for diagnostic in diagnostics {
+            let report = diagnostic.to_report(
+                Config::default()
+                    .with_char_set(CharSet::Ascii)
+                    .with_color(false),
+            );
+            report.write(self, &mut *buf).unwrap();
+        }
     }
 }
 

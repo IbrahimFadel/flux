@@ -10,8 +10,8 @@ use text_size::{TextRange, TextSize};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, Function, GenericParams, Mod, Name, Param, Params, Trait, Type, Use, Visibility,
-        WherePredicate,
+        Apply, Function, GenericParams, Mod, Name, Param, Params, Struct, StructField,
+        StructFields, Trait, Type, Use, Visibility, WherePredicate,
     },
     lower_node,
     type_interner::TypeIdx,
@@ -63,7 +63,7 @@ impl<'a> Ctx<'a> {
             ast::Item::EnumDecl(_) => todo!(),
             ast::Item::FnDecl(function) => self.lower_function(function).into(),
             ast::Item::ModDecl(m) => self.lower_mod(m).into(),
-            ast::Item::StructDecl(_) => todo!(),
+            ast::Item::StructDecl(s) => self.lower_struct(s).into(),
             ast::Item::TraitDecl(t) => self.lower_trait(t).into(),
             ast::Item::UseDecl(u) => self.lower_use(u).into(),
         }
@@ -76,7 +76,9 @@ impl<'a> Ctx<'a> {
             apply.where_clause(),
             visibility.span,
         );
-        let trt = apply.trt().map(|trt| self.body_ctx.lower_path(trt.path()));
+        let trt = apply
+            .trt()
+            .map(|trt| self.body_ctx.lower_path(trt.path(), &generic_params));
         let ty = lower_node(
             apply.to_ty(),
             |ty| {
@@ -84,9 +86,9 @@ impl<'a> Ctx<'a> {
                     .intern(Type::Unknown)
                     .at(ty.range().to_span())
             },
-            |ty| self.body_ctx.lower_type(ty.ty()),
+            |ty| self.body_ctx.lower_type(ty.ty(), &generic_params),
         );
-        let assoc_types = self.lower_apply_assoc_types(apply.associated_types());
+        let assoc_types = self.lower_apply_assoc_types(apply.associated_types(), &generic_params);
         let (methods, methods_end) = self.lower_apply_methods(apply.methods());
 
         let (l, r) = match (apply.lbrace(), apply.rbrace()) {
@@ -110,7 +112,7 @@ impl<'a> Ctx<'a> {
         let methods = methods.at(apply_methods_span);
         let res = Apply {
             visibility,
-            generic_params: generic_params.inner,
+            generic_params,
             trt,
             ty,
             assoc_types,
@@ -127,8 +129,8 @@ impl<'a> Ctx<'a> {
             function.where_clause(),
             name.span,
         );
-        let params = self.lower_params(function.param_list());
-        let ret_ty = self.lower_return_type(function.return_type());
+        let params = self.lower_params(function.param_list(), &generic_params);
+        let ret_ty = self.lower_return_type(function.return_type(), &generic_params);
         let res = Function {
             visibility,
             name,
@@ -145,6 +147,43 @@ impl<'a> Ctx<'a> {
         let name = self.body_ctx.lower_name(m.name());
         let res = Mod { visibility, name };
         id(self.tree.mods.alloc(res))
+    }
+
+    fn lower_struct(&mut self, s: &ast::StructDecl) -> FileItemTreeId<Struct> {
+        let visibility = self.lower_visibility(s.visibility());
+        let name = self.body_ctx.lower_name(s.name());
+        let generic_params =
+            self.lower_generic_params(s.generic_param_list(), s.where_clause(), name.span);
+        let fields = self.lower_struct_fields(s.field_list(), &generic_params);
+        let res = Struct {
+            visibility,
+            name,
+            generic_params,
+            fields,
+        };
+        id(self.tree.structs.alloc(res))
+    }
+
+    fn lower_struct_fields(
+        &mut self,
+        field_list: Option<ast::StructDeclFieldList>,
+        generic_params: &GenericParams,
+    ) -> StructFields {
+        lower_node(
+            field_list,
+            |_| StructFields::poisoned(),
+            |field_list| {
+                let fields = field_list
+                    .fields()
+                    .map(|field| {
+                        let name = self.body_ctx.lower_name(field.name());
+                        let ty = self.body_ctx.lower_type(field.ty(), &generic_params);
+                        StructField { name, ty }
+                    })
+                    .collect();
+                StructFields { fields }
+            },
+        )
     }
 
     fn lower_trait(&mut self, t: &ast::TraitDecl) -> FileItemTreeId<Trait> {
@@ -177,7 +216,7 @@ impl<'a> Ctx<'a> {
         let res = Trait {
             visibility,
             name,
-            generic_params: generic_params.inner,
+            generic_params,
             assoc_types,
             methods,
         };
@@ -186,7 +225,9 @@ impl<'a> Ctx<'a> {
 
     fn lower_use(&mut self, u: &ast::UseDecl) -> FileItemTreeId<Use> {
         let visibility = self.lower_visibility(u.visibility()).inner;
-        let path = self.body_ctx.lower_path(u.path());
+        let path = self
+            .body_ctx
+            .lower_path(u.path(), &GenericParams::poisoned());
         let alias = u.alias().map(|alias| self.body_ctx.lower_name(Some(alias)));
         let res = Use {
             visibility,
@@ -237,7 +278,7 @@ impl<'a> Ctx<'a> {
                     .map(|(idx, _)| idx)
                     .unwrap_or_else(|| {
                         self.diagnostics.push(
-                            LowerError::UnknownGenericInWherePredicate {
+                            LowerError::UnknownGeneric {
                                 generic: self.string_interner.resolve(&name.inner).to_string(),
                                 generic_file_span: name.span.in_file(self.file_id),
                                 generic_params: generic_params
@@ -258,12 +299,18 @@ impl<'a> Ctx<'a> {
                     |_| todo!(),
                     |type_bound_list| {
                         type_bound_list.type_bounds().for_each(|bound| {
-                            let path = self.body_ctx.lower_path(bound.trait_path());
-                            generic_params.inner.where_predicates.push(WherePredicate {
-                                ty: idx,
-                                name: name.clone(),
-                                bound: path,
-                            })
+                            let path = self
+                                .body_ctx
+                                .lower_path(bound.trait_path(), &generic_params);
+                            generic_params
+                                .inner
+                                .where_predicates
+                                .0
+                                .push(WherePredicate {
+                                    ty: idx,
+                                    name: name.clone(),
+                                    bound: path,
+                                })
                         })
                     },
                 );
@@ -284,11 +331,12 @@ impl<'a> Ctx<'a> {
     fn lower_apply_assoc_types(
         &self,
         assoc_types: impl Iterator<Item = ast::ApplyDeclAssocType>,
+        generic_params: &GenericParams,
     ) -> Vec<(Name, Spanned<TypeIdx>)> {
         assoc_types
             .map(|ty| {
                 let name = self.body_ctx.lower_name(ty.name());
-                let ty = self.body_ctx.lower_type(ty.ty());
+                let ty = self.body_ctx.lower_type(ty.ty(), &generic_params);
                 (name, ty)
             })
             .collect()
@@ -330,8 +378,8 @@ impl<'a> Ctx<'a> {
                     method.where_clause(),
                     name.span,
                 );
-                let params = self.lower_params(method.param_list());
-                let ret_ty = self.lower_return_type(method.return_ty());
+                let params = self.lower_params(method.param_list(), &generic_params);
+                let ret_ty = self.lower_return_type(method.return_ty(), &generic_params);
                 end = Some(ret_ty.span.range.end());
                 let f = Function {
                     visibility: Visibility::Public.at(name.span), // Arbitrary really... since theres no real concept of visibility for trait methods, but i guess they are public
@@ -347,7 +395,11 @@ impl<'a> Ctx<'a> {
         (methods, end)
     }
 
-    fn lower_params(&self, params: Option<ast::ParamList>) -> Spanned<Params> {
+    fn lower_params(
+        &self,
+        params: Option<ast::ParamList>,
+        generic_params: &GenericParams,
+    ) -> Spanned<Params> {
         lower_node(
             params,
             |param_list| Params::new(vec![]).at(param_list.range().to_span()),
@@ -357,7 +409,7 @@ impl<'a> Ctx<'a> {
                         .params()
                         .map(|param| {
                             let name = self.body_ctx.lower_name(param.name());
-                            let ty = self.body_ctx.lower_type(param.ty());
+                            let ty = self.body_ctx.lower_type(param.ty(), &generic_params);
                             Param { name, ty }
                         })
                         .collect(),
@@ -367,7 +419,11 @@ impl<'a> Ctx<'a> {
         )
     }
 
-    fn lower_return_type(&self, ty: Option<ast::FnReturnType>) -> Spanned<TypeIdx> {
+    fn lower_return_type(
+        &self,
+        ty: Option<ast::FnReturnType>,
+        generic_params: &GenericParams,
+    ) -> Spanned<TypeIdx> {
         lower_node(
             ty,
             |ty| {
@@ -376,7 +432,7 @@ impl<'a> Ctx<'a> {
                     .at(ty.range().to_span())
             },
             |ty| match ty.ty() {
-                Some(ty) => self.body_ctx.lower_type(Some(ty)),
+                Some(ty) => self.body_ctx.lower_type(Some(ty), &generic_params),
                 None => self
                     .type_interner
                     .intern(Type::Tuple(vec![]))

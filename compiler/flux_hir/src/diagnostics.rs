@@ -109,7 +109,7 @@ pub(crate) enum LowerError {
     },
     #[error(
         location = got_num,
-        primary = "incorrect number of generic parameters in apply_method",
+        primary = "incorrect number of generic parameters in apply method",
         label at got_num = "got {got_num} generic parameter{}" with (got_num.plural("s")),
         label at expected_num = "expected {expected_num} generic parameter{}" with (expected_num.plural("s")),
     )]
@@ -235,7 +235,7 @@ pub(crate) enum LowerError {
             generic_params.iter().map(|param| format!("`{param}`")).join(", ")
         )
     )]
-    UnknownGenericInWherePredicate {
+    UnknownGeneric {
         // The unknown generic
         #[filespanned]
         generic: String,
@@ -278,5 +278,41 @@ pub(crate) enum LowerError {
         trait_generic_param: String,
         #[filespanned]
         apply_generic_param: String,
+    },
+    #[error(
+        location = unused_generic_params,
+        primary = "unused generic parameters",
+        label at unused_generic_params = "unused generic parameters {}"
+            with (
+                unused_generic_params.iter().map(|param| format!("`{param}`")).join(", ")
+            ),
+    )]
+    UnusedGenericParams {
+        #[filespanned]
+        unused_generic_params: Vec<String>,
+    },
+    #[error(
+        location = got_num,
+        primary = "incorrect number of generic arguments in where predicate",
+        label at expected_num = "expected {expected_num} arguments",
+        label at got_num = "got {got_num} arguments",
+    )]
+    IncorrectNumGenericArgsInWherePredicate {
+        #[filespanned]
+        got_num: usize,
+        #[filespanned]
+        expected_num: usize,
+    },
+    #[error(
+        location = generic,
+        primary = "generic argument is missing required trait restriction",
+        label at generic = "generic `{generic}` missing restriction `{restriction}`",
+        label at restriction = "restriction `{restriction}` defined here",
+    )]
+    GenericArgDoesNotMatchRestriction {
+        #[filespanned]
+        generic: String,
+        #[filespanned]
+        restriction: String,
     },
 }

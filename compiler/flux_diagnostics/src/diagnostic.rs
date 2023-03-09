@@ -1,4 +1,4 @@
-use ariadne::{Color, Label, Report, ReportKind};
+use ariadne::{Color, Config, Label, Report, ReportKind};
 use flux_span::{FileId, FileSpanned, InFile};
 use lasso::Spur;
 
@@ -90,12 +90,14 @@ impl Diagnostic {
         self
     }
 
-    pub(crate) fn to_report(&self) -> Report<FileSpan> {
+    pub(crate) fn to_report(&self, config: Config) -> Report<FileSpan> {
         let (file_id, offset) = match &self.offset {
             Some(offset) => (offset.file_id, offset.inner),
             None => (FileId(Spur::default()), 0),
         };
+
         let mut builder = Report::build(self.kind.to_ariadne_report_kind(), file_id, offset)
+            .with_config(config)
             .with_code(self.code)
             .with_message(&self.msg);
 
@@ -132,7 +134,7 @@ pub enum DiagnosticCode {
     ParserExpected,
 
     CouldNotResolveModDecl,
-    UnknownGenericInWherePredicate,
+    UnknownGeneric,
 
     StmtFollowingTerminatorExpr,
     IncorrectNumArgsInCall,
@@ -149,6 +151,9 @@ pub enum DiagnosticCode {
     IncorrectNumGenericParamsInApplyMethod,
     WherePredicatesDontMatchInApplyMethod,
     MissingWherePredicateInApplyMethod,
+    UnusedGenericParams,
+    IncorrectNumGenericArgsInWherePredicate,
+    GenericArgDoesNotMatchRestriction,
 
     TypeMismatch,
     ConflictingTraitImplementations,

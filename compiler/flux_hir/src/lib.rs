@@ -5,6 +5,8 @@ mod item_scope;
 mod item_tree;
 mod name_res;
 mod per_ns;
+#[cfg(test)]
+mod tests;
 mod type_interner;
 
 use flux_diagnostics::ice;

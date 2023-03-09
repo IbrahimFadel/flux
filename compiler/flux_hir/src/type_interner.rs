@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use dashmap::DashMap;
+use dashmap::{mapref::one::Ref, DashMap};
 use flux_diagnostics::ice;
 use lasso::ThreadedRodeo;
 
@@ -37,27 +37,26 @@ impl TypeInterner {
         if let Some(key) = self.ty_to_key.get(&ty) {
             *key
         } else {
-            let make_new_key = || TypeIdx::new(len.try_into().unwrap());
-            let key = *self
-                .ty_to_key
-                .entry(ty.clone())
-                .or_insert_with(make_new_key)
-                .value();
+            // let make_new_key = || TypeIdx::new(len.try_into().unwrap());
+            let key = TypeIdx::new(len.try_into().unwrap());
+            self.ty_to_key.insert(ty.clone(), key);
+            // let key = *self
+            //     .ty_to_key
+            //     .entry(ty.clone())
+            //     .or_insert_with(make_new_key)
+            //     .value();
             self.key_to_ty.insert(key, ty);
+            println!("{:?} {:?}", self.ty_to_key, self.key_to_ty);
             key
         }
     }
 
-    pub fn resolve(&self, key: TypeIdx) -> &'static Type {
+    pub fn resolve<'a>(&'a self, key: TypeIdx) -> Ref<TypeIdx, Type> {
         assert!((key.0 as usize) < self.ty_to_key.len());
         assert!((key.0 as usize) < self.key_to_ty.len());
-        unsafe {
-            let x = self
-                .key_to_ty
-                .get(&key)
-                .unwrap_or_else(|| ice("invalid type index"));
-            std::mem::transmute::<&Type, &'static Type>(&*x)
-        }
+        self.key_to_ty
+            .get(&key)
+            .unwrap_or_else(|| ice("invalid type index"))
     }
 
     // pub fn intern(&self, ty: Type) -> TypeIdx {

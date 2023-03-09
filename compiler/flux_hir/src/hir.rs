@@ -1,8 +1,10 @@
-use std::ops::Deref;
+use std::{borrow::Borrow, ops::Deref};
 
+use flux_diagnostics::ice;
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, ToSpan, WithSpan};
 use flux_syntax::ast;
+use hashbrown::HashSet;
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
@@ -24,7 +26,7 @@ pub enum Visibility {
 #[derive(Debug, Clone)]
 pub struct Apply {
     pub visibility: Spanned<Visibility>,
-    pub generic_params: GenericParams,
+    pub generic_params: Spanned<GenericParams>,
     pub trt: Option<Spanned<Path>>,
     pub ty: Spanned<TypeIdx>,
     pub assoc_types: Vec<(Name, Spanned<TypeIdx>)>,
@@ -51,13 +53,35 @@ pub struct Mod {
 }
 
 #[derive(Debug, Clone)]
-pub struct Struct {}
+pub struct Struct {
+    pub visibility: Spanned<Visibility>,
+    pub name: Name,
+    pub generic_params: Spanned<GenericParams>,
+    pub fields: StructFields,
+}
+
+#[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
+pub struct StructFields {
+    pub fields: Vec<StructField>,
+}
+
+impl StructFields {
+    pub fn poisoned() -> Self {
+        Self { fields: vec![] }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
+pub struct StructField {
+    pub name: Name,
+    pub ty: Spanned<TypeIdx>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Trait {
     pub visibility: Spanned<Visibility>,
     pub name: Name,
-    pub generic_params: GenericParams,
+    pub generic_params: Spanned<GenericParams>,
     pub assoc_types: Vec<Name>,
     pub methods: Spanned<Vec<FunctionId>>,
 }
@@ -94,21 +118,84 @@ pub struct Param {
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
 pub struct GenericParams {
     pub types: Arena<Spanned<Spur>>,
-    pub where_predicates: Vec<WherePredicate>,
+    pub where_predicates: WherePredicates,
 }
 
 impl GenericParams {
+    pub fn new() -> Self {
+        Self {
+            types: Arena::new(),
+            where_predicates: WherePredicates(vec![]),
+        }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            types: Arena::with_capacity(capacity),
+            where_predicates: WherePredicates(Vec::with_capacity(capacity)),
+        }
+    }
+
     pub fn poisoned() -> Self {
         Self {
             types: Arena::default(),
-            where_predicates: Vec::with_capacity(0),
+            where_predicates: WherePredicates(Vec::with_capacity(0)),
         }
     }
 
     pub fn invalid_idx(&self) -> Idx<Spanned<Spur>> {
         Idx::from_raw(RawIdx::from(self.types.len() as u32))
     }
+
+    pub fn combine(a: &GenericParams, b: &GenericParams) -> Result<Self, Vec<Spur>> {
+        let a_names: HashSet<Spur> = a.types.iter().map(|(_, name)| name.inner).collect();
+        let b_names: HashSet<Spur> = b.types.iter().map(|(_, name)| name.inner).collect();
+        let duplicates: Vec<Spur> = a_names.intersection(&b_names).copied().collect();
+        if duplicates.is_empty() {
+            let mut generic_params = GenericParams::with_capacity(duplicates.len());
+            let combined = a_names.union(&b_names);
+            combined.for_each(|name| {
+                let predicate = a
+                    .where_predicates
+                    .0
+                    .iter()
+                    .find(|predicate| predicate.name.inner == *name)
+                    .or_else(|| {
+                        b.where_predicates
+                            .0
+                            .iter()
+                            .find(|predicate| predicate.name.inner == *name)
+                    })
+                    .unwrap_or_else(|| {
+                        ice("could not find where predicate when combining generic parameters")
+                    });
+
+                let new_idx = generic_params.types.alloc(predicate.name.clone());
+                generic_params.where_predicates.0.push(WherePredicate {
+                    ty: new_idx,
+                    name: predicate.name.clone(),
+                    bound: predicate.bound.clone(),
+                });
+            });
+            Ok(generic_params)
+        } else {
+            Err(duplicates)
+        }
+    }
+
+    pub fn unused<S: Borrow<Spur>>(&self, mut used: impl Iterator<Item = S>) -> Vec<Spur> {
+        let mut unused = vec![];
+        for (_, generic) in self.types.iter() {
+            if used.find(|name| name.borrow() == &generic.inner).is_none() {
+                unused.push(generic.inner)
+            }
+        }
+        unused
+    }
 }
+
+#[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
+pub struct WherePredicates(pub Vec<WherePredicate>);
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct WherePredicate {
@@ -224,6 +311,7 @@ pub enum Type {
     Ptr(Spanned<TypeIdx>),
     Path(Path),
     Unknown,
+    Generic(Spur),
 }
 
 #[derive(Clone, PartialEq, Debug, Locatable)]

@@ -20,8 +20,6 @@ use self::{
 
 pub(crate) mod mod_res;
 pub(crate) mod path_res;
-#[cfg(test)]
-mod tests;
 
 #[derive(Debug)]
 pub struct DefMap {
@@ -47,7 +45,7 @@ impl std::ops::IndexMut<LocalModuleId> for DefMap {
 
 #[derive(Debug)]
 pub struct ModuleData {
-    parent: Option<ModuleId>,
+    pub(crate) parent: Option<ModuleId>,
     children: HashMap<Spur, ModuleId>,
     pub(crate) scope: ItemScope,
     pub file_id: FileId,
@@ -321,7 +319,15 @@ impl<'a> ModCollector<'a> {
                 crate::item_tree::ModItem::Mod(id) => {
                     self.collect_module(id, file_cache, type_interner, resolver);
                 }
-                crate::item_tree::ModItem::Struct(_) => todo!(),
+                crate::item_tree::ModItem::Struct(id) => {
+                    let s = &self.item_tree[id];
+                    update_def(
+                        self.def_collector,
+                        id.into(),
+                        s.name.inner,
+                        s.visibility.inner,
+                    );
+                }
                 crate::item_tree::ModItem::Trait(id) => {
                     let t = &self.item_tree[id];
                     update_def(self.def_collector, id.into(), t.name.inner, *t.visibility);

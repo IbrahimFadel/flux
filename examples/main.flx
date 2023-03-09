@@ -1,101 +1,35 @@
-mod foo;
-mod bar;
-
-use foo::Foo;
-
-fn main() {
-    /*
-    let x u32 = foo::inside_foo_priv(1.0);
-    let y u32 = inside_foo_priv();
-    some_pub_fn();
-    0
-    */
-}
-
-/*
-trait Foo<T, X> {
-    type X;
-
-    fn bar<X, Z>();
-}
 
 trait Bar {}
+trait Dummy<T> where T is Bar {}
+trait Foo<A, B>
+    where
+        A is Dummy<B>,
+        B is Bar,
+{}
 
-apply<A, B> Foo<A, B> to i32 {
-    type X = f32;
-}
-
-apply<C, D> Foo<C, X> to i32 {
-    type X = f32;
-}
-
-fn foo<A, B>(x A) -> A
-    where A is Foo<A, B> + Bar
+fn foo<T, A, B>()
+    where
+        T is Foo<A, B>,
+        A is Dummy<B>,
 {
-    0
+
 }
-*/
 
 /*
-mod foo;
-mod bar;
-mod bazz;
+trait Bar {}
+trait Dummy<T> where T is Bar {}
+trait Foo<A, B>
+    where
+        A is Dummy<B>,
+        B is Bar,
+{}
 
-use foo::inside_foo;
+fn foo<T, A, B>()
+    where
+        T is Foo<A, B>,
+        A is Dummy<B>,
+        B is Bar,
+{
 
-struct Foo {
-    x i4g,
-    y f32,
-    z pkg::Bar,
-}
-
-struct Bar {
-    bar_field u64
-}
-
-enum Result<O, E> {
-    Ok -> O,
-    Err -> E,
-}
-
-trait SomeTrait {
-    fn do_stuff();
-}
-
-apply SomeTrait to Bar {
-    fn do_stuff() {
-    }
-}
-
-fn main() -> i8 {
-    let test = 0;
-    let x i32 = 0;
-    let y i8 = x;
-    let x Foo = Foo {
-        // x: x,
-        y: 1,
-        z: pkg::Bar {
-            bar_field: 10.0,
-        },
-        test: test,
-    };
-    let new = inside_foo();
-    let another_one i32 = new;
-
-    let hmmm = BazzStruct {
-
-    };
-    let hmmm = bazz::BazzStruct {
-
-    };
-
-    let fee i8 = test;
-    let fi i32 = 0;
-    let fo = fee;
-    let fum i32 = fo;
-}
-
-fn foo<T>() -> ([T; 3], i8**) {
-    let foo = 0;
 }
 */

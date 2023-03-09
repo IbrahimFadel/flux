@@ -37,7 +37,7 @@ impl PerNs {
             ModuleDefId::EnumId(_) => todo!(),
             ModuleDefId::FunctionId(_) => PerNs::values(def, m, v),
             ModuleDefId::ModuleId(_) => PerNs::types(def, m, v),
-            ModuleDefId::StructId(_) => todo!(),
+            ModuleDefId::StructId(_) => PerNs::types(def, m, v),
             ModuleDefId::TraitId(_) => PerNs::types(def, m, v),
             ModuleDefId::UseId(_) => todo!(),
         }

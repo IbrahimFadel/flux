@@ -1,11 +1,14 @@
 use flux_span::Spanned;
 use la_arena::Arena;
 use lasso::ThreadedRodeo;
-use pretty::{DocAllocator, DocBuilder};
+use pretty::{DocAllocator, DocBuilder, RcDoc};
 
 use crate::{type_interner::TypeIdx, TypeInterner};
 
-use super::{Block, Call, Expr, ExprIdx, Function, Let, Param, Params, Path, Type, Visibility};
+use super::{
+    Block, Call, Expr, ExprIdx, Function, GenericParams, Let, Param, Params, Path, Type,
+    Visibility, WherePredicate, WherePredicates,
+};
 
 impl Function {
     pub fn pretty<'b, D, A>(
@@ -24,6 +27,7 @@ impl Function {
             .pretty(allocator)
             .append(allocator.text("fn "))
             + allocator.text(string_interner.resolve(&self.name.inner))
+            + self.generic_params.pretty(allocator, string_interner)
             + self
                 .params
                 .pretty(allocator, string_interner, type_interner)
@@ -32,6 +36,10 @@ impl Function {
                 .ret_ty
                 .inner
                 .pretty(allocator, string_interner, type_interner)
+            + self
+                .generic_params
+                .where_predicates
+                .pretty(allocator, string_interner)
             + allocator.text(" ")
     }
 }
@@ -94,53 +102,135 @@ impl Param {
     }
 }
 
-impl TypeIdx {
+impl GenericParams {
     pub fn pretty<'b, D, A>(
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        type_interner: &'static TypeInterner,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
         D::Doc: Clone,
         A: Clone,
     {
-        let t = type_interner.resolve(*self);
-        t.pretty(allocator, string_interner, type_interner)
+        if self.types.is_empty() {
+            return allocator.nil();
+        }
+        allocator.text("<")
+            + allocator.intersperse(
+                self.types
+                    .iter()
+                    .map(|(_, ty)| allocator.text(string_interner.resolve(ty))),
+                ", ",
+            )
+            + allocator.text(">")
     }
 }
 
-impl Type {
+impl WherePredicates {
     pub fn pretty<'b, D, A>(
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        type_interner: &'static TypeInterner,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
         D::Doc: Clone,
         A: Clone,
     {
+        if self.0.is_empty() {
+            return allocator.nil();
+        }
+
+        allocator.text(" where ")
+            + allocator.intersperse(
+                self.0
+                    .iter()
+                    .map(|predicate| predicate.pretty(allocator, string_interner)),
+                ", ",
+            )
+    }
+}
+
+impl WherePredicate {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        allocator.text(string_interner.resolve(&self.name))
+            + allocator.text(" is ")
+            + allocator.text(self.bound.to_string(string_interner))
+    }
+}
+
+impl TypeIdx {
+    pub fn to_doc(
+        &self,
+        string_interner: &'static ThreadedRodeo,
+        type_interner: &'static TypeInterner,
+    ) -> RcDoc<()> {
+        let t = type_interner.resolve(*self);
+        t.to_doc(string_interner)
+    }
+    // pub fn pretty<'b, D, A>(
+    //     &'b self,
+    //     allocator: &'b D,
+    //     string_interner: &'static ThreadedRodeo,
+    //     type_interner: &'static TypeInterner,
+    // ) -> DocBuilder<'b, D, A>
+    // where
+    //     D: DocAllocator<'b, A>,
+    //     D::Doc: Clone,
+    //     A: Clone,
+    // {
+    //     let t = type_interner.resolve(*self);
+    //     t.pretty(allocator, string_interner, type_interner)
+    // }
+}
+
+impl Type {
+    pub fn to_doc(&self, string_interner: &'static ThreadedRodeo) -> RcDoc<()> {
         match self {
-            Self::Path(path) => path.pretty(allocator, string_interner, type_interner),
-            Self::Ptr(ty) => {
-                allocator.text("*") + ty.inner.pretty(allocator, string_interner, type_interner)
-            }
-            Self::Tuple(types) => {
-                allocator.text("(")
-                    + allocator.intersperse(
-                        types
-                            .iter()
-                            .map(|ty| ty.inner.pretty(allocator, string_interner, type_interner)),
-                        ", ",
-                    )
-                    + allocator.text(")")
-            }
-            Self::Unknown => allocator.text("<unknown type>"),
+            Self::Generic(name) => RcDoc::text(string_interner.resolve(name)),
+            _ => todo!(),
         }
     }
+    // pub fn pretty<'b, D, A>(
+    //     &'b self,
+    //     allocator: &'b D,
+    //     string_interner: &'static ThreadedRodeo,
+    //     type_interner: &'static TypeInterner,
+    // ) -> DocBuilder<'b, D, A>
+    // where
+    //     D: DocAllocator<'b, A>,
+    //     D::Doc: Clone,
+    //     A: Clone,
+    // {
+    //     match self {
+    //         Self::Path(path) => path.pretty(allocator, string_interner, type_interner),
+    //         Self::Ptr(ty) => {
+    //             allocator.text("*") + ty.inner.pretty(allocator, string_interner, type_interner)
+    //         }
+    //         Self::Tuple(types) => {
+    //             allocator.text("(")
+    //                 + allocator.intersperse(
+    //                     types
+    //                         .iter()
+    //                         .map(|ty| ty.inner.pretty(allocator, string_interner, type_interner)),
+    //                     ", ",
+    //                 )
+    //                 + allocator.text(")")
+    //         }
+    //         Self::Unknown => allocator.text("<unknown type>"),
+    //         Self::Generic(name) => allocator.text(string_interner.resolve(name)),
+    //     }
+    // }
 }
 
 impl Path {

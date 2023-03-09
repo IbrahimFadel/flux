@@ -17,13 +17,14 @@ use crate::{
     name_res::{path_res::ResolvePathError, DefMap, LocalModuleId},
     per_ns::PerNs,
     type_interner::TypeIdx,
-    FunctionId, ModuleDefId, ModuleId, TypeInterner,
+    FunctionId, ModuleDefId, ModuleId, StructId, TypeInterner,
 };
 
 mod apply;
 
 type ExprResult = (ExprIdx, TypeId);
 
+#[derive(Debug)]
 pub struct LoweredBodies {
     pub exprs: Arena<Spanned<Expr>>,
     pub indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
@@ -91,20 +92,33 @@ impl<'a> LowerCtx<'a> {
                 crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
                 crate::item_tree::ModItem::Enum(_) => todo!(),
                 crate::item_tree::ModItem::Function(f) => {
-                    let body_idx = self.handle_function(f.index, item_tree);
-                    self.indices
-                        .insert((module_id, ModuleDefId::FunctionId(f.index)), body_idx);
+                    self.handle_function(f.index, item_tree);
                 }
                 crate::item_tree::ModItem::Mod(_) => {}
-                crate::item_tree::ModItem::Struct(_) => todo!(),
+                crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index, item_tree),
                 crate::item_tree::ModItem::Trait(_) => {}
                 crate::item_tree::ModItem::Use(_) => {}
             }
         }
     }
 
-    fn handle_function(&mut self, f: Idx<Function>, item_tree: &ItemTree) -> ExprIdx {
-        let f = &item_tree[f];
+    fn handle_function(&mut self, f_idx: FunctionId, item_tree: &ItemTree) -> ExprIdx {
+        let f = &item_tree[f_idx];
+
+        self.check_where_predicates(
+            &f.generic_params,
+            f.generic_params.span.in_file(self.file_id()),
+            self.cur_module_id,
+        );
+
+        let mut used_generics = vec![];
+
+        for param in f.params.inner.iter() {
+            if let Type::Generic(name) = *self.type_interner.resolve(param.ty.inner) {
+                used_generics.push(name);
+            }
+        }
+
         let (body_idx, body_tid) = self.lower_expr(
             f.ast
                 .as_ref()
@@ -112,6 +126,7 @@ impl<'a> LowerCtx<'a> {
                     ice("function ast should only be `None` for trait method declarations")
                 })
                 .body(),
+            &f.generic_params,
         );
         let ret_tid = self.insert_type_to_tenv(&f.ret_ty, self.file_id());
         self.tchk
@@ -123,7 +138,55 @@ impl<'a> LowerCtx<'a> {
             .unwrap_or_else(|err| {
                 self.diagnostics.push(err);
             });
+
+        // TODO: once generics get developed more, we'll have to check if they get used inside the function body
+        let unusued_generic_params = f.generic_params.unused(used_generics.iter());
+        if !unusued_generic_params.is_empty() {
+            self.diagnostics.push(
+                LowerError::UnusedGenericParams {
+                    unused_generic_params: unusued_generic_params
+                        .iter()
+                        .map(|spur| self.string_interner.resolve(spur).to_string())
+                        .collect(),
+                    unused_generic_params_file_span: f.generic_params.span.in_file(self.file_id()),
+                }
+                .to_diagnostic(),
+            );
+        }
+
+        self.indices.insert(
+            (self.cur_module_id, ModuleDefId::FunctionId(f_idx)),
+            body_idx.clone(),
+        );
+
         body_idx
+    }
+
+    fn handle_struct(&mut self, s: StructId, item_tree: &ItemTree) {
+        let s = &item_tree[s];
+
+        let mut used_generics = vec![];
+
+        for field in &s.fields.fields {
+            if let Type::Generic(name) = *self.type_interner.resolve(*field.ty) {
+                used_generics.push(name);
+            }
+        }
+
+        let unused_generic_params = s.generic_params.unused(used_generics.iter());
+
+        if !unused_generic_params.is_empty() {
+            self.diagnostics.push(
+                LowerError::UnusedGenericParams {
+                    unused_generic_params: unused_generic_params
+                        .iter()
+                        .map(|spur| self.string_interner.resolve(&spur).to_string())
+                        .collect(),
+                    unused_generic_params_file_span: s.generic_params.span.in_file(self.file_id()),
+                }
+                .to_diagnostic(),
+            );
+        }
     }
 
     fn file_id(&self) -> FileId {
@@ -131,7 +194,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn insert_type_to_tenv(&mut self, idx: &Spanned<TypeIdx>, file_id: FileId) -> TypeId {
-        let ty = match self.type_interner.resolve(idx.inner) {
+        let ty = match &*self.type_interner.resolve(idx.inner) {
             // Type::Array(ty, n) => {
             //     let ty = self.hir_ty_to_ts_ty(ty, where_clause, file_id);
             //     TypeKind::Concrete(ConcreteKind::Array(ty, n.inner))
@@ -150,12 +213,17 @@ impl<'a> LowerCtx<'a> {
                     .collect(),
             )),
             Type::Unknown => TypeKind::Unknown,
+            Type::Generic(name) => TypeKind::Generic(*name),
         };
         let ty = ts::Type::new(ty, &mut self.tchk.tenv.type_interner);
         self.tchk.tenv.insert(ty.file_span(file_id, idx.span))
     }
 
-    fn lower_expr(&mut self, expr: Option<ast::Expr>) -> ExprResult {
+    fn lower_expr(
+        &mut self,
+        expr: Option<ast::Expr>,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
         let (idx, tid) = lower_node(
             expr,
             |_| todo!(),
@@ -168,9 +236,9 @@ impl<'a> LowerCtx<'a> {
                 ast::Expr::FloatExpr(float) => self.lower_float_expr(&float),
                 ast::Expr::IntExpr(int) => self.lower_int_expr(&int),
                 ast::Expr::BinExpr(_) => todo!(),
-                ast::Expr::CallExpr(call) => self.lower_call_expr(&call),
+                ast::Expr::CallExpr(call) => self.lower_call_expr(&call, generic_params),
                 ast::Expr::StructExpr(_) => todo!(),
-                ast::Expr::BlockExpr(block) => self.lower_block_expr(&block),
+                ast::Expr::BlockExpr(block) => self.lower_block_expr(&block, generic_params),
                 ast::Expr::TupleExpr(_) => todo!(),
                 ast::Expr::AddressExpr(_) => todo!(),
                 ast::Expr::IdxExpr(_) => todo!(),
@@ -264,7 +332,11 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    fn lower_call_expr(&mut self, call: &ast::CallExpr) -> ExprResult {
+    fn lower_call_expr(
+        &mut self,
+        call: &ast::CallExpr,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
         let (path, ret_tid, resolved_path) = self.lower_path_expr(call.path());
 
         let args = lower_node(
@@ -273,7 +345,7 @@ impl<'a> LowerCtx<'a> {
             |arg_list| {
                 arg_list
                     .args()
-                    .map(|arg| self.lower_expr(Some(arg)))
+                    .map(|arg| self.lower_expr(Some(arg), generic_params))
                     .collect::<Vec<_>>()
                     .at(arg_list.range().to_span())
             },
@@ -390,7 +462,11 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn lower_block_expr(&mut self, block: &ast::BlockExpr) -> ExprResult {
+    fn lower_block_expr(
+        &mut self,
+        block: &ast::BlockExpr,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
         let file_id = self.file_id();
         let span = block.range().to_span();
         let mut block_tid = self.tchk.tenv.insert_unit(span.in_file(file_id));
@@ -399,10 +475,10 @@ impl<'a> LowerCtx<'a> {
         let stmts_len = stmts.len();
         for i in 0..stmts_len {
             let (expr, _) = match &stmts[i] {
-                ast::Stmt::ExprStmt(expr) => self.lower_expr(expr.expr()),
-                ast::Stmt::LetStmt(let_expr) => self.lower_let_expr(let_expr),
+                ast::Stmt::ExprStmt(expr) => self.lower_expr(expr.expr(), generic_params),
+                ast::Stmt::LetStmt(let_expr) => self.lower_let_expr(let_expr, generic_params),
                 ast::Stmt::TerminatorExprStmt(expr) => {
-                    let (e, tid) = self.lower_expr(expr.expr());
+                    let (e, tid) = self.lower_expr(expr.expr(), generic_params);
                     block_tid = tid;
                     if i < stmts_len - 1 {
                         self.diagnostics.push(
@@ -429,14 +505,18 @@ impl<'a> LowerCtx<'a> {
         (idx.into(), block_tid)
     }
 
-    fn lower_let_expr(&mut self, let_expr: &ast::LetStmt) -> ExprResult {
+    fn lower_let_expr(
+        &mut self,
+        let_expr: &ast::LetStmt,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
         let name = self.lower_name(let_expr.name());
         let ty = match let_expr.ty() {
-            Some(ty) => self.lower_type(Some(ty)),
+            Some(ty) => self.lower_type(Some(ty), generic_params),
             None => self.type_interner.intern(Type::Unknown).at(name.span),
         };
         let declared_tid = self.insert_type_to_tenv(&ty, self.file_id());
-        let (val, val_tid) = self.lower_expr(let_expr.value());
+        let (val, val_tid) = self.lower_expr(let_expr.value(), generic_params);
         self.tchk
             .unify(
                 declared_tid,
@@ -451,7 +531,11 @@ impl<'a> LowerCtx<'a> {
         (idx.into(), declared_tid)
     }
 
-    pub(crate) fn lower_path(&self, path: Option<ast::Path>) -> Spanned<Path> {
+    pub(crate) fn lower_path(
+        &self,
+        path: Option<ast::Path>,
+        generic_params: &GenericParams,
+    ) -> Spanned<Path> {
         lower_node(
             path,
             |path| Path::poisoned().at(path.range().to_span()),
@@ -462,7 +546,7 @@ impl<'a> LowerCtx<'a> {
                     .map(|arg_list| {
                         arg_list
                             .args()
-                            .map(|arg| self.lower_type(Some(arg)))
+                            .map(|arg| self.lower_type(Some(arg), generic_params))
                             .collect()
                     })
                     .unwrap_or(vec![]);
@@ -488,14 +572,33 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    pub(crate) fn lower_type(&self, ty: Option<ast::Type>) -> Spanned<TypeIdx> {
+    pub(crate) fn lower_type(
+        &self,
+        ty: Option<ast::Type>,
+        generic_params: &GenericParams,
+    ) -> Spanned<TypeIdx> {
         let ty = lower_node(
             ty,
             |ty| Type::Unknown.at(ty.range().to_span()),
             |ty| {
                 let span = ty.range().to_span();
                 match ty {
-                    ast::Type::PathType(path) => Type::Path(self.lower_path(path.path()).inner),
+                    ast::Type::PathType(path) => {
+                        let path = self.lower_path(path.path(), generic_params);
+                        if path.segments.len() == 1 {
+                            if let Some((_, generic)) = generic_params
+                                .types
+                                .iter()
+                                .find(|(_, name)| name.inner == *path.segments.first().unwrap())
+                            {
+                                Type::Generic(generic.inner)
+                            } else {
+                                Type::Path(path.inner)
+                            }
+                        } else {
+                            Type::Path(path.inner)
+                        }
+                    }
                     ast::Type::TupleType(_) => todo!(),
                     ast::Type::ArrayType(_) => todo!(),
                     ast::Type::PtrType(_) => todo!(),
