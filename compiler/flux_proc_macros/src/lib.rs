@@ -62,13 +62,11 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                 let field_file_span = format_ident!("{}_file_span", field_name);
                 variant_field_names.push(quote!(#field_file_span));
                 quote! {
-                    #[allow(dead_code)]
                     #field_s
                     #field_file_span: flux_span::InFile<flux_span::Span>,
                 }
             } else {
                 quote! {
-                    #[allow(dead_code)]
                     #field_s
                 }
             };
@@ -148,6 +146,7 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
             fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
                 match self {
                     #(
+                        #[allow(unused)]
                         Self::#variants { #(#field_names),* } => flux_diagnostics::Diagnostic::error(
                             #locations,
                             flux_diagnostics::DiagnosticCode::#variants,

@@ -9,14 +9,12 @@ use std::collections::HashSet;
 
 use crate::{
     diagnostics::TypeError,
-    intern::{Interner, Key},
     r#type::{ConcreteKind, Type, TypeId, TypeKind},
     scope::Scope,
 };
 
 #[derive(Debug)]
 pub struct TEnv {
-    pub type_interner: Interner,
     pub string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
     pub locals: Vec<Scope>,
@@ -41,26 +39,26 @@ impl TraitRestriction {
 /// Stores the [`Key`] of the type constructor and a list of constraints
 #[derive(Debug, Clone)]
 pub struct TEntry {
-    keys: Vec<Key>,
+    keys: Vec<TypeKind>,
     pub restrictions: Vec<TraitRestriction>,
 }
 
 impl TEntry {
-    pub fn new(constr: Key) -> Self {
+    pub fn new(constr: TypeKind) -> Self {
         Self {
             keys: vec![constr],
             restrictions: vec![],
         }
     }
 
-    pub fn with_restrictions(constr: Key, restrictions: Vec<TraitRestriction>) -> Self {
+    pub fn with_restrictions(constr: TypeKind, restrictions: Vec<TraitRestriction>) -> Self {
         Self {
             keys: vec![constr],
             restrictions,
         }
     }
 
-    pub fn with_args(constr: Key, args: impl Iterator<Item = Key>) -> Self {
+    pub fn with_args(constr: TypeKind, args: impl Iterator<Item = TypeKind>) -> Self {
         let keys = std::iter::once(constr).chain(args).collect();
         Self {
             keys,
@@ -69,27 +67,27 @@ impl TEntry {
     }
 
     pub fn with_args_and_restrictions(
-        constr: Key,
-        args: impl Iterator<Item = Key>,
+        constr: TypeKind,
+        args: impl Iterator<Item = TypeKind>,
         restrictions: Vec<TraitRestriction>,
     ) -> Self {
         let keys = std::iter::once(constr).chain(args).collect();
         Self { keys, restrictions }
     }
 
-    pub fn get_constr(&self) -> Key {
-        self.keys[0]
+    pub fn get_constr(&self) -> &TypeKind {
+        &self.keys[0]
     }
 
-    pub fn get_params(&self) -> Option<&[Key]> {
+    pub fn get_params(&self) -> Option<&[TypeKind]> {
         self.keys.get(1..)
     }
 
-    pub fn set_constr(&mut self, key: Key) {
+    pub fn set_constr(&mut self, key: TypeKind) {
         self.keys[0] = key;
     }
 
-    pub fn set_params(&mut self, params: impl Iterator<Item = Key>) {
+    pub fn set_params(&mut self, params: impl Iterator<Item = TypeKind>) {
         self.keys.splice(1.., params.collect::<Vec<_>>());
     }
 }
@@ -98,22 +96,19 @@ impl TEnv {
     /// Construct a new `flux_typesystem` [`TEnv`]
     pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
         Self {
-            type_interner: Interner::new(string_interner),
             string_interner,
             entries: vec![],
-            // name_resolver: NameResolver::new(),
             // Global scope
             locals: vec![Scope::new()],
-            // function_signatures: HashMap::new(),
             int_paths: HashSet::from([
                 string_interner.get_or_intern_static("u8"),
                 string_interner.get_or_intern_static("u16"),
                 string_interner.get_or_intern_static("u32"),
                 string_interner.get_or_intern_static("u64"),
-                string_interner.get_or_intern_static("i8"),
-                string_interner.get_or_intern_static("i16"),
-                string_interner.get_or_intern_static("i32"),
-                string_interner.get_or_intern_static("i64"),
+                string_interner.get_or_intern_static("s8"),
+                string_interner.get_or_intern_static("s16"),
+                string_interner.get_or_intern_static("s32"),
+                string_interner.get_or_intern_static("s64"),
             ]),
             float_paths: HashSet::from([
                 string_interner.get_or_intern_static("f32"),
@@ -146,7 +141,7 @@ impl TEnv {
     /// is considered an ICE.
     pub fn get_typekind_with_id(&self, id: TypeId) -> FileSpanned<TypeKind> {
         let entry = self.get_entry(id);
-        entry.map_inner_ref(|entry| self.type_interner.resolve(entry.get_constr()).clone())
+        entry.map_inner_ref(|entry| entry.get_constr().clone())
         // entry.map_ref(|entry| entry.map_ref(|entry| self.type_interner.resolve(entry.key).clone()))
     }
 
@@ -166,31 +161,28 @@ impl TEnv {
     /// Insert a unit type `()` into the [`TEnv`]
     #[inline]
     pub fn insert_unit(&mut self, span: InFile<Span>) -> TypeId {
-        let ty = Type::new(
-            TypeKind::Concrete(ConcreteKind::Tuple(vec![])),
-            &mut self.type_interner,
-        );
+        let ty = Type::new(TypeKind::Concrete(ConcreteKind::Tuple(vec![])));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 
     /// Insert an unknown type into the [`TEnv`]
     #[inline]
     pub fn insert_unknown(&mut self, span: InFile<Span>) -> TypeId {
-        let ty = Type::new(TypeKind::Unknown, &mut self.type_interner);
+        let ty = Type::new(TypeKind::Unknown);
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 
     /// Insert an int type into the [`TEnv`]
     #[inline]
     pub fn insert_int(&mut self, span: InFile<Span>) -> TypeId {
-        let ty = Type::new(TypeKind::Int(None), &mut self.type_interner);
+        let ty = Type::new(TypeKind::Int(None));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 
     /// Insert a float type into the [`TEnv`]
     #[inline]
     pub fn insert_float(&mut self, span: InFile<Span>) -> TypeId {
-        let ty = Type::new(TypeKind::Float(None), &mut self.type_interner);
+        let ty = Type::new(TypeKind::Float(None));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 
@@ -199,9 +191,10 @@ impl TEnv {
     /// This interns the [`TypeKind`] and pushes a new [`TEntry`] to th environment, returning
     /// a valid [`TypeId`]
     pub fn insert(&mut self, ty: FileSpanned<Type>) -> TypeId {
-        let key = ty.constr();
+        let kind = ty.constr();
         let idx = self.entries.len();
-        self.entries.push(ty.map_inner_ref(|_| TEntry::new(key)));
+        self.entries
+            .push(ty.map_inner_ref(|_| TEntry::new(kind.clone())));
         TypeId::new(idx)
     }
 
@@ -214,21 +207,22 @@ impl TEnv {
         ty: FileSpanned<Type>,
         restrictions: Vec<TraitRestriction>,
     ) -> TypeId {
-        let key = ty.constr();
+        let kind = ty.constr();
         let idx = self.entries.len();
-        self.entries
-            .push(ty.map_ref(|ty| ty.map_ref(|_| TEntry::with_restrictions(key, restrictions))));
+        self.entries.push(
+            ty.map_ref(|ty| ty.map_ref(|_| TEntry::with_restrictions(kind.clone(), restrictions))),
+        );
         TypeId::new(idx)
     }
 
     pub fn set_type(&mut self, id: TypeId, ty: Type) {
-        let key = ty.constr();
-        self.get_entry_mut(id).inner.inner.set_constr(key);
-        if let Some(keys) = ty.params() {
+        let kind = ty.constr();
+        self.get_entry_mut(id).inner.inner.set_constr(kind.clone());
+        if let Some(kinds) = ty.params() {
             self.get_entry_mut(id)
                 .inner
                 .inner
-                .set_params(keys.iter().cloned());
+                .set_params(kinds.iter().cloned());
         };
     }
 
@@ -417,7 +411,7 @@ impl TEnv {
     fn fmt_tentry(&self, entry: &TEntry) -> String {
         format!(
             "{}{}",
-            self.fmt_typekind(self.type_interner.resolve(entry.get_constr())),
+            self.fmt_typekind(&entry.get_constr()),
             if entry.restrictions.is_empty() {
                 String::new()
             } else {
@@ -451,8 +445,7 @@ impl Display for TEnv {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}\n{}\n  {}\n",
-            self.type_interner,
+            "{}\n  {}\n",
             "TEnv".green(),
             self.entries
                 .iter()

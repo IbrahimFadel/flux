@@ -120,17 +120,16 @@ impl TChecker {
             .collect();
 
         let impltor_filespan = self.tenv.get_type_filespan(impltor);
-        let impltor_arg_keys = self
+        let impltor_arg_typekinds = self
             .tenv
             .get_entry(impltor)
             .get_params()
-            .map(|keys| keys.to_vec())
+            .map(|typekinds| typekinds.to_vec())
             .unwrap_or(vec![]);
-        let impltor_args = impltor_arg_keys
+        let impltor_args = impltor_arg_typekinds
             .iter()
-            .map(|key| {
-                let kind = self.tenv.type_interner.resolve(*key);
-                let ty = Type::new(kind.clone(), &mut self.tenv.type_interner);
+            .map(|kind| {
+                let ty = Type::new(kind.clone());
                 self.tenv
                     .insert(ty.file_span(impltor_filespan.file_id, impltor_filespan.inner))
             })
@@ -325,14 +324,10 @@ impl TChecker {
             (Unknown, _) => {
                 let b_entry = &self.tenv.get_entry(b).inner.inner.clone();
                 if let Some(b_params) = b_entry.get_params() {
-                    let ty = Type::with_params_as_keys(
-                        b_kind.inner.inner,
-                        b_params.iter().cloned(),
-                        &mut self.tenv.type_interner,
-                    );
+                    let ty = Type::with_params(b_kind.inner.inner, b_params.iter().cloned());
                     self.tenv.set_type(a, ty);
                 } else {
-                    let ty = Type::new(b_kind.inner.inner, &mut self.tenv.type_interner);
+                    let ty = Type::new(b_kind.inner.inner);
                     self.tenv.set_type(a, ty);
                 }
                 Ok(())
@@ -360,7 +355,7 @@ impl TChecker {
                 Some(int_id) => self.unify(a, *int_id, unification_span),
                 None => {
                     if self.tenv.int_paths.get(path).is_some() {
-                        let ty = Type::new(TypeKind::Int(Some(a)), &mut self.tenv.type_interner);
+                        let ty = Type::new(TypeKind::Int(Some(a)));
                         self.tenv.set_type(b, ty);
                         Ok(())
                     } else {
@@ -372,7 +367,7 @@ impl TChecker {
                 Some(int_id) => self.unify(*int_id, a, unification_span),
                 None => {
                     if self.tenv.int_paths.get(path).is_some() {
-                        let ty = Type::new(TypeKind::Int(Some(b)), &mut self.tenv.type_interner);
+                        let ty = Type::new(TypeKind::Int(Some(b)));
                         self.tenv.set_type(a, ty);
                         Ok(())
                     } else {
@@ -384,7 +379,7 @@ impl TChecker {
                 Some(float_id) => self.unify(a, *float_id, unification_span),
                 None => {
                     if self.tenv.float_paths.get(path).is_some() {
-                        let ty = Type::new(TypeKind::Float(Some(a)), &mut self.tenv.type_interner);
+                        let ty = Type::new(TypeKind::Float(Some(a)));
                         self.tenv.set_type(b, ty);
                         Ok(())
                     } else {
@@ -396,7 +391,7 @@ impl TChecker {
                 Some(float_id) => self.unify(*float_id, a, unification_span),
                 None => {
                     if self.tenv.float_paths.get(path).is_some() {
-                        let ty = Type::new(TypeKind::Float(Some(b)), &mut self.tenv.type_interner);
+                        let ty = Type::new(TypeKind::Float(Some(b)));
                         self.tenv.set_type(a, ty);
                         Ok(())
                     } else {

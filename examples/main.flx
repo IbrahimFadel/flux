@@ -1,35 +1,17 @@
-
-trait Bar {}
-trait Dummy<T> where T is Bar {}
-trait Foo<A, B>
-    where
-        A is Dummy<B>,
-        B is Bar,
-{}
-
-fn foo<T, A, B>()
-    where
-        T is Foo<A, B>,
-        A is Dummy<B>,
-{
-
+struct Foo {
+    x s32,
+    y Bar,
+    z f32,
 }
 
-/*
-trait Bar {}
-trait Dummy<T> where T is Bar {}
-trait Foo<A, B>
-    where
-        A is Dummy<B>,
-        B is Bar,
-{}
-
-fn foo<T, A, B>()
-    where
-        T is Foo<A, B>,
-        A is Dummy<B>,
-        B is Bar,
-{
-
+struct Bar {
+    x u32
 }
-*/
+
+fn main() {
+    let foo_instance = Foo {
+        x: 0.0,
+        z: 1,
+        foo: 10,
+    };
+}

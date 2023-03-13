@@ -1,6 +1,5 @@
 use flux_span::Span;
 use hashbrown::HashSet;
-use itertools::Itertools;
 use lasso::Spur;
 
 use super::*;
@@ -17,6 +16,8 @@ impl<'a> LowerCtx<'a> {
             self.handle_apply_trait(trt_path, &a.methods);
         }
         for f in &a.methods.inner {
+            let f_generic_params = &item_tree[*f].generic_params;
+            self.combine_generic_parameters(&a.generic_params, f_generic_params);
             self.handle_function(*f, item_tree);
         }
     }
@@ -159,14 +160,12 @@ impl<'a> LowerCtx<'a> {
                     trait_methods_declared: trait_method_names
                         .iter()
                         .map(|spur| self.string_interner.resolve(spur).to_string())
-                        .sorted()
-                        .collect::<Vec<_>>(),
+                        .collect(),
                     trait_methods_declared_file_span: trait_methods.span.in_file(trait_file_id),
                     unimplemented_methods: unimplemented_methods
                         .iter()
                         .map(|spur| self.string_interner.resolve(spur).to_string())
-                        .sorted()
-                        .collect::<Vec<_>>(),
+                        .collect(),
                     unimplemented_methods_file_span: apply_methods.span.in_file(self.file_id()),
                 }
                 .to_diagnostic(),
@@ -180,14 +179,12 @@ impl<'a> LowerCtx<'a> {
                     trait_methods_declared: trait_method_names
                         .iter()
                         .map(|spur| self.string_interner.resolve(spur).to_string())
-                        .sorted()
-                        .collect::<Vec<_>>(),
+                        .collect(),
                     trait_methods_declared_file_span: trait_methods.span.in_file(trait_file_id),
                     methods_that_dont_belond: methods_that_dont_belong
                         .iter()
                         .map(|spur| self.string_interner.resolve(spur).to_string())
-                        .sorted()
-                        .collect::<Vec<_>>(),
+                        .collect(),
                     methods_that_dont_belond_file_span: apply_methods.span.in_file(self.file_id()),
                 }
                 .to_diagnostic(),
@@ -362,9 +359,14 @@ impl<'a> LowerCtx<'a> {
             if let Some((trt, file_id)) = trt {
                 let trt_generic_params = trt.generic_params.clone();
 
-                let generic_args_span =
-                    Span::span_iter_of_spanned(where_predicate.bound.generic_args.iter())
-                        .unwrap_or(where_predicate.bound.span);
+                let generic_args_span = Span::span_iter_of_span(
+                    where_predicate
+                        .bound
+                        .generic_args
+                        .iter()
+                        .map(|arg| self.types[arg.raw()].span),
+                )
+                .unwrap_or(where_predicate.bound.span);
 
                 self.check_generic_args_with_parameters(
                     &where_predicate.bound.generic_args,
@@ -385,7 +387,7 @@ impl<'a> LowerCtx<'a> {
 
     fn check_generic_args_with_parameters(
         &mut self,
-        generic_args: &[Spanned<TypeIdx>],
+        generic_args: &[TypeIdx],
         generic_args_file_span: InFile<Span>,
         generic_args_where_predicates: &[WherePredicate],
         trait_def_generic_params: &GenericParams,
@@ -422,11 +424,11 @@ impl<'a> LowerCtx<'a> {
 
                 // for the every predicate on the current trait def param
                 for required_predicate in required_predicates {
-                    if let Type::Generic(name) = *self.type_interner.resolve(arg.inner) {
+                    if let Type::Generic(name) = &self.types[arg.raw()].inner {
                         // predicate in args that matches the requirement
                         let predicate_matched = generic_args_where_predicates
                             .iter()
-                            .filter(|predicate| predicate.name.inner == name)
+                            .filter(|predicate| predicate.name.inner == *name)
                             .find(|predicate| {
                                 predicate.bound.segments == required_predicate.bound.segments
                             });
@@ -434,11 +436,11 @@ impl<'a> LowerCtx<'a> {
                         if let Some(predicate_matched) = predicate_matched {
                             // todo!()
                         } else {
+                            let arg_span = self.types[arg.raw()].span;
                             self.diagnostics.push(
                                 LowerError::GenericArgDoesNotMatchRestriction {
                                     generic: self.string_interner.resolve(&name).to_string(),
-                                    generic_file_span: arg
-                                        .span
+                                    generic_file_span: arg_span
                                         .in_file(generic_args_file_span.file_id),
                                     restriction: required_predicate
                                         .bound
@@ -452,7 +454,7 @@ impl<'a> LowerCtx<'a> {
                             );
                         }
                     } else {
-                        todo!()
+                        todo!("{:#?} {:#?}", arg, self.types[arg.raw()]);
                     }
                 }
             });

@@ -2,17 +2,15 @@ use std::{env, fs, path::PathBuf};
 
 use diagnostics::DriverError;
 use flux_diagnostics::{reporting::FileCache, ToDiagnostic};
-use flux_hir::{BasicFileResolver, TypeInterner};
+use flux_hir::BasicFileResolver;
 use lasso::ThreadedRodeo;
 use once_cell::sync::Lazy;
-use tracing::{info, warn};
 
 mod diagnostics;
 #[cfg(test)]
 mod tests;
 
 pub static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
-pub static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&STRING_INTERNER));
 
 struct Driver {
     file_cache: FileCache,
@@ -30,21 +28,21 @@ impl Driver {
     fn find_entry_file(&self) -> Result<PathBuf, DriverError> {
         let project_dir_str = self.project_dir.to_str().unwrap();
         let dir_entries = fs::read_dir(&self.project_dir).map_err(|_| {
-            warn!("could not read directory `{project_dir_str}`");
+            tracing::warn!("could not read directory `{project_dir_str}`");
             DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
         })?;
         for entry in dir_entries {
             let entry = entry.map_err(|e| {
-                warn!("could not read entry `{}`", e);
+                tracing::warn!("could not read entry `{}`", e);
                 DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
             })?;
             let name = entry.file_name();
             if name == "main.flx" {
-                info!("found entry path: {:?}", entry.path());
+                tracing::info!("found entry path: {:?}", entry.path());
                 return Ok(entry.path());
             }
         }
-        warn!("could not find entry file `{project_dir_str}`");
+        tracing::warn!("could not find entry file `{project_dir_str}`");
         Err(DriverError::FindEntryFile)
     }
 
@@ -53,16 +51,16 @@ impl Driver {
             Ok(path) => path,
             Err(err) => return self.file_cache.report_diagnostic(&err.to_diagnostic()),
         };
-        let (def_map, diagnostics) = flux_hir::build_def_map(
+        let (def_map, mut types, diagnostics) = flux_hir::build_def_map(
             entry_path.to_str().unwrap(),
             &mut self.file_cache,
             &STRING_INTERNER,
-            &TYPE_INTERNER,
             &BasicFileResolver,
         );
         self.file_cache.report_diagnostics(&diagnostics);
+
         let (_lowered_bodies, diagnostics) =
-            flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
+            flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &mut types);
         self.file_cache.report_diagnostics(&diagnostics);
     }
 }

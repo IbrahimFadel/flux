@@ -1,0 +1,50 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+
+
+Diagnostics
+
+[E0024] Error: duplicate generics
+   ,-[ main.flx:4:8]
+   |
+ 3 | trait Foo<A, B> {
+   *        ^^^|^^  
+   *           `---- previously defined here
+ 4 |     fn foo<A>();
+   *        ^|^  
+   *         `--- duplicate generics `A`
+---'
+[E0024] Error: duplicate generics
+   ,-[ main.flx:5:7]
+   |
+ 3 | trait Foo<A, B> {
+   *        ^^^|^^  
+   *           `---- previously defined here
+   * 
+ 5 |     fn bar<B>();
+   *       ^|^  
+   *        `--- duplicate generics `B`
+---'
+[E0024] Error: duplicate generics
+   ,-[ main.flx:6:10]
+   |
+ 3 | trait Foo<A, B> {
+   *        ^^^|^^  
+   *           `---- previously defined here
+   * 
+ 6 |     fn foo_bar<A, B>();
+   *          ^^^|^^  
+   *             `---- duplicate generics `A`, `B`
+---'
+

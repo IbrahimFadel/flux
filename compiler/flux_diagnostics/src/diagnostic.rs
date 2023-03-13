@@ -154,6 +154,10 @@ pub enum DiagnosticCode {
     UnusedGenericParams,
     IncorrectNumGenericArgsInWherePredicate,
     GenericArgDoesNotMatchRestriction,
+    DuplicateGenerics,
+    CouldNotFindStructButFoundAnotherItem,
+    UninitializedFieldsInStructExpr,
+    UnknownFieldsInStructExpr,
 
     TypeMismatch,
     ConflictingTraitImplementations,

@@ -1,0 +1,65 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn main() -> () {
+let foo_instance <unknown type> = struct Foo {
+x: 0, 
+y: 10, 
+z: 1
+};
+}
+
+
+
+Diagnostics
+
+[E0028] Error: type mismatch
+    ,-[ main.flx:14:24]
+    |
+  4 |     x s32,
+    *    ^|^  
+    *     `--- s32
+    * 
+ 14 |     let foo_instance = Foo {
+    *                        |  ^|^  
+    *                        `------- type mismatch between `s32` and `float`
+    *                            |   
+    *                            `--- float
+----'
+[E0028] Error: type mismatch
+    ,-[ main.flx:15:10]
+    |
+  5 |     y Bar,
+    *   ^|^  
+    *    `--- Bar
+    * 
+ 15 |         x: 0.0,
+    *          |  ^|  
+    *          `------ type mismatch between `Bar` and `int`
+    *              |  
+    *              `-- int
+----'
+[E0028] Error: type mismatch
+    ,-[ main.flx:16:8]
+    |
+  6 |     z f32,
+    *  ^|^  
+    *   `--- f32
+    * 
+ 16 |         y: 10,
+    *        |  |  
+    *        `----- type mismatch between `f32` and `int`
+    *           |  
+    *           `-- int
+----'
+

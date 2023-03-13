@@ -187,3 +187,32 @@ apply Foo to Bar {
 }
 "#
 }
+
+errors! {
+    duplicate_generics_when_combining_trait_and_method_generics,
+    r#"
+//- main.flx
+
+trait Foo<A, B> {
+    fn foo<A>();
+    fn bar<B>();
+    fn foo_bar<A, B>();
+    fn foo_bar<C>();
+}
+"#
+}
+
+errors! {
+    duplicate_generics_when_combining_apply_and_method_generics,
+    r#"
+//- main.flx
+struct Foo {}
+
+apply<A, B> to Foo {
+    fn foo<A>() {}
+    fn bar<B>() {}
+    fn foo_bar<A, B>() {}
+    fn foo_bar<C>() {}
+}
+"#
+}

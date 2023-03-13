@@ -15,13 +15,13 @@ use crate::{
         mod_res::{FileResolver, RelativePath},
         DefMap,
     },
-    ModuleDefId, ModuleId, TypeInterner,
+    ModuleDefId, ModuleId,
 };
 
 mod generics;
+mod structs;
 
 static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
-static TYPE_INTERNER: Lazy<TypeInterner> = Lazy::new(|| TypeInterner::new(&STRING_INTERNER));
 
 struct TestFileResolver;
 
@@ -60,18 +60,17 @@ fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>, FileCache) {
             entry_file_path = Some(file_path);
         }
     }
-    let (def_map, mut diagnostics) = match entry_file_path {
+    let (def_map, mut types, mut diagnostics) = match entry_file_path {
         Some(entry_path) => crate::build_def_map(
             entry_path,
             &mut file_cache,
             &STRING_INTERNER,
-            &TYPE_INTERNER,
             &TestFileResolver,
         ),
         None => panic!("malformated input to `check` function in name resolution unit test"),
     };
     let (lowered_bodies, mut diagnostics2) =
-        crate::lower_def_map_bodies(&def_map, &STRING_INTERNER, &TYPE_INTERNER);
+        crate::lower_def_map_bodies(&def_map, &STRING_INTERNER, &mut types);
     diagnostics.append(&mut diagnostics2);
     (def_map, lowered_bodies, diagnostics, file_cache)
 }
@@ -88,7 +87,7 @@ fn fmt_function(
     buf: &mut BufWriter<Vec<u8>>,
     lowered_bodies: &LoweredBodies,
 ) {
-    f.pretty::<_, ()>(&allocator, &STRING_INTERNER, &TYPE_INTERNER)
+    f.pretty::<_, ()>(allocator, &STRING_INTERNER, &lowered_bodies.types)
         .1
         .render(50, buf)
         .unwrap();
@@ -98,9 +97,9 @@ fn fmt_function(
         .get(&(module_id, ModuleDefId::FunctionId(f_idx)))
         .unwrap();
     body.pretty::<_, ()>(
-        &allocator,
+        allocator,
         &STRING_INTERNER,
-        &TYPE_INTERNER,
+        &lowered_bodies.types,
         &lowered_bodies.exprs,
     )
     .1

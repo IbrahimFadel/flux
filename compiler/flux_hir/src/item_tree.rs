@@ -6,7 +6,7 @@ use std::{
 };
 
 use flux_diagnostics::ice;
-use flux_span::FileId;
+use flux_span::{FileId, Spanned};
 use flux_syntax::{
     ast::{self, AstNode},
     SyntaxNode,
@@ -15,8 +15,8 @@ use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 
 use crate::{
-    hir::{Apply, Enum, Function, Mod, Struct, Trait, Use},
-    ModuleDefId, TypeInterner,
+    hir::{Apply, Enum, Function, Mod, Struct, Trait, Type, Use},
+    ModuleDefId,
 };
 
 mod lower;
@@ -179,8 +179,8 @@ pub(crate) fn lower_ast_to_item_tree(
     root: SyntaxNode,
     file_id: FileId,
     string_interner: &'static ThreadedRodeo,
-    type_interner: &'static TypeInterner,
+    types: &mut Arena<Spanned<Type>>,
 ) -> ItemTree {
     let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
-    lower::Ctx::new(file_id, string_interner, type_interner).lower_module_items(&root)
+    lower::Ctx::new(file_id, string_interner, types).lower_module_items(&root)
 }

@@ -42,6 +42,13 @@ impl<T> Plural for Vec<T> {
     }
 }
 
+fn quote_and_listify<S>(iter: impl Iterator<Item = S>) -> String
+where
+    S: Into<String>,
+{
+    iter.map(|item| format!("`{}`", item.into())).join(", ")
+}
+
 #[diagnostic]
 pub(crate) enum LowerError {
     #[error(
@@ -71,10 +78,7 @@ pub(crate) enum LowerError {
         label at decl = "could not resolve module declaration for `{decl}`",
         help = "create the module at one of the following paths: {}"
             with (
-                candidate_paths
-                    .iter()
-                    .map(|path| format!("`{path}`"))
-                    .join(", ")
+                quote_and_listify(candidate_paths.iter())
             ),
     )]
     CouldNotResolveModDecl {
@@ -93,6 +97,20 @@ pub(crate) enum LowerError {
         path: String,
         #[filespanned]
         erroneous_segment: String,
+    },
+    #[error(
+        location = generics_that_caused_duplication,
+        primary = "duplicate generics",
+        label at generics_that_caused_duplication = "duplicate generics {}" with (
+            quote_and_listify(generics_that_caused_duplication.iter().sorted())
+        ),
+        label at generics_that_were_chilling = "previously defined here"
+    )]
+    DuplicateGenerics {
+        #[filespanned]
+        generics_that_were_chilling: (),
+        #[filespanned]
+        generics_that_caused_duplication: Vec<String>,
     },
     #[error(
         location = got_number,
@@ -129,20 +147,13 @@ pub(crate) enum LowerError {
         label at methods_that_dont_belond = "method{} {} do{} not belong in apply"
             with (
                 methods_that_dont_belond.plural("s"),
-                methods_that_dont_belond
-                    .iter()
-                    .map(|method| format!("`{method}`"))
-                    .join(", "),
+                quote_and_listify(methods_that_dont_belond.iter().sorted()),
                 methods_that_dont_belond.singular("es")
             ),
         label at trait_methods_declared = "trait method{} {} declared here"
             with (
                 trait_methods_declared.plural("s"),
-                trait_methods_declared
-                    .iter()
-                    .map(|method| format!("`{method}`"))
-                    .join(", ")
-
+                quote_and_listify(trait_methods_declared.iter().sorted())
             ),
     )]
     MethodsDontBelongInApply {
@@ -207,18 +218,12 @@ pub(crate) enum LowerError {
         label at unimplemented_methods = "unimeplemented trait method{} {} in apply"
             with (
                 unimplemented_methods.plural("s"),
-                unimplemented_methods
-                    .iter()
-                    .map(|method| format!("`{method}`"))
-                    .join(", ")
+                quote_and_listify(unimplemented_methods.iter().sorted())
             ),
         label at trait_methods_declared = "trait method{} {} declared here"
             with (
                 trait_methods_declared.plural("s"),
-                trait_methods_declared
-                    .iter()
-                    .map(|method| format!("`{method}`"))
-                    .join(", ")
+                quote_and_listify(trait_methods_declared.iter().sorted())
             ),
     )]
     UnimplementedTraitMethods {
@@ -232,7 +237,7 @@ pub(crate) enum LowerError {
         primary = "unknown generic used in where predicate",
         label at generic = "unknown generic `{generic}` used in where predicate",
         label at generic_params = "generic parameters {} declared here" with (
-            generic_params.iter().map(|param| format!("`{param}`")).join(", ")
+            quote_and_listify(generic_params.iter())
         )
     )]
     UnknownGeneric {
@@ -284,7 +289,7 @@ pub(crate) enum LowerError {
         primary = "unused generic parameters",
         label at unused_generic_params = "unused generic parameters {}"
             with (
-                unused_generic_params.iter().map(|param| format!("`{param}`")).join(", ")
+                quote_and_listify(unused_generic_params.iter())
             ),
     )]
     UnusedGenericParams {
@@ -314,5 +319,40 @@ pub(crate) enum LowerError {
         generic: String,
         #[filespanned]
         restriction: String,
+    },
+    #[error(
+        location = struct_path,
+        primary = "could not resolve struct",
+        label at struct_path = "could not resolve struct `{struct_path}`",
+        help = "there exists a {other_item_kind} with the same name, did you mean that?"
+    )]
+    CouldNotFindStructButFoundAnotherItem {
+        #[filespanned]
+        struct_path: String,
+        other_item_kind: String,
+    },
+    #[error(
+        location = uninitialized_fields,
+        primary = "uninitialized fields in struct expression",
+        label at uninitialized_fields = "uninitialized fields {} for `{struct_name}` struct initialization" with (
+            quote_and_listify(uninitialized_fields.iter())
+        )
+    )]
+    UninitializedFieldsInStructExpr {
+        #[filespanned]
+        uninitialized_fields: Vec<String>,
+        struct_name: String,
+    },
+    #[error(
+        location = unknown_fields,
+        primary = "unknown fields in struct expression",
+        label at unknown_fields = "unknown fields {} for `{struct_name}` struct initialization" with (
+            quote_and_listify(unknown_fields.iter())
+        )
+    )]
+    UnknownFieldsInStructExpr {
+        #[filespanned]
+        unknown_fields: Vec<String>,
+        struct_name: String,
     },
 }
