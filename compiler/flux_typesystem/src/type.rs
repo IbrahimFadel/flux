@@ -4,6 +4,8 @@ use flux_proc_macros::Locatable;
 use flux_span::WithSpan;
 use lasso::Spur;
 
+use crate::TraitRestriction;
+
 /// A `flux_typesystem` type
 ///
 /// Types consist of a constructor and parameters
@@ -85,14 +87,14 @@ impl Display for TypeId {
 ///     - Generic type
 /// * Unknown
 ///     - No information is known about this type
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Concrete(ConcreteKind),
     Int(Option<TypeId>),
     Float(Option<TypeId>),
     Ref(TypeId),
     // Generic(Vec<(Spur, Vec<TypeId>)>),
-    Generic(Spur),
+    Generic(Spur, Vec<TraitRestriction>),
     Unknown,
 }
 
@@ -101,7 +103,7 @@ impl Display for TypeKind {
         match self {
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
-            Self::Generic(name) => write!(f, "{name:?}"),
+            Self::Generic(name, _) => write!(f, "{name:?}"),
             Self::Int(_) => write!(f, "int"),
             Self::Ref(id) => write!(f, "Ref({id}"),
             Self::Unknown => write!(f, "unknown"),
@@ -118,27 +120,4 @@ pub enum ConcreteKind {
     Ptr(TypeId),
     Path(Spur),
     Tuple(Vec<TypeId>),
-    /// A vec of all the fields and their types
-    /// We hold on to the field names because its necessary for checking if the field names are correct in struct initialization expressions
-    Struct(StructConcreteKind),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StructConcreteKind {
-    pub generic_params: Vec<TypeId>,
-    pub fields: Vec<(Spur, TypeId)>,
-}
-
-impl StructConcreteKind {
-    pub const EMPTY: Self = Self {
-        generic_params: vec![],
-        fields: vec![],
-    };
-
-    pub fn new(generic_params: Vec<TypeId>, fields: Vec<(Spur, TypeId)>) -> Self {
-        Self {
-            generic_params,
-            fields,
-        }
-    }
 }

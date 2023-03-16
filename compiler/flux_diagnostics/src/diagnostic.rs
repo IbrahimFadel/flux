@@ -156,8 +156,11 @@ pub enum DiagnosticCode {
     GenericArgDoesNotMatchRestriction,
     DuplicateGenerics,
     CouldNotFindStructButFoundAnotherItem,
+    CouldNotFindFunctionButFoundAnotherItem,
     UninitializedFieldsInStructExpr,
     UnknownFieldsInStructExpr,
+    CouldNotFindMethodReferenced,
+    CouldNotFindFieldReferenced,
 
     TypeMismatch,
     ConflictingTraitImplementations,

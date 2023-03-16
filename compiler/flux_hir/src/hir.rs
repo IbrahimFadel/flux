@@ -23,6 +23,25 @@ pub enum Visibility {
     Public,
 }
 
+#[derive(Debug, Clone, Locatable)]
+pub enum Item {
+    Apply(Apply),
+    Enum(Enum),
+    Function(Function),
+    Struct(Struct),
+    Trait(Trait),
+}
+
+impl TryFrom<Item> for Function {
+    type Error = ();
+    fn try_from(value: Item) -> Result<Self, Self::Error> {
+        match value {
+            Item::Function(f) => Ok(f),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Apply {
     pub visibility: Spanned<Visibility>,
@@ -265,10 +284,6 @@ impl Path {
             .join("::")
     }
 
-    // i = 1
-    // foo::Foo
-    // [foo, Foo]
-    // 3 + 2
     pub fn spanned_segment(
         path: &Spanned<Path>,
         idx: usize,
@@ -337,7 +352,7 @@ pub struct TypeIdx(Idx<Spanned<Type>>);
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Type {
     Array(TypeIdx, u32),
-    Generic(Spur),
+    Generic(Spur, Vec<Spanned<Path>>),
     Path(Path),
     Ptr(TypeIdx),
     Tuple(Vec<TypeIdx>),
@@ -354,7 +369,19 @@ pub enum Expr {
     Path(Path),
     Let(Let),
     Struct(StructExpr),
+    MemberAccess(MemberAccess),
     Poisoned,
+}
+
+impl TryFrom<Expr> for Path {
+    type Error = ();
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        match value {
+            Expr::Path(path) => Ok(path),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -364,7 +391,7 @@ pub struct Block {
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct Call {
-    pub path: ExprIdx,
+    pub callee: ExprIdx,
     pub args: Vec<ExprIdx>,
 }
 
@@ -385,4 +412,16 @@ pub struct StructExpr {
 pub struct StructExprField {
     pub name: Name,
     pub val: ExprIdx,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct MemberAccess {
+    pub lhs: ExprIdx,
+    pub rhs: Name,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub enum MemberAccessKind {
+    Field,
+    Method,
 }

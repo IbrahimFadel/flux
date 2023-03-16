@@ -21,7 +21,7 @@ x: 1
 
 Diagnostics
 
-[E0026] Error: uninitialized fields in struct expression
+[E0027] Error: uninitialized fields in struct expression
     ,-[ main.flx:14:15]
     |
  14 | ,->     let foo_instance = Foo {

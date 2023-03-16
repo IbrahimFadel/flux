@@ -23,7 +23,7 @@ z: 1
 
 Diagnostics
 
-[E0028] Error: type mismatch
+[E0031] Error: type mismatch
     ,-[ main.flx:14:24]
     |
   4 |     x s32,
@@ -36,7 +36,7 @@ Diagnostics
     *                            |   
     *                            `--- float
 ----'
-[E0028] Error: type mismatch
+[E0031] Error: type mismatch
     ,-[ main.flx:15:10]
     |
   5 |     y Bar,
@@ -49,7 +49,7 @@ Diagnostics
     *              |  
     *              `-- int
 ----'
-[E0028] Error: type mismatch
+[E0031] Error: type mismatch
     ,-[ main.flx:16:8]
     |
   6 |     z f32,

@@ -332,6 +332,17 @@ pub(crate) enum LowerError {
         other_item_kind: String,
     },
     #[error(
+        location = function_path,
+        primary = "could not resolve function",
+        label at function_path = "could not resolve function `{function_path}`",
+        help = "there exists a {other_item_kind} with the same name, did you mean that?"
+    )]
+    CouldNotFindFunctionButFoundAnotherItem {
+        #[filespanned]
+        function_path: String,
+        other_item_kind: String,
+    },
+    #[error(
         location = uninitialized_fields,
         primary = "uninitialized fields in struct expression",
         label at uninitialized_fields = "uninitialized fields {} for `{struct_name}` struct initialization" with (
@@ -354,5 +365,38 @@ pub(crate) enum LowerError {
         #[filespanned]
         unknown_fields: Vec<String>,
         struct_name: String,
+    },
+    #[error(
+        location = method,
+        primary = "could not find method or field",
+        label at method = "could not find method called `{method}`{}" with (
+            if let Some(for_type) = for_type {
+                format!(" for type `{for_type}`")
+            } else {
+                "".to_string()
+            }
+        ),
+        help = "either create a method, or use a trait that defines it"
+    )]
+    CouldNotFindMethodReferenced {
+        #[filespanned]
+        method: String,
+        for_type: Option<String>,
+    },
+    #[error(
+        location = field,
+        primary = "could not find field",
+        label at field = "could not find field called `{field}`{}" with (
+            if let Some(for_type) = for_type {
+                format!(" for type `{for_type}`")
+            } else {
+                "".to_string()
+            }
+        ),
+    )]
+    CouldNotFindFieldReferenced {
+        #[filespanned]
+        field: String,
+        for_type: Option<String>,
     },
 }

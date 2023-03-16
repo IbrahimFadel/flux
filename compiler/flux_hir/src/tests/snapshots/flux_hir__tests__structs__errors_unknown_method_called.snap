@@ -1,0 +1,34 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn main() -> () {
+let foo <unknown type> = struct Foo {
+
+};
+foo.foo()
+}
+
+
+
+Diagnostics
+
+[E0029] Error: could not find method or field
+   ,-[ main.flx:8:2]
+   |
+ 8 |     foo.foo();
+   *  ^|^  
+   *   `--- could not find method called `foo` for type `Foo`
+   * 
+   * Help: either create a method, or use a trait that defines it
+---'
+

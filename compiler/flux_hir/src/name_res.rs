@@ -265,6 +265,7 @@ impl DefCollector {
     ) -> (ItemTree, Vec<Diagnostic>) {
         let parse = flux_parser::parse(content, file_id, string_interner);
         let (root, diagnostics) = (parse.syntax(), parse.diagnostics);
+        // println!("{}", root.debug(self.string_interner, true));
         let item_tree = lower_ast_to_item_tree(root, file_id, string_interner, types);
         (item_tree, diagnostics)
     }

@@ -119,7 +119,7 @@ fn lhs(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker
             p.bump(TokenKind::Ampersand);
             SyntaxKind::DerefExpr
         }
-        // TokenKind::LBrace => {1
+        // TokenKind::LBrace => {
         //     if restrictions.allow_block_expressions {
         //         SyntaxKind::BlockExpr
         //     } else {
@@ -146,7 +146,7 @@ fn postfix_expr(p: &mut Parser, mut lhs: CompletedMarker) -> CompletedMarker {
         lhs = match p.current() {
             TokenKind::LParen => call_expr(p, lhs),
             TokenKind::LSquare => idx_expr(p, lhs),
-            TokenKind::Period => todo!(),
+            TokenKind::Period => member_access_expr(p, lhs),
             _ => break,
         };
     }
@@ -171,6 +171,13 @@ fn idx_expr(p: &mut Parser, callee: CompletedMarker) -> CompletedMarker {
     p.bump(TokenKind::LSquare);
     expr(p);
     m.complete(p, SyntaxKind::IdxExpr)
+}
+
+fn member_access_expr(p: &mut Parser, lhs: CompletedMarker) -> CompletedMarker {
+    let m = lhs.precede(p);
+    p.bump(TokenKind::Period);
+    name(p, TokenSet::new(&[TokenKind::SemiColon]));
+    m.complete(p, SyntaxKind::MemberAccessExpr)
 }
 
 fn arg_list(p: &mut Parser) {

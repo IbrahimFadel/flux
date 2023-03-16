@@ -219,7 +219,20 @@ impl Type {
                     + allocator.text(")")
             }
             Self::Unknown => allocator.text("<unknown type>"),
-            Self::Generic(name) => allocator.text(string_interner.resolve(name)),
+            Self::Generic(name, restrictions) => {
+                allocator.text(string_interner.resolve(name))
+                    + if restrictions.is_empty() {
+                        allocator.nil()
+                    } else {
+                        allocator.text(": ")
+                            + allocator.intersperse(
+                                restrictions.iter().map(|restriction| {
+                                    restriction.pretty(allocator, string_interner, types)
+                                }),
+                                ", ",
+                            )
+                    }
+            }
         }
     }
 }
@@ -292,6 +305,7 @@ impl Expr {
             Self::Float(float) => allocator.text(float.to_string()),
             Self::Int(int) => allocator.text(int.to_string()),
             Self::Let(l) => l.pretty(allocator, string_interner, types, exprs),
+            Self::MemberAccess(access) => access.pretty(allocator, string_interner, types, exprs),
             Self::Path(path) => path.pretty(allocator, string_interner, types),
             Self::Poisoned => allocator.text("<poisoned expression>"),
             Self::Struct(strukt) => strukt.pretty(allocator, string_interner, types, exprs),
@@ -338,7 +352,7 @@ impl Call {
         D::Doc: Clone,
         A: Clone,
     {
-        self.path.pretty(allocator, string_interner, types, exprs)
+        self.callee.pretty(allocator, string_interner, types, exprs)
             + allocator.text("(")
             + allocator.intersperse(
                 self.args
@@ -370,6 +384,25 @@ impl Let {
             + allocator.text(" = ")
             + self.val.pretty(allocator, string_interner, types, exprs)
             + allocator.text(";")
+    }
+}
+
+impl MemberAccess {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        types: &'b Arena<Spanned<Type>>,
+        exprs: &'b Arena<Spanned<Expr>>,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        self.lhs.pretty(allocator, string_interner, types, exprs)
+            + allocator.text(".")
+            + allocator.text(string_interner.resolve(&self.rhs))
     }
 }
 

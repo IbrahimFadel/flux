@@ -1,0 +1,34 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn main() -> () {
+let bazz <unknown type> = struct Bazz {
+
+};
+let foo <unknown type> = struct Foo {
+x: bazz
+};
+}
+
+
+
+Diagnostics
+
+[E0035] Error: trait restrictions not met
+    ,-[ main.flx:13:8]
+    |
+ 13 | fn main() {
+    *        ^^|^  
+    *          `--- trait restrictions `Bar` not met for type `Bazz`
+----'
+

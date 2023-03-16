@@ -1,21 +1,20 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_span::{FileId, InFile, Spanned, ToSpan, WithSpan};
+use flux_span::{FileId, InFile, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode};
-use flux_typesystem::{self as ts, ConcreteKind, TChecker, TEnv, TypeId, TypeKind};
+use flux_typesystem::{self as ts, ConcreteKind, TChecker, TypeId, TypeKind};
 use hashbrown::HashMap;
 use la_arena::{Arena, Idx, RawIdx};
-use lasso::ThreadedRodeo;
+use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, Block, Call, Expr, ExprIdx, Function, GenericParams, Let, Name, Path, Struct,
-        StructExpr, StructExprField, StructFields, Trait, Type, TypeIdx, Visibility,
-        WherePredicate,
+        Apply, Block, Call, Expr, ExprIdx, Function, GenericParams, Item, Let, MemberAccess,
+        MemberAccessKind, Name, Path, Struct, StructExpr, StructExprField, StructField, Trait,
+        Type, TypeIdx, Visibility, WherePredicate,
     },
     item_tree::ItemTree,
-    name_res::{path_res::ResolvePathError, DefMap, LocalModuleId},
-    per_ns::PerNs,
+    name_res::{DefMap, LocalModuleId},
     FunctionId, ModuleDefId, ModuleId, StructId, TraitId,
 };
 
@@ -50,7 +49,7 @@ impl<'a> LowerCtx<'a> {
         Self {
             def_map: None,
             cur_module_id: LocalModuleId::from_raw(RawIdx::from(0)),
-            tchk: TChecker::new(TEnv::new(string_interner)),
+            tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
             types,
@@ -120,7 +119,7 @@ impl<'a> LowerCtx<'a> {
         Self {
             def_map: Some(def_map),
             cur_module_id: LocalModuleId::from_raw(RawIdx::from(0)),
-            tchk: TChecker::new(TEnv::new(string_interner)),
+            tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
             types,
@@ -158,7 +157,11 @@ impl<'a> LowerCtx<'a> {
         let mut used_generics = vec![];
 
         for param in f.params.inner.iter() {
-            if let Type::Generic(name) = &self.types[param.ty.raw()].inner {
+            let param_tid = self.insert_type_to_tenv(&param.ty, self.file_id());
+            self.tchk
+                .tenv
+                .insert_local_to_scope(param.name.inner, param_tid);
+            if let Type::Generic(name, _) = &self.types[param.ty.raw()].inner {
                 used_generics.push(*name);
             }
         }
@@ -212,7 +215,7 @@ impl<'a> LowerCtx<'a> {
         let mut used_generics = vec![];
 
         for field in &s.fields.fields {
-            if let Type::Generic(name) = &self.types[field.ty.raw()].inner {
+            if let Type::Generic(name, _) = &self.types[field.ty.raw()].inner {
                 used_generics.push(*name);
             }
         }
@@ -235,6 +238,8 @@ impl<'a> LowerCtx<'a> {
 
     fn handle_trait(&mut self, trt: TraitId, item_tree: &ItemTree) {
         let trt = &item_tree[trt];
+
+        self.tchk.add_trait_to_context(trt.name.inner);
 
         let trait_generic_params = &trt.generic_params;
         for method in &trt.methods.inner {
@@ -297,7 +302,22 @@ impl<'a> LowerCtx<'a> {
                     .collect(),
             )),
             Type::Unknown => TypeKind::Unknown,
-            Type::Generic(name) => TypeKind::Generic(name),
+            Type::Generic(name, restrictions) => TypeKind::Generic(
+                name,
+                restrictions
+                    .iter()
+                    .map(|path| ts::TraitRestriction {
+                        name: path
+                            .to_spur(self.string_interner)
+                            .file_span(file_id, path.span),
+                        args: path
+                            .generic_args
+                            .iter()
+                            .map(|arg| self.insert_type_to_tenv(arg, file_id))
+                            .collect(),
+                    })
+                    .collect(),
+            ),
         }
     }
 
@@ -324,6 +344,11 @@ impl<'a> LowerCtx<'a> {
                 ast::Expr::TupleExpr(_) => todo!(),
                 ast::Expr::AddressExpr(_) => todo!(),
                 ast::Expr::IdxExpr(_) => todo!(),
+                ast::Expr::MemberAccessExpr(member_access_expr) => this.lower_member_access_expr(
+                    &member_access_expr,
+                    generic_params,
+                    MemberAccessKind::Field, // If it's a method it will be called by the lower_call_expr and given the correct access kind (that's the theory at least)
+                ),
             },
         );
         (idx, tid)
@@ -332,7 +357,7 @@ impl<'a> LowerCtx<'a> {
     fn lower_path_expr(
         &mut self,
         path: Option<ast::PathExpr>,
-    ) -> (ExprIdx, TypeId, Result<PerNs, ResolvePathError>) {
+    ) -> (ExprIdx, TypeId, Option<InFile<Item>>) {
         let path = self.lower_node(
             path,
             |_, path| Path::poisoned().at(path.range().to_span()),
@@ -343,35 +368,31 @@ impl<'a> LowerCtx<'a> {
         );
 
         let span = path.span;
-        // Path expressions should never be lowered by item tree, so we should always have a def map
-        let resolved_path = self
-            .def_map
-            .unwrap()
-            .resolve_path(&path, self.cur_module_id);
+        let item = self.try_get_item(&path);
+        let tid = if let Some(item) = &item {
+            match &item.inner {
+                Item::Function(f) => self.insert_type_to_tenv(&f.ret_ty, item.file_id),
+                Item::Struct(_) => todo!(),
+                Item::Trait(_) => todo!(),
+                _ => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
+            }
+        } else if path.segments.len() == 1 {
+            let name = Path::spanned_segment(&path, 0, self.string_interner).unwrap();
+            self.tchk
+                .tenv
+                .get_local_typeid(name.in_file(self.file_id()))
+                .unwrap_or_else(|err| {
+                    self.diagnostics.push(err);
+                    self.tchk.tenv.insert_unknown(span.in_file(self.file_id()))
+                })
+        } else {
+            self.tchk.tenv.insert_unknown(span.in_file(self.file_id()))
+        };
+
         let path = Expr::Path(path.inner).at(span);
         let idx = self.exprs.alloc(path);
-        let tid = match &resolved_path {
-            Ok(per_ns) => match per_ns.values {
-                Some((def_id, m, _)) => {
-                    let item_tree = &self.def_map.unwrap().item_trees[m];
-                    let file_id = self.def_map.unwrap().modules[m].file_id;
-                    match def_id {
-                        crate::ModuleDefId::ApplyId(_) => todo!(),
-                        crate::ModuleDefId::EnumId(_) => todo!(),
-                        crate::ModuleDefId::FunctionId(f) => {
-                            self.insert_type_to_tenv(&item_tree[f].ret_ty, file_id)
-                        }
-                        crate::ModuleDefId::ModuleId(_) => todo!(),
-                        crate::ModuleDefId::StructId(_) => todo!(),
-                        crate::ModuleDefId::TraitId(_) => todo!(),
-                        crate::ModuleDefId::UseId(_) => todo!(),
-                    }
-                }
-                None => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
-            },
-            Err(_) => self.tchk.tenv.insert_unknown(span.in_file(self.file_id())),
-        };
-        (idx.into(), tid, resolved_path)
+
+        (idx.into(), tid, item)
     }
 
     fn lower_float_expr(&mut self, float: &ast::FloatExpr) -> ExprResult {
@@ -419,85 +440,39 @@ impl<'a> LowerCtx<'a> {
         call: &ast::CallExpr,
         generic_params: &GenericParams,
     ) -> ExprResult {
-        let (path, ret_tid, resolved_path) = self.lower_path_expr(call.path());
-
-        let args = self.lower_node(
-            call.args(),
-            |_, arg_list| vec![].at(arg_list.range().to_span()),
-            |this, arg_list| {
-                arg_list
-                    .args()
-                    .map(|arg| this.lower_expr(Some(arg), generic_params))
-                    .collect::<Vec<_>>()
-                    .at(arg_list.range().to_span())
-            },
-        );
-
-        let function = match resolved_path {
-            Ok(per_ns) => per_ns
-                .values
-                .map(|(def_id, m, vis)| {
-                    let item_tree = &self.def_map.unwrap().item_trees[m];
-                    let file_id = self.def_map.unwrap().modules[m].file_id;
-                    match def_id {
-                        crate::ModuleDefId::FunctionId(f) => {
-                            let f = &item_tree[f];
-                            if vis == Visibility::Private {
-                                self.diagnostics.push(
-                                    LowerError::TriedCallingPrivateFunction {
-                                        function: self
-                                            .string_interner
-                                            .resolve(&f.name.inner)
-                                            .to_string(),
-                                        declared_as_private: (),
-                                        declared_as_private_file_span: f
-                                            .visibility
-                                            .span
-                                            .in_file(file_id),
-                                        call: (),
-                                        call_file_span: self.exprs[path.raw()]
-                                            .span
-                                            .in_file(self.file_id()),
-                                    }
-                                    .to_diagnostic(),
-                                );
-                            }
-                            Some(f.in_file_ref(file_id))
-                        }
-                        _ => unreachable!(),
-                    }
-                })
-                .unwrap_or_else(|| {
-                    let function_span = self.exprs[path.raw()].span;
-                    let path_string = match &self.exprs[path.raw()].inner {
-                        Expr::Path(path) => path.to_string(self.string_interner),
-                        _ => unreachable!(),
-                    };
-                    self.diagnostics.push(
-                        LowerError::UnresolvedFunction {
-                            function: path_string,
-                            function_file_span: function_span.in_file(self.file_id()),
-                        }
-                        .to_diagnostic(),
-                    );
-                    None
-                }),
-            Err(err) => {
-                self.diagnostics.push(
-                    err.to_lower_error(self.file_id(), self.string_interner)
-                        .to_diagnostic(),
-                );
-                None
+        if let Some(callee) = call.callee() {
+            match callee {
+                ast::Expr::PathExpr(path) => self.lower_func_call_expr(call, &path, generic_params),
+                ast::Expr::MemberAccessExpr(member_access) => {
+                    self.lower_expr_call_expr(call, &member_access, generic_params)
+                }
+                _ => unreachable!(),
             }
-        };
+        } else {
+            todo!()
+        }
+    }
 
-        if let Some(function) = function {
-            self.check_call_args_with_function_decl(&args, function);
+    fn lower_func_call_expr(
+        &mut self,
+        call: &ast::CallExpr,
+        path: &ast::PathExpr,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
+        let (path, ret_tid, item) = self.lower_path_expr(Some(path.clone()));
+
+        let args = self.lower_call_args(call.args(), generic_params);
+
+        if let Some(item) = item {
+            let function: Result<Function, ()> = item.inner.try_into();
+            if let Ok(function) = &function {
+                self.check_call_args_with_function_decl(&args, &function.in_file_ref(item.file_id));
+            }
         }
 
         let args = args.map(|args| args.into_iter().map(|(idx, _)| idx).collect());
         let call = Expr::Call(Call {
-            path,
+            callee: path,
             args: args.inner,
         })
         .at(call.range().to_span());
@@ -506,10 +481,124 @@ impl<'a> LowerCtx<'a> {
         (idx.into(), ret_tid)
     }
 
+    fn lower_expr_call_expr(
+        &mut self,
+        call: &ast::CallExpr,
+        member_access_expr: &ast::MemberAccessExpr,
+        generic_params: &GenericParams,
+    ) -> ExprResult {
+        /*
+
+        foo.bar()
+        foo.bar.bazz()
+
+         */
+
+        // let rhs = self.lower_name(member_access_expr.rhs());
+        // let (lhs, lhs_tid) = self.lower_expr(member_access_expr.lhs(), generic_params);
+
+        // let def_map = self.def_map.unwrap();
+        // let item_tree_and_method = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
+        //     let file_id = def_map.modules[mod_id].file_id;
+        //     self.search_item_tree_for_method(item_tree, lhs_tid, rhs.inner)
+        //         .map(|method| (item_tree, InFile::new(method, file_id)))
+        // });
+
+        // let args = self.lower_call_args(call.args(), generic_params);
+
+        // let tid = if let Some((item_tree, method_idx)) = item_tree_and_method {
+        //     let method = &item_tree[method_idx.inner];
+        //     self.insert_type_to_tenv(&method.ret_ty, method_idx.file_id)
+        // } else {
+        //     todo!()
+        // };
+
+        let (member_access, tid) = self.lower_member_access_expr(
+            member_access_expr,
+            generic_params,
+            MemberAccessKind::Method,
+        );
+
+        let args = self.lower_call_args(call.args(), generic_params);
+
+        let args = args.map(|args| args.into_iter().map(|(idx, _)| idx).collect());
+        let call = Expr::Call(Call {
+            callee: member_access,
+            args: args.inner,
+        })
+        .at(call.range().to_span());
+        let idx = self.exprs.alloc(call);
+
+        (idx.into(), tid)
+    }
+
+    fn lower_call_args(
+        &mut self,
+        args: Option<ast::ArgList>,
+        generic_params: &GenericParams,
+    ) -> Spanned<Vec<(ExprIdx, TypeId)>> {
+        self.lower_node(
+            args,
+            |_, arg_list| vec![].at(arg_list.range().to_span()),
+            |this, arg_list| {
+                arg_list
+                    .args()
+                    .map(|arg| this.lower_expr(Some(arg), generic_params))
+                    .collect::<Vec<_>>()
+                    .at(arg_list.range().to_span())
+            },
+        )
+    }
+
+    fn search_item_tree_for_method(
+        &mut self,
+        item_tree: &ItemTree,
+        tid: TypeId,
+        name: Spur,
+    ) -> Option<FunctionId> {
+        let mut suitable_applies = item_tree.applies.iter().filter(|(_, apply)| {
+            let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+            self.tchk
+                .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+                .is_ok()
+        });
+
+        let method = suitable_applies.find_map(|(_, apply)| {
+            apply
+                .methods
+                .iter()
+                .find(|method| item_tree[**method].name.inner == name)
+                .cloned()
+        });
+        method
+    }
+
+    fn search_item_tree_for_struct_with_field(
+        &mut self,
+        item_tree: &ItemTree,
+        struct_name: Spur,
+        field_name: Spur,
+    ) -> Option<StructField> {
+        let mut suitable_structs = item_tree
+            .structs
+            .iter()
+            .filter(|(_, strukt)| strukt.name.inner == struct_name);
+
+        let field = suitable_structs.find_map(|(struct_id, strukt)| {
+            strukt
+                .fields
+                .fields
+                .iter()
+                .find(|field| field.name.inner == field_name)
+                .cloned()
+        });
+        field
+    }
+
     fn check_call_args_with_function_decl(
         &mut self,
         args: &Spanned<Vec<(ExprIdx, TypeId)>>,
-        function: InFile<&Function>,
+        function: &InFile<&Function>,
     ) {
         args.iter()
             .zip(function.params.iter())
@@ -713,6 +802,79 @@ impl<'a> LowerCtx<'a> {
         (idx.into(), block_tid)
     }
 
+    fn lower_member_access_expr(
+        &mut self,
+        member_access_expr: &ast::MemberAccessExpr,
+        generic_params: &GenericParams,
+        member_access_kind: MemberAccessKind,
+    ) -> ExprResult {
+        let span = member_access_expr.range().to_span();
+        let rhs = self.lower_name(member_access_expr.rhs());
+        let (lhs, lhs_tid) = self.lower_expr(member_access_expr.lhs(), generic_params);
+
+        let member_access = MemberAccess {
+            lhs,
+            rhs: rhs.clone(),
+        };
+        let member_access = Expr::MemberAccess(member_access).at(span);
+        let idx = self.exprs.alloc(member_access);
+
+        let def_map = self.def_map.unwrap();
+
+        let mut for_type = None;
+        if let TypeKind::Concrete(ConcreteKind::Path(path)) =
+            self.tchk.tenv.get_typekind_with_id(lhs_tid).inner.inner
+        {
+            for_type = Some(self.string_interner.resolve(&path).to_string());
+            let result = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
+                let result =
+                    self.search_item_tree_for_struct_with_field(item_tree, path, rhs.inner);
+
+                let file_id = def_map.modules[mod_id].file_id;
+
+                if let Some(field) = &result {
+                    let tid = self.insert_type_to_tenv(&field.ty, file_id);
+                    return Some((idx.into(), tid));
+                }
+
+                None
+            });
+            if let Some(result) = result {
+                return result;
+            }
+        }
+
+        let item_tree_and_method = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
+            let file_id = def_map.modules[mod_id].file_id;
+            self.search_item_tree_for_method(item_tree, lhs_tid, rhs.inner)
+                .map(|method| (item_tree, InFile::new(method, file_id)))
+        });
+
+        let tid = if let Some((item_tree, method_idx)) = item_tree_and_method {
+            let method = &item_tree[method_idx.inner];
+            self.insert_type_to_tenv(&method.ret_ty, method_idx.file_id)
+        } else {
+            let field_or_method = self.string_interner.resolve(&rhs).to_string();
+            let field_or_method_file_span = rhs.span.in_file(self.file_id());
+            let err = match member_access_kind {
+                MemberAccessKind::Method => LowerError::CouldNotFindMethodReferenced {
+                    method: field_or_method,
+                    method_file_span: field_or_method_file_span,
+                    for_type,
+                },
+                MemberAccessKind::Field => LowerError::CouldNotFindFieldReferenced {
+                    field: field_or_method,
+                    field_file_span: field_or_method_file_span,
+                    for_type,
+                },
+            };
+            self.diagnostics.push(err.to_diagnostic());
+            self.tchk.tenv.insert_unknown(span.in_file(self.file_id()))
+        };
+
+        (idx.into(), tid)
+    }
+
     fn lower_let_expr(
         &mut self,
         let_expr: &ast::LetStmt,
@@ -734,6 +896,11 @@ impl<'a> LowerCtx<'a> {
             .unwrap_or_else(|err| {
                 self.diagnostics.push(err);
             });
+
+        self.tchk
+            .tenv
+            .insert_local_to_scope(name.inner, declared_tid);
+
         let l = Expr::Let(Let { name, ty, val }).at(let_expr.range().to_span());
         let idx = self.exprs.alloc(l);
         (idx.into(), declared_tid)
@@ -799,7 +966,9 @@ impl<'a> LowerCtx<'a> {
                                 .iter()
                                 .find(|(_, name)| name.inner == *path.segments.first().unwrap())
                             {
-                                Type::Generic(generic.inner)
+                                let restrictions =
+                                    this.get_restrictions_on_generic(generic.inner, generic_params);
+                                Type::Generic(generic.inner, restrictions)
                             } else {
                                 Type::Path(path.inner)
                             }
@@ -815,6 +984,25 @@ impl<'a> LowerCtx<'a> {
             },
         );
         self.types.alloc(ty).into()
+    }
+
+    fn get_restrictions_on_generic(
+        &self,
+        generic_name: Spur,
+        generic_params: &GenericParams,
+    ) -> Vec<Spanned<Path>> {
+        generic_params
+            .where_predicates
+            .0
+            .iter()
+            .filter_map(|predicate| {
+                if predicate.name.inner == generic_name {
+                    Some(predicate.bound.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

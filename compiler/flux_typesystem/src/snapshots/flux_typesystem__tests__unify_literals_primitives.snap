@@ -1,0 +1,26 @@
+---
+source: compiler/flux_typesystem/src/tests.rs
+expression: "parse(r#\"\n    s64 == s64\n    s32 == s32\n    s16 == s16\n    s8 == s8\n    s64 == s64\n    s32 == s32\n    s16 == s16\n    s8 == s8\n    f64 == f64\n    f32 == f32\n\n    s32 != s16\n    f32 != f64\n    int != int\n    float != float\n\n    unknown == int\n    unknown == int(u8)\n    unknown == float\n    unknown == float(f64)\n\n    unknown == unknown\n\n    Foo == Foo\n    Foo != Bar\n\"#)"
+---
+s64 == s64 ✅
+s32 == s32 ✅
+s16 == s16 ✅
+s8 == s8 ✅
+s64 == s64 ✅
+s32 == s32 ✅
+s16 == s16 ✅
+s8 == s8 ✅
+f64 == f64 ✅
+f32 == f32 ✅
+s32 != s16 ✅
+f32 != f64 ✅
+int != int ✅
+float != float ✅
+unknown == int ✅
+unknown == int(u8) ✅
+unknown == float ✅
+unknown == float(f64) ✅
+unknown == unknown ✅
+Foo == Foo ✅
+Foo != Bar ✅
+

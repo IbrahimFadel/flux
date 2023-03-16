@@ -1,8 +1,28 @@
 extern crate flux_proc_macros;
+use flux_diagnostics::ToDiagnostic;
 use flux_proc_macros::diagnostic;
+use flux_span::{FileId, Span};
+
+macro_rules! assert_enum_variants_have_fields {
+    ($t:ty =>
+        $(
+            $variant:ident {
+                $($field:ident: $field_ty:ty),+
+            }
+        ),+
+    ) => {
+        const _: () = {
+            fn dummy(v: Test) {
+                let _: $t = match v {
+                    $(Test::$variant { $($field: _),+ } => todo!(),)+
+                };
+            }
+        };
+    };
+}
 
 #[test]
-fn foo() {
+fn diagnostic_enum_proc_macro() {
     #[diagnostic]
     enum Test {
         #[error(
@@ -15,10 +35,8 @@ fn foo() {
         CannotAccessPrivatePathSegment {
             #[filespanned]
             path: String,
-            // path_file_span: InFile<Span>,
             #[filespanned]
             erroneous_segment: String,
-            // erroneous_segment_file_span: InFile<Span>,
         },
         #[error(
             location = a,
@@ -31,37 +49,30 @@ fn foo() {
             b: String,
         },
     }
-    // #[derive(ToDiagnostic)]
-    // enum Test {
-    //     #[error(
-    //         location = [map_inner] path,
-    //         primary = "cannot access private path segment",
-    //         label = [map_inner(path)] "cannot access private path segment in path `{path}",
-    //         label = [map_inner(erroneous_segment)] "private segment `{erroneous_segment}`",
-    //     )]
-    //     CannotAccessPrivatePathSegment {
-    //         path: FileSpanned<String>,
-    //         erroneous_segment: FileSpanned<String>,
-    //     },
-    //     // #[error(
-    //     //     location = [map_inner_location] path,
-    //     //     primary = "cannot access private path segment",
-    //     //     label = [map_inner(path)] "cannot access private path segment in path `{path}`",
-    //     //     label = [map_inner(erroneous_segment)] "test `{erroneous_segment}`"
-    //     // )]
-    //     // CannotAccessPrivatePathSegment {
-    //     //     path: FileSpanned<String>,
-    //     //     erroneous_segment: FileSpanned<String>,
-    //     // },
 
-    //     // #[error(
-    //     //     location = [map_inner_location] path,
-    //     //     primary = "fooo primary",
-    //     //     label = [map_inner(a)] "ahhu path `{a}`",
-    //     // )]
-    //     // IncorrectNumArgsInCall {
-    //     //     a: FileSpanned<String>,
-    //     //     b: FileSpanned<String>,
-    //     // },
-    // }
+    assert_enum_variants_have_fields! {
+
+    Test =>
+        CannotAccessPrivatePathSegment {
+            path: String,
+            path_file_span: InFile<Span>,
+            erroneous_segment: String,
+            erroneous_segment_file_span: InFile<Span>
+        },
+        IncorrectNumArgsInCall {
+            a: String,
+            a_file_span: InFile<Span>,
+            b: String
+        }
+
+    };
+
+    let test = Test::IncorrectNumArgsInCall {
+        a: "foo".to_string(),
+        a_file_span: Span::poisoned().in_file(FileId::poisoned()),
+        b: "bar".to_string(),
+    };
+
+    // make sure the trait was implemented
+    let _test_diagnostic = test.to_diagnostic();
 }

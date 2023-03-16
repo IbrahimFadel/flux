@@ -216,3 +216,74 @@ apply<A, B> to Foo {
 }
 "#
 }
+
+errors! {
+    restriction_not_met_struct_initialization,
+    r#"
+//- main.flx
+
+trait Bar {}
+
+struct Foo<T>
+    where T is Bar
+{
+    x T
+}
+
+fn main() {
+    let foo = Foo {
+        x: 0,
+    };
+}
+"#
+}
+
+no_errors! {
+    restriction_met_struct_initialization,
+    r#"
+//- main.flx
+
+trait Bar {}
+
+struct Foo<T>
+    where T is Bar
+{
+    x T
+}
+
+struct Bazz {}
+
+apply Bar to Bazz {}
+
+fn main() {
+    let foo = Foo {
+        x: Bazz {},
+    };
+}
+"#
+}
+
+// no_errors! {
+//     int_subtyping,
+//     r#"
+// //- main.flx
+
+// trait Bar {}
+
+// struct Foo<T>
+//     where T is Bar
+// {
+//     x T
+// }
+
+// apply Bar to s32 {
+
+// }
+
+// fn main() {
+//     let foo = Foo {
+//         x: 0,
+//     };
+// }
+// "#
+// }

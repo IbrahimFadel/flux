@@ -1,0 +1,39 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn main() -> () {
+let foo <unknown type> = struct Foo {
+x: 0
+};
+let x s32 = foo.x;
+}
+
+
+
+Diagnostics
+
+[E0031] Error: type mismatch
+    ,-[ main.flx:12:6]
+    |
+  4 |         x u32,
+    *        ^|^  
+    *         `--- u32
+    * 
+ 11 | ,-> 
+ 12 | |->     let x s32 = foo.x;
+    * |        ^^|^^               
+    * `---------------------------- s32
+    *            |                 
+    *            `----------------- type mismatch between `s32` and `u32`
+----'
+

@@ -1,4 +1,4 @@
-use cstree::{SyntaxElementRef, TextRange};
+use cstree::{SyntaxElementRef, TextRange, TextSize};
 
 use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 
@@ -39,6 +39,14 @@ macro_rules! getter {
     ($name:ident -> nodes($node_kind:ident); $($rest:tt)*) => {
         pub fn $name(&self) -> impl Iterator<Item = $node_kind> + '_ {
             self.syntax().children().cloned().filter_map($node_kind::cast)
+        }
+        getter! {
+            $($rest)*
+        }
+    };
+    ($name:ident -> nth_node($node_kind:ident, $n:expr); $($rest:tt)*) => {
+        pub fn $name(&self) -> Option<$node_kind> {
+            self.syntax().children().cloned().filter_map($node_kind::cast).nth($n)
         }
         getter! {
             $($rest)*
@@ -120,13 +128,15 @@ fn trim_trailing_whitesapce(node: &SyntaxNode) -> TextRange {
     }
     let mut i = len - 1;
     let start = node.text_range().start();
-    let mut end = node.text_range().end();
+    let original_end = node.text_range().end();
+    let mut end = original_end;
     loop {
         let child = node.children_with_tokens().nth(i);
         if let Some(child) = child {
             match child.as_node() {
                 Some(node) => {
                     end = trim_trailing_whitesapce(node).end();
+                    return TextRange::new(start, end);
                 }
                 None => {
                     let tok = child.as_token().unwrap();

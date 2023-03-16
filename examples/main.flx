@@ -1,17 +1,26 @@
-struct Foo {
-    x s32,
-    y Bar,
-    z f32,
+fn main() {
+    let x = 0;
+    let y = x;
 }
 
-struct Bar {
-    x u32
+/*trait Bar {}
+
+struct Foo<T>
+    where T is Bar
+{
+    x T
 }
+
+struct Bazz {}
+
+apply Bar to Bazz {}
 
 fn main() {
-    let foo_instance = Foo {
-        x: 0.0,
-        z: 1,
-        foo: 10,
+    let bazz = Bazz {};
+    let foo = Foo {
+        x: bazz,
     };
-}
+
+    let y = 0;
+    let x = y;
+}*/

@@ -1,3 +1,5 @@
+#![feature(more_qualified_paths)]
+
 use std::{env, fs, path::PathBuf};
 
 use diagnostics::DriverError;

@@ -50,6 +50,7 @@ pub enum SyntaxKind {
     StructExprFieldList,
     StructExprField,
     PathExpr,
+    MemberAccessExpr,
 
     ExprStmt,
     TerminatorExprStmt,

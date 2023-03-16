@@ -70,11 +70,17 @@ getters! {
         stmts -> nodes(Stmt);
     }
     CallExpr {
-        path -> node(PathExpr);
+        callee -> node(Expr);
         args -> node(ArgList);
         lparen -> tok(LParen);
         rparen -> tok(RParen);
     }
+    // ExprCallExpr {
+    //     callee -> node(Expr);
+    //     args -> node(ArgList);
+    //     lparen -> tok(LParen);
+    //     rparen -> tok(RParen);
+    // }
     ArgList {
         args -> nodes(Expr);
     }
@@ -199,5 +205,9 @@ getters! {
     ModDecl {
         visibility -> node(Visibility);
         name -> node(Name);
+    }
+    MemberAccessExpr {
+        lhs -> node(Expr);
+        rhs -> node(Name);
     }
 }

@@ -14,6 +14,26 @@ impl<'a> LowerCtx<'a> {
         );
         if let Some(trt_path) = &a.trt {
             self.handle_apply_trait(trt_path, &a.methods);
+
+            let file_id = self.file_id();
+
+            let trt_args = &trt_path
+                .generic_args
+                .iter()
+                .map(|ty| self.insert_type_to_tenv(ty, file_id))
+                .collect::<Vec<_>>();
+            let impltr = self.insert_type_to_tenv(&a.ty, file_id);
+            self.tchk
+                .add_trait_application_to_context(
+                    &trt_path
+                        .map_ref(|path| path.to_spur(self.string_interner))
+                        .in_file(file_id),
+                    trt_args,
+                    impltr,
+                )
+                .unwrap_or_else(|err| {
+                    self.diagnostics.push(err);
+                });
         }
         for f in &a.methods.inner {
             let f_generic_params = &item_tree[*f].generic_params;
@@ -424,7 +444,7 @@ impl<'a> LowerCtx<'a> {
 
                 // for the every predicate on the current trait def param
                 for required_predicate in required_predicates {
-                    if let Type::Generic(name) = &self.types[arg.raw()].inner {
+                    if let Type::Generic(name, _) = &self.types[arg.raw()].inner {
                         // predicate in args that matches the requirement
                         let predicate_matched = generic_args_where_predicates
                             .iter()

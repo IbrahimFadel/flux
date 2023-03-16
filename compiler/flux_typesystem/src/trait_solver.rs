@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::TypeId;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Hash, Clone)]
 pub(crate) struct TraitImplementation {
     /// First `TypeId` is the implementor, followed by the trait parameters, then the implementor parameters
     ids: Vec<TypeId>,
@@ -31,12 +31,18 @@ impl TraitImplementation {
         unsafe { *self.ids.get_unchecked(0) }
     }
 
-    pub fn get_trait_params(&self) -> &[TypeId] {
-        unsafe { self.ids.get_unchecked(1..self.num_trait_params) }
+    pub fn get_trait_params(&self) -> Vec<TypeId> {
+        self.ids
+            .get(1..self.num_trait_params)
+            .map(Vec::from)
+            .unwrap_or_else(Vec::new)
     }
 
-    pub fn get_impltor_params(&self) -> &[TypeId] {
-        unsafe { self.ids.get_unchecked(self.num_trait_params..) }
+    pub fn get_impltor_params(&self) -> Vec<TypeId> {
+        self.ids
+            .get(self.num_trait_params..)
+            .map(Vec::from)
+            .unwrap_or_else(Vec::new)
     }
 }
 
@@ -69,17 +75,36 @@ impl TraitImplementationTable {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct TraitSolver {
-    pub implementation_table: TraitImplementationTable,
-    // cache: HashMap<Spur, Spur>,
-}
+// #[derive(Debug)]
+// pub(crate) struct TraitSolver {
+//     pub implementation_table: TraitImplementationTable,
+// }
 
-impl TraitSolver {
-    pub fn new() -> Self {
-        Self {
-            implementation_table: TraitImplementationTable::new(),
-            // cache: HashMap::new(),
-        }
-    }
-}
+// impl TraitSolver {
+//     pub fn new() -> Self {
+//         Self {
+//             implementation_table: TraitImplementationTable::new(),
+//         }
+//     }
+
+//     pub fn try_add_implementation(
+//         &mut self,
+//         trait_name: Spur,
+//         implementation: TraitImplementation,
+//     ) -> Result<(), Diagnostic> {
+//         let implementations = self
+//             .implementation_table
+//             .table
+//             .entry(trait_name)
+//             .or_insert(vec![]);
+
+//         for implemtation in implementations {}
+
+//         Ok(())
+//     }
+
+//     fn are_trait_impls_equal(a: &TraitImplementation, b: &TraitImplementation) -> bool {
+//         let impltor_a = a.get_impltor();
+//         let impltor_b = b.get_impltor();
+//     }
+// }

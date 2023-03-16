@@ -22,7 +22,7 @@ pub struct TEnv {
     pub(super) float_paths: HashSet<Spur>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitRestriction {
     pub name: FileSpanned<Spur>,
     pub args: Vec<TypeId>,
@@ -40,39 +40,16 @@ impl TraitRestriction {
 #[derive(Debug, Clone)]
 pub struct TEntry {
     keys: Vec<TypeKind>,
-    pub restrictions: Vec<TraitRestriction>,
 }
 
 impl TEntry {
     pub fn new(constr: TypeKind) -> Self {
-        Self {
-            keys: vec![constr],
-            restrictions: vec![],
-        }
-    }
-
-    pub fn with_restrictions(constr: TypeKind, restrictions: Vec<TraitRestriction>) -> Self {
-        Self {
-            keys: vec![constr],
-            restrictions,
-        }
+        Self { keys: vec![constr] }
     }
 
     pub fn with_args(constr: TypeKind, args: impl Iterator<Item = TypeKind>) -> Self {
         let keys = std::iter::once(constr).chain(args).collect();
-        Self {
-            keys,
-            restrictions: vec![],
-        }
-    }
-
-    pub fn with_args_and_restrictions(
-        constr: TypeKind,
-        args: impl Iterator<Item = TypeKind>,
-        restrictions: Vec<TraitRestriction>,
-    ) -> Self {
-        let keys = std::iter::once(constr).chain(args).collect();
-        Self { keys, restrictions }
+        Self { keys }
     }
 
     pub fn get_constr(&self) -> &TypeKind {
@@ -198,23 +175,6 @@ impl TEnv {
         TypeId::new(idx)
     }
 
-    /// Insert a `Spanned<Type>` with trait constraints into the type environment
-    ///
-    /// This interns the [`TypeKind`] and pushes a new [`TEntry`] to th environment, returning
-    /// a valid [`TypeId`]
-    pub fn insert_with_constraints(
-        &mut self,
-        ty: FileSpanned<Type>,
-        restrictions: Vec<TraitRestriction>,
-    ) -> TypeId {
-        let kind = ty.constr();
-        let idx = self.entries.len();
-        self.entries.push(
-            ty.map_ref(|ty| ty.map_ref(|_| TEntry::with_restrictions(kind.clone(), restrictions))),
-        );
-        TypeId::new(idx)
-    }
-
     pub fn set_type(&mut self, id: TypeId, ty: Type) {
         let kind = ty.constr();
         self.get_entry_mut(id).inner.inner.set_constr(kind.clone());
@@ -333,7 +293,7 @@ impl TEnv {
 
     pub fn fmt_typekind_constr(&self, kind: &TypeKind) -> String {
         match kind {
-            TypeKind::Generic(name) => self.string_interner.resolve(name).to_string(),
+            TypeKind::Generic(name, _) => self.string_interner.resolve(name).to_string(),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),
@@ -353,24 +313,38 @@ impl TEnv {
                     ids.iter().map(|id| self.fmt_ty_id_constr(*id)).join(", ")
                 )
             }
-            ConcreteKind::Struct(strukt) => format!(
-                "{{{}}}",
-                strukt
-                    .fields
-                    .iter()
-                    .map(|(name, ty)| format!(
-                        "{}: {}",
-                        self.string_interner.resolve(name),
-                        self.fmt_ty_id_constr(*ty)
-                    ))
-                    .join(",\n"),
-            ),
         }
     }
 
     pub fn fmt_typekind(&self, kind: &TypeKind) -> String {
         match kind {
-            TypeKind::Generic(name) => self.string_interner.resolve(name).to_string(),
+            TypeKind::Generic(name, restrictions) => format!(
+                "{}{}",
+                self.string_interner.resolve(name),
+                if restrictions.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        ": {}",
+                        restrictions
+                            .iter()
+                            .map(|restriction| format!(
+                                "{}{}",
+                                self.string_interner.resolve(&restriction.name),
+                                if restriction.args.is_empty() {
+                                    "".to_string()
+                                } else {
+                                    restriction
+                                        .args
+                                        .iter()
+                                        .map(|arg| self.fmt_ty_id(*arg))
+                                        .join(", ")
+                                }
+                            ))
+                            .join(", ")
+                    )
+                }
+            ),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),
@@ -393,18 +367,6 @@ impl TEnv {
             ConcreteKind::Tuple(ids) => {
                 format!("({})", ids.iter().map(|id| self.fmt_ty_id(*id)).join(", "))
             }
-            ConcreteKind::Struct(strukt) => format!(
-                "{{{}}}",
-                strukt
-                    .fields
-                    .iter()
-                    .map(|(name, ty)| format!(
-                        "{}: {}",
-                        self.string_interner.resolve(name),
-                        self.fmt_ty_id(*ty)
-                    ))
-                    .join(",\n"),
-            ),
         }
     }
 
@@ -412,10 +374,17 @@ impl TEnv {
         format!(
             "{}{}",
             self.fmt_typekind(&entry.get_constr()),
-            if entry.restrictions.is_empty() {
-                String::new()
+            if let Some(params) = entry.get_params() {
+                if params.is_empty() {
+                    "".to_string()
+                } else {
+                    params
+                        .iter()
+                        .map(|param| self.fmt_typekind(param))
+                        .join(", ")
+                }
             } else {
-                todo!()
+                "".to_string()
             }
         )
     }
@@ -484,19 +453,20 @@ impl Display for TEnv {
 
 impl Display for TEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}{}{}",
-            self.get_constr(),
-            if !self.restrictions.is_empty() {
-                ": ".to_string()
-            } else {
-                String::new()
-            },
-            self.restrictions
-                .iter()
-                .format_with(", ", |_, f| f(&format_args!("{:?}", self.restrictions)))
-        )
+        todo!()
+        // write!(
+        //     f,
+        //     "{:?}{}{}",
+        //     self.get_constr(),
+        //     if !self.restrictions.is_empty() {
+        //         ": ".to_string()
+        //     } else {
+        //         String::new()
+        //     },
+        //     self.restrictions
+        //         .iter()
+        //         .format_with(", ", |_, f| f(&format_args!("{:?}", self.restrictions)))
+        // )
     }
 }
 
@@ -527,7 +497,6 @@ impl Display for ConcreteKind {
             Self::Path(path) => write!(f, "{path:?}"),
             Self::Ptr(ptr) => write!(f, "*'{ptr}"),
             Self::Tuple(_) => write!(f, "()"),
-            Self::Struct(_) => write!(f, "todo (lazy pos)"),
         }
     }
 }
@@ -539,16 +508,16 @@ mod tests {
     use once_cell::sync::Lazy;
     use text_size::TextRange;
 
-    use crate::{ConcreteKind, TEnv, Type, TypeKind};
+    // use crate::{ConcreteKind, TEnv, Type, TypeKind};
 
-    static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
+    // static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 
-    fn file_spanned(ty: Type) -> FileSpanned<Type> {
-        FileSpanned::new(
-            Spanned::new(ty, Span::new(TextRange::new(0.into(), 0.into()))),
-            FileId(Spur::default()),
-        )
-    }
+    // fn file_spanned(ty: Type) -> FileSpanned<Type> {
+    //     FileSpanned::new(
+    //         Spanned::new(ty, Span::new(TextRange::new(0.into(), 0.into()))),
+    //         FileId(Spur::default()),
+    //     )
+    // }
 
     // #[test]
     // fn fmt_ty_ids() {
