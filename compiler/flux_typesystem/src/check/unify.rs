@@ -100,19 +100,16 @@ impl TChecker {
     }
 
     fn type_mismatch(&self, a: TypeId, b: TypeId, unification_span: InFile<Span>) -> Diagnostic {
-        let a_span = self.tenv.get_type_filespan(a);
-        let b_span = self.tenv.get_type_filespan(b);
+        let a_file_span = self.tenv.get_type_filespan(a);
+        let b_file_span = self.tenv.get_type_filespan(b);
 
         TypeError::TypeMismatch {
-            a: self
-                .tenv
-                .fmt_ty_id(a)
-                .file_span(a_span.file_id, a_span.inner),
-            b: self
-                .tenv
-                .fmt_ty_id(b)
-                .file_span(b_span.file_id, b_span.inner),
-            span: unification_span,
+            a: self.tenv.fmt_ty_id(a),
+            a_file_span,
+            b: self.tenv.fmt_ty_id(b),
+            b_file_span,
+            span: (),
+            span_file_span: unification_span,
         }
         .to_diagnostic()
     }

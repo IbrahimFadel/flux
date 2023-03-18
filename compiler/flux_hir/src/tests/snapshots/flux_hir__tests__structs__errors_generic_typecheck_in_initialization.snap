@@ -24,11 +24,15 @@ x: bazz
 
 Diagnostics
 
-[E0035] Error: trait restrictions not met
+[E0041] Error: trait restrictions not met
     ,-[ main.flx:13:8]
     |
+  6 |     where T is Bar
+    |           ^|^  
+    |            `--- restriction `Bar` defined here
+    | 
  13 | fn main() {
-    *        ^^|^  
-    *          `--- trait restrictions `Bar` not met for type `Bazz`
+    |        ^^|^  
+    |          `--- trait restriction `Bar` not met for type `Bazz`
 ----'
 

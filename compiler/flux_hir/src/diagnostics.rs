@@ -1,53 +1,6 @@
+use flux_diagnostics::{quote_and_listify, Plural};
 use flux_proc_macros::diagnostic;
 use itertools::Itertools;
-
-trait Plural {
-    fn plural(&self, suffix: &'static str) -> &str;
-    fn singular(&self, suffix: &'static str) -> &str;
-}
-
-impl Plural for usize {
-    fn plural(&self, suffix: &'static str) -> &str {
-        if *self == 1 {
-            ""
-        } else {
-            suffix
-        }
-    }
-
-    fn singular(&self, suffix: &'static str) -> &str {
-        if *self == 1 {
-            suffix
-        } else {
-            ""
-        }
-    }
-}
-
-impl<T> Plural for Vec<T> {
-    fn plural(&self, suffix: &'static str) -> &str {
-        if self.len() == 1 {
-            ""
-        } else {
-            suffix
-        }
-    }
-
-    fn singular(&self, suffix: &'static str) -> &str {
-        if self.len() == 1 {
-            suffix
-        } else {
-            ""
-        }
-    }
-}
-
-fn quote_and_listify<S>(iter: impl Iterator<Item = S>) -> String
-where
-    S: Into<String>,
-{
-    iter.map(|item| format!("`{}`", item.into())).join(", ")
-}
 
 #[diagnostic]
 pub(crate) enum LowerError {
@@ -88,11 +41,11 @@ pub(crate) enum LowerError {
     },
     #[error(
         location = path,
-        primary = "could not resolve use path",
+        primary = "could not resolve path",
         label at path = "could not resolve path `{path}`",
         label at erroneous_segment = "unresolved path segment `{erroneous_segment}`",
     )]
-    CouldNotResolveUsePath {
+    CouldNotResolvePath {
         #[filespanned]
         path: String,
         #[filespanned]
@@ -398,5 +351,65 @@ pub(crate) enum LowerError {
         #[filespanned]
         field: String,
         for_type: Option<String>,
+    },
+    #[error(
+        location = ty,
+        primary = "associated type do not belong in apply",
+        label at ty = "associated type `{ty}` do not belong in apply for trait `{trait_name}`"
+    )]
+    AssocTypeDoesntBelong {
+        #[filespanned]
+        ty: String,
+        trait_name: String,
+    },
+    #[error(
+        location = apply,
+        primary = "missing associated types in apply",
+        label at apply = "missing associated types {} in application of trait `{}`" with (
+            quote_and_listify(types.iter().sorted()),
+            trait_name
+        )
+    )]
+    UnassignedAssocTypes {
+        types: Vec<String>,
+        #[filespanned]
+        apply: (),
+        trait_name: String,
+    },
+    #[error(
+        location = ty,
+        primary = "unresolved type",
+        label at ty = "unresolved type `{ty}`",
+    )]
+    UnresolvedType {
+        #[filespanned]
+        ty: String,
+    },
+    #[error(
+        location = strukt,
+        primary = "unresolved struct",
+        label at strukt = "unresolved struct `{strukt}`",
+    )]
+    UnresolvedStruct {
+        #[filespanned]
+        strukt: String,
+    },
+    #[error(
+        location = path,
+        primary = "cannot access private item",
+        label at path = "cannot access private item `{path}`",
+    )]
+    AccessedPrivateItem {
+        #[filespanned]
+        path: String,
+    },
+    #[error(
+        location = path,
+        primary = "cannot access private struct",
+        label at path = "cannot access private struct `{path}`",
+    )]
+    AccessedPrivateStruct {
+        #[filespanned]
+        path: String,
     },
 }

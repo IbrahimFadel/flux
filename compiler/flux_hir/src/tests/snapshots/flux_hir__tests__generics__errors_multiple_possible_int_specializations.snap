@@ -1,0 +1,46 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn foo<T>(x T: Foo) -> () where T is Foo {
+
+}
+
+fn main() -> () {
+foo(0)
+}
+
+
+
+Diagnostics
+
+[E0048] Error: the type of this int is ambiguous
+   ,-[ main.flx:9:12]
+   |
+ 4 | apply Foo to s32 {}
+   |           ^^|^  
+   |             `--- application of trait `Foo` to type `s32`
+ 5 | apply Foo to s64 {}
+   |          ^^|^  
+   |            `--- application of trait `Foo` to type `s64`
+   | 
+ 7 | fn foo<T>(x T) where T is Foo {}
+   |                     ^|^  
+   |                      `--- this trait restriction requires the type to be known
+   | 
+ 9 | fn main() {
+   |            |  
+   |            `-- the type of this int is ambiguous between the following types: `s32`, `s64`
+   | 
+   | Help: try specifying the type of int by adding the int type to the end of the literal
+---'
+

@@ -7,7 +7,7 @@ use syn::{
 };
 
 use crate::ast::{
-    DiagnosticEnum, ErrorAttribute, Field, FieldAttribute, Help, Label, Location, Variant,
+    DiagnosticEnum, ErrorAttribute, Field, FieldAttribute, Help, Label, Labels, Location, Variant,
 };
 
 mod kw {
@@ -17,6 +17,7 @@ mod kw {
     custom_keyword!(location);
     custom_keyword!(primary);
     custom_keyword!(label);
+    custom_keyword!(labels);
     custom_keyword!(help);
 
     custom_keyword!(with);
@@ -74,6 +75,8 @@ impl ErrorAttribute {
             input.parse().map(ErrorAttribute::Primary)
         } else if lookahead.peek(kw::label) {
             input.parse().map(ErrorAttribute::Label)
+        } else if lookahead.peek(kw::labels) {
+            input.parse().map(ErrorAttribute::Labels)
         } else if lookahead.peek(kw::help) {
             input.parse().map(ErrorAttribute::Help)
         } else {
@@ -107,6 +110,25 @@ impl Parse for Label {
             None
         };
         Ok(Label { field, msg, exprs })
+    }
+}
+
+impl Parse for Labels {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let _labels: kw::labels = input.parse()?;
+        let _for: Token![for] = input.parse()?;
+        let field = input.parse()?;
+        let _eq: Token![=] = input.parse()?;
+        let msg: LitStr = input.parse()?;
+        let exprs = if input.peek(kw::with) {
+            let _with: kw::with = input.parse()?;
+            let content;
+            let _paren = parenthesized!(content in input);
+            Some(content.parse_terminated(Expr::parse)?)
+        } else {
+            None
+        };
+        Ok(Labels { field, msg, exprs })
     }
 }
 

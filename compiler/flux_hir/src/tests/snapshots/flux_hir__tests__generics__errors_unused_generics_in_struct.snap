@@ -19,14 +19,14 @@ Diagnostics
    ,-[ main.rs:3:10]
    |
  3 | struct Bazz<T> {}
-   *          ^|^  
-   *           `--- unused generic parameters `T`
+   |          ^|^  
+   |           `--- unused generic parameters `T`
 ---'
 [E0021] Error: unused generic parameters
    ,-[ main.rs:5:8]
    |
  5 | struct Bazz<A, B, C> {
-   *        ^^^^|^^^^  
-   *            `------ unused generic parameters `B`, `C`
+   |        ^^^^|^^^^  
+   |            `------ unused generic parameters `B`, `C`
 ---'
 

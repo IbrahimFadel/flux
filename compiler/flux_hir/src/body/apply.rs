@@ -13,27 +13,39 @@ impl<'a> LowerCtx<'a> {
             self.cur_module_id,
         );
         if let Some(trt_path) = &a.trt {
-            self.handle_apply_trait(trt_path, &a.methods);
+            let trt = self.get_trait(trt_path);
+            match trt {
+                Some((trt, trt_mod_id)) => {
+                    self.check_trait_methods_with_apply_methods(
+                        &trt.methods,
+                        trt_mod_id,
+                        &a.methods,
+                    );
+                    self.check_trait_assoc_types_with_apply_assoc_types(&trt, a);
 
-            let file_id = self.file_id();
+                    let file_id = self.file_id();
 
-            let trt_args = &trt_path
-                .generic_args
-                .iter()
-                .map(|ty| self.insert_type_to_tenv(ty, file_id))
-                .collect::<Vec<_>>();
-            let impltr = self.insert_type_to_tenv(&a.ty, file_id);
-            self.tchk
-                .add_trait_application_to_context(
-                    &trt_path
-                        .map_ref(|path| path.to_spur(self.string_interner))
-                        .in_file(file_id),
-                    trt_args,
-                    impltr,
-                )
-                .unwrap_or_else(|err| {
-                    self.diagnostics.push(err);
-                });
+                    let trt_args = &trt_path
+                        .generic_args
+                        .iter()
+                        .map(|ty| self.insert_type_to_tenv(ty, file_id))
+                        .collect::<Vec<_>>();
+
+                    let impltr = self.insert_type_to_tenv(&a.ty, file_id);
+                    self.tchk
+                        .add_trait_application_to_context(
+                            &trt_path
+                                .map_ref(|path| path.to_spur(self.string_interner))
+                                .in_file(file_id),
+                            trt_args,
+                            impltr,
+                        )
+                        .unwrap_or_else(|err| {
+                            self.diagnostics.push(err);
+                        });
+                }
+                None => todo!(),
+            }
         }
         for f in &a.methods.inner {
             let f_generic_params = &item_tree[*f].generic_params;
@@ -42,59 +54,106 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn handle_apply_trait(&mut self, trt_path: &Spanned<Path>, methods: &Spanned<Vec<FunctionId>>) {
-        let trt = self
-            .def_map
-            .unwrap()
-            .resolve_path(trt_path, self.cur_module_id);
-        match trt {
-            Ok(per_ns) => match per_ns.types {
-                Some((def_id, m, vis)) => {
-                    let item_tree = &self.def_map.unwrap().item_trees[m];
-                    let file_id = self.def_map.unwrap().modules[m].file_id;
-                    let trt = match def_id {
-                        ModuleDefId::TraitId(trt_idx) => {
-                            let trt = &item_tree[trt_idx];
-                            if self.cur_module_id != m && vis == Visibility::Private {
-                                self.diagnostics.push(
-                                    LowerError::TriedApplyingPrivateTrait {
-                                        trt: self
-                                            .string_interner
-                                            .resolve(&trt.name.inner)
-                                            .to_string(),
-                                        declared_as_private: (),
-                                        declared_as_private_file_span: trt
-                                            .visibility
-                                            .span
-                                            .in_file(file_id),
-                                        application: (),
-                                        application_file_span: trt_path
-                                            .span
-                                            .in_file(self.file_id()),
-                                    }
-                                    .to_diagnostic(),
-                                );
-                            }
-                            trt
-                        }
-                        _ => unreachable!(),
-                    };
+    fn check_trait_assoc_types_with_apply_assoc_types(&mut self, trt: &InFile<Trait>, a: &Apply) {
+        let trait_assoc_types = &trt.assoc_types;
+        let apply_assoc_types = &a.assoc_types;
 
-                    self.check_trait_methods_with_apply_methods(&trt.methods, m, methods);
-                }
-                None => self.diagnostics.push(
-                    LowerError::UnresolvedTrait {
-                        trt: trt_path.inner.to_string(self.string_interner),
-                        trt_file_span: trt_path.span.in_file(self.file_id()),
+        let apply_trt_span = a
+            .trt
+            .as_ref()
+            .unwrap_or_else(|| {
+                ice("entered check_trait_assoc_types_with_apply_assoc_types without trait in apply")
+            })
+            .span;
+
+        // apply Foo to Bar {
+        //       ^^^^^^^^^^
+        let apply_span = Span::combine(apply_trt_span, self.types[a.ty.raw()].span);
+
+        self.check_assoc_types_differences(
+            &trt.name,
+            apply_span,
+            trait_assoc_types,
+            apply_assoc_types,
+        );
+    }
+
+    fn check_assoc_types_differences(
+        &mut self,
+        trait_name: &Spur,
+        apply_span: Span,
+        trait_assoc_types: &[(Name, Vec<Spanned<Path>>)],
+        apply_assoc_types: &[(Name, TypeIdx)],
+    ) {
+        let trait_assoc_type_names: HashSet<Name> = trait_assoc_types
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let apply_assoc_type_names: HashSet<Name> = apply_assoc_types
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        apply_assoc_type_names
+            .difference(&trait_assoc_type_names)
+            .for_each(|doest_belong| {
+                self.diagnostics.push(
+                    LowerError::AssocTypeDoesntBelong {
+                        ty: self.string_interner.resolve(doest_belong).to_string(),
+                        ty_file_span: doest_belong.span.in_file(self.file_id()),
+                        trait_name: self.string_interner.resolve(&trait_name).to_string(),
                     }
                     .to_diagnostic(),
-                ),
-            },
-            Err(err) => self.diagnostics.push(
-                err.to_lower_error(self.file_id(), self.string_interner)
-                    .to_diagnostic(),
-            ),
+                );
+            });
+        let unassigned_assoc_types: Vec<_> = trait_assoc_type_names
+            .difference(&apply_assoc_type_names)
+            .collect();
+        if !unassigned_assoc_types.is_empty() {
+            self.diagnostics.push(
+                LowerError::UnassignedAssocTypes {
+                    types: unassigned_assoc_types
+                        .iter()
+                        .map(|spur| self.string_interner.resolve(spur).to_string())
+                        .collect(),
+                    apply: (),
+                    apply_file_span: apply_span.in_file(self.file_id()),
+                    trait_name: self.string_interner.resolve(trait_name).to_string(),
+                }
+                .to_diagnostic(),
+            );
         }
+
+        for (assoc_type_name, assoc_type_tyidx) in apply_assoc_types {
+            let trait_assoc_type = trait_assoc_types
+                .iter()
+                .find(|(name, _)| name.inner == assoc_type_name.inner);
+
+            if let Some((_, trait_assoc_type_restrictions)) = trait_assoc_type {
+                let tid = self.insert_type_to_tenv(assoc_type_tyidx, self.file_id());
+                let type_restrictions: Vec<_> = trait_assoc_type_restrictions
+                    .iter()
+                    .map(|restriction| self.path_to_trait_restriction(restriction))
+                    .collect();
+                self.tchk
+                    .check_if_type_implements_restrictions(tid, &type_restrictions)
+                    .unwrap_or_else(|err| {
+                        self.diagnostics.push(err);
+                    });
+            }
+        }
+    }
+
+    fn path_to_trait_restriction(&mut self, path: &Spanned<Path>) -> ts::TraitRestriction {
+        let name = path
+            .map_ref(|path| path.to_spur(self.string_interner))
+            .in_file(self.file_id());
+        let args = path
+            .generic_args
+            .iter()
+            .map(|idx| self.insert_type_to_tenv(idx, self.file_id()))
+            .collect();
+        ts::TraitRestriction { name, args }
     }
 
     fn check_trait_methods_with_apply_methods(
@@ -118,7 +177,6 @@ impl<'a> LowerCtx<'a> {
                     self.check_trait_method_with_apply_method(
                         trait_method,
                         trait_file_id,
-                        trait_module_id,
                         apply_method,
                     );
                 }
@@ -130,7 +188,6 @@ impl<'a> LowerCtx<'a> {
         &mut self,
         trait_method: &Function,
         trait_file_id: FileId,
-        trait_module_id: ModuleId,
         apply_method: &Function,
     ) {
         self.check_trait_method_generic_params_with_apply_method_generic_params(
@@ -144,7 +201,6 @@ impl<'a> LowerCtx<'a> {
             //     ),
             //     trait_file_id,
             // ),
-            trait_module_id,
             &apply_method.generic_params,
         );
     }
@@ -215,22 +271,9 @@ impl<'a> LowerCtx<'a> {
     fn check_trait_method_generic_params_with_apply_method_generic_params(
         &mut self,
         trait_generic_params: &InFile<Spanned<&GenericParams>>,
-        trait_module_id: ModuleId,
         apply_generic_params: &Spanned<GenericParams>,
     ) {
-        // self.check_where_predicates(
-        //     &trait_generic_params,
-        //     trait_generic_params.to_filespan(),
-        //     trait_module_id,
-        // );
-        // self.check_where_predicates(
-        //     &apply_generic_params,
-        //     apply_generic_params.span.in_file(self.file_id()),
-        //     self.cur_module_id,
-        // );
         self.check_generic_param_lengths(trait_generic_params, apply_generic_params);
-
-        let def_map = self.def_map.unwrap();
 
         for trait_where_predicate in &trait_generic_params.where_predicates.0 {
             let apply_where_predicate = apply_generic_params
@@ -239,69 +282,15 @@ impl<'a> LowerCtx<'a> {
                 .iter()
                 .find(|predicate| predicate.ty == trait_where_predicate.ty);
 
-            // let trait_trait = self.get_trait(&trait_where_predicate.bound, trait_module_id);
-            // let trait_trait = match trait_trait {
-            //     Err(err) => {
-            //         self.diagnostics.push(err);
-            //         None
-            //     }
-            //     Ok(res) => res,
-            // };
-            // // let trait_trait = trait_trait.map(|(trt, _)| trt);
-            let trait_trait = def_map.resolve_path(&trait_where_predicate.bound, trait_module_id);
-            let trait_trait = match trait_trait {
-                Err(_) => {
-                    self.diagnostics.push(
-                        LowerError::UnresolvedTrait {
-                            trt: trait_where_predicate.bound.to_string(self.string_interner),
-                            trt_file_span: trait_where_predicate.bound.span.in_file(self.file_id()),
-                        }
-                        .to_diagnostic(),
-                    );
-                    None
-                }
-                Ok(res) => res.types.map(|(def_id, mod_id, _)| {
-                    let item_tree = &self.def_map.unwrap().item_trees[mod_id];
-                    match def_id {
-                        crate::ModuleDefId::TraitId(t) => &item_tree[t],
-                        _ => todo!(),
-                    }
-                }),
-            };
+            let trait_trait = self
+                .get_trait(&trait_where_predicate.bound)
+                .map(|(trt, _)| trt.inner);
 
             match apply_where_predicate {
                 Some(apply_where_predicate) => {
-                    // let apply_trait = self.get_trait(&apply_where_predicate.bound, trait_module_id);
-                    // let apply_trait = match apply_trait {
-                    //     Err(err) => {
-                    //         // self.diagnostics.push(err);
-                    //         None
-                    //     }
-                    //     Ok(res) => res,
-                    // };
-                    // let apply_trait = apply_trait.map(|(trt, _)| trt);
-                    // .unwrap_or_else(|err| {
-                    //     self.diagnostics.push(err);
-                    //     None
-                    // })
-                    // .map(|(trt, _)| trt);
-                    let apply_trait = def_map
-                        .resolve_path(&apply_where_predicate.bound, trait_module_id)
-                        .map_or_else(
-                            |_| {
-                                todo!();
-                            },
-                            |res| {
-                                res.types.map(|(def_id, mod_id, _)| {
-                                    let item_tree = &self.def_map.unwrap().item_trees[mod_id];
-                                    match def_id {
-                                        crate::ModuleDefId::TraitId(t) => &item_tree[t],
-                                        _ => todo!(),
-                                    }
-                                })
-                            },
-                        );
-
+                    let apply_trait = self
+                        .get_trait(&apply_where_predicate.bound)
+                        .map(|(trt, _)| trt.inner);
                     self.check_if_optional_traits_are_equal(
                         trait_trait,
                         apply_trait,
@@ -368,15 +357,8 @@ impl<'a> LowerCtx<'a> {
                 continue;
             }
 
-            let trt = self.get_trait(&where_predicate.bound, module_id);
-            let trt = match trt {
-                Err(err) => {
-                    self.diagnostics.push(err);
-                    None
-                }
-                Ok(res) => res,
-            };
-            if let Some((trt, file_id)) = trt {
+            let trt = self.get_trait(&where_predicate.bound);
+            if let Some((trt, _trt_mod_id)) = trt {
                 let trt_generic_params = trt.generic_params.clone();
 
                 let generic_args_span = Span::span_iter_of_span(
@@ -393,12 +375,12 @@ impl<'a> LowerCtx<'a> {
                     generic_args_span.in_file(generic_params_file_span.file_id),
                     &generic_params.where_predicates.0,
                     &trt_generic_params,
-                    trt_generic_params.span.in_file(file_id),
+                    trt_generic_params.span.in_file(trt.file_id),
                 );
 
                 self.check_where_predicates(
                     &trt_generic_params,
-                    trt_generic_params.span.in_file(file_id),
+                    trt_generic_params.span.in_file(trt.file_id),
                     module_id,
                 );
             }
@@ -415,7 +397,6 @@ impl<'a> LowerCtx<'a> {
     ) {
         let args_len = generic_args.len();
         let params_len = trait_def_generic_params.types.len();
-        println!("{args_len} {params_len}");
         if args_len != params_len {
             self.diagnostics.push(
                 LowerError::IncorrectNumGenericArgsInWherePredicate {
@@ -453,7 +434,7 @@ impl<'a> LowerCtx<'a> {
                                 predicate.bound.segments == required_predicate.bound.segments
                             });
 
-                        if let Some(predicate_matched) = predicate_matched {
+                        if let Some(_predicate_matched) = predicate_matched {
                             // todo!()
                         } else {
                             let arg_span = self.types[arg.raw()].span;
@@ -480,33 +461,6 @@ impl<'a> LowerCtx<'a> {
             });
     }
 
-    fn get_trait(
-        &self,
-        path: &Spanned<Path>,
-        module_id: ModuleId,
-    ) -> Result<Option<(&Trait, FileId)>, Diagnostic> {
-        let def_map = self.def_map.unwrap();
-        let trt = def_map.resolve_path(&path, module_id);
-        trt.map(|res| {
-            res.types.map(|(def_id, mod_id, _)| {
-                let item_tree = &self.def_map.unwrap().item_trees[mod_id];
-                let file_id = self.def_map.unwrap()[mod_id].file_id;
-                let trt = match def_id {
-                    crate::ModuleDefId::TraitId(t) => &item_tree[t],
-                    _ => todo!(),
-                };
-                (trt, file_id)
-            })
-        })
-        .map_err(|_| {
-            LowerError::UnresolvedTrait {
-                trt: path.to_string(self.string_interner),
-                trt_file_span: path.span.in_file(self.file_id()),
-            }
-            .to_diagnostic()
-        })
-    }
-
     fn check_generic_param_lengths(
         &mut self,
         trait_generic_params: &InFile<Spanned<&GenericParams>>,
@@ -529,42 +483,10 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    // pub(super) fn check_if_where_predicate_types_exist(
-    //     &mut self,
-    //     generic_params: &InFile<Spanned<&GenericParams>>,
-    // ) {
-    //     for where_predicate in &generic_params.where_predicates.0 {
-    //         if where_predicate.ty == generic_params.invalid_idx() {
-    //             self.diagnostics.push(
-    //                 LowerError::UnknownGeneric {
-    //                     generic: self
-    //                         .string_interner
-    //                         .resolve(&where_predicate.name)
-    //                         .to_string(),
-    //                     generic_file_span: where_predicate
-    //                         .name
-    //                         .span
-    //                         .in_file(generic_params.file_id),
-    //                     generic_params: generic_params
-    //                         .types
-    //                         .iter()
-    //                         .map(|(_, param)| self.string_interner.resolve(param).to_string())
-    //                         .collect(),
-    //                     generic_params_file_span: generic_params
-    //                         .inner
-    //                         .span
-    //                         .in_file(generic_params.file_id),
-    //                 }
-    //                 .to_diagnostic(),
-    //             );
-    //         }
-    //     }
-    // }
-
     fn check_if_optional_traits_are_equal(
         &mut self,
-        trait_trait: Option<&Trait>,
-        apply_trait: Option<&Trait>,
+        trait_trait: Option<Trait>,
+        apply_trait: Option<Trait>,
         trait_where_predicate: &WherePredicate,
         apply_where_predicate: &WherePredicate,
         trait_generic_params: &InFile<Spanned<&GenericParams>>,

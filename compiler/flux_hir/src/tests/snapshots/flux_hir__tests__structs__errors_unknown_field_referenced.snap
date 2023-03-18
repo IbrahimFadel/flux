@@ -26,7 +26,7 @@ Diagnostics
    ,-[ main.flx:8:10]
    |
  8 |     let x = foo.x;
-   *          |  
-   *          `-- could not find field called `x` for type `Foo`
+   |          |  
+   |          `-- could not find field called `x` for type `Foo`
 ---'
 

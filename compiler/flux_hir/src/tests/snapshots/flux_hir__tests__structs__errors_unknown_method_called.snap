@@ -26,9 +26,9 @@ Diagnostics
    ,-[ main.flx:8:2]
    |
  8 |     foo.foo();
-   *  ^|^  
-   *   `--- could not find method called `foo` for type `Foo`
-   * 
-   * Help: either create a method, or use a trait that defines it
+   |  ^|^  
+   |   `--- could not find method called `foo` for type `Foo`
+   | 
+   | Help: either create a method, or use a trait that defines it
 ---'
 

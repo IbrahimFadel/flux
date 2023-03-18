@@ -10,7 +10,7 @@ use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 use text_size::{TextRange, TextSize};
 
-use crate::FunctionId;
+use crate::{builtin::BuiltinType, FunctionId};
 
 #[cfg(test)]
 mod pp;
@@ -30,6 +30,7 @@ pub enum Item {
     Function(Function),
     Struct(Struct),
     Trait(Trait),
+    BuiltinType(BuiltinType),
 }
 
 impl TryFrom<Item> for Function {
@@ -96,12 +97,12 @@ pub struct StructField {
     pub ty: TypeIdx,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Locatable)]
 pub struct Trait {
     pub visibility: Spanned<Visibility>,
     pub name: Name,
     pub generic_params: Spanned<GenericParams>,
-    pub assoc_types: Vec<Name>,
+    pub assoc_types: Vec<(Name, Vec<Spanned<Path>>)>,
     pub methods: Spanned<Vec<FunctionId>>,
 }
 

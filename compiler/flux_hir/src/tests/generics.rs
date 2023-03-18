@@ -263,27 +263,152 @@ fn main() {
 "#
 }
 
-// no_errors! {
-//     int_subtyping,
-//     r#"
-// //- main.flx
+errors! {
+    unknown_trait_in_trait_decl_where_predicate,
+    r#"
+//- main.flx
 
-// trait Bar {}
+trait Foo<A>
+    where A is Bar
+{
 
-// struct Foo<T>
-//     where T is Bar
-// {
-//     x T
-// }
+}
+"#
+}
 
-// apply Bar to s32 {
+errors! {
+    unassigned_assoc_types,
+    r#"
+//- main.flx
 
-// }
+trait Foo {
+    type A;
+    type B;
+    type C;
+}
 
-// fn main() {
-//     let foo = Foo {
-//         x: 0,
-//     };
-// }
-// "#
-// }
+apply Foo to s32 {
+    type B = s32;
+}
+"#
+}
+
+errors! {
+    assoc_types_dont_belong,
+    r#"
+//- main.flx
+
+trait Foo {
+    type A;
+    type B;
+    type C;
+}
+
+apply Foo to s32 {
+    type A = s32;
+    type B = s32;
+    type C = s32;
+    type D = s32;
+}
+"#
+}
+
+errors! {
+    unknown_trait_in_trait_assoc_type,
+    r#"
+//- main.flx
+
+trait Foo {
+    type A is Bar + Bazz;
+}
+"#
+}
+
+errors! {
+    trait_restrictions_not_met_in_assoc_type,
+    r#"
+//- main.flx
+
+trait Bar {}
+trait Bazz {}
+
+trait Foo {
+    type A is Bar + Bazz;
+}
+
+apply Foo to s32 {
+    type A = u32;
+}
+"#
+}
+
+no_errors! {
+    trait_restrictions_are_met_in_assoc_type,
+    r#"
+//- main.flx
+
+trait Bar {}
+trait Bazz {}
+
+trait Foo {
+    type A is Bar + Bazz;
+}
+
+apply Bar to u32 {}
+apply Bazz to u32 {}
+
+apply Foo to s32 {
+    type A = u32;
+}
+"#
+}
+
+no_errors! {
+    int_subtyping_when_int_depends_on_specialized_int,
+    r#"
+//- main.flx
+
+trait Foo {}
+apply Foo to s32 {}
+
+fn foo<T>(x T) where T is Foo {}
+
+fn main() {
+    let x s32 = 0;
+    let y = x;
+    foo(y)
+}    
+"#
+}
+
+errors! {
+    no_possible_int_spacialization,
+    r#"
+//- main.flx
+
+trait Foo {}
+
+fn foo<T>(x T) where T is Foo {}
+
+fn main() {
+    foo(0)
+}
+"#
+}
+
+errors! {
+    multiple_possible_int_specializations,
+    r#"
+//- main.flx
+
+trait Foo {}
+apply Foo to s32 {}
+apply Foo to s64 {}
+
+fn foo<T>(x T) where T is Foo {}
+
+fn main() {
+    foo(0)
+}
+"#
+}

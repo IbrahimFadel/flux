@@ -1,0 +1,27 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+
+
+Diagnostics
+
+[E0032] Error: missing associated types in apply
+   ,-[ main.flx:7:2]
+   |
+ 7 | ,-> }
+   : :   
+ 9 | |-> apply Foo to s32 {
+   | |                        
+   | `------------------------ missing associated types `A`, `C` in application of trait `Foo`
+---'
+

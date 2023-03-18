@@ -1,18 +1,35 @@
-use crate::hir::Item;
+use crate::{hir::Item, name_res::path_res::PathResolutionResultKind};
 
 use super::*;
 
 impl<'a> LowerCtx<'a> {
-    pub(super) fn try_get_item(&self, path: &Spanned<Path>) -> Option<InFile<Item>> {
+    pub(super) fn get_item(
+        &mut self,
+        path: &Spanned<Path>,
+        expected_kind: PathResolutionResultKind,
+    ) -> Option<(InFile<Item>, ModuleId)> {
+        match self.try_get_item(path, expected_kind) {
+            Ok(res) => res,
+            Err(e) => {
+                self.diagnostics.push(e);
+                None
+            }
+        }
+    }
+
+    pub(super) fn try_get_item(
+        &self,
+        path: &Spanned<Path>,
+        expected_kind: PathResolutionResultKind,
+    ) -> Result<Option<(InFile<Item>, ModuleId)>, Diagnostic> {
         let def_map = self.def_map.unwrap();
         let result = def_map.resolve_path(path, self.cur_module_id);
-        match result {
-            Ok(per_ns) => per_ns
-                .types
-                .map(|(def_id, mod_id, vis)| {
+        result
+            .map(|per_ns| {
+                per_ns.map(|(def_id, mod_id, _)| {
                     let file_id = def_map[mod_id].file_id;
                     let item_tree = &def_map.item_trees[mod_id];
-                    match def_id {
+                    let item = match def_id {
                         ModuleDefId::ApplyId(id) => {
                             Item::Apply(item_tree[id].clone()).in_file(file_id)
                         }
@@ -25,102 +42,151 @@ impl<'a> LowerCtx<'a> {
                         ModuleDefId::TraitId(id) => {
                             Item::Trait(item_tree[id].clone()).in_file(file_id)
                         }
-                        _ => todo!(),
-                    }
-                })
-                .or_else(|| {
-                    per_ns.values.map(|(def_id, mod_id, vis)| {
-                        let file_id = def_map[mod_id].file_id;
-                        let item_tree = &def_map.item_trees[mod_id];
-                        match def_id {
-                            ModuleDefId::FunctionId(id) => {
-                                Item::Function(item_tree[id].clone()).in_file(file_id)
-                            }
-                            _ => todo!(),
+                        ModuleDefId::FunctionId(id) => {
+                            Item::Function(item_tree[id].clone()).in_file(file_id)
                         }
-                    })
-                }),
-            Err(_) => None,
+                        _ => todo!(),
+                    };
+                    (item, mod_id)
+                })
+            })
+            .map_err(|err| {
+                err.to_lower_error(self.file_id(), self.string_interner, expected_kind)
+                    .to_diagnostic()
+            })
+    }
+
+    pub(super) fn get_type(&mut self, path: &Spanned<Path>) -> Option<(InFile<Item>, ModuleId)> {
+        match self.try_get_type(path) {
+            Ok(res) => res,
+            Err(e) => {
+                self.diagnostics.push(e);
+                None
+            }
         }
     }
 
-    pub(super) fn get_struct(&mut self, path: &Spanned<Path>) -> Option<InFile<&Struct>> {
+    pub(super) fn try_get_type(
+        &self,
+        path: &Spanned<Path>,
+    ) -> Result<Option<(InFile<Item>, ModuleId)>, Diagnostic> {
         let def_map = self.def_map.unwrap();
         let result = def_map.resolve_path(path, self.cur_module_id);
-        match result {
-            Ok(per_ns) => per_ns.types.map(|(def_id, mod_id, vis)| {
-                let file_id = def_map[mod_id].file_id;
-                let item_tree = &def_map.item_trees[mod_id];
-                match def_id {
-                    ModuleDefId::StructId(id) => Some((&item_tree[id]).in_file_ref(file_id)),
-                    _ => {
-                        self.diagnostics.push(
-                            LowerError::CouldNotFindStructButFoundAnotherItem {
-                                struct_path: path.to_string(self.string_interner),
-                                struct_path_file_span: path.span.in_file(self.file_id()),
-                                other_item_kind: def_id.to_item_kind().to_string(),
-                            }
-                            .to_diagnostic(),
+        result
+            .map(|per_ns| {
+                per_ns.map(|(def_id, mod_id, vis)| {
+                    if let ModuleDefId::BuiltinType(builtin_type) = def_id {
+                        return (
+                            Item::BuiltinType(builtin_type).in_file(FileId::poisoned()),
+                            mod_id,
                         );
-                        None
                     }
-                }
+                    let file_id = def_map[mod_id].file_id;
+                    let item_tree = &def_map.item_trees[mod_id];
+                    let item = match def_id {
+                        ModuleDefId::StructId(id) => {
+                            Item::Struct(item_tree[id].clone()).in_file(file_id)
+                        }
+                        _ => todo!(),
+                    };
+                    (item, mod_id)
+                })
+            })
+            .map_err(|err| {
+                err.to_lower_error(
+                    self.file_id(),
+                    self.string_interner,
+                    PathResolutionResultKind::Type,
+                )
+                .to_diagnostic()
+            })
+    }
+
+    // pub(super) fn try_get_type(&self, path: &Spanned<Path>) -> Option<(InFile<Item>, ModuleId)> {
+    //     let def_map = self.def_map.unwrap();
+    //     let result = def_map.resolve_path(path, self.cur_module_id);
+    //     match result {
+    //         Ok(per_ns) => per_ns.types.map(|(def_id, mod_id, _vis)| {
+    //             if let ModuleDefId::BuiltinType(builtin_type) = def_id {
+    //                 return (
+    //                     Item::BuiltinType(builtin_type).in_file(FileId::poisoned()),
+    //                     mod_id,
+    //                 );
+    //             }
+    //             let file_id = def_map[mod_id].file_id;
+    //             let item_tree = &def_map.item_trees[mod_id];
+    //             let item = match def_id {
+    //                 ModuleDefId::EnumId(id) => Item::Enum(item_tree[id].clone()).in_file(file_id),
+    //                 ModuleDefId::StructId(id) => {
+    //                     Item::Struct(item_tree[id].clone()).in_file(file_id)
+    //                 }
+    //                 _ => todo!(),
+    //             };
+    //             (item, mod_id)
+    //         }),
+    //         Err(_) => None,
+    //     }
+    // }
+
+    pub(super) fn get_struct(
+        &mut self,
+        path: &Spanned<Path>,
+    ) -> Option<(InFile<Struct>, ModuleId)> {
+        match self.try_get_item(path, PathResolutionResultKind::Struct) {
+            Ok(item) => item.map(|(item, mod_id)| {
+                let item = item.map(|item| match item {
+                    Item::Struct(s) => s,
+                    _ => todo!(),
+                });
+                (item, mod_id)
             }),
-            Err(err) => {
+            Err(e) => {
+                self.diagnostics.push(e);
+                // self.diagnostics.push(
+                //     LowerError::UnresolvedStruct {
+                //         strukt: path.to_string(self.string_interner),
+                //         strukt_file_span: path.span.in_file(self.file_id()),
+                //     }
+                //     .to_diagnostic(),
+                // );
+                None
+            }
+        }
+        // self.get_item(path).map(|(item, mod_id, vis)| {
+        //     let item = item.map(|item| match item {
+        //         Item::Struct(trt) => trt,
+        //         _ => todo!(),
+        //     });
+        //     (item, mod_id, vis)
+        // })
+    }
+
+    pub(super) fn get_trait(&mut self, path: &Spanned<Path>) -> Option<(InFile<Trait>, ModuleId)> {
+        match self.try_get_item(path, PathResolutionResultKind::Trait) {
+            Ok(item) => item.map(|(item, mod_id)| {
+                let item = item.map(|item| match item {
+                    Item::Trait(trt) => trt,
+                    _ => todo!(),
+                });
+                (item, mod_id)
+            }),
+            Err(_) => {
                 self.diagnostics.push(
-                    err.to_lower_error(self.file_id(), self.string_interner)
-                        .to_diagnostic(),
+                    LowerError::UnresolvedTrait {
+                        trt: path.to_string(self.string_interner),
+                        trt_file_span: path.span.in_file(self.file_id()),
+                    }
+                    .to_diagnostic(),
                 );
                 None
             }
         }
-        .flatten()
-    }
-
-    pub(super) fn get_function(&mut self, path: &Spanned<Path>) -> Option<InFile<&Function>> {
-        let def_map = self.def_map.unwrap();
-        let result = def_map.resolve_path(path, self.cur_module_id);
-        match result {
-            Ok(per_ns) => per_ns.types.map(|(def_id, mod_id, vis)| {
-                let file_id = def_map[mod_id].file_id;
-                let item_tree = &def_map.item_trees[mod_id];
-                match def_id {
-                    ModuleDefId::FunctionId(id) => Some((&item_tree[id]).in_file_ref(file_id)),
-                    _ => {
-                        self.diagnostics.push(
-                            LowerError::CouldNotFindFunctionButFoundAnotherItem {
-                                function_path: path.to_string(self.string_interner),
-                                function_path_file_span: path.span.in_file(self.file_id()),
-                                other_item_kind: def_id.to_item_kind().to_string(),
-                            }
-                            .to_diagnostic(),
-                        );
-                        None
-                    }
-                }
-            }),
-            Err(err) => {
-                self.diagnostics.push(
-                    err.to_lower_error(self.file_id(), self.string_interner)
-                        .to_diagnostic(),
-                );
-                None
-            }
-        }
-        .flatten()
-    }
-}
-
-impl ModuleDefId {
-    fn to_item_kind(&self) -> &str {
-        match self {
-            ModuleDefId::ApplyId(_) => unreachable!(),
-            ModuleDefId::EnumId(_) => "enum",
-            ModuleDefId::FunctionId(_) => "function",
-            ModuleDefId::ModuleId(_) => "module",
-            ModuleDefId::StructId(_) => "struct",
-            ModuleDefId::TraitId(_) => "trait",
-            ModuleDefId::UseId(_) => unreachable!(),
-        }
+        // self.get_item(path).map(|(item, mod_id, vis)| {
+        //     let item = item.map(|item| match item {
+        //         Item::Trait(trt) => trt,
+        //         _ => todo!(),
+        //     });
+        //     (item, mod_id, vis)
+        // })
     }
 }

@@ -13,6 +13,12 @@ pub(super) struct Label {
     pub(super) exprs: Option<Punctuated<Expr, Token![,]>>,
 }
 
+pub(super) struct Labels {
+    pub(super) field: Ident,
+    pub(super) msg: LitStr,
+    pub(super) exprs: Option<Punctuated<Expr, Token![,]>>,
+}
+
 pub(super) struct Help {
     pub(super) msg: LitStr,
     pub(super) exprs: Option<Punctuated<Expr, Token![,]>>,
@@ -39,6 +45,7 @@ pub(super) enum ErrorAttribute {
     Location(Location),
     Primary(LitStr),
     Label(Label),
+    Labels(Labels),
     Help(Help),
 }
 

@@ -30,8 +30,8 @@ Diagnostics
  14 | ,->     let foo_instance = Foo {
     : :   
  18 | |->         bazz: 0,
-    * |                      
-    * `---------------------- uninitialized fields `y`, `z` for `Foo` struct initialization
+    | |                      
+    | `---------------------- uninitialized fields `y`, `z` for `Foo` struct initialization
 ----'
 [E0028] Error: unknown fields in struct expression
     ,-[ main.flx:14:15]
@@ -39,7 +39,7 @@ Diagnostics
  14 | ,->     let foo_instance = Foo {
     : :   
  18 | |->         bazz: 0,
-    * |                      
-    * `---------------------- unknown fields `foo`, `bar`, `bazz` for `Foo` struct initialization
+    | |                      
+    | `---------------------- unknown fields `foo`, `bar`, `bazz` for `Foo` struct initialization
 ----'
 

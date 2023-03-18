@@ -15,7 +15,7 @@ pub enum DiagnosticKind {
 }
 
 impl DiagnosticKind {
-    pub fn to_ariadne_report_kind(self) -> ReportKind {
+    pub fn to_ariadne_report_kind(self) -> ReportKind<'static> {
         match self {
             Self::Error => ReportKind::Error,
             Self::Warning => ReportKind::Warning,
@@ -27,7 +27,7 @@ impl DiagnosticKind {
 pub struct Diagnostic {
     kind: DiagnosticKind,
     offset: Option<InFile<usize>>,
-    code: DiagnosticCode,
+    pub code: DiagnosticCode,
     msg: String,
     labels: Vec<FileSpanned<String>>,
     help: Option<String>,
@@ -143,7 +143,7 @@ pub enum DiagnosticCode {
     UnresolvedFunction,
     UnresolvedTrait,
     TriedApplyingPrivateTrait,
-    CouldNotResolveUsePath,
+    CouldNotResolvePath,
     CannotAccessPrivatePathSegment,
     CouldNotResolveEmptyPath,
     UnimplementedTraitMethods,
@@ -161,6 +161,12 @@ pub enum DiagnosticCode {
     UnknownFieldsInStructExpr,
     CouldNotFindMethodReferenced,
     CouldNotFindFieldReferenced,
+    AssocTypeDoesntBelong,
+    UnassignedAssocTypes,
+    UnresolvedType,
+    UnresolvedStruct,
+    AccessedPrivateItem,
+    AccessedPrivateStruct,
 
     TypeMismatch,
     ConflictingTraitImplementations,
@@ -170,25 +176,10 @@ pub enum DiagnosticCode {
     UnknownLocal,
     UnknownFunction,
     UnknownStruct,
-    // HirMissing,
-    // TypeMismatch,
-    // UnknownLocal,
-    // CouldNotParseInt,
-    // UnknownFunction,
-    // UnknownStruct,
-    // IncorrectNumberOfArgsInCall,
-    // UnusedGenericParams,
-    // UninitializedFieldsInStructExpr,
-    // UnnecessaryFieldsInStructExpr,
-    // CouldNotResolveFunction,
-    // CouldNotResolvePath,
-    // CouldNotResolveStruct,
-    // ConflictingTraitImplementations,
-    // TraitInTraitRestrictionDoesNotExist,
-    // StmtFollowingTerminatorExpr,
-    // TraitMethodGenericsAlreadyDeclaredInTraitDecl,
-    // TraitNotImplementedForType,
-    // TraitRestrictionsNotMet,
+    UnknownType,
+    UnknownVariable,
+    TraitDoesNotExist,
+    MultiplePossibleIntSpecializations,
 }
 
 impl std::fmt::Display for DiagnosticCode {

@@ -107,14 +107,20 @@ impl<T> Spanned<T> {
     /// `[Spanned<T>]` -> `Spanned<[T]>`
     ///
     /// Returns `None` if the iterator has no items, as there can be no span
-    pub fn spanned_iter<C: FromIterator<T>>(
-        iter: impl IntoIterator<Item = Spanned<T>>,
-    ) -> Option<Spanned<C>> {
+    pub fn spanned_iter<'a, C: FromIterator<T>>(
+        iter: impl IntoIterator<Item = &'a Spanned<T>>,
+    ) -> Option<Spanned<C>>
+    where
+        T: 'a + Clone,
+    {
         let mut iter = iter.into_iter().peekable();
         let first = iter.peek()?;
         let start = first.span.range.start();
         let mut end = first.span.range.end();
-        let c = C::from_iter(iter.inspect(|t| end = t.span.range.end()).map(|v| v.inner));
+        let c = C::from_iter(
+            iter.inspect(|t| end = t.span.range.end())
+                .map(|v| v.inner.clone()),
+        );
         let span = Span::new(TextRange::new(start, end));
         Some(Spanned::new(c, span))
     }

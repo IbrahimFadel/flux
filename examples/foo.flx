@@ -1,38 +1,7 @@
-fn inside_foo_priv(x X, y Y) -> i32 {
+pub fn some_function() -> u32 {
     0
 }
 
-pub fn some_pub_fn() {
-    
-}
+fn some_private_function() {}
 
-trait Bar {
-
-}
-
-trait NotBar {
-
-}
-
-trait Foo<T, X> {
-    type X;
-
-    fn foo<X, Z>()
-        where A is Bar,
-              Z is Zoo,
-              X is Bar;
-    fn bar() -> u32;
-    fn bazz();
-}
-
-apply<A, B> Foo<A, B> to i32 {
-    type X = f32;
-
-    fn boo() -> u32 {
-        0
-    }
-
-    fn foo<A, B, C>() where A is NotBar, B is NotBar {
-
-    }
-}
+struct Foo {}

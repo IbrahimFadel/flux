@@ -1,0 +1,40 @@
+---
+source: compiler/flux_hir/src/tests/resolution.rs
+expression: s
+---
+Module Id Map
+
+0 -> 2
+
+
+Item Tree
+
+File Id:  ./main.flx
+Module Id: 0
+
+fn main() -> () {
+foo::some_function()
+}
+
+File Id:  ./foo.flx
+Module Id: 2
+
+fn some_function() -> () {
+
+}
+
+
+
+Diagnostics
+
+[E0014] Error: cannot access private path segment
+   ,-[ ./main.flx:5:12]
+   |
+ 5 | ,-> fn main() {
+ 6 | |->     foo::some_function();
+   | |       ^^^^^^|^^^^^^           
+   | |             `----------------- private segment `some_function`
+   | |                               
+   | `------------------------------- cannot access private path segment in path `foo::some_function`
+---'
+

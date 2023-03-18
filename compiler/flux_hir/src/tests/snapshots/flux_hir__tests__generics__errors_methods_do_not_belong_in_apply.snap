@@ -25,13 +25,13 @@ Diagnostics
   3 | ,---> trait Foo {
     : :     
   6 | |--->     fn bazz();
-    * |                      
-    * `---------------------- trait methods `bar`, `bazz`, `foo` declared here
-    * 
+    | |                      
+    | `---------------------- trait methods `bar`, `bazz`, `foo` declared here
+    | 
  11 |   ,-> apply Foo to Bar {
  12 |   |->     fn test() {}
-    *   |                      
-    *   `---------------------- unimeplemented trait methods `bar`, `bazz`, `foo` in apply
+    |   |                      
+    |   `---------------------- unimeplemented trait methods `bar`, `bazz`, `foo` in apply
 ----'
 [E0017] Error: methods do not belong in apply
     ,-[ main.flx:11:8]
@@ -39,12 +39,12 @@ Diagnostics
   3 | ,---> trait Foo {
     : :     
   6 | |--->     fn bazz();
-    * |                      
-    * `---------------------- trait methods `bar`, `bazz`, `foo` declared here
-    * 
+    | |                      
+    | `---------------------- trait methods `bar`, `bazz`, `foo` declared here
+    | 
  11 |   ,-> apply Foo to Bar {
  12 |   |->     fn test() {}
-    *   |                      
-    *   `---------------------- method `test` does not belong in apply
+    |   |                      
+    |   `---------------------- method `test` does not belong in apply
 ----'
 

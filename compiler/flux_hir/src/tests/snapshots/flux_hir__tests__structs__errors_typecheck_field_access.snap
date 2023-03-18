@@ -22,18 +22,18 @@ let x s32 = foo.x;
 
 Diagnostics
 
-[E0031] Error: type mismatch
+[E0037] Error: type mismatch
     ,-[ main.flx:12:6]
     |
   4 |         x u32,
-    *        ^|^  
-    *         `--- u32
-    * 
+    |        ^|^  
+    |         `--- `u32`
+    | 
  11 | ,-> 
  12 | |->     let x s32 = foo.x;
-    * |        ^^|^^               
-    * `---------------------------- s32
-    *            |                 
-    *            `----------------- type mismatch between `s32` and `u32`
+    | |        ^^|^^               
+    | `---------------------------- `s32`
+    |            |                 
+    |            `----------------- type mismatch between `s32` and `u32`
 ----'
 

@@ -155,6 +155,7 @@ getters! {
     }
     TraitAssocTypeDecl {
         name -> node(Name);
+        type_bound_list -> node(TypeBoundList);
     }
     TraitMethodDecl {
         name -> node(Name);

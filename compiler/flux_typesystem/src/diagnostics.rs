@@ -1,199 +1,128 @@
-use flux_diagnostics::{Diagnostic, DiagnosticCode, ToDiagnostic};
-use flux_span::{FileSpanned, InFile, Span, Spanned, WithSpan};
+use flux_diagnostics::{quote_and_listify, Plural};
+use flux_proc_macros::diagnostic;
+use flux_span::FileSpanned;
+use itertools::Itertools;
 
+#[diagnostic]
 pub enum TypeError {
+    #[error(
+        location = implementation_a,
+        primary = "conflicting trait implementations",
+        label at implementation_a = "type `{impltor}` implements trait `{trait_name}` here",
+        label at implementation_b = "and type `{impltor}` also implements trait `{trait_name}` here"
+    )]
     ConflictingTraitImplementations {
         trait_name: String,
         impltor: String,
-        implementation_a: InFile<Span>,
-        implementation_b: InFile<Span>,
+        #[filespanned]
+        implementation_a: (),
+        #[filespanned]
+        implementation_b: (),
     },
+    #[error(
+        location = trait_name,
+        primary = "trait does not exist",
+        label at trait_name = "trait `{trait_name}` does not exist"
+    )]
     TraitDoesNotExist {
-        trait_name: FileSpanned<String>,
+        #[filespanned]
+        trait_name: String,
     },
+    #[error(
+        location = type_supposed_to_implement_trait,
+        primary = "type does not implement trait",
+        label at type_supposed_to_implement_trait = "trait `{}` is not implemented for `{type_supposed_to_implement_trait}`" with (
+            restriction
+        ),
+        label at restriction = "trait restriction occurs here"
+    )]
     TraitNotImplementedForType {
-        restriction: FileSpanned<String>,
-        type_supposed_to_implement_trait: FileSpanned<String>,
+        #[filespanned]
+        restriction: String,
+        #[filespanned]
+        type_supposed_to_implement_trait: String,
     },
+    #[error(
+        location = ty,
+        primary = "trait restrictions not met",
+        label at ty = "trait restriction{} {} not met for type `{ty}`" with (
+            unmet_restrictions.plural("s"),
+            quote_and_listify(unmet_restrictions.iter().map(|restriction| restriction.inner.inner.clone()).sorted())
+        ),
+        labels for unmet_restrictions = "restriction `{looped_value}` defined here"
+    )]
     TraitRestrictionsNotMet {
-        ty: FileSpanned<String>,
-        unmet_restrictions: Vec<String>,
+        #[filespanned]
+        ty: String,
+        unmet_restrictions: Vec<FileSpanned<String>>,
     },
-    /// A type mismatch
-    ///
-    /// `a` and `b` are both formatted to `String`, where
-    /// `a` is the type the must be matched by `b`, and
-    /// `span` is the location in which the type unification was triggered.
+    #[error(
+        location = span,
+        primary =  "type mismatch",
+        label at span =  "type mismatch between `{a}` and `{b}`",
+        label at a = "`{a}`",
+        label at b = "`{b}`",
+    )]
     TypeMismatch {
-        a: FileSpanned<String>,
-        b: FileSpanned<String>,
-        // a_got_from_list: Vec<InFile<Span>>,
-        // b_got_from_list: Vec<InFile<Span>>,
-        span: InFile<Span>,
+        #[filespanned]
+        a: String,
+        #[filespanned]
+        b: String,
+        #[filespanned]
+        span: (),
     },
+    #[error(
+        location = path,
+        primary = "unknown function referenced",
+        label at path = "unknown function `{path}` referenced",
+    )]
     UnknownFunction {
-        path: FileSpanned<String>,
+        #[filespanned]
+        path: String,
     },
+    #[error(
+        location = path,
+        primary = "unknown struct referenced",
+        label at path = "unknown struct `{path}` referenced",
+    )]
     UnknownStruct {
-        path: FileSpanned<String>,
+        #[filespanned]
+        path: String,
     },
+    #[error(
+        location = path,
+        primary = "unknown type referenced",
+        label at path = "unknown type `{path}` referenced",
+    )]
     UnknownType {
-        path: FileSpanned<String>,
+        #[filespanned]
+        path: String,
     },
+    #[error(
+        location = name,
+        primary = "unknown variable referenced",
+        label at name = "unknown variable `{name}` referenced",
+    )]
     UnknownVariable {
-        name: FileSpanned<String>,
+        #[filespanned]
+        name: String,
     },
-}
-
-impl ToDiagnostic for TypeError {
-    fn to_diagnostic(&self) -> flux_diagnostics::Diagnostic {
-        match self {
-            Self::ConflictingTraitImplementations {
-                trait_name,
-                impltor,
-                implementation_a,
-                implementation_b,
-            } => Diagnostic::error(
-                InFile::new(
-                    implementation_a.inner.range.start().into(),
-                    implementation_a.file_id,
-                ),
-                DiagnosticCode::ConflictingTraitImplementations,
-                "conflicting trait implementations".to_string(),
-                vec![
-                    FileSpanned::new(
-                        format!("type `{impltor}` implements trait `{trait_name}` here")
-                            .at(implementation_a.inner),
-                        implementation_a.file_id,
-                    ),
-                    FileSpanned::new(
-                        format!("and type `{impltor}` also implements trait `{trait_name}` here")
-                            .at(implementation_b.inner),
-                        implementation_b.file_id,
-                    ),
-                ],
-            ),
-            Self::TraitDoesNotExist { trait_name } => Diagnostic::error(
-                trait_name.map_ref(|name| name.span.range.start().into()),
-                DiagnosticCode::TraitInTraitRestrictionDoesNotExist,
-                "trait does not exist".to_string(),
-                vec![trait_name.map_inner_ref(|name| format!("trait `{name}` does not exist"))],
-            ),
-            Self::TraitNotImplementedForType {
-                restriction,
-                type_supposed_to_implement_trait,
-            } => Diagnostic::error(
-                type_supposed_to_implement_trait.map_ref(|name| name.span.range.start().into()),
-                DiagnosticCode::TraitNotImplementedForType,
-                "type does not implement trait".to_string(),
-                vec![
-                    type_supposed_to_implement_trait.map_inner_ref(|name| {
-                        format!(
-                            "trait `{}` is not implemented for `{name}`",
-                            restriction.inner.inner
-                        )
-                    }),
-                    restriction.map_inner_ref(|_| "trait restriction occurs here".to_string()),
-                ],
-            ),
-            Self::TraitRestrictionsNotMet {
-                ty,
-                unmet_restrictions,
-            } => Diagnostic::error(
-                ty.map_ref(|ty| ty.span.range.start().into()),
-                DiagnosticCode::TraitRestrictionsNotMet,
-                "trait restrictions not met".to_string(),
-                vec![ty.map_inner_ref(|ty| {
-                    format!(
-                        "trait restrictions `{}` not met for type `{ty}`",
-                        unmet_restrictions.join(", ")
-                    )
-                })],
-            ),
-            Self::TypeMismatch {
-                a,
-                b,
-                span,
-                // a_got_from_list,
-                // b_got_from_list,
-            } => {
-                let labels = vec![
-                    InFile::new(
-                        Spanned::new(
-                            format!(
-                                "type mismatch between `{}` and `{}`",
-                                a.inner.inner, b.inner.inner
-                            ),
-                            span.inner,
-                        ),
-                        span.file_id,
-                    ),
-                    a.clone(),
-                    b.clone(),
-                ];
-                // a_got_from_list.iter().for_each(|a| {
-                //     let label = FileSpanned::new("from".to_string().at(a.inner), a.file_id);
-                //     labels.push(label);
-                // });
-                // b_got_from_list.iter().for_each(|b| {
-                //     let label = FileSpanned::new("from".to_string().at(b.inner), b.file_id);
-                //     labels.push(label);
-                // });
-                Diagnostic::error(
-                    span.map_ref(|span| span.range.start().into()),
-                    DiagnosticCode::TypeMismatch,
-                    "type mismatch".to_string(),
-                    labels,
-                )
-            }
-            Self::UnknownVariable { name } => Diagnostic::error(
-                name.map_ref(|span| span.span.range.start().into()),
-                DiagnosticCode::UnknownLocal,
-                "unknown variable referenced".to_string(),
-                vec![FileSpanned::new(
-                    Spanned::new(
-                        format!("unknown variable `{}` referenced", name.inner.inner),
-                        name.span,
-                    ),
-                    name.file_id,
-                )],
-            ),
-            Self::UnknownFunction { path } => Diagnostic::error(
-                path.map_ref(|span| span.span.range.start().into()),
-                DiagnosticCode::UnknownFunction,
-                "unknown function referenced".to_string(),
-                vec![FileSpanned::new(
-                    Spanned::new(
-                        format!("unknown function `{}` referenced", path.inner.inner),
-                        path.span,
-                    ),
-                    path.file_id,
-                )],
-            ),
-            Self::UnknownStruct { path } => Diagnostic::error(
-                path.map_ref(|span| span.span.range.start().into()),
-                DiagnosticCode::UnknownStruct,
-                "unknown struct referenced".to_string(),
-                vec![FileSpanned::new(
-                    Spanned::new(
-                        format!("unknown struct `{}` referenced", path.inner.inner),
-                        path.span,
-                    ),
-                    path.file_id,
-                )],
-            ),
-            Self::UnknownType { path } => Diagnostic::error(
-                path.map_ref(|span| span.span.range.start().into()),
-                DiagnosticCode::UnknownStruct,
-                "unknown type referenced".to_string(),
-                vec![FileSpanned::new(
-                    Spanned::new(
-                        format!("unknown type `{}` referenced", path.inner.inner),
-                        path.span,
-                    ),
-                    path.file_id,
-                )],
-            ),
-        }
-    }
+    #[error(
+        location = int_types,
+        primary = "the type of this int is ambiguous",
+        label at int_types = "the type of this int is ambiguous between the following types: {}" with (
+            quote_and_listify(int_types.iter().sorted())
+        ),
+        labels for applications = "application of trait `{trt}` to type `{looped_value}`",
+        label at trt = "this trait restriction requires the type to be known",
+        help = "try specifying the type of int by adding the int type to the end of the literal"
+    )]
+    MultiplePossibleIntSpecializations {
+        #[filespanned]
+        int_types: Vec<String>,
+        #[filespanned]
+        trt: String,
+        // The name of specific int types at the span of the application
+        applications: Vec<FileSpanned<String>>,
+    },
 }

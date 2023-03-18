@@ -3,7 +3,7 @@ use flux_syntax::SyntaxKind;
 
 use crate::{
     grammar::{
-        generic_params::{opt_generic_param_list, opt_where_clause},
+        generic_params::{bounds, opt_generic_param_list, opt_where_clause},
         name, opt_return_type,
     },
     marker::CompletedMarker,
@@ -43,6 +43,11 @@ fn assoc_type_decl(p: &mut Parser) {
     let m = p.start();
     p.bump(TokenKind::Type);
     name(p, TokenSet::new(&[TokenKind::SemiColon]));
+
+    if p.at(TokenKind::Is) {
+        bounds(p);
+    }
+
     p.expect(TokenKind::SemiColon);
     m.complete(p, SyntaxKind::TraitAssocTypeDecl);
 }

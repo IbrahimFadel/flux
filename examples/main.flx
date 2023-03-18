@@ -1,26 +1,14 @@
-fn main() {
-    let x = 0;
-    let y = x;
-}
+mod foo;
 
-/*trait Bar {}
+use foo::some_function;
+use foo::some_private_function;
 
-struct Foo<T>
-    where T is Bar
-{
-    x T
-}
+trait Bar {}
 
-struct Bazz {}
-
-apply Bar to Bazz {}
+apply Bar to foo::Foo {}
 
 fn main() {
-    let bazz = Bazz {};
-    let foo = Foo {
-        x: bazz,
-    };
-
-    let y = 0;
-    let x = y;
-}*/
+    let x s32 = some_function();
+    // let x u32 = some_function();
+    let x u32 = foo::some_function();
+}

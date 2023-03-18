@@ -2,13 +2,51 @@ use flux_span::{InFile, Span};
 use lasso::Spur;
 use std::collections::HashMap;
 
-use crate::TypeId;
+use crate::{TEnv, TypeId};
 
 #[derive(Debug, Hash, Clone)]
 pub(crate) struct TraitImplementation {
     /// First `TypeId` is the implementor, followed by the trait parameters, then the implementor parameters
     ids: Vec<TypeId>,
     num_trait_params: usize,
+}
+
+impl TEnv {
+    // pub(crate) fn fmt_trait_implementation(
+    //     &self,
+    //     trait_name: &Spur,
+    //     trait_implementation: &TraitImplementation,
+    // ) -> String {
+    //     format!(
+    //         "apply {}{} to {}{}",
+    //         self.string_interner.resolve(trait_name),
+    //         if trait_implementation.get_trait_params().is_empty() {
+    //             "".to_string()
+    //         } else {
+    //             format!(
+    //                 "<{}>",
+    //                 trait_implementation
+    //                     .get_trait_params()
+    //                     .iter()
+    //                     .map(|param| self.fmt_ty_id(*param))
+    //                     .join(", ")
+    //             )
+    //         },
+    //         self.fmt_ty_id(trait_implementation.get_impltor()),
+    //         if trait_implementation.get_impltor_params().is_empty() {
+    //             "".to_string()
+    //         } else {
+    //             format!(
+    //                 "<{}>",
+    //                 trait_implementation
+    //                     .get_impltor_params()
+    //                     .iter()
+    //                     .map(|param| self.fmt_ty_id(*param))
+    //                     .join(", ")
+    //             )
+    //         }
+    //     )
+    // }
 }
 
 impl TraitImplementation {
@@ -20,7 +58,7 @@ impl TraitImplementation {
         let num_trait_params = trait_params.len();
         Self {
             ids: std::iter::once(impltor)
-                .chain(trait_params.into_iter())
+                .chain(trait_params)
                 .chain(impltor_params)
                 .collect(),
             num_trait_params,
@@ -32,10 +70,15 @@ impl TraitImplementation {
     }
 
     pub fn get_trait_params(&self) -> Vec<TypeId> {
-        self.ids
-            .get(1..self.num_trait_params)
-            .map(Vec::from)
-            .unwrap_or_else(Vec::new)
+        if self.num_trait_params == 0 {
+            vec![]
+        } else {
+            unsafe {
+                self.ids
+                    .get_unchecked(1..self.num_trait_params + 1)
+                    .to_vec()
+            }
+        }
     }
 
     pub fn get_impltor_params(&self) -> Vec<TypeId> {

@@ -21,11 +21,15 @@ x: 0
 
 Diagnostics
 
-[E0035] Error: trait restrictions not met
+[E0041] Error: trait restrictions not met
     ,-[ main.flx:12:20]
     |
+  6 |     where T is Bar
+    |           ^|^  
+    |            `--- restriction `Bar` defined here
+    | 
  12 |     let foo = Foo {
-    *                    |  
-    *                    `-- trait restrictions `Bar` not met for type `int`
+    |                    |  
+    |                    `-- trait restriction `Bar` not met for type `int`
 ----'
 

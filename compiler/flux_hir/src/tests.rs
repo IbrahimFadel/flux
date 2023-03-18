@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod generics;
+mod resolution;
 mod structs;
 
 static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
@@ -91,7 +92,6 @@ fn fmt_function(
         .1
         .render(50, buf)
         .unwrap();
-    println!("{:#?} {:?}", lowered_bodies.indices, (module_id, f_idx));
     let body = lowered_bodies
         .indices
         .get(&(module_id, ModuleDefId::FunctionId(f_idx)))
@@ -162,10 +162,8 @@ macro_rules! no_errors {
         paste::paste! {
             #[test]
             fn [<no_errors_ $name>]() {
-                let (def_map, lowered_bodies, diagnostics, file_cache) = crate::tests::check($src);
+                let (_def_map, _lowered_bodies, diagnostics, _file_cache) = crate::tests::check($src);
                 assert_eq!(diagnostics.len(), 0);
-                let s = crate::tests::fmt_def_map(&def_map, &lowered_bodies, &diagnostics, &file_cache);
-                insta::assert_snapshot!(s);
             }
         }
     };

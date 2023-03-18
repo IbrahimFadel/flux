@@ -1,21 +1,21 @@
 use flux_diagnostics::{ice, reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Spanned};
 use hashbrown::HashMap;
-use la_arena::{Arena, ArenaMap, Idx};
+use la_arena::{Arena, ArenaMap};
 use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
+    builtin::BuiltinType,
     diagnostics::LowerError,
     hir::{Mod, Type, Use, Visibility},
-    item_scope::ItemScope,
+    item_scope::{ItemScope, ModuleItemWithVis},
     item_tree::{lower_ast_to_item_tree, FileItemTreeId, ItemTree, ModItem},
-    per_ns::{PerNs, PerNsGlobImports},
     ModuleDefId, ModuleId,
 };
 
 use self::{
     mod_res::{FileResolver, ModDir},
-    path_res::ResolvePathError,
+    path_res::{PathResolutionResultKind, ResolvePathError},
 };
 
 pub(crate) mod mod_res;
@@ -25,20 +25,20 @@ pub(crate) mod path_res;
 pub struct DefMap {
     pub modules: Arena<ModuleData>,
     pub item_trees: ArenaMap<ModuleId, ItemTree>,
-    root: LocalModuleId,
+    root: ModuleId,
+    prelude: ModuleId,
+    builtin_scope: HashMap<Spur, ModuleItemWithVis>,
 }
 
-pub type LocalModuleId = Idx<ModuleData>;
-
-impl std::ops::Index<LocalModuleId> for DefMap {
+impl std::ops::Index<ModuleId> for DefMap {
     type Output = ModuleData;
-    fn index(&self, index: LocalModuleId) -> &ModuleData {
+    fn index(&self, index: ModuleId) -> &ModuleData {
         &self.modules[index]
     }
 }
 
-impl std::ops::IndexMut<LocalModuleId> for DefMap {
-    fn index_mut(&mut self, index: LocalModuleId) -> &mut Self::Output {
+impl std::ops::IndexMut<ModuleId> for DefMap {
+    fn index_mut(&mut self, index: ModuleId) -> &mut Self::Output {
         &mut self.modules[index]
     }
 }
@@ -60,6 +60,16 @@ impl ModuleData {
             file_id: FileId::poisoned(),
         }
     }
+
+    pub fn prelude() -> Self {
+        let scope = ItemScope::default();
+        ModuleData {
+            parent: None,
+            children: HashMap::default(),
+            scope,
+            file_id: FileId::poisoned(),
+        }
+    }
 }
 
 impl Default for ModuleData {
@@ -69,13 +79,29 @@ impl Default for ModuleData {
 }
 
 impl DefMap {
-    pub fn empty(module_data: ModuleData) -> Self {
+    pub fn empty(module_data: ModuleData, string_interner: &'static ThreadedRodeo) -> Self {
         let mut modules = Arena::new();
         let root = modules.alloc(module_data);
+
+        let prelude_data = ModuleData::prelude();
+        let prelude = modules.alloc(prelude_data);
+
+        let builtin_scope = BuiltinType::all(string_interner)
+            .iter()
+            .map(|(name, ty)| {
+                (
+                    name.clone(),
+                    ModuleItemWithVis::from(((*ty).into(), prelude, Visibility::Public)),
+                )
+            })
+            .collect();
+
         Self {
             modules,
             item_trees: ArenaMap::default(),
             root,
+            prelude,
+            builtin_scope,
         }
     }
 }
@@ -89,11 +115,10 @@ pub fn build_def_map<R: FileResolver>(
 ) -> (DefMap, Arena<Spanned<Type>>, Vec<Diagnostic>) {
     tracing::info!("building definition map for project");
     let root = ModuleData::new();
-    let def_map = DefMap::empty(root);
+    let def_map = DefMap::empty(root, string_interner);
     let mut types = Arena::new();
     let mut collector = DefCollector {
         def_map,
-        from_glob_import: Default::default(),
         unresolved_imports: vec![],
         diagnostics: vec![],
         string_interner,
@@ -112,7 +137,7 @@ pub fn build_def_map<R: FileResolver>(
 #[derive(Debug, Eq, PartialEq)]
 struct Import {
     /// The module this import directive is in.
-    module_id: LocalModuleId,
+    module_id: ModuleId,
     use_decl: FileItemTreeId<Use>,
     status: PartialResolvedImport,
 }
@@ -122,14 +147,14 @@ enum PartialResolvedImport {
     /// None of any namespaces is resolved
     Unresolved(ResolvePathError),
     /// All namespaces are resolved, OR it comes from other crate
-    Resolved(PerNs),
+    Resolved(ModuleItemWithVis),
 }
 
 impl PartialResolvedImport {
-    fn namespaces(self) -> PerNs {
+    fn namespaces(self) -> Option<ModuleItemWithVis> {
         match self {
-            PartialResolvedImport::Unresolved(_) => PerNs::none(),
-            PartialResolvedImport::Resolved(ns) => ns,
+            PartialResolvedImport::Unresolved(_) => None,
+            PartialResolvedImport::Resolved(ns) => Some(ns),
         }
     }
 }
@@ -137,7 +162,6 @@ impl PartialResolvedImport {
 #[derive(Debug)]
 struct DefCollector {
     def_map: DefMap,
-    from_glob_import: PerNsGlobImports,
     unresolved_imports: Vec<Import>,
     diagnostics: Vec<Diagnostic>,
     string_interner: &'static ThreadedRodeo,
@@ -146,17 +170,19 @@ struct DefCollector {
 impl DefCollector {
     fn update(
         &mut self,
-        module_id: LocalModuleId,
-        resolutions: &[(Spur, PerNs)],
+        module_id: ModuleId,
+        resolutions: &[(Spur, Option<ModuleItemWithVis>)],
         vis: Option<Visibility>,
     ) {
         for (name, res) in resolutions {
-            let scope = &mut self.def_map.modules[module_id].scope;
-            let res = match vis {
-                Some(vis) => res.with_visibility(vis),
-                None => *res,
-            };
-            scope.push_res_with_import(&mut self.from_glob_import, (module_id, *name), res);
+            if let Some((mod_def_id, mod_id, og_vis)) = res {
+                let scope = &mut self.def_map.modules[module_id].scope;
+                let res = match vis {
+                    Some(vis) => (*mod_def_id, *mod_id, vis),
+                    None => (*mod_def_id, *mod_id, *og_vis),
+                };
+                scope.define_item(*name, res);
+            }
         }
     }
 
@@ -177,6 +203,7 @@ impl DefCollector {
                             err.to_lower_error(
                                 self.def_map.modules[import.module_id].file_id,
                                 self.string_interner,
+                                PathResolutionResultKind::Use,
                             )
                             .to_diagnostic(),
                         );
@@ -187,14 +214,14 @@ impl DefCollector {
             .collect();
     }
 
-    fn resolve_import(&self, module_id: LocalModuleId, import: &Import) -> PartialResolvedImport {
+    fn resolve_import(&self, module_id: ModuleId, import: &Import) -> PartialResolvedImport {
         let u = &self.def_map.item_trees.get(module_id).unwrap()[import.use_decl];
         let res = self.def_map.resolve_path(&u.path, module_id);
 
         match res {
             Err(err) => PartialResolvedImport::Unresolved(err),
             Ok(def) => {
-                if def.take_types().is_some() || def.take_values().is_some() {
+                if let Some(def) = def {
                     PartialResolvedImport::Resolved(def)
                 } else {
                     ice("path resolution result cannot be `Ok` with no items in the `PerNs`")
@@ -224,6 +251,8 @@ impl DefCollector {
         }
     }
 
+    fn inject_prelude(&self) {}
+
     pub fn seed_with_entry<R: FileResolver>(
         &mut self,
         entry_path: &str,
@@ -232,6 +261,8 @@ impl DefCollector {
         types: &mut Arena<Spanned<Type>>,
         resolver: &R,
     ) {
+        self.inject_prelude();
+
         let (file_id, content) = resolver
             .resolve_absolute_path(entry_path, file_cache)
             .unwrap();
@@ -253,7 +284,16 @@ impl DefCollector {
         };
         let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, types, resolver);
         self.def_map.item_trees.insert(module_id, item_tree);
-        self.diagnostics.append(&mut diagnostics)
+        self.diagnostics.append(&mut diagnostics);
+
+        // self.add_core_file(
+        //     entry_path,
+        //     module_id,
+        //     file_cache,
+        //     string_interner,
+        //     types,
+        //     resolver,
+        // );
     }
 
     fn build_item_tree(
@@ -273,7 +313,7 @@ impl DefCollector {
 
 struct ModCollector<'a> {
     def_collector: &'a mut DefCollector,
-    module_id: LocalModuleId,
+    module_id: ModuleId,
     item_tree: &'a ItemTree,
     mod_dir: ModDir,
     file_id: FileId,
@@ -300,7 +340,10 @@ impl<'a> ModCollector<'a> {
                     .declare(id);
                 def_collector.update(
                     self.module_id,
-                    &[(name, PerNs::from_def(id, self.module_id, vis))],
+                    &[(
+                        name,
+                        Some(ModuleItemWithVis::from((id, self.module_id, vis))),
+                    )],
                     Some(vis),
                 );
             };
@@ -337,7 +380,7 @@ impl<'a> ModCollector<'a> {
                         module_id: self.module_id,
                         use_decl: id,
                         status: PartialResolvedImport::Unresolved(
-                            ResolvePathError::UnresolvedModule {
+                            ResolvePathError::UnresolvedPath {
                                 path: self.item_tree[id].path.clone(),
                                 segment: 0,
                             },
@@ -397,7 +440,7 @@ impl<'a> ModCollector<'a> {
         self.diagnostics.append(&mut diagnostics);
     }
 
-    fn push_child_module(&mut self, name: Spur, visibility: Visibility) -> LocalModuleId {
+    fn push_child_module(&mut self, name: Spur, visibility: Visibility) -> ModuleId {
         let def_map = &mut self.def_collector.def_map;
         let res = def_map.modules.alloc(ModuleData::new());
         def_map.modules[res].parent = Some(self.module_id);
@@ -406,7 +449,10 @@ impl<'a> ModCollector<'a> {
         def_map.modules[self.module_id].scope.declare(def);
         self.def_collector.update(
             self.module_id,
-            &[(name, PerNs::from_def(def, self.module_id, visibility))],
+            &[(
+                name,
+                Some(ModuleItemWithVis::from((def, self.module_id, visibility))),
+            )],
             Some(visibility),
         );
         res

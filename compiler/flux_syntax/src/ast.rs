@@ -1,4 +1,4 @@
-use cstree::{SyntaxElementRef, TextRange, TextSize};
+use cstree::{SyntaxElementRef, TextRange};
 
 use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 

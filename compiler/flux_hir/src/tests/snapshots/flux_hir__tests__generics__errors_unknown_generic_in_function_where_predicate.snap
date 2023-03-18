@@ -23,16 +23,16 @@ Diagnostics
    ,-[ main.flx:5:22]
    |
  5 | fn foo<T>() -> u32 where X is Foo {
-   *   ^|^                |  
-   *    `-------------------- generic parameters `T` declared here
-   *                      |  
-   *                      `-- unknown generic `X` used in where predicate
+   |   ^|^                |  
+   |    `-------------------- generic parameters `T` declared here
+   |                      |  
+   |                      `-- unknown generic `X` used in where predicate
 ---'
 [E0021] Error: unused generic parameters
    ,-[ main.flx:5:3]
    |
  5 | fn foo<T>() -> u32 where X is Foo {
-   *   ^|^  
-   *    `--- unused generic parameters `T`
+   |   ^|^  
+   |    `--- unused generic parameters `T`
 ---'
 

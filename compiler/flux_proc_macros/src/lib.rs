@@ -38,6 +38,7 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
     let mut locations = vec![];
     let mut primaries = vec![];
     let mut labels = vec![];
+    let mut extra_labels = vec![];
     let mut helps = vec![];
 
     let mut i = 0;
@@ -77,6 +78,7 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
         field_names.push(variant_field_names);
 
         let mut variant_labels = vec![];
+        let mut variant_extra_labels = vec![];
 
         helps.push(quote!(None));
 
@@ -109,6 +111,25 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                         });
                     }
                 }
+                ErrorAttribute::Labels(labels) => {
+                    let field = &labels.field;
+                    let msg = &labels.msg;
+
+                    if let Some(exprs) = &labels.exprs {
+                        variant_extra_labels.push(quote! {
+                            #field.iter().for_each(|label| {
+                                labels.push(label.map_inner_ref(|looped_value| format!(#msg, #exprs)));
+                            });
+                        });
+                    } else {
+                        variant_extra_labels.push(quote! {
+                            #field.iter().for_each(|label| {
+                                labels.push(label.map_inner_ref(|looped_value| format!(#msg)));
+                            });
+                        });
+                    }
+                    // let field_file_span = format_ident!("{}_file_span", field);
+                }
                 ErrorAttribute::Help(help) => {
                     let msg = &help.msg;
                     if let Some(exprs) = &help.exprs {
@@ -125,10 +146,13 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
             });
 
         labels.push(variant_labels);
+        extra_labels.push(variant_extra_labels);
         i += 1;
     });
 
     let visibility = &input.visibility;
+
+    // println!("{:#?}", extra_labels);
 
     let gen = quote! {
         #[derive(Debug, Clone)]
@@ -147,14 +171,18 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                 match self {
                     #(
                         #[allow(unused)]
-                        Self::#variants { #(#field_names),* } => flux_diagnostics::Diagnostic::error(
-                            #locations,
-                            flux_diagnostics::DiagnosticCode::#variants,
-                            #primaries.to_string(),
-                            vec![
+                        Self::#variants { #(#field_names),* } => {
+                            let mut labels = vec![
                                 #(#labels),*
-                            ],
-                        ).opt_with_help(#helps),
+                            ];
+                            #(#extra_labels)*
+                            flux_diagnostics::Diagnostic::error(
+                                #locations,
+                                flux_diagnostics::DiagnosticCode::#variants,
+                                #primaries.to_string(),
+                                labels,
+                            ).opt_with_help(#helps)
+                        }
                     )*
                 }
             }

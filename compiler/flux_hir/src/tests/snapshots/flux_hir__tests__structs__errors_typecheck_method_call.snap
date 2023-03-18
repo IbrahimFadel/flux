@@ -26,18 +26,18 @@ let x s32 = foo.foo();
 
 Diagnostics
 
-[E0031] Error: type mismatch
+[E0037] Error: type mismatch
     ,-[ main.flx:12:6]
     |
   6 |         fn foo() {}
-    *             | 
-    *             `- ()
-    * 
+    |             | 
+    |             `- `()`
+    | 
  11 | ,-> 
  12 | |->     let x s32 = foo.foo();
-    * |        ^^^^|^^^^               
-    * `-------------------------------- s32
-    *              |                   
-    *              `------------------- type mismatch between `s32` and `()`
+    | |        ^^^^|^^^^               
+    | `-------------------------------- `s32`
+    |              |                   
+    |              `------------------- type mismatch between `s32` and `()`
 ----'
 

@@ -1,0 +1,25 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+
+
+Diagnostics
+
+[E0011] Error: unresolved trait
+   ,-[ main.flx:4:13]
+   |
+ 4 |     where A is Bar
+   |             ^|^  
+   |              `--- unresolved trait `Bar`
+---'
+

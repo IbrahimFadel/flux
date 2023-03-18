@@ -194,62 +194,6 @@ impl TEnv {
             .insert_local(name, id);
     }
 
-    // pub fn insert_function_signature(&mut self, path: Vec<Spur>, signature: FunctionSignature) {
-    //     self.function_signatures.insert(path, signature);
-    // }
-
-    // fn hir_path_to_spur(&self, path: impl Iterator<Item = Spur>) -> Spur {
-    //     let path_string = path
-    //         .map(|spur| self.string_interner.resolve(&spur))
-    //         .join("::");
-    //     self.string_interner.get_or_intern(path_string)
-    // }
-
-    // pub fn get_function_signature(
-    //     &mut self,
-    //     path: &FileSpanned<Vec<Spur>>,
-    // ) -> Result<FunctionSignature, Diagnostic> {
-    //     self.function_signatures
-    //         .get(&path.inner.inner)
-    //         .map_or_else(
-    //             || {
-    //                 Err(TypeError::UnknownFunction {
-    //                     path: path.map_inner_ref(|path| {
-    //                         path.iter()
-    //                             .map(|spur| self.string_interner.resolve(spur))
-    //                             .join("::")
-    //                     }),
-    //                 }
-    //                 .to_diagnostic())
-    //             },
-    //             Ok,
-    //         )
-    //         .cloned()
-    // }
-
-    // pub fn get_struct_field_types(
-    //     &self,
-    //     path: FileSpanned<impl Iterator<Item = Spur>>,
-    // ) -> Result<(StructConcreteKind, InFile<Span>), Diagnostic> {
-    //     let (file_id, span) = (path.file_id, path.span);
-    //     let spur = path.map_inner(|path| self.hir_path_to_spur(path));
-    //     let struct_type_id = self
-    //         .name_resolver
-    //         .resolve_type(spur.clone(), self.string_interner)?;
-    //     let typekind = self.get_typekind_with_id(struct_type_id);
-    //     let filespan = InFile::new(typekind.span, typekind.file_id);
-    //     match typekind.inner.inner {
-    //         TypeKind::Concrete(ConcreteKind::Struct(fields)) => Ok((fields, filespan)),
-    //         _ => Err(TypeError::UnknownStruct {
-    //             path: FileSpanned::new(
-    //                 Spanned::new(self.string_interner.resolve(&spur).to_string(), span),
-    //                 file_id,
-    //             ),
-    //         }
-    //         .to_diagnostic()),
-    //     }
-    // }
-
     /// Get the [`TypeId`] of a path in any currently accessible [`Scope`]
     pub fn get_local_typeid(
         &mut self,
@@ -263,8 +207,8 @@ impl TEnv {
             .map_or_else(
                 || {
                     Err(TypeError::UnknownVariable {
-                        name: name
-                            .map_inner_ref(|spur| self.string_interner.resolve(spur).to_string()),
+                        name: self.string_interner.resolve(&name).to_string(),
+                        name_file_span: name.to_filespan(),
                     }
                     .to_diagnostic())
                 },
@@ -389,7 +333,7 @@ impl TEnv {
         )
     }
 
-    pub(super) fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
+    pub fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
         format!(
             "{}{}",
             self.string_interner
@@ -430,63 +374,19 @@ impl Display for TEnv {
                         self.fmt_tentry(entry),
                     ))
                 }),
-            // self.scopes
-            //     .iter()
-            //     .enumerate()
-            //     .map(|(idx, scope)| {
-            //         format!(
-            //             "scope {idx} {{\n  {}\n}}\n",
-            //             scope.0.iter().format_with("\n  ", |(name, ty), f| {
-            //                 f(&format_args!(
-            //                     "{} {} {}",
-            //                     self.string_interner.resolve(name).yellow(),
-            //                     "->".purple(),
-            //                     ty
-            //                 ))
-            //             })
-            //         )
-            //     })
-            //     .join("\n")
         )
     }
 }
 
 impl Display for TEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
-        // write!(
-        //     f,
-        //     "{:?}{}{}",
-        //     self.get_constr(),
-        //     if !self.restrictions.is_empty() {
-        //         ": ".to_string()
-        //     } else {
-        //         String::new()
-        //     },
-        //     self.restrictions
-        //         .iter()
-        //         .format_with(", ", |_, f| f(&format_args!("{:?}", self.restrictions)))
-        // )
     }
 }
-
-// impl Display for TraitRestriction {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{:?}", self.name)
-//     }
-// }
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.constr())
-        // match self.constr() {
-        //     TypeKind::Concrete(cncrt) => write!(f, "{}", cncrt),
-        //     TypeKind::Float(_) => write!(f, "float"),
-        //     TypeKind::Generic => write!(f, "generic"),
-        //     TypeKind::Int(_) => write!(f, "int"),
-        //     TypeKind::Ref(id) => write!(f, "ref('{id})"),
-        //     TypeKind::Unknown => write!(f, "unknown"),
-        // }
     }
 }
 
@@ -503,11 +403,6 @@ impl Display for ConcreteKind {
 
 #[cfg(test)]
 mod tests {
-    use flux_span::{FileId, FileSpanned, Span, Spanned};
-    use lasso::{Spur, ThreadedRodeo};
-    use once_cell::sync::Lazy;
-    use text_size::TextRange;
-
     // use crate::{ConcreteKind, TEnv, Type, TypeKind};
 
     // static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);

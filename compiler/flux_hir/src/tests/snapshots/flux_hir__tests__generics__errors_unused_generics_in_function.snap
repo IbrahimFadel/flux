@@ -23,7 +23,7 @@ Diagnostics
    ,-[ main.flx:3:5]
    |
  3 | fn foo<X, Y>(x X) -> X {
-   *     ^^^|^^  
-   *        `---- unused generic parameters `Y`
+   |     ^^^|^^  
+   |        `---- unused generic parameters `Y`
 ---'
 

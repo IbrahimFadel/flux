@@ -19,11 +19,11 @@ Diagnostics
     ,-[ main.rs:10:7]
     |
   4 | trait Bar<T> {}
-    *       ^|^  
-    *        `--- expected 1 arguments
-    * 
+    |       ^|^  
+    |        `--- expected 1 arguments
+    | 
  10 |     where T is Bar
-    *       ^|^  
-    *        `--- got 0 arguments
+    |       ^|^  
+    |        `--- got 0 arguments
 ----'
 

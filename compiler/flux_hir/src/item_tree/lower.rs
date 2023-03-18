@@ -10,7 +10,7 @@ use text_size::{TextRange, TextSize};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, Function, GenericParams, Mod, Name, Param, Params, Struct, StructField,
+        Apply, Function, GenericParams, Mod, Name, Param, Params, Path, Struct, StructField,
         StructFields, Trait, Type, TypeIdx, Use, Visibility, WherePredicate,
     },
     FunctionId,
@@ -187,7 +187,7 @@ impl<'a> Ctx<'a> {
         let name = self.body_ctx.lower_name(t.name());
         let generic_params =
             self.lower_generic_params(t.generic_param_list(), t.where_clause(), name.span);
-        let assoc_types = self.lower_trait_assoc_types(t.associated_types());
+        let assoc_types = self.lower_trait_assoc_types(t.associated_types(), &generic_params);
         let (methods, methods_end) = self.lower_trait_methods(t.method_decls());
 
         let (l, r) = match (t.lbrace(), t.rbrace()) {
@@ -316,10 +316,34 @@ impl<'a> Ctx<'a> {
     fn lower_trait_assoc_types(
         &mut self,
         assoc_types: impl Iterator<Item = ast::TraitAssocTypeDecl>,
-    ) -> Vec<Name> {
+        generic_params: &GenericParams,
+    ) -> Vec<(Name, Vec<Spanned<Path>>)> {
         assoc_types
-            .map(|ty| self.body_ctx.lower_name(ty.name()))
+            .map(|ty| {
+                let name = self.body_ctx.lower_name(ty.name());
+                let type_bound_list = ty.type_bound_list().map_or(vec![], |type_bound_list| {
+                    self.lower_type_bound_list(Some(type_bound_list), generic_params)
+                });
+                (name, type_bound_list)
+            })
             .collect()
+    }
+
+    fn lower_type_bound_list(
+        &mut self,
+        type_bound_list: Option<ast::TypeBoundList>,
+        generic_params: &GenericParams,
+    ) -> Vec<Spanned<Path>> {
+        self.body_ctx.lower_node(
+            type_bound_list,
+            |_, _| todo!(),
+            |this, type_bound_list| {
+                type_bound_list
+                    .type_bounds()
+                    .map(|bound| this.lower_path(bound.trait_path(), &generic_params))
+                    .collect()
+            },
+        )
     }
 
     fn lower_apply_assoc_types(

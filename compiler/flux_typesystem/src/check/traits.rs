@@ -33,22 +33,6 @@ impl TChecker {
         trait_args: &[TypeId],
         impltor: TypeId,
     ) -> Result<(), Diagnostic> {
-        println!(
-            "adding trait application {}{} to {} to context",
-            self.string_interner.resolve(&trait_name),
-            if trait_args.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "<{}>",
-                    trait_args
-                        .iter()
-                        .map(|arg| self.tenv.fmt_ty_id(*arg))
-                        .join(", ")
-                )
-            },
-            self.tenv.fmt_ty_id(impltor)
-        );
         tracing::trace!(
             "adding trait application {}{} to {} to context",
             self.string_interner.resolve(&trait_name),
@@ -71,8 +55,8 @@ impl TChecker {
             .get(trait_name)
             .ok_or_else(|| {
                 TypeError::TraitDoesNotExist {
-                    trait_name: trait_name
-                        .map_inner_ref(|spur| self.tenv.string_interner.resolve(spur).to_string()),
+                    trait_name: self.string_interner.resolve(&trait_name).to_string(),
+                    trait_name_file_span: trait_name.to_filespan(),
                 }
                 .to_diagnostic()
             })?
@@ -125,8 +109,10 @@ impl TChecker {
                         .resolve(&trait_name.inner.inner)
                         .to_string(),
                     impltor: self.tenv.string_interner.resolve(&impltor_name).to_string(),
-                    implementation_a: implementation_a_span,
-                    implementation_b: trait_name.to_filespan(),
+                    implementation_a: (),
+                    implementation_a_file_span: implementation_a_span,
+                    implementation_b: (),
+                    implementation_b_file_span: trait_name.to_filespan(),
                 }
                 .to_diagnostic());
             }
@@ -233,8 +219,8 @@ impl TChecker {
             .get(trt)
             .ok_or_else(|| {
                 TypeError::TraitDoesNotExist {
-                    trait_name: trt
-                        .map_inner_ref(|spur| self.tenv.string_interner.resolve(spur).to_string()),
+                    trait_name: self.string_interner.resolve(&trt).to_string(),
+                    trait_name_file_span: trt.to_filespan(),
                 }
                 .to_diagnostic()
             })?
@@ -254,112 +240,228 @@ impl TChecker {
         Ok(impls)
     }
 
-    pub(crate) fn check_if_type_implements_restrictions(
+    pub fn check_if_type_implements_restrictions(
         &mut self,
         ty: TypeId,
         restrictions: &[TraitRestriction],
     ) -> Result<(), Diagnostic> {
-        println!(
-            "HII {}",
-            format!(
-                "checking if type `{}` implements restrictions: {}",
-                self.tenv.fmt_ty_id(ty),
-                restrictions
-                    .iter()
-                    .map(|restriction| format!(
-                        "`{}`",
-                        self.tenv.fmt_trait_restriction(restriction)
-                    ))
-                    .join(", ")
-            )
-        );
-        tracing::info!(
-            "checking if type `{}` implements restrictions: {}",
-            self.tenv.fmt_ty_id(ty),
-            restrictions
-                .iter()
-                .map(|restriction| format!("`{}`", self.tenv.fmt_trait_restriction(restriction)))
-                .join(", ")
-        );
         let impltr_filespan = self.tenv.get_type_filespan(ty);
 
         let mut unimplemented_restrictions = vec![];
 
-        if let TypeKind::Generic(_, restrictions_of_type_being_checked) =
-            self.tenv.get_typekind_with_id(ty).inner.inner
-        {
-            if restrictions_of_type_being_checked.len() != restrictions.len() {
-                return Err(TypeError::TraitRestrictionsNotMet {
-                    ty: self
-                        .tenv
-                        .fmt_ty_id(ty)
-                        .file_span(impltr_filespan.file_id, impltr_filespan.inner),
-                    unmet_restrictions: unimplemented_restrictions,
+        let kind = self.tenv.get_typekind_with_id(ty);
+        match &kind.inner.inner {
+            TypeKind::Generic(_, restrictions_of_type_being_checked) => {
+                if restrictions_of_type_being_checked.len() != restrictions.len() {
+                    return Err(TypeError::TraitRestrictionsNotMet {
+                        ty: self.tenv.fmt_ty_id(ty),
+                        ty_file_span: impltr_filespan,
+                        unmet_restrictions: unimplemented_restrictions,
+                    }
+                    .to_diagnostic());
                 }
-                .to_diagnostic());
+                if restrictions_of_type_being_checked
+                    .iter()
+                    .zip(restrictions.iter())
+                    .filter(|(a, b)| self.are_trait_restrictions_equal(a, b))
+                    .count()
+                    == restrictions.len()
+                {
+                    return Ok(());
+                }
             }
-            if restrictions_of_type_being_checked
-                .iter()
-                .zip(restrictions.iter())
-                .filter(|(a, b)| self.are_trait_restrictions_equal(a, b))
-                .count()
-                == restrictions.len()
-            {
-                return Ok(());
+            TypeKind::Int(depends_on) => {
+                if let Some(depends_on) = depends_on {
+                    return self.check_if_type_implements_restrictions(*depends_on, restrictions);
+                } else {
+                    self.check_if_int_implements_restrictions(kind.to_filespan(), restrictions)?;
+                }
             }
+            _ => {}
         }
 
         for restriction in restrictions {
-            let implementations_for_ty = self.get_implementations(&restriction.name, ty)?.to_vec();
-            let mut found_valid_impl = false;
-            for implementation in implementations_for_ty {
-                if implementation.get_trait_params().len() == restriction.args.len() {
-                    let num_ok_unifications = implementation
-                        .get_trait_params()
-                        .iter()
-                        .zip(restriction.args.iter())
-                        .filter_map(|(a, b)| {
-                            println!(
-                                "unifying: {} {}",
-                                self.tenv.fmt_ty_id(*a),
-                                self.tenv.fmt_ty_id(*b)
-                            );
-                            self.unify(*a, *b, Span::poisoned().in_file(FileId::poisoned()))
-                                .ok()
-                        })
-                        .count();
-                    if num_ok_unifications == implementation.get_trait_params().len() {
-                        found_valid_impl = true;
-                    }
-                }
-            }
-
-            if !found_valid_impl {
-                unimplemented_restrictions.push(self.tenv.fmt_trait_restriction(restriction));
+            if !self.does_type_implements_restrictions(ty, restriction)?.0 {
+                unimplemented_restrictions.push(
+                    self.tenv
+                        .fmt_trait_restriction(restriction)
+                        .file_span(restriction.name.file_id, restriction.name.span),
+                );
             }
         }
 
         if !unimplemented_restrictions.is_empty() {
+            tracing::info!(
+                "type `{}` does not implement restrictions: {}",
+                self.tenv.fmt_ty_id(ty),
+                unimplemented_restrictions
+                    .iter()
+                    .map(|restriction| format!("`{}`", restriction.inner.inner))
+                    .join(", ")
+            );
             Err(TypeError::TraitRestrictionsNotMet {
-                ty: self
-                    .tenv
-                    .fmt_ty_id(ty)
-                    .file_span(impltr_filespan.file_id, impltr_filespan.inner),
+                ty: self.tenv.fmt_ty_id(ty),
+                ty_file_span: impltr_filespan,
                 unmet_restrictions: unimplemented_restrictions,
             }
             .to_diagnostic())
         } else {
-            tracing::debug!(
-                "type `{}` implements restrictions {}",
-                self.tenv.fmt_ty_id(ty),
-                restrictions
+            Ok(())
+        }
+    }
+
+    fn does_type_implements_restrictions(
+        &mut self,
+        ty: TypeId,
+        restriction: &TraitRestriction,
+    ) -> Result<(bool, InFile<Span>), Diagnostic> {
+        tracing::debug!(
+            "checking if type `{}` implements restriction: {}",
+            self.tenv.fmt_ty_id(ty),
+            format!("`{}`", self.tenv.fmt_trait_restriction(restriction))
+        );
+        let implementations_for_ty = self.get_implementations(&restriction.name, ty)?.to_vec();
+        let mut valid_impl = None;
+        for implementation in implementations_for_ty {
+            if implementation.get_trait_params().len() == restriction.args.len() {
+                let num_ok_unifications = implementation
+                    .get_trait_params()
                     .iter()
-                    .map(|restriction| format!(
-                        "`{}`",
-                        self.tenv.fmt_trait_restriction(restriction)
-                    ))
-                    .join(", ")
-            );
+                    .zip(restriction.args.iter())
+                    .filter_map(|(a, b)| {
+                        self.unify(*a, *b, Span::poisoned().in_file(FileId::poisoned()))
+                            .ok()
+                    })
+                    .count();
+                if num_ok_unifications == implementation.get_trait_params().len() {
+                    valid_impl = Some((
+                        true,
+                        self.tenv.get_type_filespan(implementation.get_impltor()),
+                    ));
+                }
+            }
+        }
+
+        tracing::debug!(
+            "type `{}`{} restrictions {}",
+            self.tenv.fmt_ty_id(ty),
+            if valid_impl.is_some() {
+                " implements".to_string()
+            } else {
+                format!(" does not implement")
+            },
+            self.tenv.fmt_trait_restriction(restriction)
+        );
+        Ok(valid_impl.unwrap_or((false, Span::poisoned().in_file(FileId::poisoned()))))
+    }
+
+    fn check_if_int_implements_restrictions(
+        &mut self,
+        file_span: InFile<Span>,
+        restrictions: &[TraitRestriction],
+    ) -> Result<(), Diagnostic> {
+        let s64 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s64"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s32 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s32"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s16 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s16"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s8 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s8"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u64 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u64"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u32 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u32"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u16 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u16"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u8 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u8"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let mut unmet_restrictions = vec![];
+        for restriction in restrictions {
+            let does_s64_impl = self.does_type_implements_restrictions(s64, restriction)?;
+            let does_s32_impl = self.does_type_implements_restrictions(s32, restriction)?;
+            let does_s16_impl = self.does_type_implements_restrictions(s16, restriction)?;
+            let does_s8_impl = self.does_type_implements_restrictions(s8, restriction)?;
+            let does_u64_impl = self.does_type_implements_restrictions(u64, restriction)?;
+            let does_u32_impl = self.does_type_implements_restrictions(u32, restriction)?;
+            let does_u16_impl = self.does_type_implements_restrictions(u16, restriction)?;
+            let does_u8_impl = self.does_type_implements_restrictions(u8, restriction)?;
+            let impltors: Vec<_> = [
+                (does_s64_impl, s64),
+                (does_s32_impl, s32),
+                (does_s16_impl, s16),
+                (does_s8_impl, s8),
+                (does_u64_impl, u64),
+                (does_u32_impl, u32),
+                (does_u16_impl, u16),
+                (does_u8_impl, u8),
+            ]
+            .into_iter()
+            .filter(|((b, _), _)| *b)
+            .map(|((_, file_span), id)| {
+                self.tenv
+                    .fmt_ty_id(id)
+                    .file_span(file_span.file_id, file_span.inner)
+            })
+            .collect();
+
+            if impltors.len() > 1 {
+                return Err(TypeError::MultiplePossibleIntSpecializations {
+                    int_types: impltors.iter().map(|s| s.inner.inner.clone()).collect(),
+                    int_types_file_span: file_span,
+                    trt: self.string_interner.resolve(&restriction.name).to_string(),
+                    trt_file_span: restriction.name.to_filespan(),
+                    applications: impltors,
+                }
+                .to_diagnostic());
+            } else if impltors.is_empty() {
+                unmet_restrictions.push(
+                    self.tenv
+                        .fmt_trait_restriction(restriction)
+                        .file_span(restriction.name.file_id, restriction.name.span),
+                );
+            }
+        }
+        if !unmet_restrictions.is_empty() {
+            Err(TypeError::TraitRestrictionsNotMet {
+                ty: "int".to_string(),
+                ty_file_span: file_span,
+                unmet_restrictions,
+            }
+            .to_diagnostic())
+        } else {
             Ok(())
         }
     }

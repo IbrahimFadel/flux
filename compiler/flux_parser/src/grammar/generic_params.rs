@@ -66,7 +66,7 @@ fn where_predicate(p: &mut Parser) {
     m.complete(p, SyntaxKind::WherePredicate);
 }
 
-fn bounds(p: &mut Parser) {
+pub(crate) fn bounds(p: &mut Parser) {
     let m = p.start();
     p.bump(TokenKind::Is);
     while type_bound(p) {

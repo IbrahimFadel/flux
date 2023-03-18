@@ -21,11 +21,11 @@ Diagnostics
   3 | ,-> trait Foo {
     : :   
   6 | |->     fn bazz();
-    * |                    
-    * `-------------------- trait methods `bar`, `bazz`, `foo` declared here
-    * 
+    | |                    
+    | `-------------------- trait methods `bar`, `bazz`, `foo` declared here
+    | 
  11 |     apply Foo to Bar {
-    *            ^|  
-    *             `-- unimeplemented trait methods `bar`, `bazz`, `foo` in apply
+    |            ^|  
+    |             `-- unimeplemented trait methods `bar`, `bazz`, `foo` in apply
 ----'
 

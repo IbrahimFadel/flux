@@ -23,22 +23,22 @@ Diagnostics
     ,-[ main.flx:14:15]
     |
   4 |     fn bar<T>() where T is Foo;
-    *                    |    ^|^  
-    *                    `--------- generic parameter `T` with trait bound `Foo`
-    *                          |   
-    *                          `--- where predicate in trait declaration method `Foo`
-    * 
+    |                    |    ^|^  
+    |                    `--------- generic parameter `T` with trait bound `Foo`
+    |                          |   
+    |                          `--- where predicate in trait declaration method `Foo`
+    | 
  14 |     fn bar<T>() where T is NotFoo {
-    *          |    ^^^|^^  
-    *          `------------ generic parameter `T` needs the trait bound `Foo`
-    *                  |    
-    *                  `---- where predicate in apply declaration method `NotFoo`
+    |          |    ^^^|^^  
+    |          `------------ generic parameter `T` needs the trait bound `Foo`
+    |                  |    
+    |                  `---- where predicate in apply declaration method `NotFoo`
 ----'
 [E0021] Error: unused generic parameters
     ,-[ main.flx:13:18]
     |
  13 | apply Bar to Bazz {
-    *                  ^|^  
-    *                   `--- unused generic parameters `T`
+    |                  ^|^  
+    |                   `--- unused generic parameters `T`
 ----'
 
