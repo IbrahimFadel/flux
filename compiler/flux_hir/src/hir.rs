@@ -1,9 +1,10 @@
-use std::{borrow::Borrow, ops::Deref};
+use std::ops::Deref;
 
 use flux_diagnostics::ice;
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, ToSpan, WithSpan};
 use flux_syntax::ast;
+use flux_typesystem::TypeId;
 use hashbrown::HashSet;
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
@@ -31,6 +32,7 @@ pub enum Item {
     Struct(Struct),
     Trait(Trait),
     BuiltinType(BuiltinType),
+    Mod,
 }
 
 impl TryFrom<Item> for Function {
@@ -54,7 +56,12 @@ pub struct Apply {
 }
 
 #[derive(Debug, Clone)]
-pub struct Enum {}
+pub struct Enum {
+    pub visibility: Spanned<Visibility>,
+    pub name: Name,
+    pub generic_params: Spanned<GenericParams>,
+    pub variants: Vec<EnumVariant>,
+}
 
 #[derive(Debug, Clone, Locatable)]
 pub struct Function {
@@ -78,6 +85,12 @@ pub struct Struct {
     pub name: Name,
     pub generic_params: Spanned<GenericParams>,
     pub fields: StructFields,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
+pub struct EnumVariant {
+    pub name: Name,
+    pub ty: Option<TypeIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
@@ -213,14 +226,17 @@ impl GenericParams {
         }
     }
 
-    pub fn unused<S: Borrow<Spur>>(&self, mut used: impl Iterator<Item = S>) -> Vec<Spur> {
-        let mut unused = vec![];
-        for (_, generic) in self.types.iter() {
-            if used.find(|name| name.borrow() == &generic.inner).is_none() {
-                unused.push(generic.inner)
-            }
-        }
-        unused
+    pub fn unused(&self, used: &[Spur]) -> Vec<Spur> {
+        self.types
+            .iter()
+            .filter_map(|(_, ty)| {
+                if !used.contains(&ty.inner) {
+                    Some(ty.inner)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -325,6 +341,8 @@ impl ExprIdx {
     }
 }
 
+impl WithType for ExprIdx {}
+
 impl From<Idx<Spanned<Expr>>> for ExprIdx {
     fn from(value: Idx<Spanned<Expr>>) -> Self {
         ExprIdx(value)
@@ -360,19 +378,51 @@ pub enum Type {
     Unknown,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct Typed<T> {
+    pub expr: T,
+    pub tid: TypeId,
+}
+
+pub trait WithType: Sized {
+    fn with_type(self, tid: TypeId) -> Typed<Self> {
+        Typed { expr: self, tid }
+    }
+}
+
+impl<T> Deref for Typed<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.expr
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Locatable)]
 pub enum Expr {
     Block(Block),
+    Enum(EnumExpr),
     Call(Call),
     Float(f64),
     Int(u64),
-    // Tuple(Vec<ExprIdx>),
+    Tuple(Vec<ExprIdx>),
     Path(Path),
     Let(Let),
     Struct(StructExpr),
     MemberAccess(MemberAccess),
     Poisoned,
 }
+
+// impl WithType for Block {}
+// impl WithType for EnumExpr {}
+// impl WithType for Call {}
+// impl WithType for u64 {}
+// impl WithType for f64 {}
+// impl WithType for Vec<ExprIdx> {}
+// impl WithType for Path {}
+// impl WithType for Let {}
+// impl WithType for StructExpr {}
+// impl WithType for MemberAccess {}
 
 impl TryFrom<Expr> for Path {
     type Error = ();
@@ -387,20 +437,27 @@ impl TryFrom<Expr> for Path {
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Block {
-    pub exprs: Vec<ExprIdx>,
+    pub exprs: Vec<Typed<ExprIdx>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct EnumExpr {
+    pub path: Spanned<Path>,
+    pub variant: Name,
+    pub arg: Option<Typed<ExprIdx>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct Call {
-    pub callee: ExprIdx,
-    pub args: Vec<ExprIdx>,
+    pub callee: Typed<ExprIdx>,
+    pub args: Vec<Typed<ExprIdx>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Let {
     pub name: Name,
     pub ty: TypeIdx,
-    pub val: ExprIdx,
+    pub val: Typed<ExprIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -412,12 +469,12 @@ pub struct StructExpr {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct StructExprField {
     pub name: Name,
-    pub val: ExprIdx,
+    pub val: Typed<ExprIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct MemberAccess {
-    pub lhs: ExprIdx,
+    pub lhs: Typed<ExprIdx>,
     pub rhs: Name,
 }
 

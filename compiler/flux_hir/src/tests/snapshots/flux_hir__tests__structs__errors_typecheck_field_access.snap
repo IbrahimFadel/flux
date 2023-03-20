@@ -22,7 +22,7 @@ let x s32 = foo.x;
 
 Diagnostics
 
-[E0037] Error: type mismatch
+[E0040] Error: type mismatch
     ,-[ main.flx:12:6]
     |
   4 |         x u32,

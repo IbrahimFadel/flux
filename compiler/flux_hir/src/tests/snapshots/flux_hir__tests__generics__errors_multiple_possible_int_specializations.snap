@@ -23,7 +23,7 @@ foo(0)
 
 Diagnostics
 
-[E0048] Error: the type of this int is ambiguous
+[E0051] Error: the type of this int is ambiguous
    ,-[ main.flx:9:12]
    |
  4 | apply Foo to s32 {}

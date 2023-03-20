@@ -69,6 +69,11 @@ getters! {
     BlockExpr {
         stmts -> nodes(Stmt);
     }
+    BinExpr {
+        lhs -> node(Expr);
+        op -> tok_matches(Eq, Plus, Star, Slash);
+        rhs -> nth_node(Expr, 1);
+    }
     CallExpr {
         callee -> node(Expr);
         args -> node(ArgList);
@@ -165,13 +170,14 @@ getters! {
         where_clause -> node(WhereClause);
     }
     EnumDecl {
+        visibility -> node(Visibility);
         name -> node(Name);
         generic_param_list -> node(GenericParamList);
         where_clause -> node(WhereClause);
         variants -> nodes(EnumDeclVariant);
     }
     EnumDeclVariant {
-        name -> tok(Ident);
+        name -> node(Name);
         ty -> node(Type);
     }
     ApplyDecl {

@@ -35,7 +35,7 @@ pub(crate) fn enum_decl(p: &mut Parser, visibility: CompletedMarker) {
 
 fn enum_decl_variant(p: &mut Parser) {
     let m = p.start();
-    p.expect(TokenKind::Ident);
+    name(p, TokenSet::new(&[TokenKind::Arrow, TokenKind::Comma]));
     if !p.at(TokenKind::Comma) {
         p.expect(TokenKind::Arrow);
         type_(p);

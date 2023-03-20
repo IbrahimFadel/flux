@@ -1,7 +1,3 @@
-pub fn some_function() -> u32 {
-    0
-}
+pub mod bar;
 
-fn some_private_function() {}
-
-struct Foo {}
+fn some_function() {}

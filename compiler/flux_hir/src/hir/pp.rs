@@ -301,6 +301,7 @@ impl Expr {
     {
         match self {
             Self::Block(block) => block.pretty(allocator, string_interner, types, exprs),
+            Self::Enum(eenum) => eenum.pretty(allocator, string_interner, types, exprs),
             Self::Call(call) => call.pretty(allocator, string_interner, types, exprs),
             Self::Float(float) => allocator.text(float.to_string()),
             Self::Int(int) => allocator.text(int.to_string()),
@@ -309,6 +310,15 @@ impl Expr {
             Self::Path(path) => path.pretty(allocator, string_interner, types),
             Self::Poisoned => allocator.text("<poisoned expression>"),
             Self::Struct(strukt) => strukt.pretty(allocator, string_interner, types, exprs),
+            Self::Tuple(vals) => {
+                allocator.text("(")
+                    + allocator.intersperse(
+                        vals.iter()
+                            .map(|val| val.pretty(allocator, string_interner, types, exprs)),
+                        ", ",
+                    )
+                    + allocator.text(")")
+            }
         }
     }
 }
@@ -336,6 +346,32 @@ impl Block {
             )
             + allocator.line()
             + allocator.text("}")
+    }
+}
+
+impl EnumExpr {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        types: &'b Arena<Spanned<Type>>,
+        exprs: &'b Arena<Spanned<Expr>>,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        self.path.pretty(allocator, string_interner, types)
+            + allocator.text("::")
+            + allocator.text(string_interner.resolve(&self.variant))
+            + if let Some(arg) = &self.arg {
+                allocator.text("(")
+                    + arg.pretty(allocator, string_interner, types, exprs)
+                    + allocator.text(")")
+            } else {
+                allocator.nil()
+            }
     }
 }
 

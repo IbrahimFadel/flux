@@ -52,6 +52,19 @@ macro_rules! getter {
             $($rest)*
         }
     };
+    ($name:ident -> tok_matches(
+        $($tok_kind:ident),*
+    ); $($rest:tt)*) => {
+        pub fn $name(&self) -> Option<&SyntaxToken> {
+            self.syntax()
+                .children_with_tokens()
+                .filter_map(SyntaxElementRef::into_token)
+                .find(|token| matches!(token.kind(), $(SyntaxKind::$tok_kind)|*))
+        }
+        getter! {
+            $($rest)*
+        }
+    };
     () => {};
 }
 

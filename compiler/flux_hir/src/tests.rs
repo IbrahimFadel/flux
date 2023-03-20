@@ -18,6 +18,7 @@ use crate::{
     ModuleDefId, ModuleId,
 };
 
+mod enums;
 mod generics;
 mod resolution;
 mod structs;

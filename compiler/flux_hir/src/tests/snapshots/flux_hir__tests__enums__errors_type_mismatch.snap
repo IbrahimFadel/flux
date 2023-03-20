@@ -1,0 +1,45 @@
+---
+source: compiler/flux_hir/src/tests/enums.rs
+expression: s
+---
+Module Id Map
+
+
+
+Item Tree
+
+File Id:  main.flx
+Module Id: 0
+
+fn main() -> () {
+let x u32 = Foo::A;
+let x u32 = Foo::B(0)(0);
+}
+
+
+
+Diagnostics
+
+[E0040] Error: type mismatch
+   ,-[ main.flx:9:9]
+   |
+ 9 |     let x u32 = Foo::A;
+   |   ^^|^  ^^^|^^  
+   |     `----------- `u32`
+   |            |    
+   |            `---- type mismatch between `u32` and `Foo`
+   |            |    
+   |            `---- `Foo`
+---'
+[E0040] Error: type mismatch
+    ,-[ main.flx:10:8]
+    |
+ 10 |     let x u32 = Foo::B(0);
+    |  ^^|^  ^^^||^^^^  
+    |    `-------------- `u32`
+    |           ||      
+    |           `------- `Foo`
+    |            |      
+    |            `------ type mismatch between `u32` and `Foo`
+----'
+

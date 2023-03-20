@@ -285,15 +285,6 @@ impl DefCollector {
         let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, types, resolver);
         self.def_map.item_trees.insert(module_id, item_tree);
         self.diagnostics.append(&mut diagnostics);
-
-        // self.add_core_file(
-        //     entry_path,
-        //     module_id,
-        //     file_cache,
-        //     string_interner,
-        //     types,
-        //     resolver,
-        // );
     }
 
     fn build_item_tree(
@@ -349,7 +340,15 @@ impl<'a> ModCollector<'a> {
             };
             match item {
                 crate::item_tree::ModItem::Apply(_) => {}
-                crate::item_tree::ModItem::Enum(_) => todo!(),
+                crate::item_tree::ModItem::Enum(id) => {
+                    let e = &self.item_tree[id];
+                    update_def(
+                        self.def_collector,
+                        id.into(),
+                        e.name.inner,
+                        e.visibility.inner,
+                    );
+                }
                 crate::item_tree::ModItem::Function(id) => {
                     let f = &self.item_tree[id];
                     update_def(

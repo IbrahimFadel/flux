@@ -21,7 +21,7 @@ x: 0
 
 Diagnostics
 
-[E0041] Error: trait restrictions not met
+[E0044] Error: trait restrictions not met
     ,-[ main.flx:12:20]
     |
   6 |     where T is Bar

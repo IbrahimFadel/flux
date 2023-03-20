@@ -1,14 +1,18 @@
-mod foo;
+enum Foo {
+    A -> s32,
+    B,
+}
 
-use foo::some_function;
-use foo::some_private_function;
-
-trait Bar {}
-
-apply Bar to foo::Foo {}
+struct Bar {
+    x s32,
+}
 
 fn main() {
-    let x s32 = some_function();
-    // let x u32 = some_function();
-    let x u32 = foo::some_function();
+    let x = Foo::A;
+    y = 0;
+
+    let bar = Bar {
+        x: 0,
+    };
+    bar.x = 10.0;
 }

@@ -3,19 +3,19 @@ use crate::{hir::Item, name_res::path_res::PathResolutionResultKind};
 use super::*;
 
 impl<'a> LowerCtx<'a> {
-    pub(super) fn get_item(
-        &mut self,
-        path: &Spanned<Path>,
-        expected_kind: PathResolutionResultKind,
-    ) -> Option<(InFile<Item>, ModuleId)> {
-        match self.try_get_item(path, expected_kind) {
-            Ok(res) => res,
-            Err(e) => {
-                self.diagnostics.push(e);
-                None
-            }
-        }
-    }
+    // pub(super) fn get_item(
+    //     &mut self,
+    //     path: &Spanned<Path>,
+    //     expected_kind: PathResolutionResultKind,
+    // ) -> Option<(InFile<Item>, ModuleId)> {
+    //     match self.try_get_item(path, expected_kind) {
+    //         Ok(res) => res,
+    //         Err(e) => {
+    //             self.diagnostics.push(e);
+    //             None
+    //         }
+    //     }
+    // }
 
     pub(super) fn try_get_item(
         &self,
@@ -45,7 +45,8 @@ impl<'a> LowerCtx<'a> {
                         ModuleDefId::FunctionId(id) => {
                             Item::Function(item_tree[id].clone()).in_file(file_id)
                         }
-                        _ => todo!(),
+                        ModuleDefId::ModuleId(_) => Item::Mod.in_file(file_id),
+                        _ => todo!("{:#?}", def_id),
                     };
                     (item, mod_id)
                 })
@@ -74,7 +75,7 @@ impl<'a> LowerCtx<'a> {
         let result = def_map.resolve_path(path, self.cur_module_id);
         result
             .map(|per_ns| {
-                per_ns.map(|(def_id, mod_id, vis)| {
+                per_ns.map(|(def_id, mod_id, _)| {
                     if let ModuleDefId::BuiltinType(builtin_type) = def_id {
                         return (
                             Item::BuiltinType(builtin_type).in_file(FileId::poisoned()),
@@ -86,6 +87,9 @@ impl<'a> LowerCtx<'a> {
                     let item = match def_id {
                         ModuleDefId::StructId(id) => {
                             Item::Struct(item_tree[id].clone()).in_file(file_id)
+                        }
+                        ModuleDefId::EnumId(id) => {
+                            Item::Enum(item_tree[id].clone()).in_file(file_id)
                         }
                         _ => todo!(),
                     };

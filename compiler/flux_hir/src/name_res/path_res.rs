@@ -95,7 +95,6 @@ impl DefMap {
             }
         };
         let mut curr_per_ns = self.resolve_name_in_module(original_module_id, name);
-        println!("{:?}", curr_per_ns);
 
         if curr_per_ns.is_none() {
             return Err(ResolvePathError::UnresolvedPath {

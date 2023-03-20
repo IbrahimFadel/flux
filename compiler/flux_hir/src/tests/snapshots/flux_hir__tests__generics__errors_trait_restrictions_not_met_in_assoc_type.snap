@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0041] Error: trait restrictions not met
+[E0044] Error: trait restrictions not met
     ,-[ main.flx:11:4]
     |
   7 |     type A is Bar + Bazz;

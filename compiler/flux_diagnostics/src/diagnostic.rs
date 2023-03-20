@@ -167,6 +167,9 @@ pub enum DiagnosticCode {
     UnresolvedStruct,
     AccessedPrivateItem,
     AccessedPrivateStruct,
+    UnknownEnumVariant,
+    EnumVariantMissingArg,
+    IncorrectNumArgsInEnumVariantInitialization,
 
     TypeMismatch,
     ConflictingTraitImplementations,

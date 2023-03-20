@@ -40,7 +40,7 @@ impl Driver {
             })?;
             let name = entry.file_name();
             if name == "main.flx" {
-                tracing::info!("found entry path: {:?}", entry.path());
+                tracing::trace!("found entry path: {:?}", entry.path());
                 return Ok(entry.path());
             }
         }

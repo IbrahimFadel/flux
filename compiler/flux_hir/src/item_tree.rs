@@ -57,6 +57,12 @@ pub struct FileItemTreeId<N: ItemTreeNode> {
     _p: PhantomData<N>,
 }
 
+impl From<FileItemTreeId<Enum>> for ModuleDefId {
+    fn from(value: FileItemTreeId<Enum>) -> Self {
+        ModuleDefId::EnumId(value.index)
+    }
+}
+
 impl From<FileItemTreeId<Function>> for ModuleDefId {
     fn from(value: FileItemTreeId<Function>) -> Self {
         ModuleDefId::FunctionId(value.index)

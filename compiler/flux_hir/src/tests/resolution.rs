@@ -170,3 +170,49 @@ pub struct Foo {}
 pub fn some_function() -> s32 { 0 }
 "#
 }
+
+errors! {
+    use_private_mod,
+    r#"
+//- ./main.flx
+
+mod foo;
+
+use foo::bar;
+
+fn main() {
+
+}
+
+//- ./foo.flx
+
+mod bar;
+
+//- ./foo/bar.flx
+
+pub fn test() {}
+"#
+}
+
+no_errors! {
+    use_mod_path_works,
+    r#"
+//- ./main.flx
+
+mod foo;
+
+use foo::bar;
+
+fn main() {
+    bar::test();
+}
+
+//- ./foo.flx
+
+pub mod bar;
+
+//- ./foo/bar.flx
+
+pub fn test() {}
+"#
+}

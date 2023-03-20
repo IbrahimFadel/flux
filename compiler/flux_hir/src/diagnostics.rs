@@ -412,4 +412,42 @@ pub(crate) enum LowerError {
         #[filespanned]
         path: String,
     },
+    #[error(
+        location = variant,
+        primary = "unknown enum variant",
+        label at variant = "unknown enum variant `{variant}` in enum `{eenum}`",
+    )]
+    UnknownEnumVariant {
+        eenum: String,
+        #[filespanned]
+        variant: String,
+    },
+    #[error(
+        location = initialization,
+        primary = "missing argument in enum variant initialization",
+        label at initialization = "missing argument in enum variant `{variant_name}` initialization",
+        label at variant_name = "variant `{variant_name}` defined here with argument type `{arg_type}`"
+    )]
+    EnumVariantMissingArg {
+        #[filespanned]
+        variant_name: String,
+        arg_type: String,
+        #[filespanned]
+        initialization: (),
+    },
+    #[error(
+        location = got_num,
+        primary = "incorrect number of arguments in enum variant initialization",
+        label at got_num = "incorrect number of arguments in enum variant `{variant_name}` initialization",
+        label at expected_num = "expected {expected_num} arguments",
+        label at got_num = "got {got_num} arguments"
+    )]
+    IncorrectNumArgsInEnumVariantInitialization {
+        #[filespanned]
+        variant_name: String,
+        #[filespanned]
+        expected_num: usize,
+        #[filespanned]
+        got_num: usize,
+    },
 }

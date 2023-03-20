@@ -10,8 +10,8 @@ use text_size::{TextRange, TextSize};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, Function, GenericParams, Mod, Name, Param, Params, Path, Struct, StructField,
-        StructFields, Trait, Type, TypeIdx, Use, Visibility, WherePredicate,
+        Apply, Enum, EnumVariant, Function, GenericParams, Mod, Name, Param, Params, Path, Struct,
+        StructField, StructFields, Trait, Type, TypeIdx, Use, Visibility, WherePredicate,
     },
     FunctionId,
 };
@@ -56,7 +56,7 @@ impl<'a> Ctx<'a> {
     fn lower_item(&mut self, item: &ast::Item) -> ModItem {
         match item {
             ast::Item::ApplyDecl(a) => self.lower_apply(a).into(),
-            ast::Item::EnumDecl(_) => todo!(),
+            ast::Item::EnumDecl(e) => self.lower_enum(e).into(),
             ast::Item::FnDecl(function) => self.lower_function(function).into(),
             ast::Item::ModDecl(m) => self.lower_mod(m).into(),
             ast::Item::StructDecl(s) => self.lower_struct(s).into(),
@@ -117,6 +117,21 @@ impl<'a> Ctx<'a> {
         id(self.tree.applies.alloc(res))
     }
 
+    fn lower_enum(&mut self, eenum: &ast::EnumDecl) -> FileItemTreeId<Enum> {
+        let visibility = self.lower_visibility(eenum.visibility());
+        let name = self.body_ctx.lower_name(eenum.name());
+        let generic_params =
+            self.lower_generic_params(eenum.generic_param_list(), eenum.where_clause(), name.span);
+        let variants = self.lower_enum_variants(eenum.variants(), &generic_params);
+        let res = Enum {
+            visibility,
+            name,
+            generic_params,
+            variants,
+        };
+        id(self.tree.enums.alloc(res))
+    }
+
     fn lower_function(&mut self, function: &ast::FnDecl) -> FileItemTreeId<Function> {
         let visibility = self.lower_visibility(function.visibility());
         let name = self.body_ctx.lower_name(function.name());
@@ -158,6 +173,22 @@ impl<'a> Ctx<'a> {
             fields,
         };
         id(self.tree.structs.alloc(res))
+    }
+
+    fn lower_enum_variants(
+        &mut self,
+        variants: impl Iterator<Item = ast::EnumDeclVariant>,
+        generic_params: &GenericParams,
+    ) -> Vec<EnumVariant> {
+        variants
+            .map(|variant| {
+                let name = self.body_ctx.lower_name(variant.name());
+                let ty = variant
+                    .ty()
+                    .map(|ty| self.body_ctx.lower_type(Some(ty), generic_params));
+                EnumVariant { name, ty }
+            })
+            .collect()
     }
 
     fn lower_struct_fields(
