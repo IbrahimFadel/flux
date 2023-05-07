@@ -1,52 +1,32 @@
 use flux_lexer::TokenKind;
 use flux_syntax::SyntaxKind;
 
-use crate::{parser::Parser, token_set::TokenSet};
+use crate::parser::Parser;
 
-use self::{
-    apply_decl::apply_decl, enum_decl::enum_decl, fn_decl::fn_decl, mod_decl::mod_decl,
-    struct_decl::struct_decl, trait_decl::trait_decl, use_decl::use_decl,
-};
-
-mod apply_decl;
-mod enum_decl;
-mod fn_decl;
+mod apply;
+mod r#enum;
+mod function;
 mod mod_decl;
-mod struct_decl;
-mod trait_decl;
-mod use_decl;
-
-const ITEM_RECOVERY_SET: TokenSet = TokenSet::new(&[
-    TokenKind::Fn,
-    TokenKind::Struct,
-    TokenKind::Enum,
-    TokenKind::Trait,
-    TokenKind::Let,
-    TokenKind::Mod,
-    TokenKind::Pub,
-    TokenKind::Use,
-    TokenKind::SemiColon,
-]);
+mod r#struct;
+mod r#trait;
+mod r#use;
 
 pub(crate) fn item(p: &mut Parser) {
     let m = p.start();
     p.eat(TokenKind::Pub);
     let m = m.complete(p, SyntaxKind::Visibility);
-    if p.at(TokenKind::Fn) {
-        fn_decl(p, m);
-    } else if p.at(TokenKind::Struct) {
-        struct_decl(p, m);
-    } else if p.at(TokenKind::Enum) {
-        enum_decl(p, m);
-    } else if p.at(TokenKind::Trait) {
-        trait_decl(p, m);
-    } else if p.at(TokenKind::Apply) {
-        apply_decl(p, m);
-    } else if p.at(TokenKind::Use) {
-        use_decl(p, m);
-    } else if p.at(TokenKind::Mod) {
-        mod_decl(p, m);
-    } else {
-        p.err_and_bump("expected item");
+    match p.peek() {
+        TokenKind::Apply => apply::decl(p, m),
+        TokenKind::Enum => r#enum::decl(p, m),
+        TokenKind::Fn => function::decl(p, m),
+        TokenKind::Mod => mod_decl::decl(p, m),
+        TokenKind::Struct => r#struct::decl(p, m),
+        TokenKind::Trait => r#trait::trait_decl(p, m),
+        TokenKind::Use => r#use::decl(p, m),
+        _ => {
+            p.err_and_bump(
+                "expected one of `apply`, `enum`, `fn`, `mod`, `struct`, `trait`, `use`",
+            );
+        }
     }
 }

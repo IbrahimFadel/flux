@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0031] Error: associated type do not belong in apply
+[E0030] Error: associated type do not belong in apply
     ,-[ main.flx:12:16]
     |
  12 |     type C = s32;

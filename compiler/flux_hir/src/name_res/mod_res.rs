@@ -17,6 +17,12 @@ impl ModDir {
         }
     }
 
+    pub(super) fn prelude() -> ModDir {
+        let mut dir_path = DirPath::empty();
+        dir_path.push("prelude");
+        ModDir { dir_path, depth: 1 }
+    }
+
     fn child(&self, dir_path: DirPath) -> Option<ModDir> {
         let depth = self.depth + 1;
         // if MOD_DEPTH_LIMIT.check(depth as usize).is_err() {
@@ -99,11 +105,12 @@ impl DirPath {
     fn empty() -> DirPath {
         DirPath::new(String::new())
     }
-    // fn push(&mut self, name: &str) {
-    //     self.0.push_str(name);
-    //     self.0.push('/');
-    //     self.assert_invariant();
-    // }
+
+    fn push(&mut self, name: &str) {
+        self.0.push_str(name);
+        self.0.push('/');
+        self.assert_invariant();
+    }
     // fn parent(&self) -> Option<&str> {
     //     if self.0.is_empty() {
     //         return None;

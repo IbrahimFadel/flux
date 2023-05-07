@@ -1,11 +1,8 @@
-use cstree::TextRange;
 use flux_lexer::{Token, TokenKind};
-use flux_span::{FileSpanned, Span, Spanned};
 use flux_syntax::SyntaxKind;
 
 use crate::{
-    diagnostics::ParserDiagnostic, event::Event, grammar::item::item, marker::Marker,
-    source::Source, token_set::TokenSet,
+    event::Event, grammar::item::item, marker::Marker, source::Source, token_set::TokenSet,
 };
 
 pub(super) struct Parser<'a, 'src> {
@@ -38,11 +35,11 @@ impl<'a, 'src> Parser<'a, 'src> {
         Marker::new(pos)
     }
 
-    pub(crate) fn expect(&mut self, kind: TokenKind) -> bool {
+    pub(crate) fn expect(&mut self, kind: TokenKind, parent: &str) -> bool {
         if self.eat(kind) {
             return true;
         }
-        self.error(format!("expected {kind}"));
+        self.expected(&format!("`{kind}`"), parent);
         false
     }
 
@@ -55,24 +52,41 @@ impl<'a, 'src> Parser<'a, 'src> {
     }
 
     pub(crate) fn at(&mut self, kind: TokenKind) -> bool {
-        self.peek() == Some(kind)
+        self.peek() == kind
     }
 
     pub(crate) fn at_set(&mut self, set: TokenSet) -> bool {
-        self.peek().map_or(false, |k| set.contains(k))
+        set.contains(self.peek())
     }
 
     pub(crate) fn at_end(&mut self) -> bool {
-        self.peek().is_none()
+        self.at(TokenKind::EOF)
     }
 
     pub(crate) fn error<T: Into<String>>(&mut self, msg: T) {
-        let range = self.peek_range().unwrap_or_default();
-        let msg = msg.into();
-        self.events.push(Event::Error(ParserDiagnostic::Unxpected {
-            expected: FileSpanned::new(Spanned::new(msg, Span::new(range)), self.source.file_id),
-        }));
+        self.events.push(Event::Error(msg.into()));
     }
+
+    pub(crate) fn expected(&mut self, token: &str, parent: &str) {
+        let msg = format!("expected {token} in {parent}");
+        self.events.push(Event::Error(msg));
+    }
+
+    // pub(crate) fn update_last_error_expected(&mut self, token: &str, parent: &str) {
+    //     let msg = format!("expected {token} in {parent}");
+    //     let last_error = self
+    //         .events
+    //         .iter_mut()
+    //         .rev()
+    //         .find(|event| match event {
+    //             Event::Error(_) => true,
+    //             _ => false,
+    //         })
+    //         .unwrap_or_else(|| {
+    //             flux_diagnostics::ice("tried updating last error but there are no errors")
+    //         });
+    //     *last_error = Event::Error(msg);
+    // }
 
     pub(crate) fn err_recover(&mut self, msg: &str, recovery_set: TokenSet) {
         if self.at_set(recovery_set) {
@@ -101,27 +115,111 @@ impl<'a, 'src> Parser<'a, 'src> {
     }
 
     pub(crate) fn loop_safe_not_at(&mut self, kind: TokenKind) -> bool {
-        !(self.at(kind) || self.at_end() || self.at(TokenKind::Error))
+        !(self.at(kind) || self.at_end())
     }
 
-    pub(crate) fn current(&mut self) -> TokenKind {
-        self.source.peek_kind().unwrap_or(TokenKind::Error)
-    }
-
-    fn peek(&mut self) -> Option<TokenKind> {
-        self.source.peek_kind()
+    pub(crate) fn peek(&mut self) -> TokenKind {
+        self.source.peek_kind().unwrap_or(TokenKind::EOF)
     }
 
     fn peek_token(&mut self) -> Option<&'a Token<'src>> {
         self.source.peek_token()
     }
 
-    fn peek_range(&mut self) -> Option<TextRange> {
-        self.source.peek_range()
-    }
-
     fn do_bump(&mut self) {
         self.source.next_token(); // Don't unwrap because we could have the EOF next
         self.events.push(Event::AddToken);
+    }
+
+    pub(crate) fn recover_for(&mut self, tokens: TokenSet) -> TokenKind {
+        loop {
+            let t = self.peek();
+
+            if tokens.contains(t) {
+                break t;
+            }
+
+            self.bump_any();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cstree::TextRange;
+    use flux_lexer::{Token, TokenKind};
+
+    use crate::{source::Source, token_set::TokenSet};
+
+    use super::Parser;
+
+    macro_rules! parser_with {
+        ($toks:expr) => {
+            Parser::new(Source::new($toks))
+        };
+    }
+
+    macro_rules! tok {
+        ($kind:expr) => {
+            Token {
+                kind: $kind,
+                text: "<tok>",
+                range: TextRange::new(0.into(), 0.into()),
+            }
+        };
+        ($kind:expr, $text:expr) => {
+            Token {
+                kind: $kind,
+                text: $text,
+                range: TextRange::new(0.into(), 0.into()),
+            }
+        };
+    }
+
+    #[test]
+    fn peek_skips_trivia() {
+        let toks = &[tok!(TokenKind::Whitespace), tok!(TokenKind::Ampersand)];
+        let mut p = parser_with!(toks);
+        assert_eq!(p.peek(), TokenKind::Ampersand);
+    }
+
+    #[test]
+    fn basic_functionality() {
+        let toks = &[tok!(TokenKind::Ampersand), tok!(TokenKind::Apply)];
+        let mut p = parser_with!(toks);
+        assert_eq!(p.peek(), TokenKind::Ampersand);
+        assert_eq!(p.peek(), TokenKind::Ampersand);
+        p.bump(TokenKind::Ampersand);
+
+        assert_eq!(p.eat(TokenKind::Arrow), false);
+        assert_eq!(p.peek(), TokenKind::Apply);
+        assert_eq!(p.eat(TokenKind::Apply), true);
+
+        assert_eq!(p.peek(), TokenKind::EOF);
+    }
+
+    #[test]
+    fn gives_eof_token() {
+        let mut p = parser_with!(&[]);
+        assert_eq!(p.peek(), TokenKind::EOF);
+    }
+
+    #[test]
+    fn recovery() {
+        let toks = &[tok!(TokenKind::LParen)];
+        let mut p = parser_with!(toks);
+        assert_eq!(p.expect(TokenKind::Ident, "function name"), false);
+        let recovered_to = p.recover_for(TokenSet::new(&[TokenKind::LParen]));
+        assert_eq!(recovered_to, TokenKind::LParen);
+
+        let toks = &[
+            tok!(TokenKind::Ampersand),
+            tok!(TokenKind::Ampersand),
+            tok!(TokenKind::LParen),
+        ];
+        let mut p = parser_with!(toks);
+        assert_eq!(p.expect(TokenKind::Ident, "function name"), false);
+        let recovered_to = p.recover_for(TokenSet::new(&[TokenKind::LParen]));
+        assert_eq!(recovered_to, TokenKind::LParen);
     }
 }

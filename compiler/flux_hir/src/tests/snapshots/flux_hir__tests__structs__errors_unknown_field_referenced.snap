@@ -22,7 +22,7 @@ let x <unknown type> = foo.x;
 
 Diagnostics
 
-[E0030] Error: could not find field
+[E0029] Error: could not find field
    ,-[ main.flx:8:10]
    |
  8 |     let x = foo.x;

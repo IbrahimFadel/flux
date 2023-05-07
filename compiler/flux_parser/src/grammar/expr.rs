@@ -65,7 +65,7 @@ fn current_op_prec(p: &mut Parser) -> u8 {
     // } else {
     //     0
     // }
-    match p.current() {
+    match p.peek() {
         TokenKind::Eq => 2,
         TokenKind::CmpEq
         | TokenKind::CmpNeq
@@ -86,7 +86,7 @@ fn expr_binding_power(
 ) -> Option<CompletedMarker> {
     let mut lhs = lhs(p, restrictions)?;
     loop {
-        let op = p.current();
+        let op = p.peek();
         let op_bp = current_op_prec(p);
         if op_bp < minimum_binding_power {
             break;
@@ -108,7 +108,7 @@ fn expr_binding_power(
 
 fn lhs(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker> {
     let m;
-    let kind = match p.current() {
+    let kind = match p.peek() {
         TokenKind::Ampersand => {
             m = p.start();
             p.bump(TokenKind::Ampersand);
@@ -143,7 +143,7 @@ fn lhs(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker
 
 fn postfix_expr(p: &mut Parser, mut lhs: CompletedMarker) -> CompletedMarker {
     loop {
-        lhs = match p.current() {
+        lhs = match p.peek() {
             TokenKind::LParen => call_expr(p, lhs),
             TokenKind::LSquare => idx_expr(p, lhs),
             TokenKind::Period => member_access_expr(p, lhs),
@@ -156,7 +156,7 @@ fn postfix_expr(p: &mut Parser, mut lhs: CompletedMarker) -> CompletedMarker {
 fn cast_expr(p: &mut Parser, lhs: CompletedMarker) -> CompletedMarker {
     let m = lhs.precede(p);
     p.bump(TokenKind::As);
-    type_(p);
+    type_(p, "cast expression");
     m.complete(p, SyntaxKind::CastExpr)
 }
 
@@ -176,7 +176,11 @@ fn idx_expr(p: &mut Parser, callee: CompletedMarker) -> CompletedMarker {
 fn member_access_expr(p: &mut Parser, lhs: CompletedMarker) -> CompletedMarker {
     let m = lhs.precede(p);
     p.bump(TokenKind::Period);
-    name(p, TokenSet::new(&[TokenKind::SemiColon]));
+    name(
+        p,
+        TokenSet::new(&[TokenKind::SemiColon]),
+        "member access expression",
+    );
     m.complete(p, SyntaxKind::MemberAccessExpr)
 }
 
@@ -187,11 +191,11 @@ fn arg_list(p: &mut Parser) {
         if !expr(p) {
             break;
         }
-        if !p.at(TokenKind::RParen) && !p.expect(TokenKind::Comma) {
+        if !p.at(TokenKind::RParen) && !p.expect(TokenKind::Comma, "argument list") {
             break;
         }
     }
-    p.expect(TokenKind::RParen);
+    p.expect(TokenKind::RParen, "argument list");
     m.complete(p, SyntaxKind::ArgList);
 }
 
@@ -212,9 +216,13 @@ fn stmt(p: &mut Parser) {
 fn let_stmt(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
     p.bump(TokenKind::Let);
-    name(p, TokenSet::new(&[TokenKind::Eq, TokenKind::SemiColon]));
+    name(
+        p,
+        TokenSet::new(&[TokenKind::Eq, TokenKind::SemiColon]),
+        "let expression",
+    );
     if !p.at(TokenKind::Eq) {
-        type_(p);
+        type_(p, "let expression");
     }
     if p.eat(TokenKind::Eq) {
         expr(p);
@@ -224,6 +232,6 @@ fn let_stmt(p: &mut Parser) -> CompletedMarker {
             TokenSet::new(&[TokenKind::SemiColon, TokenKind::RBrace]),
         );
     }
-    p.expect(TokenKind::SemiColon);
+    p.expect(TokenKind::SemiColon, "let expression");
     m.complete(p, SyntaxKind::LetStmt)
 }

@@ -10,7 +10,11 @@ tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 tracing-tree = "0.2.2"
 itertools = "0.10.5"
-la-arena = "0.2.1"
+la-arena = "0.3.0"
+toml = "0.7.3"
+serde = { version = "1.0.159", features = ["derive"] }
+clap = { version = "4.2.5", default-features = true, features = ["std", "derive"] }
+pretty = "0.12.1"
 
 flux_diagnostics = { path = "../flux_diagnostics" }
 flux_parser = { path = "../flux_parser" }

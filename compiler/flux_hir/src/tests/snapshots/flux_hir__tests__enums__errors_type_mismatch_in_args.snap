@@ -19,7 +19,7 @@ let x <unknown type> = Foo::A(0)(0);
 
 Diagnostics
 
-[E0040] Error: type mismatch
+[E0039] Error: type mismatch
    ,-[ main.flx:8:13]
    |
  4 |     A -> s32,

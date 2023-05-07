@@ -20,7 +20,7 @@ let x u32 = Foo::B(0)(0);
 
 Diagnostics
 
-[E0040] Error: type mismatch
+[E0039] Error: type mismatch
    ,-[ main.flx:9:9]
    |
  9 |     let x u32 = Foo::A;
@@ -31,7 +31,7 @@ Diagnostics
    |            |    
    |            `---- `Foo`
 ---'
-[E0040] Error: type mismatch
+[E0039] Error: type mismatch
     ,-[ main.flx:10:8]
     |
  10 |     let x u32 = Foo::B(0);

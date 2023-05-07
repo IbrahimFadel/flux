@@ -23,7 +23,7 @@ foo(0)
 
 Diagnostics
 
-[E0044] Error: trait restrictions not met
+[E0043] Error: trait restrictions not met
    ,-[ main.flx:8:2]
    |
  5 | fn foo<T>(x T) where T is Foo {}

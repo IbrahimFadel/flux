@@ -19,7 +19,7 @@ fn bar<T>() -> () where T is NotFoo {
 
 Diagnostics
 
-[E0019] Error: where predicate in apply declaration method does not match trait declaration
+[E0018] Error: where predicate in apply declaration method does not match trait declaration
     ,-[ main.flx:14:15]
     |
   4 |     fn bar<T>() where T is Foo;
@@ -34,7 +34,7 @@ Diagnostics
     |                  |    
     |                  `---- where predicate in apply declaration method `NotFoo`
 ----'
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
     ,-[ main.flx:13:18]
     |
  13 | apply Bar to Bazz {

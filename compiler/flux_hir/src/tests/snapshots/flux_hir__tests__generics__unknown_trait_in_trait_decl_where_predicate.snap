@@ -1,0 +1,22 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+trait Foo<A>  where A is Bar {
+    
+    
+}
+
+
+Diagnostics
+
+[E0010] Error: unresolved trait
+   ,-[ main.flx:4:13]
+   |
+ 4 |     where A is Bar
+   |             ^|^  
+   |              `--- unresolved trait `Bar`
+---'
+

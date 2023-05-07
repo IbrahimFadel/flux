@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
    ,-[ main.flx:3:10]
    |
  3 | enum Result<A, B, C> {

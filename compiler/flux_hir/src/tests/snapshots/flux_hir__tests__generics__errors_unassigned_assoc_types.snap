@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0032] Error: missing associated types in apply
+[E0031] Error: missing associated types in apply
    ,-[ main.flx:7:2]
    |
  7 | ,-> }

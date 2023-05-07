@@ -15,14 +15,14 @@ Module Id: 0
 
 Diagnostics
 
-[E0011] Error: unresolved trait
+[E0010] Error: unresolved trait
    ,-[ main.flx:4:12]
    |
  4 |     type A is Bar + Bazz;
    |            ^|^  
    |             `--- unresolved trait `Bar`
 ---'
-[E0011] Error: unresolved trait
+[E0010] Error: unresolved trait
    ,-[ main.flx:4:18]
    |
  4 |     type A is Bar + Bazz;

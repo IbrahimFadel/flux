@@ -19,7 +19,7 @@ x
 
 Diagnostics
 
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
    ,-[ main.flx:3:5]
    |
  3 | fn foo<X, Y>(x X) -> X {

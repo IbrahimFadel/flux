@@ -19,7 +19,7 @@ Module Id: 2
 
 Diagnostics
 
-[E0014] Error: cannot access private path segment
+[E0013] Error: cannot access private path segment
    ,-[ ./main.flx:7:8]
    |
  7 | apply Bar to foo::Foo {}

@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0022] Error: incorrect number of generic arguments in where predicate
+[E0021] Error: incorrect number of generic arguments in where predicate
     ,-[ main.rs:10:7]
     |
   4 | trait Bar<T> {}

@@ -1,81 +1,49 @@
-#![feature(more_qualified_paths)]
+use std::ffi::OsString;
 
-use std::{env, fs, path::PathBuf};
-
-use diagnostics::DriverError;
-use flux_diagnostics::{reporting::FileCache, ToDiagnostic};
-use flux_hir::BasicFileResolver;
+use clap::{Parser, Subcommand};
+use commands::build;
 use lasso::ThreadedRodeo;
 use once_cell::sync::Lazy;
 
+mod cfg;
+mod commands;
 mod diagnostics;
-#[cfg(test)]
-mod tests;
+mod driver;
 
-pub static STRING_INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
+static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 
-struct Driver {
-    file_cache: FileCache,
-    project_dir: PathBuf,
+#[derive(Debug)]
+pub enum ExitStatus {
+    Success,
+    Failure,
 }
 
-impl Driver {
-    pub fn new(project_dir: PathBuf, interner: &'static ThreadedRodeo) -> Self {
-        Self {
-            file_cache: FileCache::new(interner),
-            project_dir,
-        }
-    }
-
-    fn find_entry_file(&self) -> Result<PathBuf, DriverError> {
-        let project_dir_str = self.project_dir.to_str().unwrap();
-        let dir_entries = fs::read_dir(&self.project_dir).map_err(|_| {
-            tracing::warn!("could not read directory `{project_dir_str}`");
-            DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
-        })?;
-        for entry in dir_entries {
-            let entry = entry.map_err(|e| {
-                tracing::warn!("could not read entry `{}`", e);
-                DriverError::ReadDir(format!("could not read directory `{project_dir_str}`"))
-            })?;
-            let name = entry.file_name();
-            if name == "main.flx" {
-                tracing::trace!("found entry path: {:?}", entry.path());
-                return Ok(entry.path());
-            }
-        }
-        tracing::warn!("could not find entry file `{project_dir_str}`");
-        Err(DriverError::FindEntryFile)
-    }
-
-    fn build(&mut self) {
-        let entry_path = match self.find_entry_file() {
-            Ok(path) => path,
-            Err(err) => return self.file_cache.report_diagnostic(&err.to_diagnostic()),
-        };
-        let (def_map, mut types, diagnostics) = flux_hir::build_def_map(
-            entry_path.to_str().unwrap(),
-            &mut self.file_cache,
-            &STRING_INTERNER,
-            &BasicFileResolver,
-        );
-        self.file_cache.report_diagnostics(&diagnostics);
-
-        let (_lowered_bodies, diagnostics) =
-            flux_hir::lower_def_map_bodies(&def_map, &STRING_INTERNER, &mut types);
-        self.file_cache.report_diagnostics(&diagnostics);
-    }
+#[derive(Parser, Debug)]
+#[command(name = "Flux")]
+#[command(author = "Ibrahim F. <ibrahim.m.fadel@gmail.com>")]
+#[command(version = "1.0")]
+#[command(about = "The Flux Compiler", long_about = None)]
+#[command(propagate_version = true)]
+struct Args {
+    #[clap(subcommand)]
+    command: Command,
 }
 
-pub fn build() {
-    let args: Vec<_> = env::args().collect();
-    let project_dir = if args.len() > 1 {
-        let mut buf = PathBuf::new();
-        buf.push(&args[1]);
-        buf
-    } else {
-        env::current_dir().unwrap()
-    };
-    let mut driver = Driver::new(project_dir, &STRING_INTERNER);
-    driver.build();
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Build
+    ///
+    /// Build a flux project without running it
+    Build(build::Args),
+}
+
+pub fn run_with_args<T, I>(args: I) -> ExitStatus
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let args = Args::parse_from(args);
+    match args.command {
+        Command::Build(args) => build::build(args),
+    }
 }

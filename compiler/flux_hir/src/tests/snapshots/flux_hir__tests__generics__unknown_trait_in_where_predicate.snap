@@ -1,0 +1,27 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+fn foo<T>() -> () where T is Foo {
+    
+}
+
+Diagnostics
+
+[E0010] Error: unresolved trait
+   ,-[ main.flx:3:22]
+   |
+ 3 | fn foo<T>() where T is Foo {}
+   |                      ^|^  
+   |                       `--- unresolved trait `Foo`
+---'
+[E0020] Error: unused generic parameters
+   ,-[ main.flx:3:5]
+   |
+ 3 | fn foo<T>() where T is Foo {}
+   |     ^|^  
+   |      `--- unused generic parameters `T`
+---'
+

@@ -1,4 +1,0 @@
-pub struct BazzStruct {
-    x Hi,
-    y i32,
-}

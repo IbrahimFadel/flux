@@ -1,0 +1,27 @@
+---
+source: compiler/flux_hir/src/tests/enums.rs
+expression: s
+---
+//  main.flx
+
+
+fn main() -> () {
+    let x Foo = Foo::A(0)(0);
+}
+
+Diagnostics
+
+[E0039] Error: type mismatch
+   ,-[ main.flx:8:13]
+   |
+ 4 |     A -> s32,
+   |       ^|^  
+   |        `--- `s32`
+   | 
+ 8 |     let x = Foo::A(0.0);
+   |             ^|^  
+   |              `--- type mismatch between `s32` and `float`
+   |              |   
+   |              `--- `float`
+---'
+

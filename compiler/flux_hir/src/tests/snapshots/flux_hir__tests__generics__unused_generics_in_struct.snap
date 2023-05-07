@@ -1,0 +1,30 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.rs
+
+struct Bazz<T>  {
+}
+
+struct Bazz<A, B, C>  {
+A a}
+
+
+Diagnostics
+
+[E0020] Error: unused generic parameters
+   ,-[ main.rs:3:10]
+   |
+ 3 | struct Bazz<T> {}
+   |          ^|^  
+   |           `--- unused generic parameters `T`
+---'
+[E0020] Error: unused generic parameters
+   ,-[ main.rs:5:8]
+   |
+ 5 | struct Bazz<A, B, C> {
+   |        ^^^^|^^^^  
+   |            `------ unused generic parameters `B`, `C`
+---'
+

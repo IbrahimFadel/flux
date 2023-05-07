@@ -125,4 +125,13 @@ pub enum TypeError {
         // The name of specific int types at the span of the application
         applications: Vec<FileSpanned<String>>,
     },
+    #[error(
+        location = ty,
+        primary = "could not infer type",
+        label at ty = "could not infer type"
+    )]
+    CouldNotInferType {
+        #[filespanned]
+        ty: (),
+    },
 }

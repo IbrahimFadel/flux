@@ -59,10 +59,16 @@ fn paren_or_tuple_expr(p: &mut Parser) -> CompletedMarker {
         }
         if !p.at(TokenKind::RParen) {
             comma = true;
-            p.expect(TokenKind::Comma);
+            p.expect(TokenKind::Comma, "tuple expression");
         }
     }
-    p.expect(TokenKind::RParen);
+    p.expect(
+        TokenKind::RParen,
+        match comma {
+            true => "tuple expression",
+            false => "parentheses expression",
+        },
+    );
     let kind = match comma {
         true => SyntaxKind::TupleExpr,
         false => SyntaxKind::ParenExpr,
@@ -81,11 +87,11 @@ pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
     ```
     the `->` before return type was omitted, so now we are at `test`, not `->`
     */
-    p.expect(TokenKind::LBrace);
+    p.expect(TokenKind::LBrace, "block expression");
     while p.loop_safe_not_at(TokenKind::RBrace) {
         stmt(p);
     }
-    p.expect(TokenKind::RBrace);
+    p.expect(TokenKind::RBrace, "block expression");
     m.complete(p, SyntaxKind::BlockExpr)
 }
 
@@ -94,7 +100,7 @@ fn path_or_complex_type_expr(p: &mut Parser, restrictions: ExprRestrictions) -> 
     p.bump(TokenKind::Ident);
     while p.at(TokenKind::DoubleColon) {
         p.bump(TokenKind::DoubleColon);
-        if !p.expect(TokenKind::Ident) {
+        if !p.expect(TokenKind::Ident, "path") {
             break;
         }
     }
@@ -122,14 +128,18 @@ fn struct_expr_field_list(p: &mut Parser) {
             p.error("expected `,` separating struct expression fields");
         }
     }
-    p.expect(TokenKind::RBrace);
+    p.expect(TokenKind::RBrace, "struct expression field list");
     m.complete(p, SyntaxKind::StructExprFieldList);
 }
 
 fn struct_expr_field(p: &mut Parser) {
     let m = p.start();
-    name(p, TokenSet::new(&[TokenKind::Colon]));
-    p.expect(TokenKind::Colon);
+    name(
+        p,
+        TokenSet::new(&[TokenKind::Colon]),
+        "struct expression field",
+    );
+    p.expect(TokenKind::Colon, "struct expression field");
     expr(p);
     m.complete(p, SyntaxKind::StructExprField);
 }

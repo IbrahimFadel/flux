@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0011] Error: unresolved trait
+[E0010] Error: unresolved trait
    ,-[ main.flx:4:13]
    |
  4 |     where A is Bar

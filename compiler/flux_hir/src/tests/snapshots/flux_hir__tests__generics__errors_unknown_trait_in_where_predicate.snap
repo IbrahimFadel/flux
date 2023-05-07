@@ -19,14 +19,14 @@ fn foo<T>() -> () where T is Foo {
 
 Diagnostics
 
-[E0011] Error: unresolved trait
+[E0010] Error: unresolved trait
    ,-[ main.flx:3:22]
    |
  3 | fn foo<T>() where T is Foo {}
    |                      ^|^  
    |                       `--- unresolved trait `Foo`
 ---'
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
    ,-[ main.flx:3:5]
    |
  3 | fn foo<T>() where T is Foo {}

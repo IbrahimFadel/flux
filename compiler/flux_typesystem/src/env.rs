@@ -6,6 +6,7 @@ use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
 use std::collections::HashSet;
+use tracing::Instrument;
 
 use crate::{
     diagnostics::TypeError,
@@ -214,6 +215,41 @@ impl TEnv {
                 },
                 Ok,
             )
+    }
+
+    pub fn reconstruct(&self, tid: TypeId) -> Result<TypeKind, Diagnostic> {
+        let tkind = self.get_typekind_with_id(tid);
+        match &tkind.inner.inner {
+            TypeKind::Concrete(_) => Ok(tkind.inner.inner),
+            TypeKind::Float(float) => match float {
+                Some(id) => self.reconstruct(*id),
+                None => Ok(TypeKind::Concrete(ConcreteKind::Path(
+                    self.string_interner.get_or_intern_static("f32"),
+                ))),
+            },
+            TypeKind::Generic(_, _) => todo!(),
+            TypeKind::Int(int) => match int {
+                Some(id) => self.reconstruct(*id),
+                None => Ok(TypeKind::Concrete(ConcreteKind::Path(
+                    self.string_interner.get_or_intern_static("u32"),
+                ))),
+            },
+            TypeKind::Ref(id) => self.reconstruct(*id),
+            TypeKind::Unknown => Err(TypeError::CouldNotInferType {
+                ty: (),
+                ty_file_span: self.get_type_filespan(tid),
+            }
+            .to_diagnostic()),
+        }
+    }
+
+    pub fn reconstruct_concrete(&self, concrete: &ConcreteKind) -> Result<TypeKind, Diagnostic> {
+        match concrete {
+            ConcreteKind::Array(_, _) => todo!(),
+            ConcreteKind::Ptr(_) => todo!(),
+            ConcreteKind::Path(_) => todo!(),
+            ConcreteKind::Tuple(_) => todo!(),
+        }
     }
 
     /// Format a `flux_typesystem` [`TypeId`] to a `String`

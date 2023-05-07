@@ -1,0 +1,32 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+trait Foo  {
+    
+    
+}
+
+fn foo<T>(x T: Foo) -> () where T is Foo {
+    
+}
+fn main() -> () {
+    foo(0)
+}
+
+Diagnostics
+
+[E0043] Error: trait restrictions not met
+   ,-[ main.flx:8:2]
+   |
+ 5 | fn foo<T>(x T) where T is Foo {}
+   |                       ^|^  
+   |                        `--- restriction `Foo` defined here
+   | 
+ 8 |     foo(0)
+   |  |  
+   |  `-- trait restriction `Foo` not met for type `int`
+---'
+

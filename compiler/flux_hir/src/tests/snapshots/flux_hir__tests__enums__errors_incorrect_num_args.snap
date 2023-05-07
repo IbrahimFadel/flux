@@ -19,7 +19,7 @@ let x <unknown type> = Foo::A(0)(0, 0);
 
 Diagnostics
 
-[E0039] Error: incorrect number of arguments in enum variant initialization
+[E0038] Error: incorrect number of arguments in enum variant initialization
    ,-[ main.flx:8:12]
    |
  4 |     A -> s32,

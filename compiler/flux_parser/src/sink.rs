@@ -1,10 +1,11 @@
-use cstree::{GreenNodeBuilder, Language};
+use cstree::{interning::TokenInterner, GreenNodeBuilder, Language, TextRange};
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_lexer::Token;
+use flux_span::{FileId, ToSpan, WithSpan};
 use flux_syntax::{FluxLanguage, SyntaxKind};
 use lasso::ThreadedRodeo;
 
-use crate::{event::Event, Parse};
+use crate::{diagnostics::ParserDiagnostic, event::Event, Parse};
 
 pub struct Sink<'t, 'src> {
     builder: GreenNodeBuilder<'static, 'static, &'static ThreadedRodeo>,
@@ -29,7 +30,7 @@ impl<'t, 'src> Sink<'t, 'src> {
         }
     }
 
-    pub(crate) fn finish(mut self) -> Parse {
+    pub(crate) fn finish(mut self, file_id: FileId) -> Parse {
         for idx in 0..self.events.len() {
             match std::mem::replace(&mut self.events[idx], Event::Placeholder) {
                 Event::StartNode {
@@ -63,8 +64,22 @@ impl<'t, 'src> Sink<'t, 'src> {
                 }
                 Event::AddToken => self.token(),
                 Event::FinishNode => self.builder.finish_node(),
-                Event::Error(diagnostic) => {
-                    self.diagnostics.push(diagnostic.to_diagnostic());
+                Event::Error(msg) => {
+                    let range = self
+                        .tokens
+                        .get(self.cursor)
+                        .map(|token| token.range)
+                        .unwrap_or_else(|| {
+                            self.tokens
+                                .last()
+                                .map_or(TextRange::new(0.into(), 0.into()), |token| token.range)
+                        });
+                    self.diagnostics.push(
+                        ParserDiagnostic::Unxpected {
+                            expected: msg.file_span(file_id, range.to_span()),
+                        }
+                        .to_diagnostic(),
+                    );
                     self.builder
                         .start_node(FluxLanguage::kind_to_raw(SyntaxKind::Poisoned));
                     self.builder.finish_node();
@@ -79,8 +94,6 @@ impl<'t, 'src> Sink<'t, 'src> {
 
         Parse {
             green_node: tree,
-            // resolver: cache.unwrap().into().unwrap().into_resolver(),
-            resolver: cache.unwrap().interner(),
             diagnostics: self.diagnostics,
         }
     }

@@ -1,6 +1,9 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, Spanned, ToSpan, WithSpan};
-use flux_syntax::ast::{self, AstNode};
+use flux_syntax::{
+    ast::{self, AstNode},
+    SyntaxToken,
+};
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TypeId, TypeKind};
 use hashbrown::HashMap;
 use la_arena::{Arena, Idx, RawIdx};
@@ -9,8 +12,8 @@ use lasso::{Spur, ThreadedRodeo};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, Item, Let,
-        MemberAccess, MemberAccessKind, Name, Path, Struct, StructExpr, StructExprField,
+        Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, Item, Let,
+        MemberAccess, MemberAccessKind, Name, Op, Path, Struct, StructExpr, StructExprField,
         StructField, Trait, Type, TypeIdx, Typed, WherePredicate, WithType,
     },
     item_tree::ItemTree,
@@ -21,23 +24,22 @@ use crate::{
 mod apply;
 mod resolve;
 
-//todo:
-// type Typed<ExprIdx> = Typed<ExprIdx>;
-
 #[derive(Debug)]
 pub struct LoweredBodies {
     pub exprs: Arena<Spanned<Expr>>,
     pub types: Arena<Spanned<Type>>,
+    pub tid_to_tkind: HashMap<TypeId, Type>,
     pub indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
 }
 
 pub(crate) struct LowerCtx<'a> {
     def_map: Option<&'a DefMap>,
     cur_module_id: ModuleId,
-    tchk: TChecker,
+    pub tchk: TChecker,
     string_interner: &'static ThreadedRodeo,
     exprs: Arena<Spanned<Expr>>,
     pub types: &'a mut Arena<Spanned<Type>>,
+    tid_to_tidx: HashMap<TypeId, TypeIdx>,
     diagnostics: Vec<Diagnostic>,
     indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
 }
@@ -54,6 +56,7 @@ impl<'a> LowerCtx<'a> {
             string_interner,
             exprs: Arena::new(),
             types,
+            tid_to_tidx: HashMap::new(),
             diagnostics: Vec::new(),
             indices: HashMap::new(),
         }
@@ -80,7 +83,7 @@ impl<'a> LowerCtx<'a> {
         P: FnOnce(&mut Self, N) -> T,
         F: FnOnce(&mut Self, N) -> T,
     {
-        let n = node.expect("internal compiler error: missing node that should always be emitted");
+        let n = node.unwrap_or_else(|| ice("missing node that should always be emitted"));
         if n.is_poisoned() {
             poison_function(self, n)
         } else {
@@ -88,15 +91,52 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    pub fn finish(self) -> (LoweredBodies, Vec<Diagnostic>) {
+    pub fn finish(mut self) -> (LoweredBodies, Vec<Diagnostic>) {
+        let (tid_to_tkind, mut diagnostics) = self.reconstruct_types();
+        self.diagnostics.append(&mut diagnostics);
         (
             LoweredBodies {
                 exprs: self.exprs,
                 types: std::mem::take(self.types),
+                tid_to_tkind,
                 indices: self.indices,
             },
             self.diagnostics,
         )
+    }
+
+    pub fn reconstruct_types(&self) -> (HashMap<TypeId, Type>, Vec<Diagnostic>) {
+        let mut tid_to_tkind_map = HashMap::new();
+        let mut diagnostics = vec![];
+        self.exprs.iter().for_each(|(_, expr)| match &expr.inner {
+            Expr::Block(block) => {
+                self.reconstruct_types_in_block(block, &mut tid_to_tkind_map, &mut diagnostics);
+            }
+            _ => {}
+        });
+        (tid_to_tkind_map, diagnostics)
+    }
+
+    fn reconstruct_types_in_block(
+        &self,
+        block: &Block,
+        tid_to_tkind_map: &mut HashMap<TypeId, Type>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        block.exprs.iter().for_each(|expr| {
+            let e = &self.exprs[expr.expr.raw()];
+            match &e.inner {
+                Expr::Let(let_expr) => match self.tchk.tenv.reconstruct(let_expr.val.tid) {
+                    Err(err) => {
+                        diagnostics.push(err);
+                    }
+                    Ok(ty) => {
+                        tid_to_tkind_map.insert(let_expr.val.tid, self.tkind_to_type(&ty));
+                    }
+                },
+                _ => {}
+            }
+        });
     }
 
     pub fn with_def_map(
@@ -111,6 +151,7 @@ impl<'a> LowerCtx<'a> {
             string_interner,
             exprs: Arena::new(),
             types,
+            tid_to_tidx: HashMap::new(),
             diagnostics: Vec::new(),
             indices: HashMap::new(),
         }
@@ -320,7 +361,9 @@ impl<'a> LowerCtx<'a> {
         let kind = self.type_to_tkind(idx, file_id);
         let span = self.types[idx.raw()].span;
         let ty = ts::Type::new(kind);
-        self.tchk.tenv.insert(ty.file_span(file_id, span))
+        let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
+        self.tid_to_tidx.insert(tid, idx.clone());
+        tid
     }
 
     fn type_to_tkind(&mut self, idx: &TypeIdx, file_id: FileId) -> TypeKind {
@@ -360,6 +403,30 @@ impl<'a> LowerCtx<'a> {
                     })
                     .collect(),
             ),
+        }
+    }
+
+    fn tkind_to_type(&self, tkind: &TypeKind) -> Type {
+        match tkind {
+            TypeKind::Concrete(concrete) => match concrete {
+                ConcreteKind::Array(t, n) => Type::Array(self.tid_to_tidx[t].clone(), *n),
+                ConcreteKind::Ptr(t) => Type::Ptr(self.tid_to_tidx[t].clone().into()),
+                ConcreteKind::Path(path) => {
+                    Type::Path(Path::from_spur(*path, self.string_interner))
+                }
+                ConcreteKind::Tuple(tuple) => {
+                    let types = tuple
+                        .iter()
+                        .map(|tid| self.tid_to_tidx[tid].clone())
+                        .collect();
+                    Type::Tuple(types)
+                }
+            },
+            TypeKind::Int(_) => todo!(),
+            TypeKind::Float(_) => todo!(),
+            TypeKind::Ref(_) => todo!(),
+            TypeKind::Generic(_, _) => todo!(),
+            TypeKind::Unknown => todo!(),
         }
     }
 
@@ -636,20 +703,32 @@ impl<'a> LowerCtx<'a> {
         idx.with_type(int_ty)
     }
 
+    fn to_op(&self, token: &SyntaxToken) -> Spanned<Op> {
+        let op = token.text_key();
+        let eq = self.string_interner.get_or_intern_static("=");
+        let plus = self.string_interner.get_or_intern_static("+");
+        let op = if op == eq {
+            Op::Eq
+        } else if op == plus {
+            Op::Plus
+        } else {
+            todo!()
+        };
+        op.at(token.text_range().to_span())
+    }
+
     fn lower_bin_expr(
         &mut self,
         bin: &ast::BinExpr,
         generic_params: &GenericParams,
     ) -> Typed<ExprIdx> {
-        let eq = self.string_interner.get_or_intern_static("=");
         let op = bin
             .op()
             .unwrap_or_else(|| ice("how did we get here without a binop"));
-
-        if op.text_key() == eq {
-            self.lower_bin_eq_expr(bin, generic_params)
-        } else {
-            todo!()
+        let op = self.to_op(op);
+        match &op.inner {
+            Op::Eq => self.lower_bin_eq_expr(bin, generic_params),
+            Op::Plus => self.lower_bin_plus_expr(bin, op, generic_params),
         }
     }
 
@@ -670,6 +749,44 @@ impl<'a> LowerCtx<'a> {
         let tid = self.tchk.tenv.insert_unit(span.in_file(self.file_id()));
         let expr = Expr::Tuple(vec![]).at(span);
         let idx: ExprIdx = self.exprs.alloc(expr).into();
+        idx.with_type(tid)
+    }
+
+    fn lower_bin_plus_expr(
+        &mut self,
+        bin: &ast::BinExpr,
+        op: Spanned<Op>,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let lhs = self.lower_expr(bin.lhs(), generic_params);
+        let rhs = self.lower_expr(bin.rhs(), generic_params);
+
+        let add_trait_name = self
+            .string_interner
+            .get_or_intern_static("Add")
+            .file_span(self.file_id(), op.span);
+        let restriction = ts::TraitRestriction::new(add_trait_name, vec![lhs.tid]);
+
+        if let Err(err) = self
+            .tchk
+            .does_type_implement_restrictions(lhs.tid, &restriction)
+        {
+            self.diagnostics.push(err);
+        }
+        if let Err(err) = self
+            .tchk
+            .does_type_implement_restrictions(rhs.tid, &restriction)
+        {
+            self.diagnostics.push(err);
+        }
+
+        let tid = lhs.tid;
+        let binop = BinOp { lhs, op, rhs };
+        let idx: ExprIdx = self
+            .exprs
+            .alloc(Expr::BinOp(binop).at(bin.range().to_span()))
+            .into();
+
         idx.with_type(tid)
     }
 
@@ -1265,7 +1382,14 @@ pub fn lower_def_map_bodies(
 ) -> (LoweredBodies, Vec<Diagnostic>) {
     tracing::info!("lowering definition map bodies");
     let mut ctx = LowerCtx::with_def_map(def_map, string_interner, types);
+
+    // let item_tree = &def_map.item_trees[def_map.prelude];
+    // ctx.handle_item_tree(item_tree, def_map.prelude);
+
     for (module_id, item_tree) in def_map.item_trees.iter() {
+        if module_id == def_map.prelude {
+            continue;
+        }
         ctx.handle_item_tree(item_tree, module_id);
     }
     ctx.finish()

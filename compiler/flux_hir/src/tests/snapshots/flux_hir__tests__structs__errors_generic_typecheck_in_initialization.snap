@@ -24,7 +24,7 @@ x: bazz
 
 Diagnostics
 
-[E0044] Error: trait restrictions not met
+[E0043] Error: trait restrictions not met
     ,-[ main.flx:13:8]
     |
   6 |     where T is Bar

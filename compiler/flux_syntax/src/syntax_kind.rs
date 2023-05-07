@@ -121,6 +121,7 @@ pub enum SyntaxKind {
     Name,
     Poisoned,
     LetStmt,
+    EOF,
     Error,
 }
 
@@ -179,7 +180,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::In => SyntaxKind::In,
             TokenKind::Enum => SyntaxKind::Enum,
             TokenKind::StringLit => SyntaxKind::StringLit,
-            TokenKind::Error => SyntaxKind::Error,
+            TokenKind::EOF => SyntaxKind::EOF,
         }
     }
 }

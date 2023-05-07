@@ -1,0 +1,41 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+trait Foo  {
+    
+    
+}
+
+struct Bar  {
+}
+
+apply  to Bar {
+    
+    fn foo<T>() -> () where X is Foo {
+        
+    }
+}
+
+
+Diagnostics
+
+[E0004] Error: unknown generic used in where predicate
+   ,-[ main.flx:8:16]
+   |
+ 8 |     fn foo<T>() where X is Foo {
+   |    ^|^         |  
+   |     `------------- generic parameters `T` declared here
+   |                |  
+   |                `-- unknown generic `X` used in where predicate
+---'
+[E0020] Error: unused generic parameters
+   ,-[ main.flx:8:4]
+   |
+ 8 |     fn foo<T>() where X is Foo {
+   |    ^|^  
+   |     `--- unused generic parameters `T`
+---'
+

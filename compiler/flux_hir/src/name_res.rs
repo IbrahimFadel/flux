@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use flux_diagnostics::{ice, reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Spanned};
 use hashbrown::HashMap;
@@ -26,7 +28,7 @@ pub struct DefMap {
     pub modules: Arena<ModuleData>,
     pub item_trees: ArenaMap<ModuleId, ItemTree>,
     root: ModuleId,
-    prelude: ModuleId,
+    pub prelude: ModuleId,
     builtin_scope: HashMap<Spur, ModuleItemWithVis>,
 }
 
@@ -251,7 +253,72 @@ impl DefCollector {
         }
     }
 
-    fn inject_prelude(&self) {}
+    //     fn inject_prelude<R: FileResolver>(
+    //         &mut self,
+    //         entry_path: &str,
+    //         file_cache: &mut FileCache,
+    //         string_interner: &'static ThreadedRodeo,
+    //         types: &mut Arena<Spanned<Type>>,
+    //         resolver: &R,
+    //     ) -> ModuleId {
+    //         println!("{entry_path}");
+    //         let path = std::path::Path::new(entry_path);
+    //         let path = path.parent().unwrap();
+    //         let path = path.join("prelude.flx");
+    //         let path = path.to_str().unwrap();
+    //         let name = string_interner.get_or_intern_static("prelude");
+
+    //         let content = r#"
+    // pub trait Add<T> {
+    //     type Result;
+
+    //     fn add(other T) -> Result;
+    // }
+    // "#;
+
+    //         let file_id = file_cache.add_file(path, content);
+    //         let (item_tree, diagnostics) =
+    //             self.build_item_tree(file_id, &content, string_interner, types);
+    //         file_cache.report_diagnostics(&diagnostics);
+    //         assert!(diagnostics.is_empty());
+
+    //         let root_modue_id = self.def_map.root;
+    //         let module_id = self.def_map.modules.alloc(ModuleData::prelude());
+    //         self.def_map.modules[module_id].parent = Some(root_modue_id);
+    //         self.def_map.modules[root_modue_id]
+    //             .children
+    //             .insert(name, module_id);
+    //         let def = ModuleDefId::ModuleId(module_id);
+    //         self.def_map.modules[root_modue_id].scope.declare(def);
+    //         self.update(
+    //             root_modue_id,
+    //             &[(
+    //                 name,
+    //                 Some(ModuleItemWithVis::from((
+    //                     def,
+    //                     root_modue_id,
+    //                     Visibility::Public,
+    //                 ))),
+    //             )],
+    //             Some(Visibility::Public),
+    //         );
+
+    //         self.def_map[module_id].file_id = file_id;
+
+    //         let mod_collector = ModCollector {
+    //             def_collector: self,
+    //             module_id,
+    //             item_tree: &item_tree,
+    //             mod_dir: ModDir::prelude(),
+    //             file_id,
+    //             string_interner,
+    //             diagnostics: vec![],
+    //         };
+    //         let diagnostics = mod_collector.collect(item_tree.items(), file_cache, types, resolver);
+    //         assert!(diagnostics.is_empty());
+    //         self.def_map.item_trees.insert(module_id, item_tree);
+    //         module_id
+    //     }
 
     pub fn seed_with_entry<R: FileResolver>(
         &mut self,
@@ -261,7 +328,9 @@ impl DefCollector {
         types: &mut Arena<Spanned<Type>>,
         resolver: &R,
     ) {
-        self.inject_prelude();
+        // let prelude_id =
+        //     self.inject_prelude(entry_path, file_cache, string_interner, types, resolver);
+        // self.def_map.prelude = prelude_id;
 
         let (file_id, content) = resolver
             .resolve_absolute_path(entry_path, file_cache)

@@ -21,6 +21,10 @@ impl<'a> Iterator for Lexer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let kind = self.inner.next()?;
+        let kind = match kind {
+            Ok(kind) => kind,
+            Err(_) => return None,
+        };
         let text = self.inner.slice();
 
         let range = {

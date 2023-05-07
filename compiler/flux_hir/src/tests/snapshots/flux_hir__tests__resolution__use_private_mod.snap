@@ -1,0 +1,32 @@
+---
+source: compiler/flux_hir/src/tests/resolution.rs
+expression: s
+---
+//  ./main.flx
+
+mod foo;
+use foo::bar;
+fn main() -> () {
+    
+}
+//  ./foo.flx
+
+mod bar;
+//  ./foo/bar.flx
+
+pub fn test() -> () {
+    
+}
+
+Diagnostics
+
+[E0013] Error: cannot access private path segment
+   ,-[ ./main.flx:5:1]
+   |
+ 5 | use foo::bar;
+   | ^^^^|^|^  
+   |     `----- cannot access private path segment in path `foo::bar`
+   |       |   
+   |       `--- private segment `bar`
+---'
+

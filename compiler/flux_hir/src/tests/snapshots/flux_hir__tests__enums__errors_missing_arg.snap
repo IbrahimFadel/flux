@@ -19,7 +19,7 @@ let x <unknown type> = Foo::A;
 
 Diagnostics
 
-[E0038] Error: missing argument in enum variant initialization
+[E0037] Error: missing argument in enum variant initialization
    ,-[ main.flx:8:11]
    |
  4 |     A -> s32,

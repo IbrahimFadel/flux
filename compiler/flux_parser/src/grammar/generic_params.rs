@@ -5,7 +5,7 @@ use crate::{parser::Parser, token_set::TokenSet};
 
 use super::{name, path};
 
-pub(super) fn opt_generic_param_list(p: &mut Parser) {
+pub(crate) fn opt_generic_param_list(p: &mut Parser) {
     if p.at(TokenKind::CmpLt) {
         generic_param_list(p);
     }
@@ -17,17 +17,21 @@ fn generic_param_list(p: &mut Parser) {
 
     while p.loop_safe_not_at(TokenKind::CmpGt) {
         generic_param(p);
-        if !p.at(TokenKind::CmpGt) && !p.expect(TokenKind::Comma) {
+        if !p.at(TokenKind::CmpGt) && !p.expect(TokenKind::Comma, "generic parameter list") {
             break;
         }
     }
-    p.expect(TokenKind::CmpGt);
+    p.expect(TokenKind::CmpGt, "generic parameter list");
     m.complete(p, SyntaxKind::GenericParamList);
 }
 
 fn generic_param(p: &mut Parser) {
     let m = p.start();
-    name(p, TokenSet::new(&[TokenKind::CmpGt]));
+    name(
+        p,
+        TokenSet::new(&[TokenKind::Comma, TokenKind::CmpGt]),
+        "generic parameter",
+    );
     m.complete(p, SyntaxKind::TypeParam);
 }
 
@@ -45,7 +49,7 @@ pub(super) fn opt_where_clause(p: &mut Parser, ending_tokens: TokenSet) {
     while p.at(TokenKind::Ident) {
         where_predicate(p);
         let comma = p.eat(TokenKind::Comma);
-        if ending_tokens.contains(p.current()) {
+        if ending_tokens.contains(p.peek()) {
             break;
         }
         if !comma {
@@ -57,7 +61,7 @@ pub(super) fn opt_where_clause(p: &mut Parser, ending_tokens: TokenSet) {
 
 fn where_predicate(p: &mut Parser) {
     let m = p.start();
-    name(p, TokenSet::new(&[TokenKind::Is]));
+    name(p, TokenSet::new(&[TokenKind::Is]), "where predicate");
     if p.at(TokenKind::Is) {
         bounds(p);
     } else {

@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-logos = "0.12.1"
+logos = "0.13.0"
 text-size = "1.1.0"

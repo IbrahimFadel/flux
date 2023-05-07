@@ -13,8 +13,7 @@ use text_size::{TextRange, TextSize};
 
 use crate::{builtin::BuiltinType, FunctionId};
 
-#[cfg(test)]
-mod pp;
+pub mod pp;
 
 pub type Name = Spanned<Spur>;
 
@@ -281,6 +280,20 @@ impl Path {
         }
     }
 
+    pub fn from_str(s: &str, string_interner: &'static ThreadedRodeo) -> Self {
+        Self {
+            segments: s
+                .split("::")
+                .map(|s| string_interner.get_or_intern(s))
+                .collect(),
+            generic_args: vec![],
+        }
+    }
+
+    pub fn from_spur(spur: Spur, string_interner: &'static ThreadedRodeo) -> Self {
+        Self::from_str(string_interner.resolve(&spur), string_interner)
+    }
+
     pub fn get_segments(&self) -> impl Iterator<Item = &Spur> {
         self.segments.iter()
     }
@@ -342,6 +355,7 @@ impl ExprIdx {
 }
 
 impl WithType for ExprIdx {}
+impl<'a> WithType for &'a Expr {}
 
 impl From<Idx<Spanned<Expr>>> for ExprIdx {
     fn from(value: Idx<Spanned<Expr>>) -> Self {
@@ -401,6 +415,7 @@ impl<T> Deref for Typed<T> {
 #[derive(Clone, PartialEq, Debug, Locatable)]
 pub enum Expr {
     Block(Block),
+    BinOp(BinOp),
     Enum(EnumExpr),
     Call(Call),
     Float(f64),
@@ -413,16 +428,17 @@ pub enum Expr {
     Poisoned,
 }
 
-// impl WithType for Block {}
-// impl WithType for EnumExpr {}
-// impl WithType for Call {}
-// impl WithType for u64 {}
-// impl WithType for f64 {}
-// impl WithType for Vec<ExprIdx> {}
-// impl WithType for Path {}
-// impl WithType for Let {}
-// impl WithType for StructExpr {}
-// impl WithType for MemberAccess {}
+impl WithType for Block {}
+impl<'a> WithType for &'a BinOp {}
+impl WithType for EnumExpr {}
+impl WithType for Call {}
+impl WithType for u64 {}
+impl WithType for f64 {}
+impl WithType for Vec<ExprIdx> {}
+impl WithType for Path {}
+impl WithType for Let {}
+impl WithType for StructExpr {}
+impl WithType for MemberAccess {}
 
 impl TryFrom<Expr> for Path {
     type Error = ();
@@ -438,6 +454,19 @@ impl TryFrom<Expr> for Path {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Block {
     pub exprs: Vec<Typed<ExprIdx>>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
+pub enum Op {
+    Eq,
+    Plus,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct BinOp {
+    pub lhs: Typed<ExprIdx>,
+    pub op: Spanned<Op>,
+    pub rhs: Typed<ExprIdx>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]

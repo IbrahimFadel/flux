@@ -1,7 +1,5 @@
 use flux_syntax::SyntaxKind;
 
-use crate::diagnostics::ParserDiagnostic;
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Event {
     StartNode {
@@ -10,6 +8,6 @@ pub(crate) enum Event {
     },
     AddToken,
     FinishNode,
-    Error(ParserDiagnostic),
+    Error(String),
     Placeholder,
 }

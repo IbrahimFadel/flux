@@ -127,9 +127,8 @@ impl Diagnostic {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
-    CouldNotFindEntryFile,
-    CouldNotReadDir,
-    CouldNotFindSubmodule,
+    CouldNotReadEntryFile,
+    CouldNotReadConfigFile,
 
     ParserExpected,
 
@@ -183,6 +182,7 @@ pub enum DiagnosticCode {
     UnknownVariable,
     TraitDoesNotExist,
     MultiplePossibleIntSpecializations,
+    CouldNotInferType,
 }
 
 impl std::fmt::Display for DiagnosticCode {

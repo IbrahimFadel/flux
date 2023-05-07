@@ -1,5 +1,0 @@
-mod nested;
-
-pub fn inside_bar() {
-    
-}

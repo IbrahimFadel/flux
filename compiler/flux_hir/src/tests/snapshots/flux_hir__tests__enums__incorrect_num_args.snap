@@ -1,0 +1,27 @@
+---
+source: compiler/flux_hir/src/tests/enums.rs
+expression: s
+---
+//  main.flx
+
+
+fn main() -> () {
+    let x Foo = Foo::A(0)(0, 0);
+}
+
+Diagnostics
+
+[E0038] Error: incorrect number of arguments in enum variant initialization
+   ,-[ main.flx:8:12]
+   |
+ 4 |     A -> s32,
+   |       ^|^  
+   |        `--- expected 1 arguments
+   | 
+ 8 |     let x = Foo::A(0, 0);
+   |            ^^^|^^  
+   |               `---- incorrect number of arguments in enum variant `A` initialization
+   |               |    
+   |               `---- got 2 arguments
+---'
+

@@ -118,9 +118,7 @@ pub enum TokenKind {
     #[token(".")]
     Period,
 
-    #[regex(r"/\*([^*]|\*+[^*/])*\*?")]
-    #[error]
-    Error,
+    EOF,
 }
 
 impl Display for TokenKind {
@@ -143,7 +141,6 @@ impl Display for TokenKind {
             Self::Else => write!(f, "else"),
             Self::Enum => write!(f, "enum"),
             Self::Eq => write!(f, "="),
-            Self::Error => write!(f, "error"),
             Self::FatArrow => write!(f, "=>"),
             Self::FloatLit => write!(f, "float"),
             Self::Fn => write!(f, "fn"),
@@ -179,6 +176,7 @@ impl Display for TokenKind {
             Self::Use => write!(f, "use"),
             Self::Where => write!(f, "where"),
             Self::Whitespace => write!(f, "whitespace"),
+            Self::EOF => write!(f, "EOF"),
         }
     }
 }

@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0024] Error: duplicate generics
+[E0023] Error: duplicate generics
    ,-[ main.flx:4:8]
    |
  3 | trait Foo<A, B> {
@@ -25,7 +25,7 @@ Diagnostics
    |        ^|^  
    |         `--- duplicate generics `A`
 ---'
-[E0024] Error: duplicate generics
+[E0023] Error: duplicate generics
    ,-[ main.flx:5:7]
    |
  3 | trait Foo<A, B> {
@@ -36,7 +36,7 @@ Diagnostics
    |       ^|^  
    |        `--- duplicate generics `B`
 ---'
-[E0024] Error: duplicate generics
+[E0023] Error: duplicate generics
    ,-[ main.flx:6:10]
    |
  3 | trait Foo<A, B> {

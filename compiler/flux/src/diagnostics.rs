@@ -1,23 +1,42 @@
 use flux_diagnostics::{Diagnostic, DiagnosticCode, DiagnosticKind, ToDiagnostic};
 
+#[derive(Debug, Clone)]
 pub enum DriverError {
-    ReadDir(String),
-    FindEntryFile,
+    ReadEntryFile {
+        package: String,
+        candidate: String,
+    },
+    ReadConfigFile {
+        package: Option<String>,
+        candidate: String,
+    },
 }
 
 impl ToDiagnostic for DriverError {
     fn to_diagnostic(&self) -> Diagnostic {
         match self {
-            Self::FindEntryFile => Diagnostic::new_without_file(
+            Self::ReadEntryFile { package, candidate } => Diagnostic::new_without_file(
                 DiagnosticKind::Error,
-                DiagnosticCode::CouldNotFindEntryFile,
-                "could not find entry file".to_string(),
-            ),
-            Self::ReadDir(msg) => Diagnostic::new_without_file(
+                DiagnosticCode::CouldNotReadEntryFile,
+                format!("could not read entry file for package `{package}`"),
+            )
+            .with_help(format!(
+                "create the file `{candidate}` or change its permissions if it already exists"
+            )),
+            Self::ReadConfigFile { package, candidate } => Diagnostic::new_without_file(
                 DiagnosticKind::Error,
-                DiagnosticCode::CouldNotReadDir,
-                msg.to_owned(),
-            ),
+                DiagnosticCode::CouldNotReadConfigFile,
+                format!(
+                    "could not read config file for {}",
+                    package
+                        .as_ref()
+                        .map(|package| format!("package `{package}`"))
+                        .unwrap_or(format!("project"))
+                ),
+            )
+            .with_help(format!(
+                "create the file `{candidate}` or change its permissions if it already exists"
+            )),
         }
     }
 }

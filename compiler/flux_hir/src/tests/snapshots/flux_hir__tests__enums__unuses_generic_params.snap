@@ -1,0 +1,18 @@
+---
+source: compiler/flux_hir/src/tests/enums.rs
+expression: s
+---
+//  main.flx
+
+
+
+Diagnostics
+
+[E0020] Error: unused generic parameters
+   ,-[ main.flx:3:10]
+   |
+ 3 | enum Result<A, B, C> {
+   |          ^^^^|^^^^  
+   |              `------ unused generic parameters `B`
+---'
+

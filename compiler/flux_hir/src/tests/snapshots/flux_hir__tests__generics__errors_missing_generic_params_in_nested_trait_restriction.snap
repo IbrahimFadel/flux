@@ -19,7 +19,7 @@ fn foo<T, A, B>() -> () where T is Foo, A is Dummy {
 
 Diagnostics
 
-[E0023] Error: generic argument is missing required trait restriction
+[E0022] Error: generic argument is missing required trait restriction
     ,-[ main.rs:13:9]
     |
   8 |         B is Bar,
@@ -30,7 +30,7 @@ Diagnostics
     |         |  
     |         `-- generic `B` missing restriction `Bar`
 ----'
-[E0023] Error: generic argument is missing required trait restriction
+[E0022] Error: generic argument is missing required trait restriction
     ,-[ main.rs:14:7]
     |
   4 | trait Dummy<T> where T is Bar {}
@@ -41,7 +41,7 @@ Diagnostics
     |       |  
     |       `-- generic `B` missing restriction `Bar`
 ----'
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
     ,-[ main.rs:9:1]
     |
   9 | ,-> {}

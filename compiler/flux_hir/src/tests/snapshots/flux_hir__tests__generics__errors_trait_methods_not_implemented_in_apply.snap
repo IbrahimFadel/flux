@@ -15,7 +15,7 @@ Module Id: 0
 
 Diagnostics
 
-[E0016] Error: unimplemented trait methods in apply
+[E0015] Error: unimplemented trait methods in apply
     ,-[ main.flx:11:8]
     |
   3 | ,-> trait Foo {

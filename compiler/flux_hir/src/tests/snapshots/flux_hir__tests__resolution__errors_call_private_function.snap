@@ -27,7 +27,7 @@ fn some_function() -> () {
 
 Diagnostics
 
-[E0014] Error: cannot access private path segment
+[E0013] Error: cannot access private path segment
    ,-[ ./main.flx:5:12]
    |
  5 | ,-> fn main() {

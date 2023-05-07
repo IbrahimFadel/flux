@@ -1,0 +1,20 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+fn foo<X, Y>(x X) -> X {
+    x
+}
+
+Diagnostics
+
+[E0020] Error: unused generic parameters
+   ,-[ main.flx:3:5]
+   |
+ 3 | fn foo<X, Y>(x X) -> X {
+   |     ^^^|^^  
+   |        `---- unused generic parameters `Y`
+---'
+

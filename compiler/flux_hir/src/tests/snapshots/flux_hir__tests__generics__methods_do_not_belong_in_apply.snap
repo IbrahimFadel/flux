@@ -1,0 +1,55 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.flx
+
+trait Foo  {
+    
+    pub fn foo() -> ();
+    pub fn bar() -> ();
+    pub fn bazz() -> ();
+}
+
+struct Bar  {
+}
+
+apply Foo to Bar {
+    
+    fn test() -> () {
+        
+    }
+}
+
+
+Diagnostics
+
+[E0015] Error: unimplemented trait methods in apply
+    ,-[ main.flx:11:8]
+    |
+  3 | ,---> trait Foo {
+    : :     
+  6 | |--->     fn bazz();
+    | |                      
+    | `---------------------- trait methods `bar`, `bazz`, `foo` declared here
+    | 
+ 11 |   ,-> apply Foo to Bar {
+ 12 |   |->     fn test() {}
+    |   |                      
+    |   `---------------------- unimeplemented trait methods `bar`, `bazz`, `foo` in apply
+----'
+[E0016] Error: methods do not belong in apply
+    ,-[ main.flx:11:8]
+    |
+  3 | ,---> trait Foo {
+    : :     
+  6 | |--->     fn bazz();
+    | |                      
+    | `---------------------- trait methods `bar`, `bazz`, `foo` declared here
+    | 
+ 11 |   ,-> apply Foo to Bar {
+ 12 |   |->     fn test() {}
+    |   |                      
+    |   `---------------------- method `test` does not belong in apply
+----'
+

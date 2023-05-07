@@ -1,0 +1,11 @@
+[package]
+name = "flux_mir"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+la-arena = "0.3.0"
+
+flux_hir = { path = "../flux_hir" }
+# flux_typesystem = { path = "../flux_typesystem" }
+flux_span = { path = "../flux_span" }

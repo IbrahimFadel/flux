@@ -14,8 +14,8 @@ use hir::{Apply, Enum, Function, Struct, Trait, Use};
 use la_arena::Idx;
 use name_res::ModuleData;
 
-pub use body::lower_def_map_bodies;
-pub use name_res::{build_def_map, mod_res::BasicFileResolver};
+pub use body::{lower_def_map_bodies, LoweredBodies};
+pub use name_res::{build_def_map, mod_res::BasicFileResolver, DefMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleDefId {

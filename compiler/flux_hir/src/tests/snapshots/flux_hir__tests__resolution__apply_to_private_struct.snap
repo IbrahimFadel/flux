@@ -1,0 +1,35 @@
+---
+source: compiler/flux_hir/src/tests/resolution.rs
+expression: s
+---
+//  ./main.flx
+
+mod foo;
+trait Bar  {
+    
+    
+}
+
+apply Bar to foo::Foo {
+    
+    
+}
+
+//  ./foo.flx
+
+struct Foo  {
+}
+
+
+Diagnostics
+
+[E0013] Error: cannot access private path segment
+   ,-[ ./main.flx:7:8]
+   |
+ 7 | apply Bar to foo::Foo {}
+   |        ^^^^|^|^^  
+   |            `------ cannot access private path segment in path `foo::Foo`
+   |              |    
+   |              `---- private segment `Foo`
+---'
+

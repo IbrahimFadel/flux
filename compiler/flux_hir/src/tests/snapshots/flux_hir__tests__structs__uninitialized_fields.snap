@@ -1,0 +1,29 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+//  main.flx
+
+struct Foo  {
+s32 x,Bar y,f32 z}
+
+struct Bar  {
+u32 x}
+
+fn main() -> () {
+    let foo_instance Foo = struct Foo {
+        x: 1
+    };
+}
+
+Diagnostics
+
+[E0026] Error: uninitialized fields in struct expression
+    ,-[ main.flx:14:15]
+    |
+ 14 | ,->     let foo_instance = Foo {
+ 15 | |->         x: 1,
+    | |                   
+    | `------------------- uninitialized fields `y`, `z` for `Foo` struct initialization
+----'
+

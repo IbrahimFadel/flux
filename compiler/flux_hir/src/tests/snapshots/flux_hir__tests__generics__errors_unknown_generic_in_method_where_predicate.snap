@@ -19,7 +19,7 @@ fn foo<T>() -> () where X is Foo {
 
 Diagnostics
 
-[E0005] Error: unknown generic used in where predicate
+[E0004] Error: unknown generic used in where predicate
    ,-[ main.flx:8:16]
    |
  8 |     fn foo<T>() where X is Foo {
@@ -28,7 +28,7 @@ Diagnostics
    |                |  
    |                `-- unknown generic `X` used in where predicate
 ---'
-[E0021] Error: unused generic parameters
+[E0020] Error: unused generic parameters
    ,-[ main.flx:8:4]
    |
  8 |     fn foo<T>() where X is Foo {

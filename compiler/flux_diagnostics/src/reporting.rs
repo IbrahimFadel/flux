@@ -88,6 +88,11 @@ impl FileCache {
         id
     }
 
+    pub fn add_file_with_file_id(&mut self, file_id: FileId, content: &str) {
+        let src = Source::from(content);
+        self.map.insert(file_id, src);
+    }
+
     pub fn get_file_path(&self, file_id: &FileId) -> &str {
         self.interner.resolve(&file_id.0)
     }

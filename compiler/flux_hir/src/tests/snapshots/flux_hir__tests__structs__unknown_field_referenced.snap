@@ -1,0 +1,31 @@
+---
+source: compiler/flux_hir/src/tests/structs.rs
+expression: s
+---
+//  main.flx
+
+struct Foo  {
+}
+
+fn main() -> () {
+    let foo Foo = struct Foo {      };
+    let x <unknown type> = foo.x;
+}
+
+Diagnostics
+
+[E0029] Error: could not find field
+   ,-[ main.flx:8:10]
+   |
+ 8 |     let x = foo.x;
+   |          |  
+   |          `-- could not find field called `x` for type `Foo`
+---'
+[E0051] Error: could not infer type
+   ,-[ main.flx:8:6]
+   |
+ 8 |     let x = foo.x;
+   |      ^^|^^  
+   |        `---- could not infer type
+---'
+

@@ -12,7 +12,7 @@ impl ToDiagnostic for ParserDiagnostic {
             Self::Unxpected { expected } => Diagnostic::error(
                 expected.map_ref(|msg| msg.span.range.start().into()),
                 DiagnosticCode::ParserExpected,
-                expected.inner.inner.to_string(),
+                "expected syntax not found".to_string(),
                 vec![expected.clone()],
             ),
         }

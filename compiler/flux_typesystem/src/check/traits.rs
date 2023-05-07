@@ -281,7 +281,7 @@ impl TChecker {
         }
 
         for restriction in restrictions {
-            if !self.does_type_implements_restrictions(ty, restriction)?.0 {
+            if !self.does_type_implement_restrictions(ty, restriction)?.0 {
                 unimplemented_restrictions.push(
                     self.tenv
                         .fmt_trait_restriction(restriction)
@@ -310,7 +310,7 @@ impl TChecker {
         }
     }
 
-    fn does_type_implements_restrictions(
+    pub fn does_type_implement_restrictions(
         &mut self,
         ty: TypeId,
         restriction: &TraitRestriction,
@@ -320,6 +320,11 @@ impl TChecker {
             self.tenv.fmt_ty_id(ty),
             format!("`{}`", self.tenv.fmt_trait_restriction(restriction))
         );
+
+        if restriction.name.inner.inner == self.string_interner.get_or_intern_static("Add") {
+            return self.does_type_implement_add(ty, restriction);
+        }
+
         let implementations_for_ty = self.get_implementations(&restriction.name, ty)?.to_vec();
         let mut valid_impl = None;
         for implementation in implementations_for_ty {
@@ -353,6 +358,29 @@ impl TChecker {
             self.tenv.fmt_trait_restriction(restriction)
         );
         Ok(valid_impl.unwrap_or((false, Span::poisoned().in_file(FileId::poisoned()))))
+    }
+
+    fn does_type_implement_add(
+        &mut self,
+        ty: TypeId,
+        restriction: &TraitRestriction,
+    ) -> Result<(bool, InFile<Span>), Diagnostic> {
+        let file_span = Span::poisoned().in_file(FileId::poisoned());
+
+        let add_trait_name = self
+            .string_interner
+            .get_or_intern_static("Add")
+            .file_span(file_span.file_id, file_span.inner);
+
+        for int in &self.int_tids(file_span.clone()) {
+            if self.unify(ty, *int, file_span.clone()).is_ok() {
+                let add_restriction = TraitRestriction::new(add_trait_name.clone(), vec![*int]);
+                if self.are_trait_restrictions_equal(restriction, &add_restriction) {
+                    return Ok((true, file_span));
+                }
+            }
+        }
+        todo!()
     }
 
     fn check_if_int_implements_restrictions(
@@ -410,14 +438,14 @@ impl TChecker {
         );
         let mut unmet_restrictions = vec![];
         for restriction in restrictions {
-            let does_s64_impl = self.does_type_implements_restrictions(s64, restriction)?;
-            let does_s32_impl = self.does_type_implements_restrictions(s32, restriction)?;
-            let does_s16_impl = self.does_type_implements_restrictions(s16, restriction)?;
-            let does_s8_impl = self.does_type_implements_restrictions(s8, restriction)?;
-            let does_u64_impl = self.does_type_implements_restrictions(u64, restriction)?;
-            let does_u32_impl = self.does_type_implements_restrictions(u32, restriction)?;
-            let does_u16_impl = self.does_type_implements_restrictions(u16, restriction)?;
-            let does_u8_impl = self.does_type_implements_restrictions(u8, restriction)?;
+            let does_s64_impl = self.does_type_implement_restrictions(s64, restriction)?;
+            let does_s32_impl = self.does_type_implement_restrictions(s32, restriction)?;
+            let does_s16_impl = self.does_type_implement_restrictions(s16, restriction)?;
+            let does_s8_impl = self.does_type_implement_restrictions(s8, restriction)?;
+            let does_u64_impl = self.does_type_implement_restrictions(u64, restriction)?;
+            let does_u32_impl = self.does_type_implement_restrictions(u32, restriction)?;
+            let does_u16_impl = self.does_type_implement_restrictions(u16, restriction)?;
+            let does_u8_impl = self.does_type_implement_restrictions(u8, restriction)?;
             let impltors: Vec<_> = [
                 (does_s64_impl, s64),
                 (does_s32_impl, s32),
@@ -464,5 +492,57 @@ impl TChecker {
         } else {
             Ok(())
         }
+    }
+
+    fn int_tids(&mut self, file_span: InFile<Span>) -> Vec<TypeId> {
+        let s64 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s64"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s32 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s32"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s16 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s16"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let s8 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("s8"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u64 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u64"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u32 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u32"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u16 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u16"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        let u8 = self.tenv.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u8"),
+            )))
+            .file_span(file_span.file_id, file_span.inner),
+        );
+        Vec::from([s64, s32, s16, s8, u64, u32, u16, u8])
     }
 }

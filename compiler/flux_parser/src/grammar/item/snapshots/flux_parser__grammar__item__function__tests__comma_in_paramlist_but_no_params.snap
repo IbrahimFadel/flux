@@ -1,0 +1,61 @@
+---
+source: compiler/flux_parser/src/grammar/item/function.rs
+expression: s
+---
+Root@0..11
+  FnDecl@0..11
+    Visibility@0..0
+    Fn@0..2 "fn"
+    Whitespace@2..3 " "
+    Name@3..6
+      Ident@3..6 "foo"
+    ParamList@6..9
+      LParen@6..7 "("
+      Param@7..7
+        Name@7..7
+          Poisoned@7..7
+        TupleType@7..7
+          Poisoned@7..7
+      Comma@7..8 ","
+      Param@8..8
+        Name@8..8
+          Poisoned@8..8
+        TupleType@8..8
+          Poisoned@8..8
+      RParen@8..9 ")"
+    FnReturnType@9..9
+    BlockExpr@9..11
+      LBrace@9..10 "{"
+      RBrace@10..11 "}"
+
+
+Errors:
+[E0002] Error: expected syntax not found
+   ,-[fn:1:8]
+   |
+ 1 | fn foo(,){}
+   |        |  
+   |        `-- expected name in function parameter
+---'
+[E0002] Error: expected syntax not found
+   ,-[fn:1:8]
+   |
+ 1 | fn foo(,){}
+   |        |  
+   |        `-- expected type in function parameter
+---'
+[E0002] Error: expected syntax not found
+   ,-[fn:1:9]
+   |
+ 1 | fn foo(,){}
+   |         |  
+   |         `-- expected name in function parameter
+---'
+[E0002] Error: expected syntax not found
+   ,-[fn:1:9]
+   |
+ 1 | fn foo(,){}
+   |         |  
+   |         `-- expected type in function parameter
+---'
+

@@ -1,0 +1,59 @@
+---
+source: compiler/flux_hir/src/tests/generics.rs
+expression: s
+---
+//  main.rs
+
+trait Bar  {
+    
+    
+}
+
+trait Dummy<T>  where T is Bar {
+    
+    
+}
+
+trait Foo<A, B>  where A is Dummy, B is Bar {
+    
+    
+}
+
+fn foo<T, A, B>() -> () where T is Foo, A is Dummy {
+    
+}
+
+Diagnostics
+
+[E0022] Error: generic argument is missing required trait restriction
+    ,-[ main.rs:13:9]
+    |
+  8 |         B is Bar,
+    |       ^|^  
+    |        `--- restriction `Bar` defined here
+    | 
+ 13 |         T is Foo<A, B>,
+    |         |  
+    |         `-- generic `B` missing restriction `Bar`
+----'
+[E0022] Error: generic argument is missing required trait restriction
+    ,-[ main.rs:14:7]
+    |
+  4 | trait Dummy<T> where T is Bar {}
+    |                        ^|^  
+    |                         `--- restriction `Bar` defined here
+    | 
+ 14 |         A is Dummy<B>,
+    |       |  
+    |       `-- generic `B` missing restriction `Bar`
+----'
+[E0020] Error: unused generic parameters
+    ,-[ main.rs:9:1]
+    |
+  9 | ,-> {}
+    : :   
+ 11 | |-> fn foo<T, A, B>()
+    | |                       
+    | `----------------------- unused generic parameters `T`, `A`, `B`
+----'
+

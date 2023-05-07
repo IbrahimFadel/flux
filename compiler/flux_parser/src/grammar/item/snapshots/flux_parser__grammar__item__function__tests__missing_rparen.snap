@@ -1,0 +1,29 @@
+---
+source: compiler/flux_parser/src/grammar/item/function.rs
+expression: s
+---
+Root@0..9
+  FnDecl@0..9
+    Visibility@0..0
+    Fn@0..2 "fn"
+    Whitespace@2..3 " "
+    Name@3..6
+      Ident@3..6 "foo"
+    ParamList@6..7
+      LParen@6..7 "("
+      Poisoned@7..7
+    FnReturnType@7..7
+    BlockExpr@7..9
+      LBrace@7..8 "{"
+      RBrace@8..9 "}"
+
+
+Errors:
+[E0002] Error: expected syntax not found
+   ,-[fn:1:8]
+   |
+ 1 | fn foo({}
+   |        |  
+   |        `-- expected `)` in parameter list
+---'
+

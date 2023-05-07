@@ -24,7 +24,7 @@ bazz: 0
 
 Diagnostics
 
-[E0027] Error: uninitialized fields in struct expression
+[E0026] Error: uninitialized fields in struct expression
     ,-[ main.flx:14:15]
     |
  14 | ,->     let foo_instance = Foo {
@@ -33,7 +33,7 @@ Diagnostics
     | |                      
     | `---------------------- uninitialized fields `y`, `z` for `Foo` struct initialization
 ----'
-[E0028] Error: unknown fields in struct expression
+[E0027] Error: unknown fields in struct expression
     ,-[ main.flx:14:15]
     |
  14 | ,->     let foo_instance = Foo {

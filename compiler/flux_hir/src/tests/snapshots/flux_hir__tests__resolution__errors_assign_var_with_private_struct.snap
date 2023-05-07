@@ -25,7 +25,7 @@ Module Id: 2
 
 Diagnostics
 
-[E0014] Error: cannot access private path segment
+[E0013] Error: cannot access private path segment
    ,-[ ./main.flx:6:6]
    |
  6 |     let x foo::Foo = foo::Foo {};
@@ -34,7 +34,7 @@ Diagnostics
    |            |    
    |            `---- private segment `Foo`
 ---'
-[E0014] Error: cannot access private path segment
+[E0013] Error: cannot access private path segment
    ,-[ ./main.flx:6:17]
    |
  6 |     let x foo::Foo = foo::Foo {};
