@@ -42,6 +42,9 @@ getters! {
     PathType {
         path -> node(Path);
     }
+    ThisPathType {
+        path -> node(Path);
+    }
     TupleType {
         types -> nodes(Type);
     }

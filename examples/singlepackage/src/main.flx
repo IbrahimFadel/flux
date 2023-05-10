@@ -1,18 +1,27 @@
-mod foo;
-mod bar;
-
-use foo::Foo;
-
-fn main() {
-    
-    let x u32 = foo::inside_foo_priv(1.0);
-    let y u32 = inside_foo_priv();
-    some_pub_fn();
-    0
-    
+fn main(x s32) {
+    let x = {
+        0
+    };
+    let y = x;
 }
 
+
+
+
+
 /*
+mod foo;
+// mod bar;
+
+// use foo::Foo;
+use foo::some_pub_fn;
+
+fn main() {
+    // let x u32 = foo::inside_foo_priv(1.0);
+    // let y u32 = inside_foo_priv();
+    // let x = some_pub_fn();    
+}
+
 trait Foo<T, X> {
     type X;
 

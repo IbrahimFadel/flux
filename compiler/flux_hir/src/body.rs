@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{
@@ -5,8 +7,7 @@ use flux_syntax::{
     SyntaxToken,
 };
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TypeId, TypeKind};
-use hashbrown::HashMap;
-use la_arena::{Arena, Idx, RawIdx};
+use la_arena::{Arena, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 
 use crate::{
@@ -14,14 +15,15 @@ use crate::{
     hir::{
         Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, Item, Let,
         MemberAccess, MemberAccessKind, Name, Op, Path, Struct, StructExpr, StructExprField,
-        StructField, Trait, Type, TypeIdx, Typed, WherePredicate, WithType,
+        StructField, Trait, Type, TypeIdx, Typed, WithType,
     },
     item_tree::ItemTree,
     name_res::{path_res::PathResolutionResultKind, DefMap},
-    EnumId, FunctionId, ModuleDefId, ModuleId, StructId, TraitId,
+    EnumId, FunctionId, ModItem, ModuleDefId, ModuleId, StructId, TraitId,
 };
 
 mod apply;
+mod generics;
 mod resolve;
 
 #[derive(Debug)]
@@ -29,12 +31,16 @@ pub struct LoweredBodies {
     pub exprs: Arena<Spanned<Expr>>,
     pub types: Arena<Spanned<Type>>,
     pub tid_to_tkind: HashMap<TypeId, Type>,
+    /// Get the `ExprIdx` for a given item
     pub indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
 }
 
 pub(crate) struct LowerCtx<'a> {
     def_map: Option<&'a DefMap>,
+    packages: Arena<Arc<DefMap>>,
     cur_module_id: ModuleId,
+    // package_id: PackageId,
+    global_item_tree: Option<&'a ItemTree>,
     pub tchk: TChecker,
     string_interner: &'static ThreadedRodeo,
     exprs: Arena<Spanned<Expr>>,
@@ -51,7 +57,10 @@ impl<'a> LowerCtx<'a> {
     ) -> Self {
         Self {
             def_map: None,
+            packages: Arena::new(),
             cur_module_id: ModuleId::from_raw(RawIdx::from(0)),
+            // package_id: PackageId::from_raw(RawIdx::from(0)),
+            global_item_tree: None,
             tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
@@ -141,12 +150,17 @@ impl<'a> LowerCtx<'a> {
 
     pub fn with_def_map(
         def_map: &'a DefMap,
+        packages: Arena<Arc<DefMap>>,
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
+        global_item_tree: &'a ItemTree,
     ) -> Self {
         Self {
             def_map: Some(def_map),
+            packages,
             cur_module_id: ModuleId::from_raw(RawIdx::from(0)),
+            // package_id: PackageId::from_raw(RawIdx::from(packages.len() as u32)),
+            global_item_tree: Some(global_item_tree),
             tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
@@ -157,32 +171,50 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: ModuleId) {
+    pub fn handle_items(&mut self, items: impl Iterator<Item = ModItem>, module_id: ModuleId) {
         self.cur_module_id = module_id;
         let mut function_bodies = vec![];
-        for mod_item in &item_tree.top_level {
+        for mod_item in items {
             match mod_item {
-                crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
-                crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index, item_tree),
+                crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index),
+                crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index),
                 crate::item_tree::ModItem::Function(f) => {
-                    let body = self.handle_function(f.index, item_tree);
+                    let body = self.handle_function(f.index, None);
                     function_bodies.push(body);
                 }
                 crate::item_tree::ModItem::Mod(_) => {}
-                crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index, item_tree),
-                crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index, item_tree),
+                crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index),
+                crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index),
                 crate::item_tree::ModItem::Use(_) => {}
             }
         }
     }
 
-    fn handle_enum(&mut self, e_idx: EnumId, item_tree: &ItemTree) {
-        let e = &item_tree[e_idx];
+    // pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: ModuleId) {
+    //     self.cur_module_id = module_id;
+    //     let mut function_bodies = vec![];
+    //     for mod_item in &item_tree.top_level {
+    //         match mod_item {
+    //             crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
+    //             crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index, item_tree),
+    //             crate::item_tree::ModItem::Function(f) => {
+    //                 let body = self.handle_function(f.index, item_tree);
+    //                 function_bodies.push(body);
+    //             }
+    //             crate::item_tree::ModItem::Mod(_) => {}
+    //             crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index, item_tree),
+    //             crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index, item_tree),
+    //             crate::item_tree::ModItem::Use(_) => {}
+    //         }
+    //     }
+    // }
 
-        self.check_where_predicates(
+    fn handle_enum(&mut self, e_idx: EnumId) {
+        let e = &self.global_item_tree.unwrap()[e_idx];
+
+        self.verify_where_predicates(
             &e.generic_params,
-            e.generic_params.span.in_file(self.file_id()),
-            self.cur_module_id,
+            &e.generic_params.span.in_file(self.file_id()),
         );
 
         let mut used_generics = vec![];
@@ -211,16 +243,23 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn handle_function(&mut self, f_idx: FunctionId, item_tree: &ItemTree) -> Typed<ExprIdx> {
-        let f = &item_tree[f_idx];
+    fn handle_function(&mut self, f_idx: FunctionId, apply: Option<&Apply>) -> Typed<ExprIdx> {
+        let f = &self.global_item_tree.unwrap()[f_idx];
 
-        self.check_where_predicates(
+        self.verify_where_predicates(
             &f.generic_params,
-            f.generic_params.span.in_file(self.file_id()),
-            self.cur_module_id,
+            &f.generic_params.span.in_file(self.file_id()),
         );
 
         let mut used_generics = vec![];
+
+        if let Some(apply) = apply {
+            let param_tid = self.insert_type_to_tenv(&apply.ty, self.file_id());
+            self.tchk.tenv.insert_local_to_scope(
+                self.string_interner.get_or_intern_static("this"),
+                param_tid,
+            );
+        }
 
         for param in f.params.inner.iter() {
             let param_tid = self.insert_type_to_tenv(&param.ty, self.file_id());
@@ -241,7 +280,10 @@ impl<'a> LowerCtx<'a> {
                 .body(),
             &f.generic_params,
         );
-        let ret_tid = self.insert_type_to_tenv(&f.ret_ty, self.file_id());
+        let ret_tid = match apply {
+            Some(apply) => self.insert_type_in_apply_to_tenv(&f.ret_ty, self.file_id(), apply),
+            None => self.insert_type_to_tenv(&f.ret_ty, self.file_id()),
+        };
         self.tchk
             .unify(
                 body.tid,
@@ -275,8 +317,8 @@ impl<'a> LowerCtx<'a> {
         body
     }
 
-    fn handle_struct(&mut self, s: StructId, item_tree: &ItemTree) {
-        let s = &item_tree[s];
+    fn handle_struct(&mut self, s: StructId) {
+        let s = &self.global_item_tree.unwrap()[s];
 
         let mut used_generics = vec![];
 
@@ -302,22 +344,19 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn handle_trait(&mut self, trt: TraitId, item_tree: &ItemTree) {
-        let trt = &item_tree[trt];
+    fn handle_trait(&mut self, trt_id: TraitId) {
+        let trt = &self.global_item_tree.unwrap()[trt_id];
 
-        self.tchk.add_trait_to_context(trt.name.inner);
-
-        self.check_where_predicates(
+        self.verify_where_predicates(
             &trt.generic_params,
-            trt.generic_params.span.in_file(self.file_id()),
-            self.cur_module_id,
+            &trt.generic_params.span.in_file(self.file_id()),
         );
 
         self.check_trait_assoc_types(&trt.assoc_types);
 
         let trait_generic_params = &trt.generic_params;
         for method in &trt.methods.inner {
-            let f = &item_tree[*method];
+            let f = &self.global_item_tree.unwrap()[method.inner];
             let method_generic_params = &f.generic_params;
             self.combine_generic_parameters(trait_generic_params, method_generic_params);
         }
@@ -358,7 +397,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn insert_type_to_tenv(&mut self, idx: &TypeIdx, file_id: FileId) -> TypeId {
-        let kind = self.type_to_tkind(idx, file_id);
+        let kind = self.type_to_tkind(idx, file_id, None);
         let span = self.types[idx.raw()].span;
         let ty = ts::Type::new(kind);
         let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
@@ -366,7 +405,21 @@ impl<'a> LowerCtx<'a> {
         tid
     }
 
-    fn type_to_tkind(&mut self, idx: &TypeIdx, file_id: FileId) -> TypeKind {
+    fn insert_type_in_apply_to_tenv(
+        &mut self,
+        idx: &TypeIdx,
+        file_id: FileId,
+        apply: &Apply,
+    ) -> TypeId {
+        let kind = self.type_to_tkind(idx, file_id, Some(apply));
+        let span = self.types[idx.raw()].span;
+        let ty = ts::Type::new(kind);
+        let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
+        self.tid_to_tidx.insert(tid, idx.clone());
+        tid
+    }
+
+    fn type_to_tkind(&mut self, idx: &TypeIdx, file_id: FileId, apply: Option<&Apply>) -> TypeKind {
         let ty = &self.types[idx.raw()];
         match ty.inner.clone() {
             Type::Array(ty, n) => {
@@ -376,6 +429,13 @@ impl<'a> LowerCtx<'a> {
             Type::Path(path) => {
                 self.get_type(&path.clone().at(ty.span));
                 TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
+            }
+            Type::ThisPath(this_path, this_type) => {
+                if let Some(apply) = apply {
+                    self.this_path_to_tkind(&this_path, &this_type, apply, file_id)
+                } else {
+                    todo!()
+                }
             }
             Type::Ptr(ty) => {
                 TypeKind::Concrete(ConcreteKind::Ptr(self.insert_type_to_tenv(&ty, file_id)))
@@ -387,23 +447,33 @@ impl<'a> LowerCtx<'a> {
                     .collect(),
             )),
             Type::Unknown => TypeKind::Unknown,
-            Type::Generic(name, restrictions) => TypeKind::Generic(
-                name,
-                restrictions
-                    .iter()
-                    .map(|path| ts::TraitRestriction {
-                        name: path
-                            .to_spur(self.string_interner)
-                            .file_span(file_id, path.span),
-                        args: path
-                            .generic_args
-                            .iter()
-                            .map(|arg| self.insert_type_to_tenv(arg, file_id))
-                            .collect(),
-                    })
-                    .collect(),
-            ),
+            Type::Generic(name, restrictions) => {
+                todo!()
+            }
         }
+    }
+
+    fn this_path_to_tkind(
+        &mut self,
+        this_path: &Path,
+        this_type: &Spanned<Path>,
+        apply: &Apply,
+        file_id: FileId,
+    ) -> TypeKind {
+        let (trt, trait_id) = if let Some(res) = self.get_trait_with_id(this_type) {
+            res
+        } else {
+            ice("`This` couldn't be resolved");
+        };
+
+        println!("{:#?}", this_path);
+
+        apply
+            .assoc_types
+            .iter()
+            .find(|(name, _)| name.inner == *this_path.nth(0))
+            .map(|(_, ty)| self.type_to_tkind(ty, file_id, None))
+            .unwrap()
     }
 
     fn tkind_to_type(&self, tkind: &TypeKind) -> Type {
@@ -480,7 +550,7 @@ impl<'a> LowerCtx<'a> {
         let item = self.try_get_item(&path, PathResolutionResultKind::Any);
         let tid = match &item {
             Ok(item) => {
-                if let Some((item, _)) = &item {
+                if let Some(item) = &item {
                     match &item.inner {
                         Item::Function(f) => self.insert_type_to_tenv(&f.ret_ty, item.file_id),
                         Item::Struct(_) => todo!(),
@@ -530,7 +600,7 @@ impl<'a> LowerCtx<'a> {
                 }
             }
         };
-        let item = item.unwrap_or(None).map(|(i, _)| i);
+        let item = item.unwrap_or(None);
         let path = Expr::Path(path.inner).at(span);
         let idx: ExprIdx = self.exprs.alloc(path).into();
 
@@ -551,7 +621,7 @@ impl<'a> LowerCtx<'a> {
             Path::spanned_segment(&path, path.segments.len() - 1, self.string_interner).unwrap();
         let item = self.try_get_item(&enum_path, PathResolutionResultKind::Any);
         if let Ok(item) = item {
-            if let Some((item, _)) = item {
+            if let Some(item) = item {
                 let e = match &item.inner {
                     Item::Enum(e) => Some(e),
                     _ => None,
@@ -761,24 +831,24 @@ impl<'a> LowerCtx<'a> {
         let lhs = self.lower_expr(bin.lhs(), generic_params);
         let rhs = self.lower_expr(bin.rhs(), generic_params);
 
-        let add_trait_name = self
-            .string_interner
-            .get_or_intern_static("Add")
-            .file_span(self.file_id(), op.span);
-        let restriction = ts::TraitRestriction::new(add_trait_name, vec![lhs.tid]);
+        // let add_trait_name = self
+        //     .string_interner
+        //     .get_or_intern_static("Add")
+        //     .file_span(self.file_id(), op.span);
+        // let restriction = ts::TraitRestriction::new(todo!(), add_trait_name, vec![lhs.tid]);
 
-        if let Err(err) = self
-            .tchk
-            .does_type_implement_restrictions(lhs.tid, &restriction)
-        {
-            self.diagnostics.push(err);
-        }
-        if let Err(err) = self
-            .tchk
-            .does_type_implement_restrictions(rhs.tid, &restriction)
-        {
-            self.diagnostics.push(err);
-        }
+        // if let Err(err) = self
+        //     .tchk
+        //     .does_type_implement_restrictions(lhs.tid, &restriction)
+        // {
+        //     self.diagnostics.push(err);
+        // }
+        // if let Err(err) = self
+        //     .tchk
+        //     .does_type_implement_restrictions(rhs.tid, &restriction)
+        // {
+        //     self.diagnostics.push(err);
+        // }
 
         let tid = lhs.tid;
         let binop = BinOp { lhs, op, rhs };
@@ -919,49 +989,88 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    fn search_item_tree_for_method(
+    fn search_items_for_method(
         &mut self,
-        item_tree: &ItemTree,
+        items: impl Iterator<Item = ModItem>,
         tid: TypeId,
         name: Spur,
     ) -> Option<FunctionId> {
-        let mut suitable_applies = item_tree.applies.iter().filter(|(_, apply)| {
-            let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
-            self.tchk
-                .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
-                .is_ok()
-        });
+        // let mut suitable_applies = items.filter_map(|mod_item| match mod_item {
+        //     ModItem::Apply(apply) => {
+        //         let apply = &self.global_item_tree[apply];
+        //         let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+        //         self.tchk
+        //             .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+        //             .ok()
+        //             .map(|_| apply)
+        //     }
+        //     _ => None,
+        // });
+        let mut suitable_applies = vec![];
+        for mod_item in items {
+            match mod_item {
+                ModItem::Apply(apply) => {
+                    let apply = &self.global_item_tree.unwrap()[apply];
+                    let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+                    if self
+                        .tchk
+                        .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+                        .is_ok()
+                    {
+                        suitable_applies.push(apply);
+                    }
+                }
+                _ => {}
+            }
+        }
 
-        let method = suitable_applies.find_map(|(_, apply)| {
-            apply
-                .methods
-                .iter()
-                .find(|method| item_tree[**method].name.inner == name)
-                .cloned()
-        });
-        method
+        for apply in suitable_applies {
+            for method in &apply.methods.inner {
+                if self.global_item_tree.unwrap()[method.inner].name.inner == name {
+                    return Some(method.inner);
+                }
+            }
+            // apply
+            //     .methods
+            //     .iter()
+            //     .find(|method| self.global_item_tree[**method].name.inner == name);
+        }
+
+        None
+        // suitable_applies.find_map(|apply| {
+        //     apply
+        //         .methods
+        //         .iter()
+        //         .find(|method| self.global_item_tree[**method].name.inner == name)
+        //         .cloned()
+        // })
     }
 
-    fn search_item_tree_for_struct_with_field(
+    fn search_items_for_struct_with_field(
         &mut self,
-        item_tree: &ItemTree,
+        items: impl Iterator<Item = ModItem>,
         struct_name: Spur,
         field_name: Spur,
     ) -> Option<StructField> {
-        let mut suitable_structs = item_tree
-            .structs
-            .iter()
-            .filter(|(_, strukt)| strukt.name.inner == struct_name);
+        let mut suitable_structs = items.filter_map(|mod_item| match mod_item {
+            ModItem::Struct(strukt) => {
+                if self.global_item_tree.unwrap()[strukt].name.inner == struct_name {
+                    Some(&self.global_item_tree.unwrap()[strukt])
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        });
 
-        let field = suitable_structs.find_map(|(_, strukt)| {
+        suitable_structs.find_map(|strukt| {
             strukt
                 .fields
                 .fields
                 .iter()
                 .find(|field| field.name.inner == field_name)
                 .cloned()
-        });
-        field
+        })
     }
 
     fn check_call_args_with_function_decl(
@@ -1011,14 +1120,14 @@ impl<'a> LowerCtx<'a> {
         let span = strukt.range().to_span();
         let path = self.lower_path(strukt.path(), generic_params);
 
-        let struct_decl = self.get_struct(&path).map(|(s, _)| s);
+        let struct_decl = self.get_struct(&path);
         let fields = self.lower_struct_fields(strukt.field_list(), generic_params, &struct_decl);
 
         let ty = ts::Type::with_params(
             TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner))),
             path.generic_args
                 .iter()
-                .map(|idx| self.type_to_tkind(idx, file_id)),
+                .map(|idx| self.type_to_tkind(idx, file_id, None)),
         );
         let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
 
@@ -1190,9 +1299,10 @@ impl<'a> LowerCtx<'a> {
             self.tchk.tenv.get_typekind_with_id(lhs_tid).inner.inner
         {
             for_type = Some(self.string_interner.resolve(&path).to_string());
-            let result = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
+
+            let result = def_map.items.iter().find_map(|(mod_id, items)| {
                 let result =
-                    self.search_item_tree_for_struct_with_field(item_tree, path, rhs.inner);
+                    self.search_items_for_struct_with_field(items.iter().cloned(), path, rhs.inner);
 
                 let file_id = def_map.modules[mod_id].file_id;
 
@@ -1210,14 +1320,14 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        let item_tree_and_method = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
+        let method = def_map.items.iter().find_map(|(mod_id, items)| {
             let file_id = def_map.modules[mod_id].file_id;
-            self.search_item_tree_for_method(item_tree, lhs_tid, rhs.inner)
-                .map(|method| (item_tree, InFile::new(method, file_id)))
+            self.search_items_for_method(items.iter().cloned(), lhs_tid, rhs.inner)
+                .map(|method| InFile::new(method, file_id))
         });
 
-        let tid = if let Some((item_tree, method_idx)) = item_tree_and_method {
-            let method = &item_tree[method_idx.inner];
+        let tid = if let Some(method_idx) = method {
+            let method = &self.global_item_tree.unwrap()[method_idx.inner];
             self.insert_type_to_tenv(&method.ret_ty, method_idx.file_id)
         } else {
             let field_or_method = self.string_interner.resolve(&rhs).to_string();
@@ -1345,6 +1455,55 @@ impl<'a> LowerCtx<'a> {
                             Type::Path(path.inner)
                         }
                     }
+                    ast::Type::ThisPathType(this_path) => {
+                        todo!()
+                        // let path = this.lower_path(this_path.path(), generic_params);
+                        // Type::ThisPath(path.inner)
+                    }
+                    ast::Type::TupleType(_) => todo!(),
+                    ast::Type::ArrayType(_) => todo!(),
+                    ast::Type::PtrType(_) => todo!(),
+                }
+                .at(span)
+            },
+        );
+        self.types.alloc(ty).into()
+    }
+
+    pub(crate) fn lower_apply_method_type(
+        &mut self,
+        ty: Option<ast::Type>,
+        generic_params: &GenericParams,
+        this_trait: Spanned<Path>,
+    ) -> TypeIdx {
+        let ty = self.lower_node(
+            ty,
+            |_, ty| Type::Unknown.at(ty.range().to_span()),
+            |this, ty| {
+                let span = ty.range().to_span();
+                match ty {
+                    ast::Type::PathType(path) => {
+                        let path = this.lower_path(path.path(), generic_params);
+                        if path.segments.len() == 1 {
+                            if let Some((_, generic)) = generic_params
+                                .types
+                                .iter()
+                                .find(|(_, name)| name.inner == *path.segments.first().unwrap())
+                            {
+                                let restrictions =
+                                    this.get_restrictions_on_generic(generic.inner, generic_params);
+                                Type::Generic(generic.inner, restrictions)
+                            } else {
+                                Type::Path(path.inner)
+                            }
+                        } else {
+                            Type::Path(path.inner)
+                        }
+                    }
+                    ast::Type::ThisPathType(this_path) => {
+                        let path = this.lower_path(this_path.path(), generic_params);
+                        Type::ThisPath(path.inner, this_trait)
+                    }
                     ast::Type::TupleType(_) => todo!(),
                     ast::Type::ArrayType(_) => todo!(),
                     ast::Type::PtrType(_) => todo!(),
@@ -1377,20 +1536,41 @@ impl<'a> LowerCtx<'a> {
 
 pub fn lower_def_map_bodies(
     def_map: &DefMap,
+    global_item_tree: &ItemTree,
+    packages: Arena<Arc<DefMap>>,
     string_interner: &'static ThreadedRodeo,
     types: &mut Arena<Spanned<Type>>,
 ) -> (LoweredBodies, Vec<Diagnostic>) {
     tracing::info!("lowering definition map bodies");
-    let mut ctx = LowerCtx::with_def_map(def_map, string_interner, types);
+    let mut ctx =
+        LowerCtx::with_def_map(def_map, packages, string_interner, types, global_item_tree);
 
     // let item_tree = &def_map.item_trees[def_map.prelude];
     // ctx.handle_item_tree(item_tree, def_map.prelude);
 
-    for (module_id, item_tree) in def_map.item_trees.iter() {
-        if module_id == def_map.prelude {
-            continue;
-        }
-        ctx.handle_item_tree(item_tree, module_id);
+    // println!("HI {:?}", def_map.items);
+    // for dep in &def_map.dependencies {
+    //     ctx.packages[*dep].items.iter().for_each(|(_, items)| {
+    //         for item in items {
+    //             match item {
+    //                 ModItem::Trait(t) => {
+    //                     ctx.tchk
+    //                         .add_trait_to_context(global_item_tree[*t].name.inner);
+    //                     println!(
+    //                         "HI adding {}",
+    //                         string_interner.resolve(&global_item_tree[*t].name.inner)
+    //                     );
+    //                 }
+    //                 _ => {}
+    //             }
+    //         }
+    //     });
+    // }
+    // for (_, package) in ctx.packages.iter() {
+    // }
+
+    for (module_id, items) in def_map.items.iter() {
+        ctx.handle_items(items.iter().cloned(), module_id);
     }
     ctx.finish()
 }

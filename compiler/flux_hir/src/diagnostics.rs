@@ -1,5 +1,6 @@
 use flux_diagnostics::{quote_and_listify, Plural};
 use flux_proc_macros::diagnostic;
+use flux_span::FileSpanned;
 use itertools::Itertools;
 
 #[diagnostic]
@@ -95,14 +96,15 @@ pub(crate) enum LowerError {
     //     restriction_in_trait_decl: FileSpanned<String>,
     // },
     #[error(
-        location = methods_that_dont_belond,
+        location = apply_location,
         primary = "methods do not belong in apply",
-        label at methods_that_dont_belond = "method{} {} do{} not belong in apply"
-            with (
-                methods_that_dont_belond.plural("s"),
-                quote_and_listify(methods_that_dont_belond.iter().sorted()),
-                methods_that_dont_belond.singular("es")
-            ),
+        // label at methods_that_dont_belond = "method{} {} do{} not belong in apply"
+        //     with (
+        //         methods_that_dont_belond.plural("s"),
+        //         quote_and_listify(methods_that_dont_belond.iter().sorted()),
+        //         methods_that_dont_belond.singular("es")
+        //     ),
+        labels for methods_that_dont_belond = "method `{looped_value}` defined here",
         label at trait_methods_declared = "trait method{} {} declared here"
             with (
                 trait_methods_declared.plural("s"),
@@ -113,7 +115,9 @@ pub(crate) enum LowerError {
         #[filespanned]
         trait_methods_declared: Vec<String>,
         #[filespanned]
-        methods_that_dont_belond: Vec<String>,
+        apply_location: (),
+        // #[filespanned]
+        methods_that_dont_belond: Vec<FileSpanned<String>>,
     },
     #[error(
         location = apply_decl_generic_missing_where_predicate,
@@ -173,15 +177,17 @@ pub(crate) enum LowerError {
                 unimplemented_methods.plural("s"),
                 quote_and_listify(unimplemented_methods.iter().sorted())
             ),
-        label at trait_methods_declared = "trait method{} {} declared here"
-            with (
-                trait_methods_declared.plural("s"),
-                quote_and_listify(trait_methods_declared.iter().sorted())
-            ),
+        // label at trait_methods_declared = "trait method{} {} declared here"
+        //     with (
+        //         trait_methods_declared.plural("s"),
+        //         quote_and_listify(trait_methods_declared.iter().sorted())
+        //     ),
+        labels for trait_methods_declared = "method `{looped_value}` defined here"
+        
     )]
     UnimplementedTraitMethods {
-        #[filespanned]
-        trait_methods_declared: Vec<String>,
+        // #[filespanned]
+        trait_methods_declared: Vec<FileSpanned<String>>,
         #[filespanned]
         unimplemented_methods: Vec<String>,
     },

@@ -26,6 +26,8 @@ pub enum TokenKind {
     #[regex(r"[0-9]+\.[0-9]+(_[0-9]+)*")]
     FloatLit,
 
+    #[token("This")]
+    This,
     #[token("mod")]
     Mod,
     #[token("use")]
@@ -176,6 +178,7 @@ impl Display for TokenKind {
             Self::Use => write!(f, "use"),
             Self::Where => write!(f, "where"),
             Self::Whitespace => write!(f, "whitespace"),
+            Self::This => write!(f, "This"),
             Self::EOF => write!(f, "EOF"),
         }
     }

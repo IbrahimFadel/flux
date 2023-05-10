@@ -1,4 +1,4 @@
-use flux_diagnostics::{Diagnostic, DiagnosticCode, DiagnosticKind, ToDiagnostic};
+use flux_diagnostics::{Diagnostic, DiagnosticCode, DiagnosticKind, ToDiagnostic, quote_and_listify};
 
 #[derive(Debug, Clone)]
 pub enum DriverError {
@@ -9,6 +9,9 @@ pub enum DriverError {
     ReadConfigFile {
         package: Option<String>,
         candidate: String,
+    },
+    UnresolvedDeps {
+        deps: Vec<String>,
     },
 }
 
@@ -37,6 +40,11 @@ impl ToDiagnostic for DriverError {
             .with_help(format!(
                 "create the file `{candidate}` or change its permissions if it already exists"
             )),
+            Self::UnresolvedDeps { deps } => Diagnostic::new_without_file(
+                DiagnosticKind::Error,
+                DiagnosticCode::UnresolvedDependencies,
+                format!("unresolved dependencies {}", quote_and_listify(deps.iter())),
+            ),
         }
     }
 }

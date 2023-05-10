@@ -84,9 +84,9 @@ impl DefMap {
         &self,
         path: &Spanned<Path>,
         original_module_id: ModuleId,
-    ) -> Result<Option<ModuleItemWithVis>, ResolvePathError> {
+    ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
         let mut segments = path.segments.iter().enumerate();
-        let name = match segments.next() {
+        let mut name = match segments.next() {
             Some((_, segment)) => segment,
             None => {
                 return Err(ResolvePathError::EmptyPath {
@@ -94,13 +94,23 @@ impl DefMap {
                 })
             }
         };
+
+        // If the path is absolute (aka, begins with package name, skip to first segment that needs to be resolved)
+        if name == &self.name {
+            match segments.next() {
+                Some((_, segment)) => name = segment,
+                None => {
+                    return Err(ResolvePathError::EmptyPath {
+                        path_span: path.span,
+                    })
+                }
+            };
+        };
+
         let mut curr_per_ns = self.resolve_name_in_module(original_module_id, name);
 
         if curr_per_ns.is_none() {
-            return Err(ResolvePathError::UnresolvedPath {
-                path: path.clone(),
-                segment: 0,
-            });
+            return self.try_resolve_in_dependency(path);
         }
 
         for (i, segment) in segments {
@@ -123,7 +133,7 @@ impl DefMap {
                             segment: i,
                         });
                     }
-                    return Ok(Some((s, m, vis)));
+                    return Ok((None, Some((s, m, vis))));
                 }
             };
 
@@ -143,17 +153,36 @@ impl DefMap {
             }
         }
 
-        Ok(curr_per_ns)
+        Ok((None, (curr_per_ns)))
     }
 
     fn resolve_name_in_module(&self, module: ModuleId, name: &Spur) -> Option<ModuleItemWithVis> {
         let from_scope = self[module].scope.get(name);
         let from_builtin = self.builtin_scope.get(name).copied();
-        let prelude = || self.resolve_in_prelude(name);
-        from_scope.or(from_builtin).or_else(prelude)
+        let from_prelude = || self.resolve_in_prelude(name);
+        from_scope.or(from_builtin).or_else(from_prelude)
     }
 
     fn resolve_in_prelude(&self, name: &Spur) -> Option<ModuleItemWithVis> {
         self[self.prelude].scope.get(name)
+    }
+
+    fn try_resolve_in_dependency(
+        &self,
+        path: &Spanned<Path>,
+    ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
+        for dep in &self.dependencies {
+            let def_map = &self.packages[*dep];
+            if &def_map.name == path.nth(0) {
+                return def_map
+                    .resolve_path(path, def_map.root)
+                    .map(|(_, mod_item)| (Some(dep.clone()), mod_item));
+            }
+        }
+
+        Err(ResolvePathError::UnresolvedPath {
+            path: path.clone(),
+            segment: 0,
+        })
     }
 }

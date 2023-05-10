@@ -1,0 +1,7 @@
+// TODO: we really want the Self type like in rust.
+// Also, why does rust have Self::Output? I guess for name collisions
+pub trait Add<T> {
+    type Output;
+
+    fn add(other T) -> Output;
+}

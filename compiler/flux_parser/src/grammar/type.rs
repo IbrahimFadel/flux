@@ -1,9 +1,9 @@
 use flux_lexer::TokenKind;
 use flux_syntax::SyntaxKind;
 
-use crate::{marker::CompletedMarker, parser::Parser, token_set::TokenSet};
+use crate::{marker::CompletedMarker, parser::Parser};
 
-use super::{expr, path};
+use super::{expr, path, PathType};
 
 pub(crate) fn poisoned_type(p: &mut Parser, parent: &str) {
     let m = p.start();
@@ -12,15 +12,11 @@ pub(crate) fn poisoned_type(p: &mut Parser, parent: &str) {
 }
 
 pub(crate) fn type_(p: &mut Parser, parent: &str) {
-    let m = if p.at(TokenKind::LParen) {
-        tuple_type(p)
-    } else if p.at(TokenKind::Ident) {
-        path_type(p)
-    } else if p.at(TokenKind::LSquare) {
-        array_type(p)
-    } else {
-        return p.expected("type", parent);
-        // return p.err_recover("expected type", TYPE_RECOVERY_SET);
+    let m = match p.peek() {
+        TokenKind::LParen => tuple_type(p),
+        TokenKind::Ident | TokenKind::This => path_type(p),
+        TokenKind::LSquare => array_type(p),
+        _ => return p.expected("type", parent),
     };
     while p.at(TokenKind::Star) {
         let m = m.clone().precede(p);
@@ -42,8 +38,11 @@ fn tuple_type(p: &mut Parser) -> CompletedMarker {
 
 fn path_type(p: &mut Parser) -> CompletedMarker {
     let m = p.start();
-    path(p);
-    m.complete(p, SyntaxKind::PathType)
+    let path_type = path(p);
+    match path_type {
+        PathType::Regular => m.complete(p, SyntaxKind::PathType),
+        PathType::This => m.complete(p, SyntaxKind::ThisPathType),
+    }
 }
 
 fn array_type(p: &mut Parser) -> CompletedMarker {

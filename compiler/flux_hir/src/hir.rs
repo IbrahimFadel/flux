@@ -1,17 +1,19 @@
-use std::ops::Deref;
+use std::{
+    collections::HashSet,
+    ops::{Deref, DerefMut},
+};
 
 use flux_diagnostics::ice;
 use flux_proc_macros::Locatable;
 use flux_span::{Spanned, ToSpan, WithSpan};
 use flux_syntax::ast;
 use flux_typesystem::TypeId;
-use hashbrown::HashSet;
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 use text_size::{TextRange, TextSize};
 
-use crate::{builtin::BuiltinType, FunctionId};
+use crate::{builtin::BuiltinType, FunctionId, TraitId};
 
 pub mod pp;
 
@@ -51,7 +53,7 @@ pub struct Apply {
     pub trt: Option<Spanned<Path>>,
     pub ty: TypeIdx,
     pub assoc_types: Vec<(Name, TypeIdx)>,
-    pub methods: Spanned<Vec<FunctionId>>,
+    pub methods: Spanned<Vec<Spanned<FunctionId>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -115,7 +117,7 @@ pub struct Trait {
     pub name: Name,
     pub generic_params: Spanned<GenericParams>,
     pub assoc_types: Vec<(Name, Vec<Spanned<Path>>)>,
-    pub methods: Spanned<Vec<FunctionId>>,
+    pub methods: Spanned<Vec<Spanned<FunctionId>>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -138,6 +140,12 @@ impl Deref for Params {
     type Target = Vec<Param>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for Params {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -242,6 +250,12 @@ impl GenericParams {
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
 pub struct WherePredicates(pub Vec<WherePredicate>);
 
+impl WherePredicates {
+    pub fn iter(&self) -> impl Iterator<Item = &WherePredicate> {
+        self.0.iter()
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct WherePredicate {
     pub ty: Idx<Spanned<Spur>>,
@@ -339,6 +353,22 @@ impl Path {
             TextRange::new(TextSize::from(start as u32), TextSize::from(end as u32)).to_span(),
         ))
     }
+
+    pub fn nth(&self, n: usize) -> &Spur {
+        &self.segments[n]
+    }
+
+    pub fn is_int_type(&self, string_interner: &'static ThreadedRodeo) -> bool {
+        let first = *self.nth(0);
+        first == string_interner.get_or_intern_static("u64")
+            || first == string_interner.get_or_intern_static("u32")
+            || first == string_interner.get_or_intern_static("u16")
+            || first == string_interner.get_or_intern_static("u8")
+            || first == string_interner.get_or_intern_static("s64")
+            || first == string_interner.get_or_intern_static("s32")
+            || first == string_interner.get_or_intern_static("s16")
+            || first == string_interner.get_or_intern_static("s8")
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -387,6 +417,8 @@ pub enum Type {
     Array(TypeIdx, u32),
     Generic(Spur, Vec<Spanned<Path>>),
     Path(Path),
+    /// Path itself, Path of trait referenced by `This`
+    ThisPath(Path, Spanned<Path>),
     Ptr(TypeIdx),
     Tuple(Vec<TypeIdx>),
     Unknown,
@@ -456,7 +488,7 @@ pub struct Block {
     pub exprs: Vec<Typed<ExprIdx>>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Op {
     Eq,
     Plus,

@@ -6,7 +6,6 @@ use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
 use std::collections::HashSet;
-use tracing::Instrument;
 
 use crate::{
     diagnostics::TypeError,
@@ -25,13 +24,18 @@ pub struct TEnv {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitRestriction {
-    pub name: FileSpanned<Spur>,
+    pub trait_id: u32,
+    pub trait_name: FileSpanned<Spur>,
     pub args: Vec<TypeId>,
 }
 
 impl TraitRestriction {
-    pub fn new(name: FileSpanned<Spur>, args: Vec<TypeId>) -> Self {
-        Self { name, args }
+    pub fn new(trait_id: u32, trait_name: FileSpanned<Spur>, args: Vec<TypeId>) -> Self {
+        Self {
+            trait_id,
+            trait_name,
+            args,
+        }
     }
 }
 
@@ -310,7 +314,7 @@ impl TEnv {
                             .iter()
                             .map(|restriction| format!(
                                 "{}{}",
-                                self.string_interner.resolve(&restriction.name),
+                                self.string_interner.resolve(&restriction.trait_name),
                                 if restriction.args.is_empty() {
                                     "".to_string()
                                 } else {
@@ -372,8 +376,7 @@ impl TEnv {
     pub fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
         format!(
             "{}{}",
-            self.string_interner
-                .resolve(&trait_restriction.name.inner.inner),
+            self.string_interner.resolve(&trait_restriction.trait_name),
             if trait_restriction.args.is_empty() {
                 "".to_string()
             } else {

@@ -37,7 +37,7 @@ impl TChecker {
                 -   Does uN implement Foo?
                 */
                 // let restrictions = self.tenv.get_entry(a).restrictions.clone();
-                self.check_if_type_implements_restrictions(b, &restrictions)?;
+                // self.check_if_type_implements_restrictions(b, &restrictions)?;
                 Ok(())
             }
             (Concrete(ConcreteKind::Path(path)), Int(int_id)) => match int_id {

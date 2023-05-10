@@ -15,22 +15,78 @@ impl DefMap {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
+        global_item_tree: &'b ItemTree,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
         D::Doc: Clone,
         A: Clone,
     {
-        allocator.intersperse(
-            self.item_trees.iter().map(|(module_id, item_tree)| {
-                allocator.text("// ")
-                    + allocator.text(string_interner.resolve(&self[module_id].file_id.0))
-                    + allocator.hardline()
-                    + allocator.hardline()
-                    + item_tree.pretty(allocator, string_interner, bodies, module_id)
-            }),
-            "\n",
-        )
+        allocator.nil()
+        // allocator.intersperse(
+        //     self.items.iter().map(|(module_id, items)| {
+        //         let items = allocator.intersperse(
+        //             items.iter().map(|item| {
+        //                 item.pretty(
+        //                     allocator,
+        //                     string_interner,
+        //                     bodies,
+        //                     module_id,
+        //                     global_item_tree,
+        //                 )
+        //             }),
+        //             allocator.hardline(),
+        //         );
+        //         allocator.text("// ")
+        //             + allocator.text(string_interner.resolve(&self[module_id].file_id.0))
+        //             + allocator.hardline()
+        //             + allocator.hardline()
+        //             + items
+        //     }),
+        //     "\n",
+        // )
+    }
+}
+
+impl ModItem {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+        module_id: ModuleId,
+        item_tree: &'b ItemTree,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        match self {
+            ModItem::Apply(apply) => item_tree[*apply].pretty(
+                allocator,
+                string_interner,
+                bodies,
+                &item_tree.functions,
+                module_id,
+            ),
+            ModItem::Function(f_idx) => {
+                let body = bodies
+                    .indices
+                    .get(&(module_id, ModuleDefId::FunctionId(f_idx.index)))
+                    .unwrap();
+                item_tree[*f_idx].pretty(allocator, string_interner, bodies)
+                    + allocator.space()
+                    + body.pretty(allocator, string_interner, bodies)
+            }
+            ModItem::Mod(m_idx) => item_tree[*m_idx].pretty(allocator, string_interner),
+            ModItem::Struct(s_idx) => item_tree[*s_idx].pretty(allocator, string_interner, bodies),
+            ModItem::Trait(t_idx) => {
+                item_tree[*t_idx].pretty(allocator, string_interner, bodies, &item_tree.functions)
+            }
+            ModItem::Use(u_idx) => item_tree[*u_idx].pretty(allocator, string_interner, bodies),
+            _ => allocator.nil(),
+        }
     }
 }
 
@@ -49,9 +105,13 @@ impl ItemTree {
     {
         allocator.intersperse(
             self.top_level.iter().map(|mod_item| match mod_item {
-                ModItem::Apply(apply) => {
-                    self[*apply].pretty(allocator, string_interner, bodies, &self.functions, module_id)
-                }
+                ModItem::Apply(apply) => self[*apply].pretty(
+                    allocator,
+                    string_interner,
+                    bodies,
+                    &self.functions,
+                    module_id,
+                ),
                 ModItem::Function(f_idx) => {
                     let body = bodies
                         .indices
@@ -105,15 +165,15 @@ impl Apply {
             self.methods.iter().map(|method| {
                 let body = bodies
                     .indices
-                    .get(&(module_id, ModuleDefId::FunctionId(method.clone())))
+                    .get(&(module_id, ModuleDefId::FunctionId(method.inner.clone())))
                     .unwrap();
-                functions[*method].pretty(allocator, string_interner, bodies)
+                functions[method.inner].pretty(allocator, string_interner, bodies)
                     + allocator.space()
                     + body.pretty(allocator, string_interner, bodies)
             }),
             allocator.hardline(),
         );
-        self.visibility.inner.pretty(allocator)
+        self.visibility.pretty(allocator)
             + allocator.text("apply")
             + self.generic_params.pretty(allocator, string_interner)
             + allocator.space()
@@ -249,7 +309,8 @@ impl Trait {
         );
         let methods = allocator.intersperse(
             self.methods.iter().map(|method| {
-                functions[*method].pretty(allocator, string_interner, bodies) + allocator.text(";")
+                functions[method.inner].pretty(allocator, string_interner, bodies)
+                    + allocator.text(";")
             }),
             allocator.hardline(),
         );
@@ -321,7 +382,7 @@ impl Visibility {
         A: Clone,
     {
         match self {
-            Self::Public => allocator.text("pub "),
+            Self::Public => allocator.text("pub") + allocator.space(),
             Self::Private => allocator.text(""),
         }
     }
@@ -487,6 +548,7 @@ impl Type {
                     + allocator.text("]")
             }
             Self::Path(path) => path.pretty(allocator, string_interner, bodies),
+            Self::ThisPath(_, _) => allocator.text("todo"),
             Self::Ptr(ty) => allocator.text("*") + ty.pretty(allocator, string_interner, bodies),
             Self::Tuple(tys) => {
                 allocator.text("(")
@@ -578,6 +640,7 @@ impl Expr {
     {
         match self {
             Self::Block(block) => block.pretty(allocator, string_interner, bodies),
+            Self::BinOp(binop) => binop.pretty(allocator, string_interner, bodies),
             Self::Enum(eenum) => eenum.pretty(allocator, string_interner, bodies),
             Self::Call(call) => call.pretty(allocator, string_interner, bodies),
             Self::Float(float) => allocator.text(float.to_string()),
@@ -596,7 +659,6 @@ impl Expr {
                     )
                     + allocator.text(")")
             }
-            _ => todo!(),
         }
     }
 }
@@ -622,6 +684,40 @@ impl Block {
             + allocator.intersperse(exprs, allocator.hardline()).indent(4)
             + allocator.line()
             + allocator.text("}")
+    }
+}
+
+impl BinOp {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        self.lhs.pretty(allocator, string_interner, bodies)
+            + allocator.space()
+            + self.op.pretty(allocator)
+            + allocator.space()
+            + self.rhs.pretty(allocator, string_interner, bodies)
+    }
+}
+
+impl Op {
+    pub fn pretty<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        match self {
+            Op::Eq => allocator.text("="),
+            Op::Plus => allocator.text("+"),
+        }
     }
 }
 

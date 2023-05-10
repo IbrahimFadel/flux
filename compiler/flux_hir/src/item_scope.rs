@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 use crate::{hir::Visibility, ModuleDefId, ModuleId};
-use hashbrown::HashMap;
 use lasso::Spur;
 
 pub(crate) type ModuleItemWithVis = (ModuleDefId, ModuleId, Visibility);

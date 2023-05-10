@@ -7,8 +7,12 @@ pub(crate) struct TokenSet(u128);
 
 impl TokenSet {
     pub(crate) const EMPTY: TokenSet = TokenSet(0);
-    pub(crate) const TYPE_BEGIN: TokenSet =
-        TokenSet::new(&[TokenKind::LParen, TokenKind::Ident, TokenKind::LSquare]);
+    pub(crate) const TYPE_BEGIN: TokenSet = TokenSet::new(&[
+        TokenKind::LParen,
+        TokenKind::Ident,
+        TokenKind::This,
+        TokenKind::LSquare,
+    ]);
 
     pub(crate) const fn new(kinds: &[TokenKind]) -> TokenSet {
         let mut res = 0u128;

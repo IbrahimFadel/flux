@@ -53,7 +53,7 @@ pub trait ItemTreeNode: Clone {
 }
 
 pub struct FileItemTreeId<N: ItemTreeNode> {
-    pub(crate) index: Idx<N>,
+    pub index: Idx<N>,
     _p: PhantomData<N>,
 }
 
@@ -188,5 +188,20 @@ pub(crate) fn lower_ast_to_item_tree(
     types: &mut Arena<Spanned<Type>>,
 ) -> ItemTree {
     let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
-    lower::Ctx::new(file_id, string_interner, types).lower_module_items(&root)
+    let mut item_tree = ItemTree::default();
+    let ctx = lower::Ctx::with_item_tree(file_id, string_interner, types, &mut item_tree);
+    ctx.lower_module_items(&root);
+    item_tree
+}
+
+pub(crate) fn lower_ast_to_existing_item_tree(
+    root: SyntaxNode,
+    file_id: FileId,
+    string_interner: &'static ThreadedRodeo,
+    types: &mut Arena<Spanned<Type>>,
+    item_tree: &mut ItemTree,
+) -> Vec<ModItem> {
+    let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
+    let ctx = lower::Ctx::with_item_tree(file_id, string_interner, types, item_tree);
+    ctx.lower_module_items(&root)
 }

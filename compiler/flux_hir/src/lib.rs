@@ -5,9 +5,9 @@ pub mod hir;
 mod item_scope;
 mod item_tree;
 mod name_res;
-// mod per_ns;
 #[cfg(test)]
 mod tests;
+mod traits;
 
 use builtin::BuiltinType;
 use hir::{Apply, Enum, Function, Struct, Trait, Use};
@@ -15,7 +15,8 @@ use la_arena::Idx;
 use name_res::ModuleData;
 
 pub use body::{lower_def_map_bodies, LoweredBodies};
-pub use name_res::{build_def_map, mod_res::BasicFileResolver, DefMap};
+pub use item_tree::{FileItemTreeId, ItemTree, ModItem};
+pub use name_res::{build_def_map, mod_res::BasicFileResolver, DefMap, PackageId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleDefId {

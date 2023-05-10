@@ -129,6 +129,7 @@ impl Diagnostic {
 pub enum DiagnosticCode {
     CouldNotReadEntryFile,
     CouldNotReadConfigFile,
+    UnresolvedDependencies,
 
     ParserExpected,
 

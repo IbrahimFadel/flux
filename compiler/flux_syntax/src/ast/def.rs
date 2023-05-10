@@ -64,8 +64,9 @@ enum_node!(
     MemberAccessExpr
 );
 
-enum_node!(Type: PathType, TupleType, ArrayType, PtrType);
+enum_node!(Type: PathType, ThisPathType, TupleType, ArrayType, PtrType);
 basic_node!(PathType);
+basic_node!(ThisPathType);
 basic_node!(TupleType);
 basic_node!(ArrayType);
 basic_node!(PtrType);

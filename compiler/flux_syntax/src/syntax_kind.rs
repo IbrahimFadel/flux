@@ -64,6 +64,7 @@ pub enum SyntaxKind {
     EnumDeclVariant,
     ArrayType,
     PtrType,
+    ThisPathType,
 
     Whitespace,
     Comment,
@@ -87,6 +88,7 @@ pub enum SyntaxKind {
     IntLit,
     FloatLit,
     StringLit,
+    This,
 
     Comma,
     CmpEq,
@@ -180,6 +182,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::In => SyntaxKind::In,
             TokenKind::Enum => SyntaxKind::Enum,
             TokenKind::StringLit => SyntaxKind::StringLit,
+            TokenKind::This => SyntaxKind::This,
             TokenKind::EOF => SyntaxKind::EOF,
         }
     }

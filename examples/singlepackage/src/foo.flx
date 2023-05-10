@@ -1,9 +1,10 @@
-fn inside_foo_priv(x X, y Y) -> i32 {
+pub fn some_pub_fn() -> s32 {
     0
 }
 
-pub fn some_pub_fn() {
-    
+/*
+fn inside_foo_priv(x X, y Y) -> i32 {
+    0
 }
 
 trait Bar {
@@ -36,3 +37,4 @@ apply<A, B> Foo<A, B> to i32 {
 
     }
 }
+*/

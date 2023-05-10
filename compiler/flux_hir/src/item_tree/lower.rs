@@ -26,7 +26,7 @@ fn id<N: ItemTreeNode>(index: Idx<N>) -> FileItemTreeId<N> {
 }
 
 pub(super) struct Ctx<'a> {
-    tree: ItemTree,
+    tree: &'a mut ItemTree,
     string_interner: &'static ThreadedRodeo,
     body_ctx: crate::body::LowerCtx<'a>,
     diagnostics: Vec<Diagnostic>,
@@ -34,13 +34,28 @@ pub(super) struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
-    pub fn new(
+    // pub fn new(
+    //     file_id: FileId,
+    //     string_interner: &'static ThreadedRodeo,
+    //     types: &'a mut Arena<Spanned<Type>>,
+    // ) -> Self {
+    //     Self {
+    //         tree,
+    //         string_interner,
+    //         body_ctx: crate::body::LowerCtx::new(string_interner, types),
+    //         diagnostics: Vec::new(),
+    //         file_id,
+    //     }
+    // }
+
+    pub fn with_item_tree(
         file_id: FileId,
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
+        tree: &'a mut ItemTree,
     ) -> Self {
         Self {
-            tree: ItemTree::default(),
+            tree,
             string_interner,
             body_ctx: crate::body::LowerCtx::new(string_interner, types),
             diagnostics: Vec::new(),
@@ -48,16 +63,18 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    pub(super) fn lower_module_items(mut self, root: &Root) -> ItemTree {
-        self.tree.top_level = root.items().map(|item| self.lower_item(&item)).collect();
-        self.tree
+    pub(super) fn lower_module_items(mut self, root: &Root) -> Vec<ModItem> {
+        let new_items: Vec<_> = root.items().map(|item| self.lower_item(&item)).collect();
+        let mut clone = new_items.clone();
+        self.tree.top_level.append(&mut clone);
+        new_items
     }
 
     fn lower_item(&mut self, item: &ast::Item) -> ModItem {
         match item {
             ast::Item::ApplyDecl(a) => self.lower_apply(a).into(),
             ast::Item::EnumDecl(e) => self.lower_enum(e).into(),
-            ast::Item::FnDecl(function) => self.lower_function(function).into(),
+            ast::Item::FnDecl(function) => self.lower_function(function, &None).into(),
             ast::Item::ModDecl(m) => self.lower_mod(m).into(),
             ast::Item::StructDecl(s) => self.lower_struct(s).into(),
             ast::Item::TraitDecl(t) => self.lower_trait(t).into(),
@@ -85,7 +102,7 @@ impl<'a> Ctx<'a> {
             |this, ty| this.lower_type(ty.ty(), &generic_params),
         );
         let assoc_types = self.lower_apply_assoc_types(apply.associated_types(), &generic_params);
-        let (methods, methods_end) = self.lower_apply_methods(apply.methods());
+        let (methods, methods_end) = self.lower_apply_methods(apply.methods(), &trt.clone());
 
         let (l, r) = match (apply.lbrace(), apply.rbrace()) {
             (Some(lbrace), Some(rbrace)) => {
@@ -132,7 +149,11 @@ impl<'a> Ctx<'a> {
         id(self.tree.enums.alloc(res))
     }
 
-    fn lower_function(&mut self, function: &ast::FnDecl) -> FileItemTreeId<Function> {
+    fn lower_function(
+        &mut self,
+        function: &ast::FnDecl,
+        this_trait: &Option<Spanned<Path>>,
+    ) -> FileItemTreeId<Function> {
         let visibility = self.lower_visibility(function.visibility());
         let name = self.body_ctx.lower_name(function.name());
         let generic_params = self.lower_generic_params(
@@ -141,7 +162,7 @@ impl<'a> Ctx<'a> {
             name.span,
         );
         let params = self.lower_params(function.param_list(), &generic_params);
-        let ret_ty = self.lower_return_type(function.return_type(), &generic_params);
+        let ret_ty = self.lower_return_type(function.return_type(), &generic_params, this_trait);
         let res = Function {
             visibility,
             name,
@@ -219,7 +240,10 @@ impl<'a> Ctx<'a> {
         let generic_params =
             self.lower_generic_params(t.generic_param_list(), t.where_clause(), name.span);
         let assoc_types = self.lower_trait_assoc_types(t.associated_types(), &generic_params);
-        let (methods, methods_end) = self.lower_trait_methods(t.method_decls());
+        let (methods, methods_end) = self.lower_trait_methods(
+            t.method_decls(),
+            &Some(Path::from_spur(name.inner, self.string_interner).at(name.span)),
+        );
 
         let (l, r) = match (t.lbrace(), t.rbrace()) {
             (Some(lbrace), Some(rbrace)) => {
@@ -394,11 +418,12 @@ impl<'a> Ctx<'a> {
     fn lower_apply_methods(
         &mut self,
         methods: impl Iterator<Item = ast::FnDecl>,
-    ) -> (Vec<FunctionId>, Option<TextSize>) {
+        this_trait: &Option<Spanned<Path>>,
+    ) -> (Vec<Spanned<FunctionId>>, Option<TextSize>) {
         let mut end = None;
         let methods = methods
             .map(|method| {
-                let f = self.lower_function(&method);
+                let f = self.lower_function(&method, this_trait);
                 end = Some(
                     self.tree[f]
                         .ast
@@ -407,7 +432,7 @@ impl<'a> Ctx<'a> {
                         .range()
                         .end(),
                 );
-                f.index
+                Spanned::new(f.index, self.tree[f].name.span)
             })
             .collect();
 
@@ -417,7 +442,8 @@ impl<'a> Ctx<'a> {
     fn lower_trait_methods(
         &mut self,
         methods: impl Iterator<Item = ast::TraitMethodDecl>,
-    ) -> (Vec<FunctionId>, Option<TextSize>) {
+        this_trait: &Option<Spanned<Path>>,
+    ) -> (Vec<Spanned<FunctionId>>, Option<TextSize>) {
         let mut end = None;
         let methods = methods
             .map(|method| {
@@ -428,18 +454,20 @@ impl<'a> Ctx<'a> {
                     name.span,
                 );
                 let params = self.lower_params(method.param_list(), &generic_params);
-                let ret_ty = self.lower_return_type(method.return_ty(), &generic_params);
+                let ret_ty =
+                    self.lower_return_type(method.return_ty(), &generic_params, this_trait);
                 let ret_ty_span = self.body_ctx.types[ret_ty.raw()].span;
                 end = Some(ret_ty_span.range.end());
+                let name_span = name.span;
                 let f = Function {
-                    visibility: Visibility::Public.at(name.span), // Arbitrary really... since theres no real concept of visibility for trait methods, but i guess they are public
+                    visibility: Visibility::Public.at(name_span), // Arbitrary really... since theres no real concept of visibility for trait methods, but i guess they are public
                     name,
                     generic_params,
                     params,
                     ret_ty,
                     ast: None,
                 };
-                self.tree.functions.alloc(f)
+                Spanned::new(self.tree.functions.alloc(f), name_span)
             })
             .collect();
         (methods, end)
@@ -473,6 +501,7 @@ impl<'a> Ctx<'a> {
         &mut self,
         ty: Option<ast::FnReturnType>,
         generic_params: &GenericParams,
+        this_trait: &Option<Spanned<Path>>,
     ) -> TypeIdx {
         self.body_ctx.lower_node(
             ty,
@@ -482,7 +511,13 @@ impl<'a> Ctx<'a> {
                     .into()
             },
             |this, ty| match ty.ty() {
-                Some(ty) => this.lower_type(Some(ty), &generic_params),
+                Some(ty) => {
+                    if let Some(this_trait) = this_trait {
+                        this.lower_apply_method_type(Some(ty), generic_params, this_trait.clone())
+                    } else {
+                        this.lower_type(Some(ty), &generic_params)
+                    }
+                }
                 None => this
                     .types
                     .alloc(Type::Tuple(vec![]).at(ty.range().to_span()))

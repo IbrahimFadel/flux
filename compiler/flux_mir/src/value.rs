@@ -1,50 +1,97 @@
 use std::{marker::PhantomData, sync::Arc};
 
+#[derive(Debug)]
 pub enum Value {
+    Block(Block),
+    BinOp(BinOp),
     // Parameter(Parameter),
     // Tuple(Tuple),
     // Pi(Pi),
-    // Lambda(Lambda),
-    UInt(UInt),
-    SInt(SInt),
-    BinOp(BinOp),
+    Lambda(Lambda),
+    Int(u64),
+    Tuple(Vec<ValRef>),
+    // UInt(UInt),
+    // SInt(SInt),
 }
 
-enum UInt {
-    U64,
-    U32,
-    U16,
-    U8,
+#[derive(Debug)]
+pub struct Block(Vec<ValRef>);
+
+impl Block {
+    pub fn new(values: Vec<ValRef>) -> Self {
+        Self(values)
+    }
 }
 
-enum SInt {
-    S64,
-    S32,
-    S16,
-    S8,
+#[derive(Debug)]
+pub struct Lambda {}
+
+#[derive(Debug)]
+pub enum Op {
+    Eq,
+    Sum,
 }
 
-pub enum Op {}
-
+#[derive(Debug)]
 pub struct BinOp {
     lhs: ValRef,
     op: Op,
     rhs: ValRef,
 }
 
+impl BinOp {
+    pub fn new(lhs: ValRef, op: Op, rhs: ValRef) -> Self {
+        Self { lhs, op, rhs }
+    }
+}
+
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct ValRef<P = ()> {
     ptr: Arc<Value>,
     variant: PhantomData<P>,
 }
 
-pub type TypeRef = ValRef<IsType>;
-
-pub struct IsType;
-
-pub type TyArr = ValArr<IsType>;
-
-pub struct ValArr<P = ()> {
-    arr: Vec<ValRef<P>>,
-    variant: PhantomData<P>,
+impl<T> ValRef<T> {
+    pub fn new(ptr: Arc<Value>) -> Self {
+        Self {
+            ptr,
+            variant: PhantomData,
+        }
+    }
 }
+
+// impl<T> ValRef<T> {
+//     pub fn new(v: Arc<Value>) -> Self {
+//         Self {
+//             ptr: v,
+//             variant: PhantomData,
+//         }
+//     }
+// }
+
+// pub type TypeRef = ValRef<IsType>;
+
+// #[derive(Debug)]
+// pub struct IsType;
+
+// pub type TyArr = ValArr<IsType>;
+
+// #[derive(Debug)]
+// pub struct ValArr<P = ()> {
+//     arr: Vec<ValRef<P>>,
+//     variant: PhantomData<P>,
+// }
+
+// impl<T> ValArr<T> {
+//     pub fn new() -> Self {
+//         Self {
+//             arr: vec![],
+//             variant: PhantomData,
+//         }
+//     }
+
+//     pub fn push(&mut self, v: ValRef<T>) {
+//         self.arr.push(v);
+//     }
+// }

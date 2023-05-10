@@ -35,15 +35,28 @@ fn opt_return_type(p: &mut Parser) {
     m.complete(p, SyntaxKind::FnReturnType);
 }
 
-fn path(p: &mut Parser) {
+pub enum PathType {
+    Regular,
+    This,
+}
+
+fn path(p: &mut Parser) -> PathType {
     let m = p.start();
-    p.expect(TokenKind::Ident, "path");
+    let is_this_path = p.eat(TokenKind::This);
+    if !is_this_path {
+        p.expect(TokenKind::Ident, "path");
+    }
     while p.at(TokenKind::DoubleColon) {
         p.bump(TokenKind::DoubleColon);
         p.expect(TokenKind::Ident, "path");
     }
     opt_generic_arg_list(p);
     m.complete(p, SyntaxKind::Path);
+    if is_this_path {
+        PathType::This
+    } else {
+        PathType::Regular
+    }
 }
 
 #[cfg(test)]
