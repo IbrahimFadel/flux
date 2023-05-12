@@ -111,6 +111,10 @@ pub enum TokenKind {
     CmpLte,
     #[token(">=")]
     CmpGte,
+    #[token("&&")]
+    CmpAnd,
+    #[token("||")]
+    CmpOr,
     #[token("::")]
     DoubleColon,
     #[token(";")]
@@ -179,6 +183,8 @@ impl Display for TokenKind {
             Self::Where => write!(f, "where"),
             Self::Whitespace => write!(f, "whitespace"),
             Self::This => write!(f, "This"),
+            Self::CmpAnd => write!(f, "&&"),
+            Self::CmpOr => write!(f, "||"),
             Self::EOF => write!(f, "EOF"),
         }
     }

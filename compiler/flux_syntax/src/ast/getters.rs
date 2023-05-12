@@ -74,7 +74,7 @@ getters! {
     }
     BinExpr {
         lhs -> node(Expr);
-        op -> tok_matches(Eq, Plus, Star, Slash);
+        op -> tok_matches(Eq, Plus, Minus, Star, Slash, CmpAnd, CmpEq, CmpGt, CmpGte, CmpLt, CmpLte, CmpNeq, CmpOr);
         rhs -> nth_node(Expr, 1);
     }
     CallExpr {
@@ -89,6 +89,19 @@ getters! {
     //     lparen -> tok(LParen);
     //     rparen -> tok(RParen);
     // }
+    IfExpr {
+        condition -> nth_node(Expr, 0);
+        block -> nth_node(BlockExpr, 0);
+        else_ifs -> nodes(ElseIfBlock);
+        else_block -> node(ElseBlock);
+    }
+    ElseIfBlock {
+        condition -> nth_node(Expr, 0);
+        block -> nth_node(BlockExpr, 0);
+    }
+    ElseBlock {
+        block -> nth_node(BlockExpr, 0);
+    }
     ArgList {
         args -> nodes(Expr);
     }

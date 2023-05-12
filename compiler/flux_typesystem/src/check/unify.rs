@@ -1,3 +1,5 @@
+use flux_span::WithSpan;
+
 use super::*;
 
 impl TChecker {
@@ -62,6 +64,26 @@ impl TChecker {
                     } else {
                         Err(self.type_mismatch(a, b, unification_span))
                     }
+                }
+            },
+            (Int(a_int_id), Int(b_int_id)) => match (a_int_id, b_int_id) {
+                (Some(a_int_id), Some(b_int_id)) => {
+                    self.unify(*a_int_id, *b_int_id, unification_span)
+                }
+                (Some(_), None) => {
+                    let ty = Type::new(TypeKind::Int(Some(a)));
+                    self.tenv.set_type(b, ty);
+                    Ok(())
+                }
+                (None, Some(_)) => {
+                    let ty = Type::new(TypeKind::Int(Some(b)));
+                    self.tenv.set_type(a, ty);
+                    Ok(())
+                }
+                (None, None) => {
+                    let ty = Type::new(TypeKind::Int(Some(a)));
+                    self.tenv.set_type(b, ty);
+                    Ok(())
                 }
             },
             (Concrete(ConcreteKind::Path(path)), Float(float_id)) => match float_id {

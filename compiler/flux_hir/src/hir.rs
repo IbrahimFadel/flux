@@ -457,6 +457,7 @@ pub enum Expr {
     Let(Let),
     Struct(StructExpr),
     MemberAccess(MemberAccess),
+    If(If),
     Poisoned,
 }
 
@@ -491,7 +492,18 @@ pub struct Block {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Op {
     Eq,
-    Plus,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    CmpAnd,
+    CmpEq,
+    CmpGt,
+    CmpGte,
+    CmpLt,
+    CmpLte,
+    CmpNeq,
+    CmpOr,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -543,4 +555,48 @@ pub struct MemberAccess {
 pub enum MemberAccessKind {
     Field,
     Method,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct If {
+    exprs: Vec<Typed<ExprIdx>>,
+}
+
+impl If {
+    pub fn new(
+        condition: Typed<ExprIdx>,
+        block: Typed<ExprIdx>,
+        else_ifs: Vec<(Typed<ExprIdx>, Typed<ExprIdx>)>,
+        else_block: Option<Typed<ExprIdx>>,
+    ) -> Self {
+        let mut exprs = vec![condition, block];
+        for (cond, block) in else_ifs {
+            exprs.push(cond);
+            exprs.push(block);
+        }
+        if let Some(else_block) = else_block {
+            exprs.push(else_block);
+        }
+        Self { exprs }
+    }
+
+    pub fn condition(&self) -> &Typed<ExprIdx> {
+        &self.exprs[0]
+    }
+
+    pub fn block(&self) -> &Typed<ExprIdx> {
+        &self.exprs[1]
+    }
+
+    pub fn else_ifs(&self) -> impl Iterator<Item = (&Typed<ExprIdx>, &Typed<ExprIdx>)> {
+        self.exprs.iter().skip(2).tuples()
+    }
+
+    pub fn else_block(&self) -> Option<&Typed<ExprIdx>> {
+        if self.exprs.len() % 2 == 1 {
+            self.exprs.last()
+        } else {
+            None
+        }
+    }
 }

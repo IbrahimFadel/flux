@@ -25,16 +25,16 @@ pub(super) fn expr(p: &mut Parser) -> bool {
     .is_some()
 }
 
-// pub(crate) fn expr_no_structs(p: &mut Parser) {
-//     expr_binding_power(
-//         p,
-//         1,
-//         ExprRestrictions {
-//             allow_struct_expressions: false,
-//             allow_block_expressions: true,
-//         },
-//     );
-// }
+pub(crate) fn expr_no_structs(p: &mut Parser) {
+    expr_binding_power(
+        p,
+        1,
+        ExprRestrictions {
+            allow_struct_expressions: false,
+            allow_block_expressions: true,
+        },
+    );
+}
 
 pub(crate) fn expr_no_blocks(p: &mut Parser) {
     expr_binding_power(
@@ -48,33 +48,17 @@ pub(crate) fn expr_no_blocks(p: &mut Parser) {
 }
 
 fn current_op_prec(p: &mut Parser) -> u8 {
-    // if p.at(TokenKind::Eq) {
-    //     2
-    // } else if p.at(TokenKind::CmpEq)
-    //     || p.at(TokenKind::CmpNeq)
-    //     || p.at(TokenKind::CmpLt)
-    //     || p.at(TokenKind::CmpGt)
-    //     || p.at(TokenKind::CmpLte)
-    //     || p.at(TokenKind::CmpGte)
-    // {
-    //     3
-    // } else if p.at(TokenKind::Plus) || p.at(TokenKind::Minus) {
-    //     4
-    // } else if p.at(TokenKind::Star) || p.at(TokenKind::Slash) {
-    //     5
-    // } else {
-    //     0
-    // }
     match p.peek() {
-        TokenKind::Eq => 2,
+        TokenKind::Eq => 10,
+        TokenKind::CmpAnd | TokenKind::CmpOr => 20,
         TokenKind::CmpEq
         | TokenKind::CmpNeq
         | TokenKind::CmpLt
         | TokenKind::CmpGt
         | TokenKind::CmpLte
-        | TokenKind::CmpGte => 3,
-        TokenKind::Plus | TokenKind::Minus => 4,
-        TokenKind::Star | TokenKind::Slash => 5,
+        | TokenKind::CmpGte => 30,
+        TokenKind::Plus | TokenKind::Minus => 40,
+        TokenKind::Star | TokenKind::Slash => 50,
         _ => 0,
     }
 }

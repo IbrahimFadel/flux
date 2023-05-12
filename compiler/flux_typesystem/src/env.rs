@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_span::{FileSpanned, InFile, Span, Spanned};
@@ -165,6 +165,15 @@ impl TEnv {
     #[inline]
     pub fn insert_float(&mut self, span: InFile<Span>) -> TypeId {
         let ty = Type::new(TypeKind::Float(None));
+        self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
+    }
+
+    /// Insert a bool type into the [`TEnv`]
+    #[inline]
+    pub fn insert_bool(&mut self, span: InFile<Span>) -> TypeId {
+        let ty = Type::new(TypeKind::Concrete(ConcreteKind::Path(
+            self.string_interner.get_or_intern_static("bool"),
+        )));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 

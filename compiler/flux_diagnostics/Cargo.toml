@@ -7,4 +7,6 @@ edition = "2021"
 ariadne = "0.2.0"
 lasso = { version = "0.6.0", features = ["multi-threaded"] }
 itertools = "0.10.5"
+owo-colors = "3.5.0"
+
 flux_span = { path = "../flux_span" }

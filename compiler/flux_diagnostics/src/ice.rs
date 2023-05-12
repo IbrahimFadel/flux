@@ -1,3 +1,8 @@
+use std::process::exit;
+
+use owo_colors::OwoColorize;
+
 pub fn ice(msg: &str) -> ! {
-    panic!("internal compiler error: {msg}")
+    eprintln!("{}: {msg}", "internal compiler error".red());
+    exit(1);
 }

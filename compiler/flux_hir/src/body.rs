@@ -4,7 +4,7 @@ use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::{
     ast::{self, AstNode},
-    SyntaxToken,
+    SyntaxKind, SyntaxToken,
 };
 use flux_typesystem::{self as ts, ConcreteKind, TChecker, TypeId, TypeKind};
 use la_arena::{Arena, RawIdx};
@@ -13,7 +13,7 @@ use lasso::{Spur, ThreadedRodeo};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, Item, Let,
+        Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, If, Item, Let,
         MemberAccess, MemberAccessKind, Name, Op, Path, Struct, StructExpr, StructExprField,
         StructField, Trait, Type, TypeIdx, Typed, WithType,
     },
@@ -245,24 +245,28 @@ impl<'a> LowerCtx<'a> {
 
     fn handle_function(&mut self, f_idx: FunctionId, apply: Option<&Apply>) -> Typed<ExprIdx> {
         let f = &self.global_item_tree.unwrap()[f_idx];
+        let file_id = self.file_id();
 
-        self.verify_where_predicates(
-            &f.generic_params,
-            &f.generic_params.span.in_file(self.file_id()),
-        );
+        self.verify_where_predicates(&f.generic_params, &f.generic_params.span.in_file(file_id));
 
         let mut used_generics = vec![];
 
+        // let this_tid = apply.map(|apply| {
+        //     let this_tid = self.insert_type_to_tenv(&apply.ty, file_id);
+        //     self.tchk
+        //         .tenv
+        //         .insert_local_to_scope(self.string_interner.get_or_intern_static("this"), this_tid);
+        //     this_tid
+        // });
         if let Some(apply) = apply {
-            let param_tid = self.insert_type_to_tenv(&apply.ty, self.file_id());
-            self.tchk.tenv.insert_local_to_scope(
-                self.string_interner.get_or_intern_static("this"),
-                param_tid,
-            );
-        }
+            let this_tid = self.insert_type_to_tenv(&apply.ty, file_id);
+            self.tchk
+                .tenv
+                .insert_local_to_scope(self.string_interner.get_or_intern_static("this"), this_tid);
+        };
 
         for param in f.params.inner.iter() {
-            let param_tid = self.insert_type_to_tenv(&param.ty, self.file_id());
+            let param_tid = self.insert_type_to_tenv(&param.ty, file_id);
             self.tchk
                 .tenv
                 .insert_local_to_scope(param.name.inner, param_tid);
@@ -281,14 +285,22 @@ impl<'a> LowerCtx<'a> {
             &f.generic_params,
         );
         let ret_tid = match apply {
-            Some(apply) => self.insert_type_in_apply_to_tenv(&f.ret_ty, self.file_id(), apply),
-            None => self.insert_type_to_tenv(&f.ret_ty, self.file_id()),
+            Some(apply) => self.insert_type_in_apply_to_tenv(&f.ret_ty, file_id, apply),
+            None => self.insert_type_to_tenv(&f.ret_ty, file_id),
         };
+        // if let Some(this_tid) = this_tid {
+        //     self.tchk
+        //         .tenv
+        //         .inference_sources
+        //         .entry(this_tid)
+        //         .or_default()
+        //         .push(().file_span(file_id, self.types[apply.unwrap().ty.raw()].span));
+        // }
         self.tchk
             .unify(
                 body.tid,
                 ret_tid,
-                self.exprs[body.raw()].span.in_file(self.file_id()),
+                self.exprs[body.raw()].span.in_file(file_id),
             )
             .unwrap_or_else(|err| {
                 self.diagnostics.push(err);
@@ -303,7 +315,7 @@ impl<'a> LowerCtx<'a> {
                         .iter()
                         .map(|spur| self.string_interner.resolve(spur).to_string())
                         .collect(),
-                    unused_generic_params_file_span: f.generic_params.span.in_file(self.file_id()),
+                    unused_generic_params_file_span: f.generic_params.span.in_file(file_id),
                 }
                 .to_diagnostic(),
             );
@@ -460,13 +472,11 @@ impl<'a> LowerCtx<'a> {
         apply: &Apply,
         file_id: FileId,
     ) -> TypeKind {
-        let (trt, trait_id) = if let Some(res) = self.get_trait_with_id(this_type) {
-            res
-        } else {
-            ice("`This` couldn't be resolved");
-        };
-
-        println!("{:#?}", this_path);
+        // let (trt, trait_id) = if let Some(res) = self.get_trait_with_id(this_type) {
+        //     res
+        // } else {
+        //     ice("`This` couldn't be resolved");
+        // };
 
         apply
             .assoc_types
@@ -507,7 +517,10 @@ impl<'a> LowerCtx<'a> {
     ) -> Typed<ExprIdx> {
         self.lower_node(
             expr,
-            |_, _| todo!(),
+            |_, expr| {
+                println!("{:#?}", expr);
+                todo!()
+            },
             |this, expr| match expr {
                 ast::Expr::PathExpr(path) => {
                     let (idx, _) = this.lower_path_expr(Some(path), None);
@@ -528,6 +541,7 @@ impl<'a> LowerCtx<'a> {
                     generic_params,
                     MemberAccessKind::Field, // If it's a method it will be called by the lower_call_expr and given the correct access kind (that's the theory at least)
                 ),
+                ast::Expr::IfExpr(if_expr) => this.lower_if_expr(&if_expr, generic_params),
             },
         )
     }
@@ -759,6 +773,7 @@ impl<'a> LowerCtx<'a> {
             Some(v) => self
                 .string_interner
                 .resolve(&v.text_key())
+                .replace("_", "")
                 .at(v.text_range().to_span()),
             None => {
                 let idx: ExprIdx = self.exprs.alloc(Expr::Poisoned.at(span)).into();
@@ -770,20 +785,50 @@ impl<'a> LowerCtx<'a> {
             Err(_) => todo!(),
         });
         let idx: ExprIdx = self.exprs.alloc(Expr::Int(value.inner).at(span)).into();
+
+        if value.inner > u32::MAX.into() {
+            // int_ty = self.tchk.tenv.insert
+            let u64_ty = ts::Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                self.string_interner.get_or_intern_static("u64"),
+            )));
+            let u64_tid = self
+                .tchk
+                .tenv
+                .insert(u64_ty.file_span(self.file_id(), span));
+            let new_type = ts::Type::new(TypeKind::Int(Some(u64_tid)));
+            self.tchk.tenv.set_type(int_ty, new_type);
+        }
+
         idx.with_type(int_ty)
     }
 
     fn to_op(&self, token: &SyntaxToken) -> Spanned<Op> {
-        let op = token.text_key();
-        let eq = self.string_interner.get_or_intern_static("=");
-        let plus = self.string_interner.get_or_intern_static("+");
-        let op = if op == eq {
-            Op::Eq
-        } else if op == plus {
-            Op::Plus
-        } else {
-            todo!()
+        let op = match token.kind() {
+            SyntaxKind::Eq => Op::Eq,
+            SyntaxKind::Plus => Op::Add,
+            SyntaxKind::Minus => Op::Sub,
+            SyntaxKind::Star => Op::Mul,
+            SyntaxKind::Slash => Op::Div,
+            SyntaxKind::CmpAnd => Op::CmpAnd,
+            SyntaxKind::CmpEq => Op::CmpEq,
+            SyntaxKind::CmpGt => Op::CmpGt,
+            SyntaxKind::CmpGte => Op::CmpGte,
+            SyntaxKind::CmpLt => Op::CmpLt,
+            SyntaxKind::CmpLte => Op::CmpLte,
+            SyntaxKind::CmpNeq => Op::CmpNeq,
+            SyntaxKind::CmpOr => Op::CmpOr,
+            _ => todo!(),
         };
+        // let op = token.text_key();
+        // let eq = self.string_interner.get_or_intern_static("=");
+        // let plus = self.string_interner.get_or_intern_static("+");
+        // let op = if op == eq {
+        //     Op::Eq
+        // } else if op == plus {
+        //     Op::Plus
+        // } else {
+        //     todo!()
+        // };
         op.at(token.text_range().to_span())
     }
 
@@ -798,7 +843,17 @@ impl<'a> LowerCtx<'a> {
         let op = self.to_op(op);
         match &op.inner {
             Op::Eq => self.lower_bin_eq_expr(bin, generic_params),
-            Op::Plus => self.lower_bin_plus_expr(bin, op, generic_params),
+            Op::Add | Op::Sub | Op::Mul | Op::Div => {
+                self.lower_bin_plus_expr(bin, op, generic_params)
+            }
+            Op::CmpAnd
+            | Op::CmpEq
+            | Op::CmpGt
+            | Op::CmpGte
+            | Op::CmpLt
+            | Op::CmpLte
+            | Op::CmpNeq
+            | Op::CmpOr => self.lower_bin_op_cmp(bin, op, generic_params),
         }
     }
 
@@ -820,6 +875,27 @@ impl<'a> LowerCtx<'a> {
         let expr = Expr::Tuple(vec![]).at(span);
         let idx: ExprIdx = self.exprs.alloc(expr).into();
         idx.with_type(tid)
+    }
+
+    fn lower_bin_op_cmp(
+        &mut self,
+        bin: &ast::BinExpr,
+        op: Spanned<Op>,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let lhs = self.lower_expr(bin.lhs(), generic_params);
+        let rhs = self.lower_expr(bin.rhs(), generic_params);
+        let binop = BinOp { lhs, op, rhs };
+        let idx: ExprIdx = self
+            .exprs
+            .alloc(Expr::BinOp(binop).at(bin.range().to_span()))
+            .into();
+
+        idx.with_type(
+            self.tchk
+                .tenv
+                .insert_bool(bin.range().to_span().in_file(self.file_id())),
+        )
     }
 
     fn lower_bin_plus_expr(
@@ -1239,7 +1315,7 @@ impl<'a> LowerCtx<'a> {
         generic_params: &GenericParams,
     ) -> Typed<ExprIdx> {
         let file_id = self.file_id();
-        let span = block.range().to_span();
+        let mut span = block.range().to_span();
         let mut block_tid = self.tchk.tenv.insert_unit(span.in_file(file_id));
         let mut exprs = vec![];
         let stmts = block.stmts().collect::<Vec<_>>();
@@ -1266,10 +1342,14 @@ impl<'a> LowerCtx<'a> {
                         );
                     }
                     exprs.push(e);
+                    span = stmts[i].range().to_span();
                     break;
                 }
             };
             exprs.push(expr);
+            if i == stmts_len - 1 {
+                span = stmts[i].range().to_span();
+            }
         }
         let block = Expr::Block(Block { exprs }).at(span);
         let idx: ExprIdx = self.exprs.alloc(block).into();
@@ -1383,6 +1463,110 @@ impl<'a> LowerCtx<'a> {
         let l = Expr::Let(Let { name, ty, val }).at(span);
         let idx: ExprIdx = self.exprs.alloc(l).into();
         idx.with_type(self.tchk.tenv.insert_unit(span.in_file(self.file_id())))
+    }
+
+    fn lower_if_expr(
+        &mut self,
+        if_expr: &ast::IfExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let span = if_expr.range().to_span();
+        let file_id = self.file_id();
+        let condition = self.lower_expr(if_expr.condition(), generic_params);
+        let cond_span = self.exprs[condition.expr.raw()].span;
+        let bool_tid = self.tchk.tenv.insert_bool(cond_span.in_file(file_id));
+
+        self.tchk
+            .unify(condition.tid, bool_tid, cond_span.in_file(file_id))
+            .unwrap_or_else(|err| {
+                self.diagnostics.push(err);
+            });
+
+        let block = self.lower_if_block(if_expr.block(), generic_params);
+        let block_tid = block.tid;
+        let else_ifs = if_expr
+            .else_ifs()
+            .map(|else_if| {
+                let cond = self.lower_expr(else_if.condition(), generic_params);
+                let else_if_block = self.lower_if_block(else_if.block(), generic_params);
+
+                self.tchk
+                    .unify(
+                        cond.tid,
+                        bool_tid,
+                        self.exprs[cond.expr.raw()].span.in_file(file_id),
+                    )
+                    .unwrap_or_else(|err| {
+                        self.diagnostics.push(err);
+                    });
+
+                self.tchk
+                    .unify(
+                        block_tid,
+                        else_if_block.tid,
+                        self.exprs[else_if_block.expr.raw()].span.in_file(file_id),
+                    )
+                    .unwrap_or_else(|err| {
+                        self.diagnostics.push(err);
+                    });
+                (cond, else_if_block)
+            })
+            .collect();
+        let else_block = if_expr.else_block().map(|else_block| {
+            let else_block = self.lower_if_block(else_block.block(), generic_params);
+            self.tchk
+                .unify(
+                    block_tid,
+                    else_block.tid,
+                    self.exprs[else_block.expr.raw()].span.in_file(file_id),
+                )
+                .unwrap_or_else(|err| {
+                    self.diagnostics.push(err);
+                });
+            else_block
+        });
+
+        let if_expr = Expr::If(If::new(condition, block, else_ifs, else_block)).at(span);
+        let idx: ExprIdx = self.exprs.alloc(if_expr).into();
+        idx.with_type(block_tid)
+    }
+
+    fn lower_if_block(
+        &mut self,
+        block: Option<ast::BlockExpr>,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        self.lower_node(
+            block,
+            |this, block| {
+                let span = block.range().to_span();
+                let idx: ExprIdx = this
+                    .exprs
+                    .alloc(Expr::Block(Block { exprs: vec![] }).at(span))
+                    .into();
+                idx.with_type(this.tchk.tenv.insert_unknown(span.in_file(this.file_id())))
+            },
+            |this, block| this.lower_block_expr(&block, generic_params),
+        )
+    }
+
+    fn lower_else_block(
+        &mut self,
+        block: Option<ast::ElseBlock>,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        self.lower_node(
+            block,
+            |this, block| {
+                let span = block.range().to_span();
+                let idx: ExprIdx = this
+                    .exprs
+                    .alloc(Expr::Block(Block { exprs: vec![] }).at(span))
+                    .into();
+                idx.with_type(this.tchk.tenv.insert_unknown(span.in_file(this.file_id())))
+            },
+            |this, block| this.lower_if_block(block.block(), generic_params),
+        )
     }
 
     pub(crate) fn lower_path(

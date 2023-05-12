@@ -44,6 +44,9 @@ basic_node!(TupleExpr);
 basic_node!(AddressExpr);
 basic_node!(IdxExpr);
 basic_node!(MemberAccessExpr);
+basic_node!(IfExpr);
+basic_node!(ElseIfBlock);
+basic_node!(ElseBlock);
 
 basic_node!(LetStmt);
 basic_node!(ExprStmt);
@@ -61,7 +64,8 @@ enum_node!(
     TupleExpr,
     AddressExpr,
     IdxExpr,
-    MemberAccessExpr
+    MemberAccessExpr,
+    IfExpr
 );
 
 enum_node!(Type: PathType, ThisPathType, TupleType, ArrayType, PtrType);

@@ -135,7 +135,7 @@ macro_rules! basic_node {
 }
 
 fn trim_trailing_whitesapce(node: &SyntaxNode) -> TextRange {
-    let len = node.children().len();
+    let len = node.children_with_tokens().len();
     if len == 0 {
         return node.text_range();
     }

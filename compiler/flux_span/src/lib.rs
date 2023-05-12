@@ -322,6 +322,7 @@ impl WithSpan for usize {}
 impl WithSpan for u32 {}
 impl<T> WithSpan for Vec<T> {}
 impl<T, F> WithSpan for std::iter::Map<T, F> {}
+impl WithSpan for () {}
 // impl<I, T> WithSpan for I where I: Iterator<Item = T> {}
 
 pub trait ToSpan: Into<TextRange> {

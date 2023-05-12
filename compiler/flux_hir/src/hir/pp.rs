@@ -22,29 +22,28 @@ impl DefMap {
         D::Doc: Clone,
         A: Clone,
     {
-        allocator.nil()
-        // allocator.intersperse(
-        //     self.items.iter().map(|(module_id, items)| {
-        //         let items = allocator.intersperse(
-        //             items.iter().map(|item| {
-        //                 item.pretty(
-        //                     allocator,
-        //                     string_interner,
-        //                     bodies,
-        //                     module_id,
-        //                     global_item_tree,
-        //                 )
-        //             }),
-        //             allocator.hardline(),
-        //         );
-        //         allocator.text("// ")
-        //             + allocator.text(string_interner.resolve(&self[module_id].file_id.0))
-        //             + allocator.hardline()
-        //             + allocator.hardline()
-        //             + items
-        //     }),
-        //     "\n",
-        // )
+        allocator.intersperse(
+            self.items.iter().map(|(module_id, items)| {
+                let items = allocator.intersperse(
+                    items.iter().map(|item| {
+                        item.pretty(
+                            allocator,
+                            string_interner,
+                            bodies,
+                            module_id,
+                            global_item_tree,
+                        )
+                    }),
+                    allocator.hardline(),
+                );
+                allocator.text("// ")
+                    + allocator.text(string_interner.resolve(&self[module_id].file_id.0))
+                    + allocator.hardline()
+                    + allocator.hardline()
+                    + items
+            }),
+            "\n",
+        )
     }
 }
 
@@ -117,9 +116,19 @@ impl ItemTree {
                         .indices
                         .get(&(module_id, ModuleDefId::FunctionId(f_idx.index)))
                         .unwrap();
+                    let is_block_expr = match &bodies.exprs[body.raw()].inner {
+                        Expr::Block(_) => true,
+                        _ => false,
+                    };
                     self[*f_idx].pretty(allocator, string_interner, bodies)
                         + allocator.space()
-                        + body.pretty(allocator, string_interner, bodies)
+                        + if is_block_expr {
+                            body.pretty(allocator, string_interner, bodies)
+                        } else {
+                            allocator.text("=>")
+                                + allocator.space()
+                                + body.pretty(allocator, string_interner, bodies)
+                        }
                 }
                 ModItem::Mod(m_idx) => self[*m_idx].pretty(allocator, string_interner),
                 ModItem::Struct(s_idx) => self[*s_idx].pretty(allocator, string_interner, bodies),
@@ -167,9 +176,19 @@ impl Apply {
                     .indices
                     .get(&(module_id, ModuleDefId::FunctionId(method.inner.clone())))
                     .unwrap();
+                let is_block_expr = match &bodies.exprs[body.raw()].inner {
+                    Expr::Block(_) => true,
+                    _ => false,
+                };
                 functions[method.inner].pretty(allocator, string_interner, bodies)
                     + allocator.space()
-                    + body.pretty(allocator, string_interner, bodies)
+                    + if is_block_expr {
+                        body.pretty(allocator, string_interner, bodies)
+                    } else {
+                        allocator.text("=>")
+                            + allocator.space()
+                            + body.pretty(allocator, string_interner, bodies)
+                    }
             }),
             allocator.hardline(),
         );
@@ -548,7 +567,9 @@ impl Type {
                     + allocator.text("]")
             }
             Self::Path(path) => path.pretty(allocator, string_interner, bodies),
-            Self::ThisPath(_, _) => allocator.text("todo"),
+            Self::ThisPath(this_path, _) => {
+                allocator.text("This::") + this_path.pretty(allocator, string_interner, bodies)
+            }
             Self::Ptr(ty) => allocator.text("*") + ty.pretty(allocator, string_interner, bodies),
             Self::Tuple(tys) => {
                 allocator.text("(")
@@ -644,6 +665,7 @@ impl Expr {
             Self::Enum(eenum) => eenum.pretty(allocator, string_interner, bodies),
             Self::Call(call) => call.pretty(allocator, string_interner, bodies),
             Self::Float(float) => allocator.text(float.to_string()),
+            Self::If(if_) => if_.pretty(allocator, string_interner, bodies),
             Self::Int(int) => allocator.text(int.to_string()),
             Self::Let(l) => l.pretty(allocator, string_interner, bodies),
             Self::MemberAccess(access) => access.pretty(allocator, string_interner, bodies),
@@ -715,8 +737,19 @@ impl Op {
         A: Clone,
     {
         match self {
+            Op::Add => allocator.text("+"),
             Op::Eq => allocator.text("="),
-            Op::Plus => allocator.text("+"),
+            Op::Sub => allocator.text("-"),
+            Op::Mul => allocator.text("*"),
+            Op::Div => allocator.text("/"),
+            Op::CmpAnd => allocator.text("&&"),
+            Op::CmpEq => allocator.text("=="),
+            Op::CmpGt => allocator.text(">"),
+            Op::CmpGte => allocator.text(">="),
+            Op::CmpLt => allocator.text("<"),
+            Op::CmpLte => allocator.text("<="),
+            Op::CmpNeq => allocator.text("!="),
+            Op::CmpOr => allocator.text("||"),
         }
     }
 }
@@ -767,6 +800,47 @@ impl Call {
                 ", ",
             )
             + allocator.text(")")
+    }
+}
+
+impl If {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        let else_ifs = allocator.intersperse(
+            self.else_ifs().map(|(cond, block)| {
+                allocator.text("else if")
+                    + allocator.space()
+                    + cond.pretty(allocator, string_interner, bodies)
+                    + allocator.space()
+                    + block.pretty(allocator, string_interner, bodies)
+            }),
+            allocator.space(),
+        );
+        allocator.text("if")
+            + allocator.space()
+            + self.condition().pretty(allocator, string_interner, bodies)
+            + allocator.space()
+            + self.block().pretty(allocator, string_interner, bodies)
+            + allocator.space()
+            + else_ifs
+            + match self.else_block() {
+                Some(else_block) => {
+                    allocator.space()
+                        + allocator.text("else")
+                        + allocator.space()
+                        + else_block.pretty(allocator, string_interner, bodies)
+                }
+                None => allocator.nil(),
+            }
     }
 }
 

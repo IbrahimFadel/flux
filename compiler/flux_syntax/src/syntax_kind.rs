@@ -51,6 +51,9 @@ pub enum SyntaxKind {
     StructExprField,
     PathExpr,
     MemberAccessExpr,
+    IfExpr,
+    ElseIfBlock,
+    ElseBlock,
 
     ExprStmt,
     TerminatorExprStmt,
@@ -97,6 +100,8 @@ pub enum SyntaxKind {
     CmpGt,
     CmpLte,
     CmpGte,
+    CmpAnd,
+    CmpOr,
     Colon,
     DoubleColon,
     Plus,
@@ -183,6 +188,8 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::Enum => SyntaxKind::Enum,
             TokenKind::StringLit => SyntaxKind::StringLit,
             TokenKind::This => SyntaxKind::This,
+            TokenKind::CmpAnd => SyntaxKind::CmpAnd,
+            TokenKind::CmpOr => SyntaxKind::CmpOr,
             TokenKind::EOF => SyntaxKind::EOF,
         }
     }

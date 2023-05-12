@@ -1,11 +1,3 @@
-apply std::math::Add<u32> to u32 {
-    type Output = s32;
-
-    fn add(other u32) -> This::Output {
-        this + other
-    }
-}
-
 fn main() {
     
 }

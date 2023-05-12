@@ -287,6 +287,7 @@ dependencies = [
  "flux_span",
  "itertools",
  "lasso",
+ "owo-colors",
 ]
 
 [[package]]

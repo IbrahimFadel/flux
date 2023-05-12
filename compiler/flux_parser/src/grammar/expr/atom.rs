@@ -8,24 +8,21 @@ use crate::{
     token_set::TokenSet,
 };
 
-use super::{expr, stmt, ExprRestrictions};
+use super::{expr, expr_no_blocks, expr_no_structs, stmt, ExprRestrictions};
 
 pub(super) fn atom(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker> {
-    let m = if p.at(TokenKind::IntLit) {
-        int_expr(p)
-    } else if p.at(TokenKind::FloatLit) {
-        float_expr(p)
-    } else if p.at(TokenKind::StringLit) {
-        string_expr(p)
-    } else if p.at(TokenKind::LParen) {
-        paren_or_tuple_expr(p)
-    } else if p.at(TokenKind::LBrace) && restrictions.allow_block_expressions {
-        block_expr(p)
-    } else if p.at(TokenKind::Ident) {
-        path_or_complex_type_expr(p, restrictions)
-    } else {
-        p.err_and_bump("expected expression atom");
-        return None;
+    let m = match p.peek() {
+        TokenKind::IntLit => int_expr(p),
+        TokenKind::FloatLit => float_expr(p),
+        TokenKind::StringLit => string_expr(p),
+        TokenKind::LParen => paren_or_tuple_expr(p),
+        TokenKind::LBrace if restrictions.allow_block_expressions => block_expr(p),
+        TokenKind::Ident => path_or_complex_type_expr(p, restrictions),
+        TokenKind::If => if_expr(p),
+        _ => {
+            p.err_and_bump("expected expression atom");
+            return None;
+        }
     };
     Some(m)
 }
@@ -142,4 +139,30 @@ fn struct_expr_field(p: &mut Parser) {
     p.expect(TokenKind::Colon, "struct expression field");
     expr(p);
     m.complete(p, SyntaxKind::StructExprField);
+}
+
+fn if_expr(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(TokenKind::If);
+    expr_no_structs(p);
+    block_expr(p);
+
+    while p.eat(TokenKind::Else) {
+        let m = p.start();
+        if p.eat(TokenKind::If) {
+            expr_no_structs(p);
+            block_expr(p);
+            m.complete(p, SyntaxKind::ElseIfBlock);
+        } else {
+            block_expr(p);
+            m.complete(p, SyntaxKind::ElseBlock);
+        }
+    }
+
+    // if p.eat(TokenKind::Else) {
+    // let m = p.start();
+    // if p.eat(To)
+    // }
+
+    m.complete(p, SyntaxKind::IfExpr)
 }
