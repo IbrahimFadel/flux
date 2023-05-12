@@ -170,6 +170,7 @@ pub enum DiagnosticCode {
     UnknownEnumVariant,
     EnumVariantMissingArg,
     IncorrectNumArgsInEnumVariantInitialization,
+    IncorrectNumArgsInIntrinsic,
 
     TypeMismatch,
     ConflictingTraitImplementations,

@@ -2,6 +2,7 @@ mod body;
 mod builtin;
 mod diagnostics;
 pub mod hir;
+mod intrinsics;
 mod item_scope;
 mod item_tree;
 mod name_res;

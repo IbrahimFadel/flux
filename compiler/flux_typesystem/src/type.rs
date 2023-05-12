@@ -95,6 +95,7 @@ pub enum TypeKind {
     Ref(TypeId),
     // Generic(Vec<(Spur, Vec<TypeId>)>),
     Generic(Spur, Vec<TraitRestriction>),
+    Never,
     Unknown,
 }
 
@@ -106,6 +107,7 @@ impl Display for TypeKind {
             Self::Generic(name, _) => write!(f, "{name:?}"),
             Self::Int(_) => write!(f, "int"),
             Self::Ref(id) => write!(f, "Ref({id}"),
+            Self::Never => write!(f, "!"),
             Self::Unknown => write!(f, "unknown"),
         }
     }

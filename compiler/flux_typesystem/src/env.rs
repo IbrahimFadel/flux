@@ -177,6 +177,14 @@ impl TEnv {
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
 
+    #[inline]
+    pub fn insert_str(&mut self, span: InFile<Span>) -> TypeId {
+        let ty = Type::new(TypeKind::Concrete(ConcreteKind::Path(
+            self.string_interner.get_or_intern_static("str"),
+        )));
+        self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
+    }
+
     /// Insert a `Spanned<Type>` into the type environment
     ///
     /// This interns the [`TypeKind`] and pushes a new [`TEntry`] to th environment, returning
@@ -248,6 +256,7 @@ impl TEnv {
                 ))),
             },
             TypeKind::Ref(id) => self.reconstruct(*id),
+            TypeKind::Never => todo!(),
             TypeKind::Unknown => Err(TypeError::CouldNotInferType {
                 ty: (),
                 ty_file_span: self.get_type_filespan(tid),
@@ -291,6 +300,7 @@ impl TEnv {
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),
             TypeKind::Ref(id) => self.fmt_ty_id_constr(*id),
+            TypeKind::Never => "!".to_string(),
             TypeKind::Concrete(concrete) => self.fmt_concrete_kind_constr(concrete),
         }
     }
@@ -342,6 +352,7 @@ impl TEnv {
             TypeKind::Int(_) => "int".to_string(),
             TypeKind::Float(_) => "float".to_string(),
             TypeKind::Ref(id) => self.fmt_ty_id(*id),
+            TypeKind::Never => "!".to_string(),
             TypeKind::Concrete(concrete) => self.fmt_concrete_kind(concrete),
         }
     }

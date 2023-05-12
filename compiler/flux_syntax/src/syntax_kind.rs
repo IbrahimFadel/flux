@@ -54,6 +54,7 @@ pub enum SyntaxKind {
     IfExpr,
     ElseIfBlock,
     ElseBlock,
+    IntrinsicExpr,
 
     ExprStmt,
     TerminatorExprStmt,

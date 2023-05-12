@@ -421,6 +421,7 @@ pub enum Type {
     ThisPath(Path, Spanned<Path>),
     Ptr(TypeIdx),
     Tuple(Vec<TypeIdx>),
+    Never,
     Unknown,
 }
 
@@ -458,6 +459,8 @@ pub enum Expr {
     Struct(StructExpr),
     MemberAccess(MemberAccess),
     If(If),
+    Intrinsic(Intrinsic),
+    Str(Str),
     Poisoned,
 }
 
@@ -598,5 +601,23 @@ impl If {
         } else {
             None
         }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub enum Intrinsic {
+    Panic(Spur),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+pub struct Str(Spanned<Spur>);
+
+impl Str {
+    pub fn new(value: Spanned<Spur>) -> Self {
+        Self(value)
+    }
+
+    pub fn spur(&self) -> &Spanned<Spur> {
+        &self.0
     }
 }

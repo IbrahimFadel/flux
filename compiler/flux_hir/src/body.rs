@@ -13,10 +13,11 @@ use lasso::{Spur, ThreadedRodeo};
 use crate::{
     diagnostics::LowerError,
     hir::{
-        Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, If, Item, Let,
-        MemberAccess, MemberAccessKind, Name, Op, Path, Struct, StructExpr, StructExprField,
-        StructField, Trait, Type, TypeIdx, Typed, WithType,
+        Apply, BinOp, Block, Call, EnumExpr, Expr, ExprIdx, Function, GenericParams, If, Intrinsic,
+        Item, Let, MemberAccess, MemberAccessKind, Name, Op, Path, Str, Struct, StructExpr,
+        StructExprField, StructField, Trait, Type, TypeIdx, Typed, WithType,
     },
+    intrinsics,
     item_tree::ItemTree,
     name_res::{path_res::PathResolutionResultKind, DefMap},
     EnumId, FunctionId, ModItem, ModuleDefId, ModuleId, StructId, TraitId,
@@ -404,6 +405,7 @@ impl<'a> LowerCtx<'a> {
         })
     }
 
+    #[inline]
     fn file_id(&self) -> FileId {
         self.def_map.unwrap()[self.cur_module_id].file_id
     }
@@ -458,6 +460,7 @@ impl<'a> LowerCtx<'a> {
                     .map(|idx| self.insert_type_to_tenv(idx, file_id))
                     .collect(),
             )),
+            Type::Never => TypeKind::Never,
             Type::Unknown => TypeKind::Unknown,
             Type::Generic(name, restrictions) => {
                 todo!()
@@ -505,6 +508,7 @@ impl<'a> LowerCtx<'a> {
             TypeKind::Int(_) => todo!(),
             TypeKind::Float(_) => todo!(),
             TypeKind::Ref(_) => todo!(),
+            TypeKind::Never => todo!(),
             TypeKind::Generic(_, _) => todo!(),
             TypeKind::Unknown => todo!(),
         }
@@ -517,10 +521,7 @@ impl<'a> LowerCtx<'a> {
     ) -> Typed<ExprIdx> {
         self.lower_node(
             expr,
-            |_, expr| {
-                println!("{:#?}", expr);
-                todo!()
-            },
+            |_, expr| todo!(),
             |this, expr| match expr {
                 ast::Expr::PathExpr(path) => {
                     let (idx, _) = this.lower_path_expr(Some(path), None);
@@ -542,6 +543,10 @@ impl<'a> LowerCtx<'a> {
                     MemberAccessKind::Field, // If it's a method it will be called by the lower_call_expr and given the correct access kind (that's the theory at least)
                 ),
                 ast::Expr::IfExpr(if_expr) => this.lower_if_expr(&if_expr, generic_params),
+                ast::Expr::IntrinsicExpr(intrinsic) => {
+                    this.lower_intrinsic_expr(&intrinsic, generic_params)
+                }
+                ast::Expr::StringExpr(string) => this.lower_string_expr(&string),
             },
         )
     }
@@ -1550,23 +1555,92 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    fn lower_else_block(
+    fn lower_intrinsic_expr(
         &mut self,
-        block: Option<ast::ElseBlock>,
+        intrinsic: &ast::IntrinsicExpr,
         generic_params: &GenericParams,
     ) -> Typed<ExprIdx> {
-        self.lower_node(
-            block,
-            |this, block| {
-                let span = block.range().to_span();
-                let idx: ExprIdx = this
-                    .exprs
-                    .alloc(Expr::Block(Block { exprs: vec![] }).at(span))
-                    .into();
-                idx.with_type(this.tchk.tenv.insert_unknown(span.in_file(this.file_id())))
-            },
-            |this, block| this.lower_if_block(block.block(), generic_params),
-        )
+        let arg_list = self.lower_call_args(intrinsic.arg_list(), generic_params);
+        intrinsic
+            .name()
+            .map(|tok| {
+                if tok.text_key() == intrinsics::panic_name(self.string_interner) {
+                    self.lower_panic_intrinsic_expr(tok.text_range().to_span(), &arg_list)
+                } else {
+                    todo!()
+                }
+            })
+            .unwrap_or_else(|| todo!())
+    }
+
+    fn lower_panic_intrinsic_expr(
+        &mut self,
+        name_span: Span,
+        arg_list: &Spanned<Vec<Typed<ExprIdx>>>,
+    ) -> Typed<ExprIdx> {
+        let file_id = self.file_id();
+        let arg_list_len = arg_list.len();
+        if arg_list_len != intrinsics::PANIC_NUM_ARGS {
+            self.diagnostics.push(
+                LowerError::IncorrectNumArgsInIntrinsic {
+                    intrinsic_name: "panic".to_string(),
+                    intrinsic_name_file_span: name_span.in_file(file_id),
+                    expected_num: intrinsics::PANIC_NUM_ARGS,
+                    got_num: arg_list_len,
+                    got_num_file_span: arg_list.span.in_file(file_id),
+                }
+                .to_diagnostic(),
+            );
+        }
+
+        intrinsics::panic_param_types(self.string_interner)
+            .iter()
+            .cloned()
+            .zip(arg_list.iter())
+            .for_each(|(param_tykind, arg)| {
+                let arg_span = self.exprs[arg.expr.raw()].span;
+                let param_tid = self
+                    .tchk
+                    .tenv
+                    .insert(ts::Type::new(param_tykind).file_span(file_id, arg_span));
+                self.tchk
+                    .unify(param_tid, arg.tid, arg_span.in_file(file_id))
+                    .unwrap_or_else(|err| {
+                        self.diagnostics.push(err);
+                    });
+            });
+
+        let panic_msg = if let Some(arg) = arg_list.first() {
+            match &self.exprs[arg.expr.raw()].inner {
+                Expr::Str(s) => s.spur().inner,
+                _ => self.string_interner.get_or_intern_static("<error string>"),
+            }
+        } else {
+            self.string_interner.get_or_intern_static("<error string>")
+        };
+
+        // put any expr.. it's ! type
+        let expr = Expr::Intrinsic(Intrinsic::Panic(panic_msg))
+            .at(Span::combine(name_span, arg_list.span));
+        let idx: ExprIdx = self.exprs.alloc(expr).into();
+
+        let ret_ty =
+            ts::Type::new(intrinsics::PANIC_RETURN_TYPE.clone()).file_span(file_id, name_span);
+        let ret_tid = self.tchk.tenv.insert(ret_ty);
+
+        idx.with_type(ret_tid)
+    }
+
+    fn lower_string_expr(&mut self, string: &ast::StringExpr) -> Typed<ExprIdx> {
+        let span = string.range().to_span();
+        let v = match string.value() {
+            Some(value) => Expr::Str(Str::new(value.text_key().at(span))),
+            None => Expr::Poisoned,
+        }
+        .at(span);
+        let idx: ExprIdx = self.exprs.alloc(v).into();
+        let tid = self.tchk.tenv.insert_str(span.in_file(self.file_id()));
+        idx.with_type(tid)
     }
 
     pub(crate) fn lower_path(

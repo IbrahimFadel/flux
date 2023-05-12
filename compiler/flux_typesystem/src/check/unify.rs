@@ -42,6 +42,7 @@ impl TChecker {
                 // self.check_if_type_implements_restrictions(b, &restrictions)?;
                 Ok(())
             }
+            (Never, _) => Ok(()),
             (Concrete(ConcreteKind::Path(path)), Int(int_id)) => match int_id {
                 Some(int_id) => self.unify(a, *int_id, unification_span),
                 None => {

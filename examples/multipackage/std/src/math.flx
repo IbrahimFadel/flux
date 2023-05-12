@@ -15,14 +15,7 @@ apply Add<u64> to u64 {
         let overflowed = other > U64_MAX - this;
 
         if overflowed {
-            // @flux.intrinsics.panic("unsigned integer overflow in addition")
-            0
-        } else if 0 == 1 {
-            1.0
-        } else if 1 == 2 {
-            2
-        } else if 2 == 3 {
-            3
+            @flux.intrinsics.panic("unsigned integer overflow in addition")
         } else {
             this + other
         }
@@ -30,6 +23,8 @@ apply Add<u64> to u64 {
 
     fn add_unchecked(other u64) -> This::Output => this + other
 }
+
+/*
 
 apply Add<u32> to u32 {
     type Output = u32;
@@ -72,3 +67,5 @@ apply Add<s8> to s8 {
     fn add(other s8) -> This::Output => this + other
     fn add_unchecked(other s8) -> This::Output => this + other
 }
+
+*/

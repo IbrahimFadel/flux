@@ -456,4 +456,17 @@ pub(crate) enum LowerError {
         #[filespanned]
         got_num: usize,
     },
+    #[error(
+        location = got_num,
+        primary = "incorrect number of arguments in intrinsic call",
+        label at got_num = "incorrect number of arguments in call to the `{intrinsic_name}` intrinsic",
+        label at got_num = "expected {expected_num} but got {got_num} arguments"
+    )]
+    IncorrectNumArgsInIntrinsic {
+        #[filespanned]
+        intrinsic_name: String,
+        expected_num: usize,
+        #[filespanned]
+        got_num: usize,
+    }
 }

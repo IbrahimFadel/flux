@@ -102,6 +102,13 @@ getters! {
     ElseBlock {
         block -> nth_node(BlockExpr, 0);
     }
+    IntrinsicExpr {
+        name -> tok(Intrinsic);
+        arg_list -> node(ArgList);
+    }
+    StringExpr {
+        value -> tok(StringLit);
+    }
     ArgList {
         args -> nodes(Expr);
     }

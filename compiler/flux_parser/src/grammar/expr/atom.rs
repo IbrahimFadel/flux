@@ -2,7 +2,7 @@ use flux_lexer::TokenKind;
 use flux_syntax::SyntaxKind;
 
 use crate::{
-    grammar::{generic_args::opt_generic_arg_list, name},
+    grammar::{expr::arg_list, generic_args::opt_generic_arg_list, name},
     marker::CompletedMarker,
     parser::Parser,
     token_set::TokenSet,
@@ -19,6 +19,7 @@ pub(super) fn atom(p: &mut Parser, restrictions: ExprRestrictions) -> Option<Com
         TokenKind::LBrace if restrictions.allow_block_expressions => block_expr(p),
         TokenKind::Ident => path_or_complex_type_expr(p, restrictions),
         TokenKind::If => if_expr(p),
+        TokenKind::Intrinsic => intrinsic_expr(p),
         _ => {
             p.err_and_bump("expected expression atom");
             return None;
@@ -158,11 +159,12 @@ fn if_expr(p: &mut Parser) -> CompletedMarker {
             m.complete(p, SyntaxKind::ElseBlock);
         }
     }
-
-    // if p.eat(TokenKind::Else) {
-    // let m = p.start();
-    // if p.eat(To)
-    // }
-
     m.complete(p, SyntaxKind::IfExpr)
+}
+
+fn intrinsic_expr(p: &mut Parser) -> CompletedMarker {
+    let m = p.start();
+    p.bump(TokenKind::Intrinsic);
+    arg_list(p);
+    m.complete(p, SyntaxKind::IntrinsicExpr)
 }

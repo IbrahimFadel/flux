@@ -43,7 +43,7 @@ impl Driver {
                 }
                 .to_diagnostic()
             })
-            .and_then(|content| Ok(file_path))
+            .and_then(|_| Ok(file_path))
     }
 
     pub(crate) fn fmt_def_map(&self, def_map: &DefMap, lowered_bodies: &LoweredBodies) -> String {

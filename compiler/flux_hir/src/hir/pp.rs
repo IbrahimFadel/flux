@@ -580,6 +580,7 @@ impl Type {
                     )
                     + allocator.text(")")
             }
+            Self::Never => allocator.text("!"),
             Self::Unknown => allocator.text("<unknown type>"),
             Self::Generic(name, restrictions) => {
                 allocator.text(string_interner.resolve(name))
@@ -667,6 +668,7 @@ impl Expr {
             Self::Float(float) => allocator.text(float.to_string()),
             Self::If(if_) => if_.pretty(allocator, string_interner, bodies),
             Self::Int(int) => allocator.text(int.to_string()),
+            Self::Intrinsic(intrinsic) => intrinsic.pretty(allocator, string_interner, bodies),
             Self::Let(l) => l.pretty(allocator, string_interner, bodies),
             Self::MemberAccess(access) => access.pretty(allocator, string_interner, bodies),
             Self::Path(path) => path.pretty(allocator, string_interner, bodies),
@@ -680,6 +682,9 @@ impl Expr {
                         ", ",
                     )
                     + allocator.text(")")
+            }
+            Self::Str(value) => {
+                allocator.text("\"") + string_interner.resolve(&value.0) + allocator.text("\"")
             }
         }
     }
@@ -840,6 +845,27 @@ impl If {
                         + else_block.pretty(allocator, string_interner, bodies)
                 }
                 None => allocator.nil(),
+            }
+    }
+}
+
+impl Intrinsic {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        allocator.text("@flux.intrinsics.")
+            + match self {
+                Self::Panic(msg) => {
+                    allocator.text("panic(") + string_interner.resolve(msg) + allocator.text(")")
+                }
             }
     }
 }
