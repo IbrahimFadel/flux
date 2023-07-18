@@ -19,7 +19,7 @@ pub enum ExitStatus {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "Flux")]
+#[command(name = "flux")]
 #[command(author = "Ibrahim F. <ibrahim.m.fadel@gmail.com>")]
 #[command(version = "1.0")]
 #[command(about = "The Flux Compiler", long_about = None)]

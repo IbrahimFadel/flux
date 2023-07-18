@@ -4,10 +4,10 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 s32 x,Bar y,f32 z}
 
-struct Bar  {
+struct Bar {
 u32 x}
 
 fn main() -> () {
@@ -18,7 +18,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0026] Error: uninitialized fields in struct expression
+[E0027] Error: uninitialized fields in struct expression
     ,-[ main.flx:14:15]
     |
  14 | ,->     let foo_instance = Foo {
@@ -27,7 +27,7 @@ Diagnostics
     | |                      
     | `---------------------- uninitialized fields `y`, `z` for `Foo` struct initialization
 ----'
-[E0027] Error: unknown fields in struct expression
+[E0028] Error: unknown fields in struct expression
     ,-[ main.flx:14:15]
     |
  14 | ,->     let foo_instance = Foo {

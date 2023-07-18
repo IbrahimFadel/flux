@@ -267,6 +267,7 @@ pub struct WherePredicate {
 pub struct Path {
     pub segments: Vec<Spur>,
     pub generic_args: Vec<TypeIdx>,
+    // pub generic_args: Vec<TypeId>,
 }
 
 impl Path {

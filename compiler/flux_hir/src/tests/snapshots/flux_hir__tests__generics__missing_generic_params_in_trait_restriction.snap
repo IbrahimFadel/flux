@@ -4,20 +4,20 @@ expression: s
 ---
 //  main.rs
 
-trait Foo  {
+trait Foo {
     
     
 }
 
-trait Bar<T>  {
+trait Bar<T> {
     
     
 }
 
-struct Bazz<T>  {
+struct Bazz<T> {
 T t}
 
-apply<T> Foo to Bazz<T: Bar> where T is Bar {
+apply<T> Foo to Bazz<T> where T is Bar {
     
     
 }
@@ -25,7 +25,7 @@ apply<T> Foo to Bazz<T: Bar> where T is Bar {
 
 Diagnostics
 
-[E0021] Error: incorrect number of generic arguments in where predicate
+[E0022] Error: incorrect number of generic arguments in where predicate
     ,-[ main.rs:10:7]
     |
   4 | trait Bar<T> {}

@@ -49,6 +49,14 @@ impl<'a> LowerCtx<'a> {
                     .map(|arg| self.types[arg.raw()].span),
             )
             .unwrap_or(where_predicate.bound.span);
+            // let generic_args_span = Span::span_iter_of_span(
+            //     where_predicate
+            //         .bound
+            //         .generic_args
+            //         .iter()
+            //         .map(|arg| self.tchk.tenv.get_type_filespan(*arg).inner),
+            // )
+            // .unwrap_or(where_predicate.bound.span);
 
             self.verify_generic_args_match_trait_definition(
                 &where_predicate.bound.generic_args,
@@ -100,9 +108,16 @@ impl<'a> LowerCtx<'a> {
                     .iter()
                     .filter(|predicate| predicate.name.inner == param_name.inner);
 
+                // self.tchk.tenv.
+
                 // for the every predicate on the current trait def param
                 for required_predicate in required_predicates {
+                    // let entry = self.tchk.tenv.get_entry(*arg).get_constr();
+                    // println!("{}", self.tchk.tenv.fmt_ty_id(*arg));
+                    // let arg_typekind = self.tchk.tenv.get_typekind_with_id(*arg);
+                    // arg_typekind.
                     if let Type::Generic(name, _) = &self.types[arg.raw()].inner {
+                        // if let TypeKind::Generic(name, _) = &arg_typekind.inner.inner {
                         // predicate in args that matches the requirement
                         let predicate_matched = generic_args_where_predicates
                             .iter()
@@ -133,6 +148,7 @@ impl<'a> LowerCtx<'a> {
                         }
                     } else {
                         todo!("{:#?} {:#?}", arg, self.types[arg.raw()]);
+                        // todo!("{:#?} {:#?}", arg, self.tchk.tenv.fmt_ty_id(*arg));
                     }
                 }
             });

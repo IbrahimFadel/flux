@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use flux_diagnostics::{ice, reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Spanned};
@@ -10,7 +10,7 @@ use crate::{
     diagnostics::LowerError,
     hir::{Mod, Type, Use, Visibility},
     item_scope::{ItemScope, ModuleItemWithVis},
-    item_tree::{lower_ast_to_existing_item_tree, FileItemTreeId, ItemTree, ModItem},
+    item_tree::{lower_ast_to_item_tree, FileItemTreeId, ItemTree, ModItem},
     ModuleDefId, ModuleId,
 };
 
@@ -22,20 +22,44 @@ use self::{
 pub(crate) mod mod_res;
 pub(crate) mod path_res;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefMap {
-    name: Spur,
+    // name: Spur,
     pub modules: Arena<ModuleData>,
-    // pub item_trees: ArenaMap<ModuleId, ItemTree>,
-    pub items: ArenaMap<ModuleId, Vec<ModItem>>,
-    packages: Arena<Arc<DefMap>>,
-    pub dependencies: Vec<PackageId>,
+    pub item_trees: ArenaMap<ModuleId, ItemTree>,
+    // pub items: ArenaMap<ModuleId, Vec<ModItem>>,
+    // packages: Arena<Arc<DefMap>>,
+    // pub dependencies: Vec<PackageId>,
     root: ModuleId,
     pub prelude: ModuleId,
     builtin_scope: HashMap<Spur, ModuleItemWithVis>,
 }
 
-pub type PackageId = Idx<Arc<DefMap>>;
+#[derive(Debug, Clone)]
+pub struct PackageData {
+    // root_file_id: FileId,
+    pub def_map: DefMap,
+    name: Spur,
+    dependencies: Vec<PackageDependency>,
+}
+
+impl PackageData {
+    pub fn new(name: Spur, def_map: DefMap, dependencies: Vec<PackageDependency>) -> Self {
+        Self {
+            def_map,
+            name,
+            dependencies,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PackageDependency {
+    pub name: Spur,
+    pub package_id: PackageId,
+}
+
+pub type PackageId = Idx<PackageData>;
 
 impl std::ops::Index<ModuleId> for DefMap {
     type Output = ModuleData;
@@ -50,7 +74,7 @@ impl std::ops::IndexMut<ModuleId> for DefMap {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModuleData {
     pub(crate) parent: Option<ModuleId>,
     children: HashMap<Spur, ModuleId>,
@@ -86,13 +110,7 @@ impl Default for ModuleData {
 }
 
 impl DefMap {
-    pub fn empty(
-        name: Spur,
-        module_data: ModuleData,
-        packages: Arena<Arc<DefMap>>,
-        dependencies: Vec<PackageId>,
-        string_interner: &'static ThreadedRodeo,
-    ) -> Self {
+    pub fn empty(module_data: ModuleData, string_interner: &'static ThreadedRodeo) -> Self {
         let mut modules = Arena::new();
         let root = modules.alloc(module_data);
 
@@ -110,13 +128,9 @@ impl DefMap {
             .collect();
 
         Self {
-            name,
             modules,
-            // item_trees: ArenaMap::default(),
-            items: ArenaMap::default(),
+            item_trees: ArenaMap::default(),
             root,
-            dependencies,
-            packages,
             prelude,
             builtin_scope,
         }
@@ -128,19 +142,17 @@ pub fn build_def_map<'a, R: FileResolver>(
     name: Spur,
     entry_path: &str,
     file_cache: &mut FileCache,
-    global_item_tree: &'a mut ItemTree,
-    packages: Arena<Arc<DefMap>>,
-    dependencies: Vec<Idx<Arc<DefMap>>>,
+    packages: &Arena<PackageData>,
+    dependencies: &[PackageDependency],
     string_interner: &'static ThreadedRodeo,
     resolver: &R,
 ) -> (DefMap, Arena<Spanned<Type>>, Vec<Diagnostic>) {
     tracing::info!("building definition map for project");
     let root = ModuleData::new();
-    let def_map = DefMap::empty(name, root, packages, dependencies, string_interner);
+    let def_map = DefMap::empty(root, string_interner);
     let mut types = Arena::new();
     let mut collector = DefCollector {
         def_map,
-        global_item_tree,
         unresolved_imports: vec![],
         diagnostics: vec![],
         string_interner,
@@ -152,7 +164,7 @@ pub fn build_def_map<'a, R: FileResolver>(
         &mut types,
         resolver,
     );
-    collector.resolve_imports();
+    collector.resolve_imports(&name, dependencies, packages);
     (collector.def_map, types, collector.diagnostics)
 }
 
@@ -179,15 +191,15 @@ impl PartialResolvedImport {
 }
 
 #[derive(Debug)]
-struct DefCollector<'a> {
+struct DefCollector {
     def_map: DefMap,
-    global_item_tree: &'a mut ItemTree,
+    // global_item_tree: &'a mut ItemTree,
     unresolved_imports: Vec<Import>,
     diagnostics: Vec<Diagnostic>,
     string_interner: &'static ThreadedRodeo,
 }
 
-impl<'a> DefCollector<'a> {
+impl DefCollector {
     fn update(
         &mut self,
         module_id: ModuleId,
@@ -206,29 +218,27 @@ impl<'a> DefCollector<'a> {
         }
     }
 
-    fn resolve_imports(&mut self) {
+    fn resolve_imports(
+        &mut self,
+        package_name: &Spur,
+        dependencies: &[PackageDependency],
+        packages: &Arena<PackageData>,
+    ) {
         let imports = std::mem::take(&mut self.unresolved_imports);
 
         self.unresolved_imports = imports
             .into_iter()
             .filter_map(|mut import| {
-                let u = self
-                    .def_map
-                    .items
-                    .get(import.module_id)
-                    .unwrap()
-                    .iter()
-                    .find(|mod_item| mod_item == &&ModItem::Use(import.use_decl))
-                    .map(|mod_item| match mod_item {
-                        ModItem::Use(u) => self.global_item_tree[*u].clone(),
-                        _ => unreachable!(),
-                    })
-                    .unwrap();
-
-                import.status = self.resolve_import(import.module_id, &u);
+                import.status = self.resolve_import(
+                    import.module_id,
+                    &import,
+                    package_name,
+                    dependencies,
+                    packages,
+                );
                 match &import.status {
                     PartialResolvedImport::Resolved(_) => {
-                        self.record_resolved_import(&u, &import);
+                        self.record_resolved_import(&import);
                         None
                     }
                     PartialResolvedImport::Unresolved(err) => {
@@ -250,11 +260,16 @@ impl<'a> DefCollector<'a> {
     fn resolve_import(
         &self,
         module_id: ModuleId,
-        u: &Use,
-        // import: &Import,
+        import: &Import,
+        package_name: &Spur,
+        dependencies: &[PackageDependency],
+        packages: &Arena<PackageData>,
     ) -> PartialResolvedImport {
-        // let u = &self.def_map.item_trees.get(module_id).unwrap()[import.use_decl];
-        let res = self.def_map.resolve_path(&u.path, module_id);
+        let u = &self.def_map.item_trees.get(module_id).unwrap()[import.use_decl];
+        // let res = self.def_map.resolve_path(&u.path, module_id);
+        let res =
+            self.def_map
+                .resolve_path(package_name, &u.path, module_id, dependencies, packages);
 
         match res {
             Err(err) => PartialResolvedImport::Unresolved(err),
@@ -268,8 +283,8 @@ impl<'a> DefCollector<'a> {
         }
     }
 
-    fn record_resolved_import(&mut self, u: &Use, import: &Import) {
-        // let u = &self.def_map.item_trees.get(import.module_id).unwrap()[import.use_decl];
+    fn record_resolved_import(&mut self, import: &Import) {
+        let u = &self.def_map.item_trees.get(import.module_id).unwrap()[import.use_decl];
 
         let name = match &u.alias {
             Some(name) => Some(name.inner),
@@ -300,7 +315,7 @@ impl<'a> DefCollector<'a> {
         let (file_id, content) = resolver
             .resolve_absolute_path(entry_path, file_cache)
             .unwrap();
-        let (new_items, diagnostics) =
+        let (item_tree, diagnostics) =
             self.build_item_tree(file_id, &content, string_interner, types);
         self.diagnostics = diagnostics;
 
@@ -310,16 +325,14 @@ impl<'a> DefCollector<'a> {
         let mod_collector = ModCollector {
             def_collector: self,
             module_id,
+            item_tree: &item_tree,
             mod_dir: ModDir::root(),
             file_id,
             string_interner,
             diagnostics: vec![],
         };
-        let mut diagnostics = mod_collector.collect(&new_items, file_cache, types, resolver);
-        // self.def_map
-        //     .item_trees
-        //     .insert(module_id, self.global_item_tree);
-        self.def_map.items.insert(module_id, new_items);
+        let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, types, resolver);
+        self.def_map.item_trees.insert(module_id, item_tree);
         self.diagnostics.append(&mut diagnostics);
     }
 
@@ -329,57 +342,26 @@ impl<'a> DefCollector<'a> {
         content: &str,
         string_interner: &'static ThreadedRodeo,
         types: &mut Arena<Spanned<Type>>,
-    ) -> (Vec<ModItem>, Vec<Diagnostic>) {
+    ) -> (ItemTree, Vec<Diagnostic>) {
         let parse = flux_parser::parse(content, file_id, string_interner);
         let (root, diagnostics) = (parse.syntax(), parse.diagnostics);
         // println!("{}", root.debug(self.string_interner, true));
-        // let item_tree = lower_ast_to_item_tree(root, file_id, string_interner, types);
-        let new_items = lower_ast_to_existing_item_tree(
-            root,
-            file_id,
-            string_interner,
-            types,
-            self.global_item_tree,
-        );
-        // for item in item_tree.items() {
-        //     match item {
-        //         ModItem::Apply(a) => {
-        //             self.global_item_tree.applies.alloc(item_tree[*a].clone());
-        //         }
-        //         ModItem::Enum(e) => {
-        //             self.global_item_tree.enums.alloc(item_tree[*e].clone());
-        //         }
-        //         ModItem::Function(f) => {
-        //             self.global_item_tree.functions.alloc(item_tree[*f].clone());
-        //         }
-        //         ModItem::Mod(m) => {
-        //             self.global_item_tree.mods.alloc(item_tree[*m].clone());
-        //         }
-        //         ModItem::Struct(s) => {
-        //             self.global_item_tree.structs.alloc(item_tree[*s].clone());
-        //         }
-        //         ModItem::Trait(t) => {
-        //             self.global_item_tree.traits.alloc(item_tree[*t].clone());
-        //         }
-        //         ModItem::Use(u) => {
-        //             self.global_item_tree.uses.alloc(item_tree[*u].clone());
-        //         }
-        //     }
-        // }
-        (new_items, diagnostics)
+        let item_tree = lower_ast_to_item_tree(root, file_id, string_interner, types);
+        (item_tree, diagnostics)
     }
 }
 
-struct ModCollector<'a, 'b> {
-    def_collector: &'a mut DefCollector<'b>,
+struct ModCollector<'a> {
+    def_collector: &'a mut DefCollector,
     module_id: ModuleId,
+    item_tree: &'a ItemTree,
     mod_dir: ModDir,
     file_id: FileId,
     string_interner: &'static ThreadedRodeo,
     diagnostics: Vec<Diagnostic>,
 }
 
-impl<'a, 'b> ModCollector<'a, 'b> {
+impl<'a> ModCollector<'a> {
     fn collect<R: FileResolver>(
         mut self,
         items: &[ModItem],
@@ -408,7 +390,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
             match item {
                 crate::item_tree::ModItem::Apply(_) => {}
                 crate::item_tree::ModItem::Enum(id) => {
-                    let e = &self.def_collector.global_item_tree[id];
+                    let e = &self.item_tree[id];
                     update_def(
                         self.def_collector,
                         id.into(),
@@ -417,7 +399,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
                     );
                 }
                 crate::item_tree::ModItem::Function(id) => {
-                    let f = &self.def_collector.global_item_tree[id];
+                    let f = &self.item_tree[id];
                     update_def(
                         self.def_collector,
                         id.into(),
@@ -429,7 +411,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
                     self.collect_module(id, file_cache, types, resolver);
                 }
                 crate::item_tree::ModItem::Struct(id) => {
-                    let s = &self.def_collector.global_item_tree[id];
+                    let s = &self.item_tree[id];
                     update_def(
                         self.def_collector,
                         id.into(),
@@ -438,7 +420,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
                     );
                 }
                 crate::item_tree::ModItem::Trait(id) => {
-                    let t = &self.def_collector.global_item_tree[id];
+                    let t = &self.item_tree[id];
                     update_def(self.def_collector, id.into(), t.name.inner, *t.visibility);
                 }
                 crate::item_tree::ModItem::Use(id) => {
@@ -447,7 +429,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
                         use_decl: id,
                         status: PartialResolvedImport::Unresolved(
                             ResolvePathError::UnresolvedPath {
-                                path: self.def_collector.global_item_tree[id].path.clone(),
+                                path: self.item_tree[id].path.clone(),
                                 segment: 0,
                             },
                         ),
@@ -466,7 +448,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
         resolver: &R,
     ) {
         let (name, visibility) = {
-            let module = &self.def_collector.global_item_tree[module_id];
+            let module = &self.item_tree[module_id];
             (module.name.clone(), module.visibility)
         };
         let module_id = self.push_child_module(name.inner, visibility);
@@ -485,7 +467,7 @@ impl<'a, 'b> ModCollector<'a, 'b> {
         };
         self.def_collector.def_map[module_id].file_id = file_id;
 
-        let (new_items, mut diagnostics) =
+        let (item_tree, mut diagnostics) =
             self.def_collector
                 .build_item_tree(file_id, &content, self.string_interner, types);
         self.diagnostics.append(&mut diagnostics);
@@ -493,20 +475,17 @@ impl<'a, 'b> ModCollector<'a, 'b> {
         let mod_collector = ModCollector {
             def_collector: self.def_collector,
             module_id,
+            item_tree: &item_tree,
             mod_dir,
             file_id,
             string_interner: self.string_interner,
             diagnostics: vec![],
         };
-        let mut diagnostics = mod_collector.collect(&new_items, file_cache, types, resolver);
-        // self.def_collector
-        //     .def_map
-        //     .item_trees
-        //     .insert(module_id, item_tree);
+        let mut diagnostics = mod_collector.collect(item_tree.items(), file_cache, types, resolver);
         self.def_collector
             .def_map
-            .items
-            .insert(module_id, new_items);
+            .item_trees
+            .insert(module_id, item_tree);
         self.diagnostics.append(&mut diagnostics);
     }
 

@@ -1,7 +1,11 @@
-use std::{collections::HashMap, io::BufWriter, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    io::BufWriter,
+    path::{Path, PathBuf},
+};
 
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
-use flux_hir::{DefMap, ItemTree, LoweredBodies, PackageId};
+use flux_hir::{DefMap, LoweredBodies, PackageData, PackageId};
 use la_arena::Arena;
 use lasso::Spur;
 use pretty::BoxAllocator;
@@ -12,9 +16,8 @@ pub(crate) struct Driver {
     pub(crate) cfg: Config,
     pub(crate) root_directory: PathBuf,
     pub(crate) file_cache: FileCache,
-    pub(crate) def_maps: Arena<Arc<DefMap>>,
+    pub(crate) packages: Arena<PackageData>,
     pub(crate) package_name_to_id: HashMap<Spur, PackageId>,
-    pub(crate) global_item_tree: ItemTree,
 }
 
 impl Driver {
@@ -23,15 +26,15 @@ impl Driver {
             cfg,
             root_directory,
             file_cache: FileCache::new(&INTERNER),
-            def_maps: Arena::new(),
+            // def_maps: Arena::new(),
+            packages: Arena::new(),
             package_name_to_id: HashMap::new(),
-            global_item_tree: ItemTree::default(),
         }
     }
 
     pub(crate) fn get_package_entry_file_path(
         &self,
-        package_root: &PathBuf,
+        package_root: &Path,
         package_name: &str,
     ) -> Result<PathBuf, Diagnostic> {
         let file_path = package_root.join("src/main.flx");
@@ -50,12 +53,7 @@ impl Driver {
         let mut buf = BufWriter::new(Vec::new());
         let allocator = BoxAllocator;
         def_map
-            .pretty::<_, ()>(
-                &allocator,
-                &INTERNER,
-                &lowered_bodies,
-                &self.global_item_tree,
-            )
+            .pretty::<_, ()>(&allocator, &INTERNER, &lowered_bodies)
             .1
             .render(50, &mut buf)
             .unwrap();

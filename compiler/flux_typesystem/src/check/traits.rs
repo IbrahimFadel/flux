@@ -1,31 +1,19 @@
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::{FileId, FileSpanned, InFile, Span, WithSpan};
+use flux_span::{FileId, InFile, Span, WithSpan};
 use itertools::Itertools;
-use lasso::Spur;
 
 use crate::{
-    diagnostics::TypeError, trait_solver::TraitApplication, TChecker, TraitRestriction, TypeId,
-    TypeKind,
+    diagnostics::TypeError, trait_solver::TraitApplication, TChecker, TEnv, TraitRestriction,
+    TypeId, TypeKind,
 };
 
 impl TChecker {
-    fn get_applications(
-        &mut self,
-        trait_id: u32,
-        trait_name: &FileSpanned<Spur>,
-        impltr: TypeId,
-    ) -> Result<Vec<TraitApplication>, Diagnostic> {
+    fn get_applications(&mut self, trait_id: u32, impltr: TypeId) -> Vec<TraitApplication> {
         let applications = self
             .trait_applications
             .get_applications(trait_id)
-            .ok_or_else(|| {
-                TypeError::TraitDoesNotExist {
-                    trait_name: self.string_interner.resolve(&trait_name).to_string(),
-                    trait_name_file_span: trait_name.to_filespan(),
-                }
-                .to_diagnostic()
-            })?
-            .clone()
+            .cloned()
+            .unwrap_or_default()
             .into_iter()
             .filter(|implementation| {
                 self.unify(
@@ -36,7 +24,7 @@ impl TChecker {
                 .is_ok()
             })
             .collect();
-        Ok(applications)
+        applications
     }
 
     pub fn does_type_implement_restrictions(
@@ -73,8 +61,7 @@ impl TChecker {
                 if let Some(depends_on) = depends_on {
                     return self.does_type_implement_restrictions(*depends_on, restrictions);
                 } else {
-                    todo!()
-                    // self.check_if_int_implements_restrictions(kind.to_filespan(), restrictions)?;
+                    self.does_int_implement_restrictions(kind.to_filespan(), restrictions)?;
                 }
             }
             _ => {}
@@ -115,12 +102,7 @@ impl TChecker {
         ty: TypeId,
         restriction: &TraitRestriction,
     ) -> Result<(bool, InFile<Span>), Diagnostic> {
-        // if restriction.name.inner.inner == self.string_interner.get_or_intern_static("Add") {
-        //     return Ok(self.does_type_implement_add(ty, restriction));
-        // }
-
-        let implementations_for_ty =
-            self.get_applications(restriction.trait_id, &restriction.trait_name, ty)?;
+        let implementations_for_ty = self.get_applications(restriction.trait_id, ty);
         let mut valid_impl = None;
         for implementation in implementations_for_ty {
             if implementation.get_trait_params().len() == restriction.args.len() {
@@ -156,7 +138,7 @@ impl TChecker {
     }
 
     fn are_trait_restrictions_equal(&mut self, a: &TraitRestriction, b: &TraitRestriction) -> bool {
-        if a.trait_id == b.trait_id {
+        if a.trait_id != b.trait_id {
             return false;
         }
 
@@ -178,6 +160,72 @@ impl TChecker {
         }
 
         true
+    }
+
+    fn does_int_implement_restrictions(
+        &mut self,
+        file_span: InFile<Span>,
+        restrictions: &[TraitRestriction],
+    ) -> Result<(), Diagnostic> {
+        let mut unmet_restrictions = vec![];
+        for restriction in restrictions {
+            let does_s64_impl = self.does_type_implement_restriction(TEnv::S64, restriction)?;
+            let does_s32_impl = self.does_type_implement_restriction(TEnv::S32, restriction)?;
+            let does_s16_impl = self.does_type_implement_restriction(TEnv::S16, restriction)?;
+            let does_s8_impl = self.does_type_implement_restriction(TEnv::S8, restriction)?;
+            let does_u64_impl = self.does_type_implement_restriction(TEnv::U64, restriction)?;
+            let does_u32_impl = self.does_type_implement_restriction(TEnv::U32, restriction)?;
+            let does_u16_impl = self.does_type_implement_restriction(TEnv::U16, restriction)?;
+            let does_u8_impl = self.does_type_implement_restriction(TEnv::U8, restriction)?;
+            let impltors: Vec<_> = [
+                (does_s64_impl, TEnv::S64),
+                (does_s32_impl, TEnv::S32),
+                (does_s16_impl, TEnv::S16),
+                (does_s8_impl, TEnv::S8),
+                (does_u64_impl, TEnv::U64),
+                (does_u32_impl, TEnv::U32),
+                (does_u16_impl, TEnv::U16),
+                (does_u8_impl, TEnv::U8),
+            ]
+            .into_iter()
+            .filter(|((b, _), _)| *b)
+            .map(|((_, file_span), id)| {
+                self.tenv
+                    .fmt_ty_id(id)
+                    .file_span(file_span.file_id, file_span.inner)
+            })
+            .collect();
+
+            if impltors.len() > 1 {
+                return Err(TypeError::MultiplePossibleIntSpecializations {
+                    int_types: impltors.iter().map(|s| s.inner.inner.clone()).collect(),
+                    int_types_file_span: file_span,
+                    trt: self
+                        .string_interner
+                        .resolve(&restriction.trait_name)
+                        .to_string(),
+                    trt_file_span: restriction.trait_name.to_filespan(),
+                    applications: impltors,
+                }
+                .to_diagnostic());
+            } else if impltors.is_empty() {
+                unmet_restrictions.push(
+                    self.tenv
+                        .fmt_trait_restriction(restriction)
+                        .file_span(restriction.trait_name.file_id, restriction.trait_name.span),
+                );
+            }
+        }
+        if !unmet_restrictions.is_empty() {
+            Err(TypeError::TraitRestrictionsNotMet {
+                ty: "int".to_string(),
+                ty_file_span: file_span,
+                unmet_restrictions,
+            }
+            .to_diagnostic())
+        } else {
+            Ok(())
+        }
     }
 
     //     fn get_trait_implementation_span(

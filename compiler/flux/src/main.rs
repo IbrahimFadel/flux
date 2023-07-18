@@ -1,8 +1,8 @@
-use tracing_subscriber::{prelude::*, Registry};
-use tracing_tree::HierarchicalLayer;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 fn main() {
-    let subscriber = Registry::default().with(HierarchicalLayer::new(2));
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    tracing_subscriber::fmt::fmt()
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
     flux::run_with_args(std::env::args_os());
 }

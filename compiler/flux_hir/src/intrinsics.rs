@@ -13,5 +13,6 @@ pub(crate) static PANIC_RETURN_TYPE: TypeKind = TypeKind::Never;
 pub(crate) fn panic_param_types(string_interner: &ThreadedRodeo) -> Vec<TypeKind> {
     vec![TypeKind::Concrete(ConcreteKind::Path(
         string_interner.get_or_intern_static("str"),
+        vec![],
     ))]
 }

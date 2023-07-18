@@ -20,7 +20,7 @@ pub fn test() -> () {
 
 Diagnostics
 
-[E0013] Error: cannot access private path segment
+[E0014] Error: cannot access private path segment
    ,-[ ./main.flx:5:1]
    |
  5 | use foo::bar;

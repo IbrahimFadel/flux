@@ -2,23 +2,27 @@ use std::collections::HashSet;
 
 use crate::{hir::WherePredicate, ApplyId};
 use flux_span::FileSpanned;
-use itertools::Itertools;
 use ts::TraitApplication;
 
 use super::*;
 
 impl<'a> LowerCtx<'a> {
-    pub(super) fn handle_apply(&mut self, a: ApplyId) {
-        let a = &self.global_item_tree.unwrap()[a];
+    pub(super) fn handle_apply(&mut self, a: ApplyId, item_tree: &ItemTree) {
+        let a = &item_tree[a];
         let file_id = self.file_id();
 
         self.verify_where_predicates(&a.generic_params, &a.generic_params.span.in_file(file_id));
 
         if let Some(trt_path) = &a.trt {
-            if let Some((trt, trait_id)) = self.get_trait_with_id(trt_path) {
+            if let Some((trt, trait_id, trait_module_id)) = self.get_trait_with_module_id(trt_path)
+            {
                 let methods = &trt.methods;
                 let methods_in_file = methods.file_span_ref(trt.file_id, methods.span);
-                self.verify_apply_methods_match_trait_methods(&methods_in_file, &a.methods);
+                self.verify_apply_methods_match_trait_methods(
+                    &methods_in_file,
+                    trait_module_id,
+                    &a.methods,
+                );
                 self.verify_apply_assoc_types_match_trait_assoc_types(&trt, a);
 
                 self.add_trait_application_to_context(a, trait_id, trt_path);
@@ -26,9 +30,9 @@ impl<'a> LowerCtx<'a> {
         }
 
         for f in &a.methods.inner {
-            let f_generic_params = &self.global_item_tree.unwrap()[f.inner].generic_params;
+            let f_generic_params = &item_tree[f.inner].generic_params;
             self.combine_generic_parameters(&a.generic_params, f_generic_params);
-            self.handle_function(f.inner, Some(a));
+            self.handle_function(f.inner, Some(a), item_tree);
         }
     }
 
@@ -49,6 +53,7 @@ impl<'a> LowerCtx<'a> {
             .map(|params| params.to_vec())
             .unwrap_or(vec![]);
         let impltr_filespan = self.tchk.tenv.get_type_filespan(impltr);
+        // let trait_params = trait_path.generic_args.clone();
         let trait_params: Vec<_> = trait_path
             .generic_args
             .iter()
@@ -65,34 +70,34 @@ impl<'a> LowerCtx<'a> {
             })
             .collect();
 
-        tracing::debug!(
-            "adding application of trait `{}{}` to `{}{}`",
-            self.string_interner
-                .resolve(&self.global_item_tree.unwrap()[trait_id].name),
-            if trait_params.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "<{}>",
-                    trait_params
-                        .iter()
-                        .map(|tid| self.tchk.tenv.fmt_ty_id(*tid))
-                        .join(", ")
-                )
-            },
-            self.tchk.tenv.fmt_ty_id(impltr),
-            if impltr_args.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "<{}>",
-                    impltr_args
-                        .iter()
-                        .map(|tid| self.tchk.tenv.fmt_ty_id(*tid))
-                        .join(", ")
-                )
-            }
-        );
+        // tracing::debug!(
+        //     "adding application of trait `{}{}` to `{}{}`",
+        //     self.string_interner
+        //         .resolve(&self.global_item_tree.unwrap()[trait_id].name),
+        //     if trait_params.is_empty() {
+        //         "".to_string()
+        //     } else {
+        //         format!(
+        //             "<{}>",
+        //             trait_params
+        //                 .iter()
+        //                 .map(|tid| self.tchk.tenv.fmt_ty_id(*tid))
+        //                 .join(", ")
+        //         )
+        //     },
+        //     self.tchk.tenv.fmt_ty_id(impltr),
+        //     if impltr_args.is_empty() {
+        //         "".to_string()
+        //     } else {
+        //         format!(
+        //             "<{}>",
+        //             impltr_args
+        //                 .iter()
+        //                 .map(|tid| self.tchk.tenv.fmt_ty_id(*tid))
+        //                 .join(", ")
+        //         )
+        //     }
+        // );
 
         self.tchk.trait_applications.push_application(
             trait_id.into_raw().into(),
@@ -193,21 +198,23 @@ impl<'a> LowerCtx<'a> {
     fn verify_apply_methods_match_trait_methods(
         &mut self,
         trait_methods: &InFile<Spanned<&Vec<Spanned<FunctionId>>>>,
+        trait_module_id: ModuleId,
         apply_methods: &Spanned<Vec<Spanned<FunctionId>>>,
     ) {
-        self.verify_methods_defined_match_method_list(trait_methods, apply_methods);
+        self.verify_methods_defined_match_method_list(
+            trait_methods,
+            trait_module_id,
+            apply_methods,
+        );
 
+        // let item_tree = &self.packages[self.package_id].def_map.item_trees[self.cur_module_id];
+        let def_map = &self.packages[self.package_id].def_map;
         for apply_method in &apply_methods.inner {
             for trait_method in trait_methods.inner.inner {
-                let apply_method = &self.global_item_tree.unwrap()[apply_method.inner];
-                let trait_method = &self.global_item_tree.unwrap()[trait_method.inner];
+                let apply_method = &def_map.item_trees[self.cur_module_id][apply_method.inner];
+                let trait_method = &def_map.item_trees[trait_module_id][trait_method.inner];
 
                 if apply_method.name == trait_method.name {
-                    self.combine_generic_parameters(
-                        &apply_method.generic_params,
-                        &trait_method.generic_params,
-                    );
-
                     let trait_method_generics = &trait_method.generic_params;
                     let trait_method_generics_file_spanned = trait_method_generics
                         .file_span_ref(trait_methods.file_id, trait_method_generics.span);
@@ -223,12 +230,15 @@ impl<'a> LowerCtx<'a> {
     fn verify_methods_defined_match_method_list(
         &mut self,
         trait_methods: &FileSpanned<&Vec<Spanned<FunctionId>>>,
+        trait_module_id: ModuleId,
         apply_methods: &Spanned<Vec<Spanned<FunctionId>>>,
     ) {
+        let cur_item_tree = &self.packages[self.package_id].def_map.item_trees[self.cur_module_id];
+        let trait_item_tree = &self.packages[self.package_id].def_map.item_trees[trait_module_id];
         let apply_method_names_filespanned: Vec<FileSpanned<String>> = apply_methods
             .iter()
             .map(|method_id| {
-                self.global_item_tree.unwrap()[method_id.inner]
+                cur_item_tree[method_id.inner]
                     .name
                     .map_ref(|name| self.string_interner.resolve(name).to_string())
                     .in_file(self.file_id())
@@ -236,12 +246,12 @@ impl<'a> LowerCtx<'a> {
             .collect();
         let apply_method_names: HashSet<Spur> = apply_methods
             .iter()
-            .map(|method_id| self.global_item_tree.unwrap()[method_id.inner].name.inner)
+            .map(|method_id| cur_item_tree[method_id.inner].name.inner)
             .collect();
         let trait_method_names_filespanned: Vec<FileSpanned<String>> = trait_methods
             .iter()
             .map(|method_id| {
-                self.global_item_tree.unwrap()[method_id.inner]
+                trait_item_tree[method_id.inner]
                     .name
                     .map_ref(|name| self.string_interner.resolve(name).to_string())
                     .in_file(trait_methods.file_id)
@@ -249,7 +259,7 @@ impl<'a> LowerCtx<'a> {
             .collect();
         let trait_method_names: HashSet<Spur> = trait_methods
             .iter()
-            .map(|method_id| self.global_item_tree.unwrap()[method_id.inner].name.inner)
+            .map(|method_id| trait_item_tree[method_id.inner].name.inner)
             .collect();
         let methods_that_dont_belong: Vec<_> =
             apply_method_names.difference(&trait_method_names).collect();

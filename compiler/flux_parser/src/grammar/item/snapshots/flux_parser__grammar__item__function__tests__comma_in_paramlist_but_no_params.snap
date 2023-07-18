@@ -30,28 +30,28 @@ Root@0..11
 
 
 Errors:
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:8]
    |
  1 | fn foo(,){}
    |        |  
    |        `-- expected name in function parameter
 ---'
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:8]
    |
  1 | fn foo(,){}
    |        |  
    |        `-- expected type in function parameter
 ---'
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:9]
    |
  1 | fn foo(,){}
    |         |  
    |         `-- expected name in function parameter
 ---'
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:9]
    |
  1 | fn foo(,){}

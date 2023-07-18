@@ -7,13 +7,8 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = "1.0"
+syn = { version = "1.0", features = [ "full" ] }
 quote = "1.0.26"
-proc-macro2 = "1.0.51"
+proc-macro2 = "1.0.64"
 text-size = "1.1.0"
 flux_diagnostics = { path = "../flux_diagnostics" }
-
-# [dependencies]
-# syn = { version = "*", features = ["extra-traits"] }
-# proc-macro2 = "*"
-# quote = "*"

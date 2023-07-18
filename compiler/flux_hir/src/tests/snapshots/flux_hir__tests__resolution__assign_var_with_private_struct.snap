@@ -10,13 +10,13 @@ fn main() -> () {
 }
 //  ./foo.flx
 
-struct Foo  {
+struct Foo {
 }
 
 
 Diagnostics
 
-[E0013] Error: cannot access private path segment
+[E0014] Error: cannot access private path segment
    ,-[ ./main.flx:6:6]
    |
  6 |     let x foo::Foo = foo::Foo {};
@@ -25,7 +25,7 @@ Diagnostics
    |            |    
    |            `---- private segment `Foo`
 ---'
-[E0013] Error: cannot access private path segment
+[E0014] Error: cannot access private path segment
    ,-[ ./main.flx:6:17]
    |
  6 |     let x foo::Foo = foo::Foo {};

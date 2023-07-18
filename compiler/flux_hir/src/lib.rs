@@ -17,7 +17,11 @@ use name_res::ModuleData;
 
 pub use body::{lower_def_map_bodies, LoweredBodies};
 pub use item_tree::{FileItemTreeId, ItemTree, ModItem};
-pub use name_res::{build_def_map, mod_res::BasicFileResolver, DefMap, PackageId};
+pub use name_res::{
+    build_def_map,
+    mod_res::{BasicFileResolver, FileResolver, RelativePath},
+    DefMap, PackageData, PackageDependency, PackageId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModuleDefId {

@@ -1,2 +1,5 @@
 [workspace]
 members = ["compiler/*"]
+
+[profile.release]
+debug = 1

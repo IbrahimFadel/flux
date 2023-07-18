@@ -4,15 +4,15 @@ expression: s
 ---
 //  main.flx
 
-trait Bar  {
+trait Bar {
     
     
 }
 
-struct Foo<T>  where T is Bar {
-T: Bar x}
+struct Foo<T> where T is Bar {
+T x}
 
-struct Bazz  {
+struct Bazz {
 }
 
 fn main() -> () {
@@ -22,7 +22,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0043] Error: trait restrictions not met
+[E0045] Error: trait restrictions not met
     ,-[ main.flx:13:8]
     |
   6 |     where T is Bar

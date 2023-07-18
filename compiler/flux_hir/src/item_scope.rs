@@ -5,7 +5,7 @@ use lasso::Spur;
 
 pub(crate) type ModuleItemWithVis = (ModuleDefId, ModuleId, Visibility);
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ItemScope {
     items: HashMap<Spur, (ModuleDefId, ModuleId, Visibility)>,
     declarations: Vec<ModuleDefId>,

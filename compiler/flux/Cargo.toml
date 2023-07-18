@@ -17,11 +17,11 @@ clap = { version = "4.2.5", default-features = true, features = ["std", "derive"
 pretty = "0.12.1"
 
 flux_diagnostics = { path = "../flux_diagnostics" }
-flux_parser = { path = "../flux_parser" }
+# flux_parser = { path = "../flux_parser" }
 flux_hir = { path = "../flux_hir" }
-flux_mir = { path = "../flux_mir" }
-flux_typesystem = { path = "../flux_typesystem" }
-flux_span = { path = "../flux_span" }
+# flux_mir = { path = "../flux_mir" }
+# flux_typesystem = { path = "../flux_typesystem" }
+# flux_span = { path = "../flux_span" }
 
-[dev-dependencies]
-flux_proc_macros = { path = "../flux_proc_macros" }
+# [dev-dependencies]
+# flux_proc_macros = { path = "../flux_proc_macros" }

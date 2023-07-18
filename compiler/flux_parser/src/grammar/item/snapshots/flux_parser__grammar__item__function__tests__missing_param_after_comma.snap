@@ -32,14 +32,14 @@ Root@0..14
 
 
 Errors:
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:12]
    |
  1 | fn foo(x X,){}
    |            |  
    |            `-- expected name in function parameter
 ---'
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:12]
    |
  1 | fn foo(x X,){}

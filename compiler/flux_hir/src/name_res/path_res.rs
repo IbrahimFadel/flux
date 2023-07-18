@@ -79,11 +79,31 @@ impl ResolvePathError {
     }
 }
 
-impl DefMap {
+impl PackageData {
     pub(crate) fn resolve_path(
         &self,
         path: &Spanned<Path>,
         original_module_id: ModuleId,
+        packages: &Arena<PackageData>,
+    ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
+        self.def_map.resolve_path(
+            &self.name,
+            path,
+            original_module_id,
+            &self.dependencies,
+            packages,
+        )
+    }
+}
+
+impl DefMap {
+    pub(crate) fn resolve_path(
+        &self,
+        package_name: &Spur,
+        path: &Spanned<Path>,
+        original_module_id: ModuleId,
+        dependencies: &[PackageDependency],
+        packages: &Arena<PackageData>,
     ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
         let mut segments = path.segments.iter().enumerate();
         let mut name = match segments.next() {
@@ -96,7 +116,7 @@ impl DefMap {
         };
 
         // If the path is absolute (aka, begins with package name, skip to first segment that needs to be resolved)
-        if name == &self.name {
+        if name == package_name {
             match segments.next() {
                 Some((_, segment)) => name = segment,
                 None => {
@@ -110,7 +130,12 @@ impl DefMap {
         let mut curr_per_ns = self.resolve_name_in_module(original_module_id, name);
 
         if curr_per_ns.is_none() {
-            return self.try_resolve_in_dependency(path);
+            return self.try_resolve_in_dependency(
+                path,
+                original_module_id,
+                dependencies,
+                packages,
+            );
         }
 
         for (i, segment) in segments {
@@ -170,13 +195,17 @@ impl DefMap {
     fn try_resolve_in_dependency(
         &self,
         path: &Spanned<Path>,
+        original_module_id: ModuleId,
+        dependencies: &[PackageDependency],
+        packages: &Arena<PackageData>,
     ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
-        for dep in &self.dependencies {
-            let def_map = &self.packages[*dep];
-            if &def_map.name == path.nth(0) {
-                return def_map
-                    .resolve_path(path, def_map.root)
-                    .map(|(_, mod_item)| (Some(dep.clone()), mod_item));
+        for dep in dependencies {
+            let package = &packages[dep.package_id];
+            if &package.name == path.nth(0) {
+                return package.resolve_path(path, original_module_id, packages);
+                // return packagedef_map
+                //     .resolve_path(path, def_map.root)
+                //     .map(|(_, mod_item)| (Some(dep.clone()), mod_item));
             }
         }
 

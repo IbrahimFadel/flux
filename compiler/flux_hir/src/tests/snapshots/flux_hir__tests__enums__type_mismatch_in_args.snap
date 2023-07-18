@@ -4,14 +4,17 @@ expression: s
 ---
 //  main.flx
 
+enum Foo {
+    A -> s32
+}
 
 fn main() -> () {
-    let x Foo = Foo::A(0)(0);
+    let x Foo = Foo::A(0);
 }
 
 Diagnostics
 
-[E0039] Error: type mismatch
+[E0041] Error: type mismatch
    ,-[ main.flx:8:13]
    |
  4 |     A -> s32,

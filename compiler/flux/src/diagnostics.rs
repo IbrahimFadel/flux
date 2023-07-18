@@ -1,4 +1,6 @@
-use flux_diagnostics::{Diagnostic, DiagnosticCode, DiagnosticKind, ToDiagnostic, quote_and_listify};
+use flux_diagnostics::{
+    quote_and_listify, Diagnostic, DiagnosticCode, DiagnosticKind, ToDiagnostic,
+};
 
 #[derive(Debug, Clone)]
 pub enum DriverError {

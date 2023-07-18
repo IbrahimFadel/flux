@@ -4,14 +4,17 @@ expression: s
 ---
 //  main.flx
 
+enum Foo {
+    A -> s32
+}
 
 fn main() -> () {
-    let x Foo = Foo::A(0)(0, 0);
+    let x Foo = Foo::A(0, 0);
 }
 
 Diagnostics
 
-[E0038] Error: incorrect number of arguments in enum variant initialization
+[E0039] Error: incorrect number of arguments in enum variant initialization
    ,-[ main.flx:8:12]
    |
  4 |     A -> s32,

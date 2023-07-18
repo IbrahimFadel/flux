@@ -4,11 +4,16 @@ expression: s
 ---
 //  main.flx
 
+enum Result<A, B, C> {
+    A -> A,
+    B,
+    C -> C
+}
 
 
 Diagnostics
 
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:3:10]
    |
  3 | enum Result<A, B, C> {

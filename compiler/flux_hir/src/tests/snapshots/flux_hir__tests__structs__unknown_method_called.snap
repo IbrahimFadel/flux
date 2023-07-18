@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 }
 
 fn main() -> () {
@@ -14,7 +14,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0028] Error: could not find method or field
+[E0029] Error: could not find method or field
    ,-[ main.flx:8:2]
    |
  8 |     foo.foo();

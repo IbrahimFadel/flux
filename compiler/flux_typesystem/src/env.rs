@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::{FileSpanned, InFile, Span, Spanned};
+use flux_span::{FileId, FileSpanned, InFile, Span, Spanned, WithSpan};
 use itertools::Itertools;
 use lasso::{Spur, ThreadedRodeo};
 use owo_colors::OwoColorize;
@@ -75,9 +75,19 @@ impl TEntry {
 }
 
 impl TEnv {
+    // This is unsafe.. but it's cool ig. just pay attention to the order we intern them in at the start
+    pub const U64: TypeId = TypeId::new(0);
+    pub const U32: TypeId = TypeId::new(1);
+    pub const U16: TypeId = TypeId::new(2);
+    pub const U8: TypeId = TypeId::new(3);
+    pub const S64: TypeId = TypeId::new(4);
+    pub const S32: TypeId = TypeId::new(5);
+    pub const S16: TypeId = TypeId::new(6);
+    pub const S8: TypeId = TypeId::new(7);
+
     /// Construct a new `flux_typesystem` [`TEnv`]
     pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
-        Self {
+        let mut s = Self {
             string_interner,
             entries: vec![],
             // Global scope
@@ -96,7 +106,64 @@ impl TEnv {
                 string_interner.get_or_intern_static("f32"),
                 string_interner.get_or_intern_static("f64"),
             ]),
-        }
+        };
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("u64"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("u32"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("u16"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("u8"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("s64"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("s32"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("s16"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s.insert(
+            Type::new(TypeKind::Concrete(ConcreteKind::Path(
+                string_interner.get_or_intern_static("s8"),
+                vec![],
+            )))
+            .file_span(FileId::poisoned(), Span::poisoned()),
+        );
+        s
     }
 
     /// Get a `FileSpanned<TEntry>` given a [`TypeId`]
@@ -173,6 +240,7 @@ impl TEnv {
     pub fn insert_bool(&mut self, span: InFile<Span>) -> TypeId {
         let ty = Type::new(TypeKind::Concrete(ConcreteKind::Path(
             self.string_interner.get_or_intern_static("bool"),
+            vec![],
         )));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
     }
@@ -181,8 +249,36 @@ impl TEnv {
     pub fn insert_str(&mut self, span: InFile<Span>) -> TypeId {
         let ty = Type::new(TypeKind::Concrete(ConcreteKind::Path(
             self.string_interner.get_or_intern_static("str"),
+            vec![],
         )));
         self.insert(FileSpanned::new(Spanned::new(ty, span.inner), span.file_id))
+    }
+
+    pub fn get_inner_typeid(&self, type_id: TypeId) -> TypeId {
+        let mut inner_id = type_id;
+        loop {
+            match &self.get_typekind_with_id(inner_id).inner.inner {
+                TypeKind::Int(id) => {
+                    if let Some(id) = id {
+                        inner_id = *id;
+                    } else {
+                        break;
+                    }
+                }
+                TypeKind::Float(id) => {
+                    if let Some(id) = id {
+                        inner_id = *id;
+                    } else {
+                        break;
+                    }
+                }
+                TypeKind::Ref(id) => {
+                    inner_id = *id;
+                }
+                _ => break,
+            }
+        }
+        inner_id
     }
 
     /// Insert a `Spanned<Type>` into the type environment
@@ -246,6 +342,7 @@ impl TEnv {
                 Some(id) => self.reconstruct(*id),
                 None => Ok(TypeKind::Concrete(ConcreteKind::Path(
                     self.string_interner.get_or_intern_static("f32"),
+                    vec![],
                 ))),
             },
             TypeKind::Generic(_, _) => todo!(),
@@ -253,6 +350,7 @@ impl TEnv {
                 Some(id) => self.reconstruct(*id),
                 None => Ok(TypeKind::Concrete(ConcreteKind::Path(
                     self.string_interner.get_or_intern_static("u32"),
+                    vec![],
                 ))),
             },
             TypeKind::Ref(id) => self.reconstruct(*id),
@@ -269,7 +367,7 @@ impl TEnv {
         match concrete {
             ConcreteKind::Array(_, _) => todo!(),
             ConcreteKind::Ptr(_) => todo!(),
-            ConcreteKind::Path(_) => todo!(),
+            ConcreteKind::Path(_, _) => todo!(),
             ConcreteKind::Tuple(_) => todo!(),
         }
     }
@@ -285,6 +383,7 @@ impl TEnv {
     /// This method is good for debugging, and error messages.
     pub fn fmt_ty_id(&self, id: TypeId) -> String {
         let typekind = self.get_typekind_with_id(id);
+        // println!("{:?}", typekind.inner.inner);
         self.fmt_typekind(&typekind.inner.inner)
     }
 
@@ -309,7 +408,7 @@ impl TEnv {
         match kind {
             ConcreteKind::Array(ty, n) => format!("[{}; {}]", self.fmt_ty_id_constr(*ty), n),
             ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty_id_constr(*id)),
-            ConcreteKind::Path(spur) => self.string_interner.resolve(spur).to_string(),
+            ConcreteKind::Path(spur, _) => self.string_interner.resolve(spur).to_string(),
             ConcreteKind::Tuple(ids) => {
                 format!(
                     "({})",
@@ -367,7 +466,23 @@ impl TEnv {
         match kind {
             ConcreteKind::Array(ty, n) => format!("[{}; {}]", self.fmt_ty_id(*ty), n),
             ConcreteKind::Ptr(id) => format!("*{}", self.fmt_ty_id(*id)),
-            ConcreteKind::Path(spur) => self.string_interner.resolve(spur).to_string(),
+            ConcreteKind::Path(spur, generics) => {
+                format!(
+                    "{}{}",
+                    self.string_interner.resolve(spur).to_string(),
+                    if generics.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "<{}>",
+                            generics
+                                .iter()
+                                .map(|generic| self.fmt_ty_id(*generic))
+                                .join(", ")
+                        )
+                    }
+                )
+            }
             ConcreteKind::Tuple(ids) => {
                 format!("({})", ids.iter().map(|id| self.fmt_ty_id(*id)).join(", "))
             }
@@ -453,7 +568,7 @@ impl Display for ConcreteKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Array(ty, n) => write!(f, "['{ty}; {n}]"),
-            Self::Path(path) => write!(f, "{path:?}"),
+            Self::Path(path, _) => write!(f, "{path:?}"),
             Self::Ptr(ptr) => write!(f, "*'{ptr}"),
             Self::Tuple(_) => write!(f, "()"),
         }

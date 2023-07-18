@@ -4,17 +4,17 @@ expression: s
 ---
 //  main.flx
 
-trait Bar  {
+trait Bar {
     
     
 }
 
-trait Bazz  {
+trait Bazz {
     
     
 }
 
-trait Foo  {
+trait Foo {
     type A;
     
 }
@@ -27,7 +27,7 @@ apply Foo to s32 {
 
 Diagnostics
 
-[E0043] Error: trait restrictions not met
+[E0045] Error: trait restrictions not met
     ,-[ main.flx:11:4]
     |
   7 |     type A is Bar + Bazz;

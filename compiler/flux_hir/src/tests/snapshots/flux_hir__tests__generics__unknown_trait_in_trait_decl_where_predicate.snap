@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo<A>  where A is Bar {
+trait Foo<A> where A is Bar {
     
     
 }
@@ -12,7 +12,7 @@ trait Foo<A>  where A is Bar {
 
 Diagnostics
 
-[E0010] Error: unresolved trait
+[E0011] Error: unresolved trait
    ,-[ main.flx:4:13]
    |
  4 |     where A is Bar

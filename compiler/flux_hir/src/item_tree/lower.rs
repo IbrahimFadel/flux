@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
+use flux_typesystem::TEnv;
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 use text_size::{TextRange, TextSize};
@@ -13,7 +14,7 @@ use crate::{
         Apply, Enum, EnumVariant, Function, GenericParams, Mod, Name, Param, Params, Path, Struct,
         StructField, StructFields, Trait, Type, TypeIdx, Use, Visibility, WherePredicate,
     },
-    FunctionId,
+    FunctionId, PackageData,
 };
 
 use super::{FileItemTreeId, ItemTree, ItemTreeNode, ModItem};
@@ -26,48 +27,35 @@ fn id<N: ItemTreeNode>(index: Idx<N>) -> FileItemTreeId<N> {
 }
 
 pub(super) struct Ctx<'a> {
-    tree: &'a mut ItemTree,
+    tree: ItemTree,
     string_interner: &'static ThreadedRodeo,
     body_ctx: crate::body::LowerCtx<'a>,
     diagnostics: Vec<Diagnostic>,
     file_id: FileId,
+    tenv: &'a TEnv,
 }
 
 impl<'a> Ctx<'a> {
-    // pub fn new(
-    //     file_id: FileId,
-    //     string_interner: &'static ThreadedRodeo,
-    //     types: &'a mut Arena<Spanned<Type>>,
-    // ) -> Self {
-    //     Self {
-    //         tree,
-    //         string_interner,
-    //         body_ctx: crate::body::LowerCtx::new(string_interner, types),
-    //         diagnostics: Vec::new(),
-    //         file_id,
-    //     }
-    // }
-
-    pub fn with_item_tree(
+    pub fn new(
         file_id: FileId,
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
-        tree: &'a mut ItemTree,
+        packages: &'a Arena<PackageData>,
+        tenv: &'a TEnv,
     ) -> Self {
         Self {
-            tree,
+            tree: ItemTree::default(),
             string_interner,
-            body_ctx: crate::body::LowerCtx::new(string_interner, types),
+            body_ctx: crate::body::LowerCtx::new(packages, string_interner, types),
             diagnostics: Vec::new(),
             file_id,
+            tenv,
         }
     }
 
-    pub(super) fn lower_module_items(mut self, root: &Root) -> Vec<ModItem> {
-        let new_items: Vec<_> = root.items().map(|item| self.lower_item(&item)).collect();
-        let mut clone = new_items.clone();
-        self.tree.top_level.append(&mut clone);
-        new_items
+    pub(super) fn lower_module_items(mut self, root: &Root) -> ItemTree {
+        self.tree.top_level = root.items().map(|item| self.lower_item(&item)).collect();
+        self.tree
     }
 
     fn lower_item(&mut self, item: &ast::Item) -> ModItem {

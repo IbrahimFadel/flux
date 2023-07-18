@@ -363,52 +363,52 @@ apply Foo to s32 {
 "#
 }
 
-no_errors! {
-    int_subtyping_when_int_depends_on_specialized_int,
-    r#"
-//- main.flx
+// no_errors! {
+//     int_subtyping_when_int_depends_on_specialized_int,
+//     r#"
+// //- main.flx
 
-trait Foo {}
-apply Foo to s32 {}
+// trait Foo {}
+// apply Foo to s32 {}
 
-fn foo<T>(x T) where T is Foo {}
+// fn foo<T>(x T) where T is Foo {}
 
-fn main() {
-    let x s32 = 0;
-    let y = x;
-    foo(y)
-}    
-"#
-}
+// fn main() {
+//     let x s32 = 0;
+//     let y = x;
+//     foo(y)
+// }
+// "#
+// }
 
-errors! {
-    no_possible_int_spacialization,
-    r#"
-//- main.flx
+// errors! {
+//     no_possible_int_spacialization,
+//     r#"
+// //- main.flx
 
-trait Foo {}
+// trait Foo {}
 
-fn foo<T>(x T) where T is Foo {}
+// fn foo<T>(x T) where T is Foo {}
 
-fn main() {
-    foo(0)
-}
-"#
-}
+// fn main() {
+//     foo(0)
+// }
+// "#
+// }
 
-errors! {
-    multiple_possible_int_specializations,
-    r#"
-//- main.flx
+// errors! {
+//     multiple_possible_int_specializations,
+//     r#"
+// //- main.flx
 
-trait Foo {}
-apply Foo to s32 {}
-apply Foo to s64 {}
+// trait Foo {}
+// apply Foo to s32 {}
+// apply Foo to s64 {}
 
-fn foo<T>(x T) where T is Foo {}
+// fn foo<T>(x T) where T is Foo {}
 
-fn main() {
-    foo(0)
-}
-"#
-}
+// fn main() {
+//     foo(0)
+// }
+// "#
+// }

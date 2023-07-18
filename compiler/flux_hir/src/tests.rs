@@ -1,6 +1,7 @@
 use std::io::{BufWriter, Write};
 
 use flux_diagnostics::{reporting::FileCache, Diagnostic};
+use la_arena::Arena;
 use lasso::ThreadedRodeo;
 use once_cell::sync::Lazy;
 use pretty::BoxAllocator;
@@ -11,6 +12,7 @@ use crate::{
         mod_res::{FileResolver, RelativePath},
         DefMap,
     },
+    ItemTree, PackageData,
 };
 
 mod enums;
@@ -42,7 +44,7 @@ impl FileResolver for TestFileResolver {
     }
 }
 
-fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>, FileCache) {
+fn check(content: &str) -> (PackageData, LoweredBodies, Vec<Diagnostic>, FileCache) {
     let mut file_cache = FileCache::new(&STRING_INTERNER);
     let files = content.split("//-").skip(1);
     let mut entry_file_path = None;
@@ -57,19 +59,30 @@ fn check(content: &str) -> (DefMap, LoweredBodies, Vec<Diagnostic>, FileCache) {
             entry_file_path = Some(file_path);
         }
     }
+    let mut packages = Arena::new();
+    let package_name = STRING_INTERNER.get_or_intern_static("test");
+
     let (def_map, mut types, mut diagnostics) = match entry_file_path {
         Some(entry_path) => crate::build_def_map(
+            package_name,
             entry_path,
             &mut file_cache,
+            &packages,
+            &vec![],
             &STRING_INTERNER,
             &TestFileResolver,
         ),
         None => panic!("malformated input to `check` function in name resolution unit test"),
     };
-    let (lowered_bodies, mut diagnostics2) =
-        crate::lower_def_map_bodies(&def_map, &STRING_INTERNER, &mut types);
+
+    let package = PackageData::new(package_name, def_map, vec![]);
+    let package_id: la_arena::Idx<PackageData> = packages.alloc(package.clone());
+
+    let (bodies, mut diagnostics2) =
+        crate::lower_def_map_bodies(package_id, &packages, &STRING_INTERNER, &mut types);
+
     diagnostics.append(&mut diagnostics2);
-    (def_map, lowered_bodies, diagnostics, file_cache)
+    (package, bodies, diagnostics, file_cache)
 }
 
 fn fmt_def_map(
@@ -112,9 +125,9 @@ macro_rules! errors {
         paste::paste! {
             #[test]
             fn [<$name>]() {
-                let (def_map, lowered_bodies, diagnostics, file_cache) = crate::tests::check($src);
+                let (package, lowered_bodies, diagnostics, file_cache) = crate::tests::check($src);
                 assert_ne!(diagnostics.len(), 0);
-                let s = crate::tests::fmt_def_map(&def_map, &lowered_bodies, &diagnostics, &file_cache);
+                let s = crate::tests::fmt_def_map(&package.def_map, &lowered_bodies, &diagnostics, &file_cache);
                 insta::assert_snapshot!(s);
             }
         }

@@ -19,14 +19,14 @@ Root@0..8
 
 
 Errors:
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:7]
    |
  1 | fn foo{}
    |       |  
    |       `-- expected `(` in function parameter list
 ---'
-[E0002] Error: expected syntax not found
+[E0003] Error: expected syntax not found
    ,-[fn:1:7]
    |
  1 | fn foo{}

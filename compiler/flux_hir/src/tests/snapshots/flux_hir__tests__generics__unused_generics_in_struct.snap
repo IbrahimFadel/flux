@@ -4,23 +4,23 @@ expression: s
 ---
 //  main.rs
 
-struct Bazz<T>  {
+struct Bazz<T> {
 }
 
-struct Bazz<A, B, C>  {
+struct Bazz<A, B, C> {
 A a}
 
 
 Diagnostics
 
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.rs:3:10]
    |
  3 | struct Bazz<T> {}
    |          ^|^  
    |           `--- unused generic parameters `T`
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.rs:5:8]
    |
  5 | struct Bazz<A, B, C> {

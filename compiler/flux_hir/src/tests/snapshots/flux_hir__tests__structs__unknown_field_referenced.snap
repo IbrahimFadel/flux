@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 }
 
 fn main() -> () {
@@ -14,14 +14,14 @@ fn main() -> () {
 
 Diagnostics
 
-[E0029] Error: could not find field
+[E0030] Error: could not find field
    ,-[ main.flx:8:10]
    |
  8 |     let x = foo.x;
    |          |  
    |          `-- could not find field called `x` for type `Foo`
 ---'
-[E0051] Error: could not infer type
+[E0053] Error: could not infer type
    ,-[ main.flx:8:6]
    |
  8 |     let x = foo.x;

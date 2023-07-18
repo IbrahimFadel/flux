@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo  {
+trait Foo {
     type A;
     type B;
     type C;
@@ -19,7 +19,7 @@ apply Foo to s32 {
 
 Diagnostics
 
-[E0031] Error: missing associated types in apply
+[E0032] Error: missing associated types in apply
    ,-[ main.flx:7:2]
    |
  7 | ,-> }

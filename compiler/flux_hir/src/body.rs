@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, Spanned, ToSpan, WithSpan};
@@ -19,8 +19,8 @@ use crate::{
     },
     intrinsics,
     item_tree::ItemTree,
-    name_res::{path_res::PathResolutionResultKind, DefMap},
-    EnumId, FunctionId, ModItem, ModuleDefId, ModuleId, StructId, TraitId,
+    name_res::path_res::PathResolutionResultKind,
+    EnumId, FunctionId, ModuleDefId, ModuleId, PackageData, PackageId, StructId, TraitId,
 };
 
 mod apply;
@@ -37,11 +37,10 @@ pub struct LoweredBodies {
 }
 
 pub(crate) struct LowerCtx<'a> {
-    def_map: Option<&'a DefMap>,
-    packages: Arena<Arc<DefMap>>,
+    // def_map: Option<&'a DefMap>,
+    packages: &'a Arena<PackageData>,
     cur_module_id: ModuleId,
-    // package_id: PackageId,
-    global_item_tree: Option<&'a ItemTree>,
+    package_id: PackageId,
     pub tchk: TChecker,
     string_interner: &'static ThreadedRodeo,
     exprs: Arena<Spanned<Expr>>,
@@ -49,19 +48,20 @@ pub(crate) struct LowerCtx<'a> {
     tid_to_tidx: HashMap<TypeId, TypeIdx>,
     diagnostics: Vec<Diagnostic>,
     indices: HashMap<(ModuleId, ModuleDefId), ExprIdx>,
+    resolution_cache: HashMap<Path, (InFile<Item>, ModuleDefId)>,
 }
 
 impl<'a> LowerCtx<'a> {
     pub fn new(
+        packages: &'a Arena<PackageData>,
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
     ) -> Self {
         Self {
-            def_map: None,
-            packages: Arena::new(),
+            // def_map: None,
+            packages,
             cur_module_id: ModuleId::from_raw(RawIdx::from(0)),
-            // package_id: PackageId::from_raw(RawIdx::from(0)),
-            global_item_tree: None,
+            package_id: PackageId::from_raw(RawIdx::from(0)),
             tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
@@ -69,6 +69,7 @@ impl<'a> LowerCtx<'a> {
             tid_to_tidx: HashMap::new(),
             diagnostics: Vec::new(),
             indices: HashMap::new(),
+            resolution_cache: HashMap::new(),
         }
     }
 
@@ -149,19 +150,17 @@ impl<'a> LowerCtx<'a> {
         });
     }
 
-    pub fn with_def_map(
-        def_map: &'a DefMap,
-        packages: Arena<Arc<DefMap>>,
+    pub fn with_package(
+        package_id: PackageId,
+        packages: &'a Arena<PackageData>,
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
-        global_item_tree: &'a ItemTree,
     ) -> Self {
         Self {
-            def_map: Some(def_map),
             packages,
             cur_module_id: ModuleId::from_raw(RawIdx::from(0)),
+            package_id,
             // package_id: PackageId::from_raw(RawIdx::from(packages.len() as u32)),
-            global_item_tree: Some(global_item_tree),
             tchk: TChecker::new(string_interner),
             string_interner,
             exprs: Arena::new(),
@@ -169,49 +168,50 @@ impl<'a> LowerCtx<'a> {
             tid_to_tidx: HashMap::new(),
             diagnostics: Vec::new(),
             indices: HashMap::new(),
+            resolution_cache: HashMap::new(),
         }
     }
 
-    pub fn handle_items(&mut self, items: impl Iterator<Item = ModItem>, module_id: ModuleId) {
-        self.cur_module_id = module_id;
-        let mut function_bodies = vec![];
-        for mod_item in items {
-            match mod_item {
-                crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index),
-                crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index),
-                crate::item_tree::ModItem::Function(f) => {
-                    let body = self.handle_function(f.index, None);
-                    function_bodies.push(body);
-                }
-                crate::item_tree::ModItem::Mod(_) => {}
-                crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index),
-                crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index),
-                crate::item_tree::ModItem::Use(_) => {}
-            }
-        }
-    }
-
-    // pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: ModuleId) {
+    // pub fn handle_items(&mut self, items: impl Iterator<Item = ModItem>, module_id: ModuleId) {
     //     self.cur_module_id = module_id;
     //     let mut function_bodies = vec![];
-    //     for mod_item in &item_tree.top_level {
+    //     for mod_item in items {
     //         match mod_item {
-    //             crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
-    //             crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index, item_tree),
+    //             crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index),
+    //             crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index),
     //             crate::item_tree::ModItem::Function(f) => {
-    //                 let body = self.handle_function(f.index, item_tree);
+    //                 let body = self.handle_function(f.index, None);
     //                 function_bodies.push(body);
     //             }
     //             crate::item_tree::ModItem::Mod(_) => {}
-    //             crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index, item_tree),
-    //             crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index, item_tree),
+    //             crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index),
+    //             crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index),
     //             crate::item_tree::ModItem::Use(_) => {}
     //         }
     //     }
     // }
 
-    fn handle_enum(&mut self, e_idx: EnumId) {
-        let e = &self.global_item_tree.unwrap()[e_idx];
+    pub fn handle_item_tree(&mut self, item_tree: &ItemTree, module_id: ModuleId) {
+        self.cur_module_id = module_id;
+        let mut function_bodies = vec![];
+        for mod_item in &item_tree.top_level {
+            match mod_item {
+                crate::item_tree::ModItem::Apply(a) => self.handle_apply(a.index, item_tree),
+                crate::item_tree::ModItem::Enum(e) => self.handle_enum(e.index, item_tree),
+                crate::item_tree::ModItem::Function(f) => {
+                    let body = self.handle_function(f.index, None, item_tree);
+                    function_bodies.push(body);
+                }
+                crate::item_tree::ModItem::Mod(_) => {}
+                crate::item_tree::ModItem::Struct(s) => self.handle_struct(s.index, item_tree),
+                crate::item_tree::ModItem::Trait(trt) => self.handle_trait(trt.index, item_tree),
+                crate::item_tree::ModItem::Use(_) => {}
+            }
+        }
+    }
+
+    fn handle_enum(&mut self, e_idx: EnumId, item_tree: &ItemTree) {
+        let e = &item_tree[e_idx];
 
         self.verify_where_predicates(
             &e.generic_params,
@@ -244,8 +244,13 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn handle_function(&mut self, f_idx: FunctionId, apply: Option<&Apply>) -> Typed<ExprIdx> {
-        let f = &self.global_item_tree.unwrap()[f_idx];
+    fn handle_function(
+        &mut self,
+        f_idx: FunctionId,
+        apply: Option<&Apply>,
+        item_tree: &ItemTree,
+    ) -> Typed<ExprIdx> {
+        let f = &item_tree[f_idx];
         let file_id = self.file_id();
 
         self.verify_where_predicates(&f.generic_params, &f.generic_params.span.in_file(file_id));
@@ -330,8 +335,8 @@ impl<'a> LowerCtx<'a> {
         body
     }
 
-    fn handle_struct(&mut self, s: StructId) {
-        let s = &self.global_item_tree.unwrap()[s];
+    fn handle_struct(&mut self, s: StructId, item_tree: &ItemTree) {
+        let s = &item_tree[s];
 
         let mut used_generics = vec![];
 
@@ -357,8 +362,8 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn handle_trait(&mut self, trt_id: TraitId) {
-        let trt = &self.global_item_tree.unwrap()[trt_id];
+    fn handle_trait(&mut self, trt_id: TraitId, item_tree: &ItemTree) {
+        let trt = &item_tree[trt_id];
 
         self.verify_where_predicates(
             &trt.generic_params,
@@ -369,7 +374,7 @@ impl<'a> LowerCtx<'a> {
 
         let trait_generic_params = &trt.generic_params;
         for method in &trt.methods.inner {
-            let f = &self.global_item_tree.unwrap()[method.inner];
+            let f = &item_tree[method.inner];
             let method_generic_params = &f.generic_params;
             self.combine_generic_parameters(trait_generic_params, method_generic_params);
         }
@@ -407,13 +412,31 @@ impl<'a> LowerCtx<'a> {
 
     #[inline]
     fn file_id(&self) -> FileId {
-        self.def_map.unwrap()[self.cur_module_id].file_id
+        self.packages[self.package_id].def_map[self.cur_module_id].file_id
     }
 
     fn insert_type_to_tenv(&mut self, idx: &TypeIdx, file_id: FileId) -> TypeId {
         let kind = self.type_to_tkind(idx, file_id, None);
         let span = self.types[idx.raw()].span;
         let ty = ts::Type::new(kind);
+        let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
+        self.tid_to_tidx.insert(tid, idx.clone());
+        tid
+    }
+
+    fn insert_type_with_args_to_tenv(
+        &mut self,
+        idx: &TypeIdx,
+        args: &[TypeIdx],
+        file_id: FileId,
+    ) -> TypeId {
+        let kind = self.type_to_tkind(idx, file_id, None);
+        let arg_kinds: Vec<TypeKind> = args
+            .iter()
+            .map(|arg| self.type_to_tkind(arg, file_id, None))
+            .collect();
+        let span = self.types[idx.raw()].span;
+        let ty = ts::Type::with_params(kind, arg_kinds.iter().cloned());
         let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
         self.tid_to_tidx.insert(tid, idx.clone());
         tid
@@ -442,7 +465,15 @@ impl<'a> LowerCtx<'a> {
             }
             Type::Path(path) => {
                 self.get_type(&path.clone().at(ty.span));
-                TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner)))
+                let generic_args = path
+                    .generic_args
+                    .iter()
+                    .map(|idx| self.insert_type_to_tenv(idx, file_id))
+                    .collect();
+                TypeKind::Concrete(ConcreteKind::Path(
+                    path.to_spur(self.string_interner),
+                    generic_args,
+                ))
             }
             Type::ThisPath(this_path, this_type) => {
                 if let Some(apply) = apply {
@@ -462,9 +493,13 @@ impl<'a> LowerCtx<'a> {
             )),
             Type::Never => TypeKind::Never,
             Type::Unknown => TypeKind::Unknown,
-            Type::Generic(name, restrictions) => {
-                todo!()
-            }
+            Type::Generic(name, restrictions) => TypeKind::Generic(
+                name,
+                restrictions
+                    .iter()
+                    .map(|restriction| self.path_to_trait_restriction(restriction))
+                    .collect(),
+            ),
         }
     }
 
@@ -494,7 +529,7 @@ impl<'a> LowerCtx<'a> {
             TypeKind::Concrete(concrete) => match concrete {
                 ConcreteKind::Array(t, n) => Type::Array(self.tid_to_tidx[t].clone(), *n),
                 ConcreteKind::Ptr(t) => Type::Ptr(self.tid_to_tidx[t].clone().into()),
-                ConcreteKind::Path(path) => {
+                ConcreteKind::Path(path, _) => {
                     Type::Path(Path::from_spur(*path, self.string_interner))
                 }
                 ConcreteKind::Tuple(tuple) => {
@@ -639,115 +674,98 @@ impl<'a> LowerCtx<'a> {
         let variant_name =
             Path::spanned_segment(&path, path.segments.len() - 1, self.string_interner).unwrap();
         let item = self.try_get_item(&enum_path, PathResolutionResultKind::Any);
-        if let Ok(item) = item {
-            if let Some(item) = item {
-                let e = match &item.inner {
-                    Item::Enum(e) => Some(e),
-                    _ => None,
-                };
-
-                if let Some(e) = e {
-                    let variant = e
-                        .variants
-                        .iter()
-                        .find(|variant| variant.name.inner == *variant_name);
-
-                    match variant {
-                        Some(variant) => {
-                            match (&variant.ty, args) {
-                                (Some(variant_ty), Some(args)) => {
-                                    let variant_tid =
-                                        self.insert_type_to_tenv(variant_ty, self.file_id());
-                                    let args_len = args.len();
-                                    let variant_name_file_span =
-                                        self.tchk.tenv.get_type_filespan(variant_tid);
-                                    if args_len == 0 {
-                                        self.diagnostics.push(
-                                            LowerError::EnumVariantMissingArg {
-                                                arg_type: self.tchk.tenv.fmt_ty_id(variant_tid),
-                                                variant_name: self
-                                                    .string_interner
-                                                    .resolve(&variant_name)
-                                                    .to_string(),
-                                                variant_name_file_span: variant_name_file_span
-                                                    .clone(),
-                                                initialization: (),
-                                                initialization_file_span: args
-                                                    .span
-                                                    .in_file(self.file_id()),
-                                            }
-                                            .to_diagnostic(),
-                                        );
-                                    } else if args_len > 1 {
-                                        self.diagnostics.push(LowerError::IncorrectNumArgsInEnumVariantInitialization { variant_name: self
-                                            .string_interner
-                                            .resolve(&variant_name)
-                                            .to_string(), variant_name_file_span: variant_name_file_span.clone(), expected_num: 1, expected_num_file_span: variant_name_file_span, got_num: args_len, got_num_file_span: args
-                                            .span
-                                            .in_file(self.file_id()) }.to_diagnostic());
-                                    }
-                                }
-                                (Some(variant_ty), None) => {
-                                    let variant_tid =
-                                        self.insert_type_to_tenv(variant_ty, self.file_id());
-                                    let variant_name_file_span =
-                                        self.tchk.tenv.get_type_filespan(variant_tid);
-                                    self.diagnostics.push(
-                                        LowerError::EnumVariantMissingArg {
-                                            arg_type: self.tchk.tenv.fmt_ty_id(variant_tid),
-                                            variant_name: self
-                                                .string_interner
-                                                .resolve(&variant_name)
-                                                .to_string(),
-                                            variant_name_file_span: variant_name_file_span.clone(),
-                                            initialization: (),
-                                            initialization_file_span: variant_name
-                                                .span
-                                                .in_file(self.file_id()),
-                                        }
-                                        .to_diagnostic(),
-                                    );
-                                }
-                                _ => {}
-                            }
-                            let ty = ts::Type::new(TypeKind::Concrete(ConcreteKind::Path(
-                                enum_path.to_spur(self.string_interner),
-                            )))
-                            .file_span(self.file_id(), enum_path.span);
-                            let tid = self.tchk.tenv.insert(ty);
-                            let enum_expr = EnumExpr {
-                                path: enum_path,
-                                variant: variant_name,
-                                arg: None,
-                            };
-                            let expr: ExprIdx =
-                                self.exprs.alloc(Expr::Enum(enum_expr).at(path.span)).into();
-                            (Some((expr.with_type(tid), item)), true)
-                        }
-                        None => {
-                            self.diagnostics.push(
-                                LowerError::UnknownEnumVariant {
-                                    eenum: enum_path.to_string(self.string_interner),
-                                    variant: self
-                                        .string_interner
-                                        .resolve(&variant_name)
-                                        .to_string(),
-                                    variant_file_span: variant_name.span.in_file(self.file_id()),
-                                }
-                                .to_diagnostic(),
-                            );
-                            (None, true)
-                        }
-                    }
-                } else {
-                    (None, false)
-                }
-            } else {
-                (None, false)
-            }
+        let item = if let Ok(item) = item {
+            item
         } else {
-            (None, false)
+            return (None, false);
+        };
+        let item = if let Some(item) = item {
+            item
+        } else {
+            return (None, false);
+        };
+        let e = match &item.inner {
+            Item::Enum(e) => e,
+            _ => return (None, false),
+        };
+
+        let variant = e
+            .variants
+            .iter()
+            .find(|variant| variant.name.inner == *variant_name);
+        let variant = if let Some(variant) = variant {
+            variant
+        } else {
+            self.diagnostics.push(
+                LowerError::UnknownEnumVariant {
+                    eenum: enum_path.to_string(self.string_interner),
+                    variant: self.string_interner.resolve(&variant_name).to_string(),
+                    variant_file_span: variant_name.span.in_file(self.file_id()),
+                }
+                .to_diagnostic(),
+            );
+            return (None, true);
+        };
+
+        match (&variant.ty, args) {
+            (Some(variant_ty), Some(args)) => {
+                let variant_tid = self.insert_type_to_tenv(variant_ty, self.file_id());
+                let args_len = args.len();
+                let variant_name_file_span = self.tchk.tenv.get_type_filespan(variant_tid);
+                if args_len == 0 {
+                    self.diagnostics.push(
+                        LowerError::EnumVariantMissingArg {
+                            arg_type: self.tchk.tenv.fmt_ty_id(variant_tid),
+                            variant_name: self.string_interner.resolve(&variant_name).to_string(),
+                            variant_name_file_span: variant_name_file_span.clone(),
+                            initialization: (),
+                            initialization_file_span: args.span.in_file(self.file_id()),
+                        }
+                        .to_diagnostic(),
+                    );
+                } else if args_len > 1 {
+                    self.diagnostics.push(
+                        LowerError::IncorrectNumArgsInEnumVariantInitialization {
+                            variant_name: self.string_interner.resolve(&variant_name).to_string(),
+                            variant_name_file_span: variant_name_file_span.clone(),
+                            expected_num: 1,
+                            expected_num_file_span: variant_name_file_span,
+                            got_num: args_len,
+                            got_num_file_span: args.span.in_file(self.file_id()),
+                        }
+                        .to_diagnostic(),
+                    );
+                }
+            }
+            (Some(variant_ty), None) => {
+                let variant_tid = self.insert_type_to_tenv(variant_ty, self.file_id());
+                let variant_name_file_span = self.tchk.tenv.get_type_filespan(variant_tid);
+                self.diagnostics.push(
+                    LowerError::EnumVariantMissingArg {
+                        arg_type: self.tchk.tenv.fmt_ty_id(variant_tid),
+                        variant_name: self.string_interner.resolve(&variant_name).to_string(),
+                        variant_name_file_span: variant_name_file_span.clone(),
+                        initialization: (),
+                        initialization_file_span: variant_name.span.in_file(self.file_id()),
+                    }
+                    .to_diagnostic(),
+                );
+            }
+            _ => {}
         }
+        let ty = ts::Type::new(TypeKind::Concrete(ConcreteKind::Path(
+            enum_path.to_spur(self.string_interner),
+            vec![],
+        )))
+        .file_span(self.file_id(), enum_path.span);
+        let tid = self.tchk.tenv.insert(ty);
+        let enum_expr = EnumExpr {
+            path: enum_path,
+            variant: variant_name,
+            arg: None,
+        };
+        let expr: ExprIdx = self.exprs.alloc(Expr::Enum(enum_expr).at(path.span)).into();
+        (Some((expr.with_type(tid), item)), true)
     }
 
     fn lower_float_expr(&mut self, float: &ast::FloatExpr) -> Typed<ExprIdx> {
@@ -795,6 +813,7 @@ impl<'a> LowerCtx<'a> {
             // int_ty = self.tchk.tenv.insert
             let u64_ty = ts::Type::new(TypeKind::Concrete(ConcreteKind::Path(
                 self.string_interner.get_or_intern_static("u64"),
+                vec![],
             )));
             let u64_tid = self
                 .tchk
@@ -969,7 +988,7 @@ impl<'a> LowerCtx<'a> {
 
         let (path, item) = self.lower_path_expr(Some(path.clone()), Some(&args));
 
-        if let Expr::Enum(enum_expr) = &self.exprs[path.raw()].inner {
+        let variant_ty = if let Expr::Enum(enum_expr) = &self.exprs[path.raw()].inner.clone() {
             let item = item
                 .as_ref()
                 .unwrap_or_else(|| ice("got enum expr but no item"));
@@ -983,16 +1002,19 @@ impl<'a> LowerCtx<'a> {
                 .iter()
                 .find(|variant| variant.name.inner == enum_expr.variant.inner);
 
-            let tid = variant
-                .map(|variant| {
-                    variant
-                        .ty
-                        .clone()
-                        .map(|ty| self.insert_type_to_tenv(&ty, self.file_id()))
-                })
-                .flatten();
+            // let tid = variant
+            //     .map(|variant| {
+            //         variant
+            //             .ty
+            //             .clone()
+            //             .map(|ty| self.insert_type_to_tenv(&ty, self.file_id()))
+            //     })
+            //     .flatten();
+            // let variant_ty = variant.map(|variant| variant.ty.clone()).flatten();
+            let mut variant_ty = None;
 
-            if let Some(tid) = tid {
+            if let Some(variant_ty) = &variant_ty {
+                let tid = self.insert_type_to_tenv(variant_ty, self.file_id());
                 args.first().map(|arg| {
                     self.tchk
                         .unify(
@@ -1004,9 +1026,37 @@ impl<'a> LowerCtx<'a> {
                             self.diagnostics.push(err);
                         });
                 });
+                println!(
+                    "{}",
+                    self.tchk
+                        .tenv
+                        .fmt_ty_id(self.tchk.tenv.get_inner_typeid(args.first().unwrap().tid))
+                );
+                // println!(
+                //     "HELL) {} == {} {:#?}",
+                //     self.tchk.tenv.fmt_ty_id(tid),
+                //     self.tchk.tenv.fmt_ty_id(args.first().unwrap().tid),
+                //     self.tchk
+                //         .tenv
+                //         .get_typekind_with_id(args.first().unwrap().tid),
+                // );
+                // let x = self.tchk.tenv.reconstruct(tid).unwrap();
+                // enum_expr.path.inner.generic_args.push(tid);
+                // enum_expr.path.generic_args.push(self.tchk.tenv.get_entry(id));
+
+                // variant_ty = self.reco
             }
-        }
+
+            variant_ty
+        } else {
+            None
+        };
+
         if let Expr::Enum(enum_expr) = &mut self.exprs[path.raw()].inner {
+            if let Some(variant_ty) = variant_ty {
+                enum_expr.path.inner.generic_args.push(variant_ty);
+            }
+
             if let Some(arg) = args.first() {
                 enum_expr.arg = Some(arg.clone());
             }
@@ -1070,88 +1120,98 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    fn search_items_for_method(
+    fn search_item_tree_for_method(
         &mut self,
-        items: impl Iterator<Item = ModItem>,
+        item_tree: &ItemTree,
         tid: TypeId,
         name: Spur,
     ) -> Option<FunctionId> {
-        // let mut suitable_applies = items.filter_map(|mod_item| match mod_item {
-        //     ModItem::Apply(apply) => {
-        //         let apply = &self.global_item_tree[apply];
-        //         let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
-        //         self.tchk
-        //             .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
-        //             .ok()
-        //             .map(|_| apply)
+        let mut suitable_applies = item_tree.applies.iter().filter(|(_, apply)| {
+            let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+            self.tchk
+                .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+                .is_ok()
+        });
+
+        let method = suitable_applies.find_map(|(_, apply)| {
+            apply
+                .methods
+                .iter()
+                .find(|method| item_tree[method.inner].name.inner == name)
+                .map(|idx| idx.inner)
+        });
+        method
+        // // let mut suitable_applies = items.filter_map(|mod_item| match mod_item {
+        // //     ModItem::Apply(apply) => {
+        // //         let apply = &self.global_item_tree[apply];
+        // //         let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+        // //         self.tchk
+        // //             .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+        // //             .ok()
+        // //             .map(|_| apply)
+        // //     }
+        // //     _ => None,
+        // // });
+        // let mut suitable_applies = vec![];
+        // for mod_item in items {
+        //     match mod_item {
+        //         ModItem::Apply(apply) => {
+        //             let apply = &self.global_item_tree.unwrap()[apply];
+        //             let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
+        //             if self
+        //                 .tchk
+        //                 .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
+        //                 .is_ok()
+        //             {
+        //                 suitable_applies.push(apply);
+        //             }
+        //         }
+        //         _ => {}
         //     }
-        //     _ => None,
-        // });
-        let mut suitable_applies = vec![];
-        for mod_item in items {
-            match mod_item {
-                ModItem::Apply(apply) => {
-                    let apply = &self.global_item_tree.unwrap()[apply];
-                    let apply_ty = self.insert_type_to_tenv(&apply.ty, self.file_id());
-                    if self
-                        .tchk
-                        .unify(tid, apply_ty, Span::poisoned().in_file(self.file_id()))
-                        .is_ok()
-                    {
-                        suitable_applies.push(apply);
-                    }
-                }
-                _ => {}
-            }
-        }
+        // }
 
-        for apply in suitable_applies {
-            for method in &apply.methods.inner {
-                if self.global_item_tree.unwrap()[method.inner].name.inner == name {
-                    return Some(method.inner);
-                }
-            }
-            // apply
-            //     .methods
-            //     .iter()
-            //     .find(|method| self.global_item_tree[**method].name.inner == name);
-        }
+        // for apply in suitable_applies {
+        //     for method in &apply.methods.inner {
+        //         if self.global_item_tree.unwrap()[method.inner].name.inner == name {
+        //             return Some(method.inner);
+        //         }
+        //     }
+        //     // apply
+        //     //     .methods
+        //     //     .iter()
+        //     //     .find(|method| self.global_item_tree[**method].name.inner == name);
+        // }
 
-        None
-        // suitable_applies.find_map(|apply| {
-        //     apply
-        //         .methods
-        //         .iter()
-        //         .find(|method| self.global_item_tree[**method].name.inner == name)
-        //         .cloned()
-        // })
+        // None
+        // // suitable_applies.find_map(|apply| {
+        // //     apply
+        // //         .methods
+        // //         .iter()
+        // //         .find(|method| self.global_item_tree[**method].name.inner == name)
+        // //         .cloned()
+        // // })
     }
 
-    fn search_items_for_struct_with_field(
+    fn search_item_tree_for_struct_with_field(
         &mut self,
-        items: impl Iterator<Item = ModItem>,
+        item_tree: &ItemTree,
         struct_name: Spur,
         field_name: Spur,
     ) -> Option<StructField> {
-        let mut suitable_structs = items.filter_map(|mod_item| match mod_item {
-            ModItem::Struct(strukt) => {
-                if self.global_item_tree.unwrap()[strukt].name.inner == struct_name {
-                    Some(&self.global_item_tree.unwrap()[strukt])
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        });
+        let mut suitable_structs = item_tree
+            .structs
+            .iter()
+            .filter(|(_, strukt)| strukt.name.inner == struct_name);
 
-        suitable_structs.find_map(|strukt| {
+        let field = suitable_structs.find_map(|(_, strukt)| {
             strukt
                 .fields
                 .fields
                 .iter()
                 .find(|field| field.name.inner == field_name)
                 .cloned()
-        })
+        });
+        field
     }
 
     fn check_call_args_with_function_decl(
@@ -1205,10 +1265,16 @@ impl<'a> LowerCtx<'a> {
         let fields = self.lower_struct_fields(strukt.field_list(), generic_params, &struct_decl);
 
         let ty = ts::Type::with_params(
-            TypeKind::Concrete(ConcreteKind::Path(path.to_spur(self.string_interner))),
+            TypeKind::Concrete(ConcreteKind::Path(
+                path.to_spur(self.string_interner),
+                vec![],
+            )),
             path.generic_args
                 .iter()
                 .map(|idx| self.type_to_tkind(idx, file_id, None)),
+            // path.generic_args
+            //     .iter()
+            //     .map(|id| self.tchk.tenv.get_typekind_with_id(*id).inner.inner),
         );
         let tid = self.tchk.tenv.insert(ty.file_span(file_id, span));
 
@@ -1377,17 +1443,17 @@ impl<'a> LowerCtx<'a> {
             rhs: rhs.clone(),
         };
 
-        let def_map = self.def_map.unwrap();
+        let def_map = &self.packages[self.package_id].def_map;
 
         let mut for_type = None;
-        if let TypeKind::Concrete(ConcreteKind::Path(path)) =
+        if let TypeKind::Concrete(ConcreteKind::Path(path, _)) =
             self.tchk.tenv.get_typekind_with_id(lhs_tid).inner.inner
         {
             for_type = Some(self.string_interner.resolve(&path).to_string());
 
-            let result = def_map.items.iter().find_map(|(mod_id, items)| {
+            let result = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
                 let result =
-                    self.search_items_for_struct_with_field(items.iter().cloned(), path, rhs.inner);
+                    self.search_item_tree_for_struct_with_field(item_tree, path, rhs.inner);
 
                 let file_id = def_map.modules[mod_id].file_id;
 
@@ -1397,7 +1463,6 @@ impl<'a> LowerCtx<'a> {
                     let idx: ExprIdx = self.exprs.alloc(member_access).into();
                     return Some(idx.with_type(tid));
                 }
-
                 None
             });
             if let Some(result) = result {
@@ -1405,14 +1470,14 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        let method = def_map.items.iter().find_map(|(mod_id, items)| {
+        let item_tree_and_method = def_map.item_trees.iter().find_map(|(mod_id, item_tree)| {
             let file_id = def_map.modules[mod_id].file_id;
-            self.search_items_for_method(items.iter().cloned(), lhs_tid, rhs.inner)
-                .map(|method| InFile::new(method, file_id))
+            self.search_item_tree_for_method(item_tree, lhs_tid, rhs.inner)
+                .map(|method| (item_tree, InFile::new(method, file_id)))
         });
 
-        let tid = if let Some(method_idx) = method {
-            let method = &self.global_item_tree.unwrap()[method_idx.inner];
+        let tid = if let Some((item_tree, method_idx)) = item_tree_and_method {
+            let method = &item_tree[method_idx.inner];
             self.insert_type_to_tenv(&method.ret_ty, method_idx.file_id)
         } else {
             let field_or_method = self.string_interner.resolve(&rhs).to_string();
@@ -1792,16 +1857,15 @@ impl<'a> LowerCtx<'a> {
     }
 }
 
+#[tracing::instrument(skip_all, name = "hir::lower_def_map_bodies")]
 pub fn lower_def_map_bodies(
-    def_map: &DefMap,
-    global_item_tree: &ItemTree,
-    packages: Arena<Arc<DefMap>>,
+    package_id: PackageId,
+    packages: &Arena<PackageData>,
     string_interner: &'static ThreadedRodeo,
     types: &mut Arena<Spanned<Type>>,
 ) -> (LoweredBodies, Vec<Diagnostic>) {
     tracing::info!("lowering definition map bodies");
-    let mut ctx =
-        LowerCtx::with_def_map(def_map, packages, string_interner, types, global_item_tree);
+    let mut ctx = LowerCtx::with_package(package_id, packages, string_interner, types);
 
     // let item_tree = &def_map.item_trees[def_map.prelude];
     // ctx.handle_item_tree(item_tree, def_map.prelude);
@@ -1827,8 +1891,17 @@ pub fn lower_def_map_bodies(
     // for (_, package) in ctx.packages.iter() {
     // }
 
-    for (module_id, items) in def_map.items.iter() {
-        ctx.handle_items(items.iter().cloned(), module_id);
+    // for (module_id, items) in def_map.items.iter() {
+    //     ctx.handle_items(items.iter().cloned(), module_id);
+    // }
+
+    for (module_id, item_tree) in packages[package_id].def_map.item_trees.iter() {
+        if module_id == packages[package_id].def_map.prelude {
+            continue;
+        }
+        ctx.handle_item_tree(item_tree, module_id);
     }
+    // packages[package_id].def_map.modules
+
     ctx.finish()
 }

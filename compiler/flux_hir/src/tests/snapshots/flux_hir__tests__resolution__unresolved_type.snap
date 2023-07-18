@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo  {
+trait Foo {
     
     
 }
@@ -20,21 +20,21 @@ fn main() -> () {
 
 Diagnostics
 
-[E0032] Error: unresolved type
+[E0033] Error: unresolved type
    ,-[ main.flx:5:10]
    |
  5 | apply Foo to Bar {}
    |          ^^|^  
    |            `--- unresolved type `Bar`
 ---'
-[E0032] Error: unresolved type
+[E0033] Error: unresolved type
    ,-[ main.flx:8:4]
    |
  8 |     let x Bar = Bar {};
    |    ^^|^  
    |      `--- unresolved type `Bar`
 ---'
-[E0033] Error: unresolved struct
+[E0034] Error: unresolved struct
    ,-[ main.flx:8:10]
    |
  8 |     let x Bar = Bar {};

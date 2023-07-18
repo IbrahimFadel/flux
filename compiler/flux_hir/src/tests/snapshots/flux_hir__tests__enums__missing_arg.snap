@@ -4,6 +4,9 @@ expression: s
 ---
 //  main.flx
 
+enum Foo {
+    A -> s32
+}
 
 fn main() -> () {
     let x Foo = Foo::A;
@@ -11,7 +14,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0037] Error: missing argument in enum variant initialization
+[E0038] Error: missing argument in enum variant initialization
    ,-[ main.flx:8:11]
    |
  4 |     A -> s32,

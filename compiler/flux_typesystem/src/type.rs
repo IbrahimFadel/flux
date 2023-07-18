@@ -53,7 +53,7 @@ pub struct TypeId(usize);
 impl WithSpan for TypeId {}
 
 impl TypeId {
-    pub fn new(id: usize) -> Self {
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 
@@ -120,6 +120,6 @@ impl Display for TypeKind {
 pub enum ConcreteKind {
     Array(TypeId, u32),
     Ptr(TypeId),
-    Path(Spur),
+    Path(Spur, Vec<TypeId>),
     Tuple(Vec<TypeId>),
 }

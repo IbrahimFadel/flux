@@ -11,6 +11,7 @@ use flux_syntax::{
     ast::{self, AstNode},
     SyntaxNode,
 };
+use flux_typesystem::TEnv;
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 
@@ -21,7 +22,7 @@ use crate::{
 
 mod lower;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ItemTree {
     pub top_level: Vec<ModItem>,
     pub applies: Arena<Apply>,
@@ -188,20 +189,8 @@ pub(crate) fn lower_ast_to_item_tree(
     types: &mut Arena<Spanned<Type>>,
 ) -> ItemTree {
     let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
-    let mut item_tree = ItemTree::default();
-    let ctx = lower::Ctx::with_item_tree(file_id, string_interner, types, &mut item_tree);
-    ctx.lower_module_items(&root);
-    item_tree
-}
-
-pub(crate) fn lower_ast_to_existing_item_tree(
-    root: SyntaxNode,
-    file_id: FileId,
-    string_interner: &'static ThreadedRodeo,
-    types: &mut Arena<Spanned<Type>>,
-    item_tree: &mut ItemTree,
-) -> Vec<ModItem> {
-    let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
-    let ctx = lower::Ctx::with_item_tree(file_id, string_interner, types, item_tree);
+    let tenv = TEnv::new(string_interner);
+    let packages = &Arena::new();
+    let ctx = lower::Ctx::new(file_id, string_interner, types, packages, &tenv);
     ctx.lower_module_items(&root)
 }

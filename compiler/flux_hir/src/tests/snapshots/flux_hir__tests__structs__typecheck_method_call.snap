@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 }
 
 apply  to Foo {
@@ -21,7 +21,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0039] Error: type mismatch
+[E0041] Error: type mismatch
     ,-[ main.flx:12:6]
     |
   6 |         fn foo() {}

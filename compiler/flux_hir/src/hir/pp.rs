@@ -15,7 +15,6 @@ impl DefMap {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
-        global_item_tree: &'b ItemTree,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -23,16 +22,10 @@ impl DefMap {
         A: Clone,
     {
         allocator.intersperse(
-            self.items.iter().map(|(module_id, items)| {
-                let items = allocator.intersperse(
-                    items.iter().map(|item| {
-                        item.pretty(
-                            allocator,
-                            string_interner,
-                            bodies,
-                            module_id,
-                            global_item_tree,
-                        )
+            self.item_trees.iter().map(|(module_id, item_tree)| {
+                let item_tree = allocator.intersperse(
+                    item_tree.top_level.iter().map(|item| {
+                        item.pretty(allocator, string_interner, bodies, module_id, item_tree)
                     }),
                     allocator.hardline(),
                 );
@@ -40,7 +33,7 @@ impl DefMap {
                     + allocator.text(string_interner.resolve(&self[module_id].file_id.0))
                     + allocator.hardline()
                     + allocator.hardline()
-                    + items
+                    + item_tree
             }),
             "\n",
         )
@@ -69,6 +62,7 @@ impl ModItem {
                 &item_tree.functions,
                 module_id,
             ),
+            ModItem::Enum(e_idx) => item_tree[*e_idx].pretty(allocator, string_interner, bodies),
             ModItem::Function(f_idx) => {
                 let body = bodies
                     .indices
@@ -84,7 +78,6 @@ impl ModItem {
                 item_tree[*t_idx].pretty(allocator, string_interner, bodies, &item_tree.functions)
             }
             ModItem::Use(u_idx) => item_tree[*u_idx].pretty(allocator, string_interner, bodies),
-            _ => allocator.nil(),
         }
     }
 }
@@ -111,6 +104,7 @@ impl ItemTree {
                     &self.functions,
                     module_id,
                 ),
+                ModItem::Enum(e_idx) => self[*e_idx].pretty(allocator, string_interner, bodies),
                 ModItem::Function(f_idx) => {
                     let body = bodies
                         .indices
@@ -136,7 +130,6 @@ impl ItemTree {
                     self[*t_idx].pretty(allocator, string_interner, bodies, &self.functions)
                 }
                 ModItem::Use(u_idx) => self[*u_idx].pretty(allocator, string_interner, bodies),
-                _ => allocator.nil(),
             }),
             allocator.hardline(),
         )
@@ -204,11 +197,16 @@ impl Apply {
             + allocator.text("to")
             + allocator.space()
             + self.ty.pretty(allocator, string_interner, bodies)
-            + self
-                .generic_params
-                .where_predicates
-                .pretty(allocator, string_interner)
             + allocator.space()
+            + match self.generic_params.where_predicates.0.is_empty() {
+                true => allocator.nil(),
+                false => {
+                    self.generic_params
+                        .where_predicates
+                        .pretty(allocator, string_interner)
+                        + allocator.space()
+                }
+            }
             + allocator.text("{")
             + allocator.hardline()
             + assoc_types.indent(4)
@@ -217,6 +215,70 @@ impl Apply {
             + allocator.hardline()
             + allocator.text("}")
             + allocator.hardline()
+    }
+}
+
+impl Enum {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        let variants = allocator.intersperse(
+            self.variants
+                .iter()
+                .map(|variant| variant.pretty(allocator, string_interner, bodies)),
+            allocator.text(",") + allocator.hardline(),
+        );
+        self.visibility.pretty(allocator)
+            + allocator.text("enum")
+            + allocator.space()
+            + string_interner.resolve(&self.name)
+            + self.generic_params.pretty(allocator, string_interner)
+            + match self.generic_params.where_predicates.0.is_empty() {
+                true => allocator.space(),
+                false => self
+                    .generic_params
+                    .where_predicates
+                    .pretty(allocator, string_interner),
+            }
+            + allocator.text("{")
+            + allocator.hardline()
+            + variants.indent(4)
+            + allocator.hardline()
+            + allocator.text("}")
+            + allocator.hardline()
+    }
+}
+
+impl EnumVariant {
+    pub fn pretty<'b, D, A>(
+        &'b self,
+        allocator: &'b D,
+        string_interner: &'static ThreadedRodeo,
+        bodies: &'b LoweredBodies,
+    ) -> DocBuilder<'b, D, A>
+    where
+        D: DocAllocator<'b, A>,
+        D::Doc: Clone,
+        A: Clone,
+    {
+        allocator.text(string_interner.resolve(&self.name))
+            + match &self.ty {
+                Some(ty) => {
+                    allocator.space()
+                        + allocator.text("->")
+                        + allocator.space()
+                        + ty.pretty(allocator, string_interner, bodies)
+                }
+                None => allocator.nil(),
+            }
     }
 }
 
@@ -235,16 +297,25 @@ impl Function {
         self.visibility
             .inner
             .pretty(allocator)
-            .append(allocator.text("fn "))
+            .append(allocator.text("fn"))
+            + allocator.space()
             + allocator.text(string_interner.resolve(&self.name.inner))
             + self.generic_params.pretty(allocator, string_interner)
             + self.params.pretty(allocator, string_interner, bodies)
-            + allocator.text(" -> ")
+            + allocator.space()
+            + allocator.text("->")
+            + allocator.space()
             + self.ret_ty.pretty(allocator, string_interner, bodies)
-            + self
-                .generic_params
-                .where_predicates
-                .pretty(allocator, string_interner)
+            + match self.generic_params.where_predicates.0.is_empty() {
+                true => allocator.nil(),
+                false => {
+                    allocator.space()
+                        + self
+                            .generic_params
+                            .where_predicates
+                            .pretty(allocator, string_interner)
+                }
+            }
     }
 }
 
@@ -291,11 +362,15 @@ impl Struct {
             + allocator.text(string_interner.resolve(&self.name))
             + self.generic_params.pretty(allocator, string_interner)
             + allocator.space()
-            + self
-                .generic_params
-                .where_predicates
-                .pretty(allocator, string_interner)
-            + allocator.space()
+            + match self.generic_params.where_predicates.0.is_empty() {
+                true => allocator.nil(),
+                false => {
+                    self.generic_params
+                        .where_predicates
+                        .pretty(allocator, string_interner)
+                        + allocator.space()
+                }
+            }
             + allocator.text("{")
             + allocator.line()
             + fields
@@ -339,11 +414,15 @@ impl Trait {
             + allocator.text(string_interner.resolve(&self.name))
             + self.generic_params.pretty(allocator, string_interner)
             + allocator.space()
-            + self
-                .generic_params
-                .where_predicates
-                .pretty(allocator, string_interner)
-            + allocator.space()
+            + match self.generic_params.where_predicates.0.is_empty() {
+                true => allocator.nil(),
+                false => {
+                    self.generic_params
+                        .where_predicates
+                        .pretty(allocator, string_interner)
+                        + allocator.space()
+                }
+            }
             + allocator.text("{")
             + allocator.line()
             + assoc_types.indent(4)
@@ -488,7 +567,8 @@ impl WherePredicates {
             return allocator.nil();
         }
 
-        allocator.text(" where ")
+        allocator.text("where")
+            + allocator.space()
             + allocator.intersperse(
                 self.0
                     .iter()
@@ -584,17 +664,17 @@ impl Type {
             Self::Unknown => allocator.text("<unknown type>"),
             Self::Generic(name, restrictions) => {
                 allocator.text(string_interner.resolve(name))
-                    + if restrictions.is_empty() {
-                        allocator.nil()
-                    } else {
-                        allocator.text(": ")
-                            + allocator.intersperse(
-                                restrictions.iter().map(|restriction| {
-                                    restriction.pretty(allocator, string_interner, bodies)
-                                }),
-                                ", ",
-                            )
-                    }
+                // + if restrictions.is_empty() {
+                //     allocator.nil()
+                // } else {
+                //     allocator.text(": ")
+                //         + allocator.intersperse(
+                //             restrictions.iter().map(|restriction| {
+                //                 restriction.pretty(allocator, string_interner, bodies)
+                //             }),
+                //             ", ",
+                //         )
+                // }
             }
         }
     }
@@ -622,9 +702,15 @@ impl Path {
         } else {
             allocator.text("<")
                 + allocator.intersperse(
-                    self.generic_args
-                        .iter()
-                        .map(|arg| arg.pretty(allocator, string_interner, bodies)),
+                    self.generic_args.iter().map(|arg| {
+                        arg.pretty(allocator, string_interner, bodies)
+                        // let ty = bodies
+                        //     .tid_to_tkind
+                        //     .get(arg)
+                        //     .map(|ty| ty.pretty(allocator, string_interner, bodies))
+                        //     .unwrap_or_else(|| allocator.text("<unknown arg>"));
+                        // ty
+                    }),
                     ",",
                 )
                 + allocator.text(">")
@@ -774,13 +860,6 @@ impl EnumExpr {
         self.path.pretty(allocator, string_interner, bodies)
             + allocator.text("::")
             + allocator.text(string_interner.resolve(&self.variant))
-            + if let Some(arg) = &self.arg {
-                allocator.text("(")
-                    + arg.pretty(allocator, string_interner, bodies)
-                    + allocator.text(")")
-            } else {
-                allocator.nil()
-            }
     }
 }
 

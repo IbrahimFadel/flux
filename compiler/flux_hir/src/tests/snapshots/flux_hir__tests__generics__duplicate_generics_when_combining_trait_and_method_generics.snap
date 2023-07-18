@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo<A, B>  {
+trait Foo<A, B> {
     
     pub fn foo<A>() -> ();
     pub fn bar<B>() -> ();
@@ -15,7 +15,7 @@ trait Foo<A, B>  {
 
 Diagnostics
 
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:4:8]
    |
  3 | trait Foo<A, B> {
@@ -25,7 +25,7 @@ Diagnostics
    |        ^|^  
    |         `--- duplicate generics `A`
 ---'
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:5:7]
    |
  3 | trait Foo<A, B> {
@@ -36,7 +36,7 @@ Diagnostics
    |       ^|^  
    |        `--- duplicate generics `B`
 ---'
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:6:10]
    |
  3 | trait Foo<A, B> {

@@ -4,10 +4,10 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 s32 x,Bar y,f32 z}
 
-struct Bar  {
+struct Bar {
 u32 x}
 
 fn main() -> () {
@@ -18,7 +18,7 @@ fn main() -> () {
 
 Diagnostics
 
-[E0039] Error: type mismatch
+[E0041] Error: type mismatch
     ,-[ main.flx:14:24]
     |
   4 |     x s32,
@@ -31,7 +31,7 @@ Diagnostics
     |                            |   
     |                            `--- `float`
 ----'
-[E0039] Error: type mismatch
+[E0041] Error: type mismatch
     ,-[ main.flx:15:10]
     |
   5 |     y Bar,
@@ -44,7 +44,7 @@ Diagnostics
     |              |  
     |              `-- `int`
 ----'
-[E0039] Error: type mismatch
+[E0041] Error: type mismatch
     ,-[ main.flx:16:8]
     |
   6 |     z f32,

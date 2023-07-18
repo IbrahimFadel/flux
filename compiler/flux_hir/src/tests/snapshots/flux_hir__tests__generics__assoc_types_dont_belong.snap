@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo  {
+trait Foo {
     type A;
     type B;
     type C;
@@ -22,7 +22,7 @@ apply Foo to s32 {
 
 Diagnostics
 
-[E0030] Error: associated type do not belong in apply
+[E0031] Error: associated type do not belong in apply
     ,-[ main.flx:12:16]
     |
  12 |     type C = s32;

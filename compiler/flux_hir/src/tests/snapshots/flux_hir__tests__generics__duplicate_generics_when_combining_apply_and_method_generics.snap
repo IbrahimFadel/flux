@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-struct Foo  {
+struct Foo {
 }
 
 apply<A, B>  to Foo {
@@ -26,7 +26,7 @@ apply<A, B>  to Foo {
 
 Diagnostics
 
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:5:7]
    |
  4 | apply<A, B> to Foo {
@@ -36,14 +36,14 @@ Diagnostics
    |       ^|^  
    |        `--- duplicate generics `A`
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:5:7]
    |
  5 |     fn foo<A>() {}
    |       ^|^  
    |        `--- unused generic parameters `A`
 ---'
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:6:6]
    |
  4 | apply<A, B> to Foo {
@@ -54,14 +54,14 @@ Diagnostics
    |      ^|^  
    |       `--- duplicate generics `B`
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:6:6]
    |
  6 |     fn bar<B>() {}
    |      ^|^  
    |       `--- unused generic parameters `B`
 ---'
-[E0023] Error: duplicate generics
+[E0024] Error: duplicate generics
    ,-[ main.flx:7:9]
    |
  4 | apply<A, B> to Foo {
@@ -72,14 +72,14 @@ Diagnostics
    |         ^^^|^^  
    |            `---- duplicate generics `A`, `B`
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:7:9]
    |
  7 |     fn foo_bar<A, B>() {}
    |         ^^^|^^  
    |            `---- unused generic parameters `A`, `B`
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:8:8]
    |
  8 |     fn foo_bar<C>() {}

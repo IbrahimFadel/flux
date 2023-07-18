@@ -4,7 +4,7 @@ expression: s
 ---
 //  main.flx
 
-trait Foo  {
+trait Foo {
     
     
 }
@@ -15,7 +15,7 @@ fn foo<T>() -> u32 where X is Foo {
 
 Diagnostics
 
-[E0004] Error: unknown generic used in where predicate
+[E0005] Error: unknown generic used in where predicate
    ,-[ main.flx:5:22]
    |
  5 | fn foo<T>() -> u32 where X is Foo {
@@ -24,7 +24,7 @@ Diagnostics
    |                      |  
    |                      `-- unknown generic `X` used in where predicate
 ---'
-[E0020] Error: unused generic parameters
+[E0021] Error: unused generic parameters
    ,-[ main.flx:5:3]
    |
  5 | fn foo<T>() -> u32 where X is Foo {
