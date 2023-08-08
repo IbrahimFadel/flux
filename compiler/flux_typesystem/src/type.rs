@@ -6,6 +6,8 @@ use lasso::Spur;
 
 use crate::TraitRestriction;
 
+mod pp;
+
 /// A `flux_typesystem` type
 ///
 /// Types consist of a constructor and parameters
@@ -89,6 +91,7 @@ impl Display for TypeId {
 ///     - No information is known about this type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
+    AssocPath(Spur),
     Concrete(ConcreteKind),
     Int(Option<TypeId>),
     Float(Option<TypeId>),
@@ -102,6 +105,7 @@ pub enum TypeKind {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::AssocPath(_) => write!(f, "todo"),
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
             Self::Generic(name, _) => write!(f, "{name:?}"),

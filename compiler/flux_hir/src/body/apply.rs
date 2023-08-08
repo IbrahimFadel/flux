@@ -29,11 +29,19 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
+        for (assoc_type_name, assoc_type_id) in &a.assoc_types {
+            self.tchk
+                .tenv
+                .push_assoc_type(assoc_type_name.clone().in_file(file_id), *assoc_type_id);
+        }
+
         for f in &a.methods.inner {
             let f_generic_params = &item_tree[f.inner].generic_params;
             self.combine_generic_parameters(&a.generic_params, f_generic_params);
             self.handle_function(f.inner, Some(a), item_tree);
         }
+
+        self.tchk.tenv.clear_assoc_types();
     }
 
     fn add_trait_application_to_context(
@@ -44,7 +52,7 @@ impl<'a> LowerCtx<'a> {
     ) {
         // TODO: how tf do i avoid all these allocations?
         let file_id = self.file_id();
-        let impltr = self.insert_type_to_tenv(&apply.ty, file_id);
+        let impltr = apply.ty;
         let impltr_args = self
             .tchk
             .tenv
@@ -54,11 +62,12 @@ impl<'a> LowerCtx<'a> {
             .unwrap_or(vec![]);
         let impltr_filespan = self.tchk.tenv.get_type_filespan(impltr);
         // let trait_params = trait_path.generic_args.clone();
-        let trait_params: Vec<_> = trait_path
-            .generic_args
-            .iter()
-            .map(|ty| self.insert_type_to_tenv(ty, file_id))
-            .collect();
+        let trait_params = trait_path.generic_args.clone();
+        // let trait_params: Vec<_> = trait_path
+        //     .generic_args
+        //     .iter()
+        //     .map(|ty| self.insert_type_to_tenv(ty, file_id))
+        //     .collect();
 
         let impltr_args: Vec<_> = impltr_args
             .iter()
@@ -119,7 +128,8 @@ impl<'a> LowerCtx<'a> {
 
         // apply Foo to Bar {
         //       ^^^^^^^^^^
-        let apply_span = Span::combine(apply_trt_span, self.types[a.ty.raw()].span);
+        let apply_span =
+            Span::combine(apply_trt_span, self.tchk.tenv.get_type_filespan(a.ty).inner);
 
         self.verify_assoc_types_defined_match_trait_assoc_type_list(
             &trt.name,
@@ -134,7 +144,7 @@ impl<'a> LowerCtx<'a> {
         trait_name: &Spur,
         apply_span: Span,
         trait_assoc_types: &[(Name, Vec<Spanned<Path>>)],
-        apply_assoc_types: &[(Name, TypeIdx)],
+        apply_assoc_types: &[(Name, TypeId)],
     ) {
         let trait_assoc_type_names: HashSet<Name> = trait_assoc_types
             .iter()
@@ -175,19 +185,19 @@ impl<'a> LowerCtx<'a> {
             );
         }
 
-        for (assoc_type_name, assoc_type_tyidx) in apply_assoc_types {
+        for (assoc_type_name, assoc_type_tyid) in apply_assoc_types {
             let trait_assoc_type = trait_assoc_types
                 .iter()
                 .find(|(name, _)| name.inner == assoc_type_name.inner);
 
             if let Some((_, trait_assoc_type_restrictions)) = trait_assoc_type {
-                let tid = self.insert_type_to_tenv(assoc_type_tyidx, self.file_id());
+                // let tid = self.insert_type_to_tenv(assoc_type_tyidx, self.file_id());
                 let type_restrictions: Vec<_> = trait_assoc_type_restrictions
                     .iter()
                     .map(|restriction| self.path_to_trait_restriction(restriction))
                     .collect();
                 self.tchk
-                    .does_type_implement_restrictions(tid, &type_restrictions)
+                    .does_type_implement_restrictions(*assoc_type_tyid, &type_restrictions)
                     .unwrap_or_else(|err| {
                         self.diagnostics.push(err);
                     });

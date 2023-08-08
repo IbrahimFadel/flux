@@ -13,11 +13,12 @@ use crate::{
     scope::Scope,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TEnv {
     pub string_interner: &'static ThreadedRodeo,
     entries: Vec<FileSpanned<TEntry>>,
     pub locals: Vec<Scope>,
+    pub(super) assoc_types: Vec<(FileSpanned<Spur>, TypeId)>,
     pub(super) int_paths: HashSet<Spur>,
     pub(super) float_paths: HashSet<Spur>,
 }
@@ -90,8 +91,8 @@ impl TEnv {
         let mut s = Self {
             string_interner,
             entries: vec![],
-            // Global scope
             locals: vec![Scope::new()],
+            assoc_types: vec![],
             int_paths: HashSet::from([
                 string_interner.get_or_intern_static("u8"),
                 string_interner.get_or_intern_static("u16"),
@@ -205,6 +206,14 @@ impl TEnv {
 
     pub fn get_call_return_type(&self, _path: &[Spur]) -> TypeId {
         todo!()
+    }
+
+    pub fn clear_assoc_types(&mut self) {
+        self.assoc_types.clear();
+    }
+
+    pub fn push_assoc_type(&mut self, name: FileSpanned<Spur>, type_id: TypeId) {
+        self.assoc_types.push((name, type_id));
     }
 
     /// Insert a unit type `()` into the [`TEnv`]
@@ -337,6 +346,7 @@ impl TEnv {
     pub fn reconstruct(&self, tid: TypeId) -> Result<TypeKind, Diagnostic> {
         let tkind = self.get_typekind_with_id(tid);
         match &tkind.inner.inner {
+            TypeKind::AssocPath(spur) => todo!(),
             TypeKind::Concrete(_) => Ok(tkind.inner.inner),
             TypeKind::Float(float) => match float {
                 Some(id) => self.reconstruct(*id),
@@ -394,6 +404,7 @@ impl TEnv {
 
     pub fn fmt_typekind_constr(&self, kind: &TypeKind) -> String {
         match kind {
+            TypeKind::AssocPath(spur) => self.string_interner.resolve(spur).to_string(),
             TypeKind::Generic(name, _) => self.string_interner.resolve(name).to_string(),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
@@ -420,32 +431,33 @@ impl TEnv {
 
     pub fn fmt_typekind(&self, kind: &TypeKind) -> String {
         match kind {
+            TypeKind::AssocPath(spur) => self.string_interner.resolve(spur).to_string(),
             TypeKind::Generic(name, restrictions) => format!(
-                "{}{}",
+                "{}",
                 self.string_interner.resolve(name),
-                if restrictions.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        ": {}",
-                        restrictions
-                            .iter()
-                            .map(|restriction| format!(
-                                "{}{}",
-                                self.string_interner.resolve(&restriction.trait_name),
-                                if restriction.args.is_empty() {
-                                    "".to_string()
-                                } else {
-                                    restriction
-                                        .args
-                                        .iter()
-                                        .map(|arg| self.fmt_ty_id(*arg))
-                                        .join(", ")
-                                }
-                            ))
-                            .join(", ")
-                    )
-                }
+                // if restrictions.is_empty() {
+                //     "".to_string()
+                // } else {
+                //     format!(
+                //         ": {}",
+                //         restrictions
+                //             .iter()
+                //             .map(|restriction| format!(
+                //                 "{}{}",
+                //                 self.string_interner.resolve(&restriction.trait_name),
+                //                 if restriction.args.is_empty() {
+                //                     "".to_string()
+                //                 } else {
+                //                     restriction
+                //                         .args
+                //                         .iter()
+                //                         .map(|arg| self.fmt_ty_id(*arg))
+                //                         .join(", ")
+                //                 }
+                //             ))
+                //             .join(", ")
+                //     )
+                // }
             ),
             TypeKind::Unknown => "unknown".to_string(),
             TypeKind::Int(_) => "int".to_string(),
@@ -509,22 +521,23 @@ impl TEnv {
     }
 
     pub fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
-        format!(
-            "{}{}",
-            self.string_interner.resolve(&trait_restriction.trait_name),
-            if trait_restriction.args.is_empty() {
-                "".to_string()
-            } else {
-                format!(
-                    "<{}>",
-                    trait_restriction
-                        .args
-                        .iter()
-                        .map(|id| self.fmt_ty_id(*id))
-                        .join(", ")
-                )
-            }
-        )
+        todo!()
+        // format!(
+        //     "{}{}",
+        //     self.string_interner.resolve(&trait_restriction.trait_name),
+        //     if trait_restriction.args.is_empty() {
+        //         "".to_string()
+        //     } else {
+        //         format!(
+        //             "<{}>",
+        //             trait_restriction
+        //                 .args
+        //                 .iter()
+        //                 .map(|id| self.fmt_ty_id(*id))
+        //                 .join(", ")
+        //         )
+        //     }
+        // )
     }
 }
 

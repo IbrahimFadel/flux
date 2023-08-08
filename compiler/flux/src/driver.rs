@@ -6,6 +6,7 @@ use std::{
 
 use flux_diagnostics::{reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_hir::{DefMap, LoweredBodies, PackageData, PackageId};
+use flux_typesystem::TEnv;
 use la_arena::Arena;
 use lasso::Spur;
 use pretty::BoxAllocator;
@@ -49,11 +50,25 @@ impl Driver {
             .and_then(|_| Ok(file_path))
     }
 
-    pub(crate) fn fmt_def_map(&self, def_map: &DefMap, lowered_bodies: &LoweredBodies) -> String {
+    pub(crate) fn fmt_package(
+        &self,
+        package: &PackageData,
+        lowered_bodies: &LoweredBodies,
+        tenv: &TEnv,
+    ) -> String {
+        self.fmt_def_map(&package.def_map, lowered_bodies, tenv)
+    }
+
+    pub(crate) fn fmt_def_map(
+        &self,
+        def_map: &DefMap,
+        lowered_bodies: &LoweredBodies,
+        tenv: &TEnv,
+    ) -> String {
         let mut buf = BufWriter::new(Vec::new());
         let allocator = BoxAllocator;
         def_map
-            .pretty::<_, ()>(&allocator, &INTERNER, &lowered_bodies)
+            .pretty::<_, ()>(&allocator, &INTERNER, &lowered_bodies, tenv)
             .1
             .render(50, &mut buf)
             .unwrap();

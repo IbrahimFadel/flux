@@ -7,7 +7,7 @@ use crate::{
     TypeId, TypeKind,
 };
 
-impl TChecker {
+impl<'tenv> TChecker<'tenv> {
     fn get_applications(&mut self, trait_id: u32, impltr: TypeId) -> Vec<TraitApplication> {
         let applications = self
             .trait_applications

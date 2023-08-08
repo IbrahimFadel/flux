@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use flux_diagnostics::{ice, reporting::FileCache, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Spanned};
+use flux_typesystem::TEnv;
 use la_arena::{Arena, ArenaMap, Idx};
 use lasso::{Spur, ThreadedRodeo};
 
@@ -146,13 +147,15 @@ pub fn build_def_map<'a, R: FileResolver>(
     dependencies: &[PackageDependency],
     string_interner: &'static ThreadedRodeo,
     resolver: &R,
-) -> (DefMap, Arena<Spanned<Type>>, Vec<Diagnostic>) {
+) -> (DefMap, TEnv, Arena<Spanned<Type>>, Vec<Diagnostic>) {
     tracing::info!("building definition map for project");
     let root = ModuleData::new();
     let def_map = DefMap::empty(root, string_interner);
     let mut types = Arena::new();
+    let mut tenv = TEnv::new(string_interner);
     let mut collector = DefCollector {
         def_map,
+        tenv: &mut tenv,
         unresolved_imports: vec![],
         diagnostics: vec![],
         string_interner,
@@ -165,7 +168,8 @@ pub fn build_def_map<'a, R: FileResolver>(
         resolver,
     );
     collector.resolve_imports(&name, dependencies, packages);
-    (collector.def_map, types, collector.diagnostics)
+    let (def_map, diagnostics) = (collector.def_map, collector.diagnostics);
+    (def_map, tenv, types, diagnostics)
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -191,15 +195,16 @@ impl PartialResolvedImport {
 }
 
 #[derive(Debug)]
-struct DefCollector {
+struct DefCollector<'tenv> {
     def_map: DefMap,
+    tenv: &'tenv mut TEnv,
     // global_item_tree: &'a mut ItemTree,
     unresolved_imports: Vec<Import>,
     diagnostics: Vec<Diagnostic>,
     string_interner: &'static ThreadedRodeo,
 }
 
-impl DefCollector {
+impl<'tenv> DefCollector<'tenv> {
     fn update(
         &mut self,
         module_id: ModuleId,
@@ -346,13 +351,13 @@ impl DefCollector {
         let parse = flux_parser::parse(content, file_id, string_interner);
         let (root, diagnostics) = (parse.syntax(), parse.diagnostics);
         // println!("{}", root.debug(self.string_interner, true));
-        let item_tree = lower_ast_to_item_tree(root, file_id, string_interner, types);
+        let item_tree = lower_ast_to_item_tree(root, file_id, string_interner, types, self.tenv);
         (item_tree, diagnostics)
     }
 }
 
-struct ModCollector<'a> {
-    def_collector: &'a mut DefCollector,
+struct ModCollector<'a, 'tenv> {
+    def_collector: &'a mut DefCollector<'tenv>,
     module_id: ModuleId,
     item_tree: &'a ItemTree,
     mod_dir: ModDir,
@@ -361,7 +366,7 @@ struct ModCollector<'a> {
     diagnostics: Vec<Diagnostic>,
 }
 
-impl<'a> ModCollector<'a> {
+impl<'a, 'tenv> ModCollector<'a, 'tenv> {
     fn collect<R: FileResolver>(
         mut self,
         items: &[ModItem],

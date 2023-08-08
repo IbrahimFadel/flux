@@ -3,16 +3,17 @@ use std::marker::PhantomData;
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
-use flux_typesystem::TEnv;
+use flux_typesystem::{self as ts, TEnv};
 use la_arena::{Arena, Idx};
 use lasso::ThreadedRodeo;
 use text_size::{TextRange, TextSize};
+use ts::TypeId;
 
 use crate::{
     diagnostics::LowerError,
     hir::{
         Apply, Enum, EnumVariant, Function, GenericParams, Mod, Name, Param, Params, Path, Struct,
-        StructField, StructFields, Trait, Type, TypeIdx, Use, Visibility, WherePredicate,
+        StructField, StructFields, Trait, Type, Use, Visibility, WherePredicate,
     },
     FunctionId, PackageData,
 };
@@ -32,7 +33,6 @@ pub(super) struct Ctx<'a> {
     body_ctx: crate::body::LowerCtx<'a>,
     diagnostics: Vec<Diagnostic>,
     file_id: FileId,
-    tenv: &'a TEnv,
 }
 
 impl<'a> Ctx<'a> {
@@ -41,15 +41,14 @@ impl<'a> Ctx<'a> {
         string_interner: &'static ThreadedRodeo,
         types: &'a mut Arena<Spanned<Type>>,
         packages: &'a Arena<PackageData>,
-        tenv: &'a TEnv,
+        tenv: &'a mut TEnv,
     ) -> Self {
         Self {
             tree: ItemTree::default(),
             string_interner,
-            body_ctx: crate::body::LowerCtx::new(packages, string_interner, types),
+            body_ctx: crate::body::LowerCtx::new(packages, string_interner, types, tenv),
             diagnostics: Vec::new(),
             file_id,
-            tenv,
         }
     }
 
@@ -77,18 +76,29 @@ impl<'a> Ctx<'a> {
             apply.where_clause(),
             visibility.span,
         );
-        let trt = apply
-            .trt()
-            .map(|trt| self.body_ctx.lower_path(trt.path(), &generic_params));
+        let trt = apply.trt().map(|trt| {
+            self.body_ctx
+                .lower_path(trt.path(), &generic_params, self.file_id)
+        });
+        // let ty = self.body_ctx.lower_node(
+        //     apply.to_ty(),
+        //     |this, ty| {
+        //         this.types
+        //             .alloc(Type::Unknown.at(ty.range().to_span()))
+        //             .into()
+        //     },
+        //     |this, ty| this.lower_type(ty.ty(), &generic_params),
+        // );
         let ty = self.body_ctx.lower_node(
             apply.to_ty(),
             |this, ty| {
-                this.types
-                    .alloc(Type::Unknown.at(ty.range().to_span()))
-                    .into()
+                this.tchk
+                    .tenv
+                    .insert_unknown(ty.range().to_span().in_file(self.file_id))
             },
-            |this, ty| this.lower_type(ty.ty(), &generic_params),
+            |this, ty| this.lower_type(ty.ty(), &generic_params, self.file_id),
         );
+        // self.tenv.insert(ts::Type::new(TypeKin))
         let assoc_types = self.lower_apply_assoc_types(apply.associated_types(), &generic_params);
         let (methods, methods_end) = self.lower_apply_methods(apply.methods(), &trt.clone());
 
@@ -192,9 +202,10 @@ impl<'a> Ctx<'a> {
         variants
             .map(|variant| {
                 let name = self.body_ctx.lower_name(variant.name());
-                let ty = variant
-                    .ty()
-                    .map(|ty| self.body_ctx.lower_type(Some(ty), generic_params));
+                let ty = variant.ty().map(|ty| {
+                    self.body_ctx
+                        .lower_type(Some(ty), generic_params, self.file_id)
+                });
                 EnumVariant { name, ty }
             })
             .collect()
@@ -213,7 +224,7 @@ impl<'a> Ctx<'a> {
                     .fields()
                     .map(|field| {
                         let name = this.lower_name(field.name());
-                        let ty = this.lower_type(field.ty(), &generic_params);
+                        let ty = this.lower_type(field.ty(), &generic_params, self.file_id);
                         StructField { name, ty }
                     })
                     .collect();
@@ -266,7 +277,7 @@ impl<'a> Ctx<'a> {
         let visibility = self.lower_visibility(u.visibility()).inner;
         let path = self
             .body_ctx
-            .lower_path(u.path(), &GenericParams::poisoned());
+            .lower_path(u.path(), &GenericParams::poisoned(), self.file_id);
         let alias = u.alias().map(|alias| self.body_ctx.lower_name(Some(alias)));
         let res = Use {
             visibility,
@@ -338,7 +349,8 @@ impl<'a> Ctx<'a> {
                     |_, _| todo!(),
                     |this, type_bound_list| {
                         type_bound_list.type_bounds().for_each(|bound| {
-                            let path = this.lower_path(bound.trait_path(), &generic_params);
+                            let path =
+                                this.lower_path(bound.trait_path(), &generic_params, self.file_id);
                             generic_params
                                 .inner
                                 .where_predicates
@@ -383,7 +395,7 @@ impl<'a> Ctx<'a> {
             |this, type_bound_list| {
                 type_bound_list
                     .type_bounds()
-                    .map(|bound| this.lower_path(bound.trait_path(), &generic_params))
+                    .map(|bound| this.lower_path(bound.trait_path(), &generic_params, self.file_id))
                     .collect()
             },
         )
@@ -393,11 +405,13 @@ impl<'a> Ctx<'a> {
         &mut self,
         assoc_types: impl Iterator<Item = ast::ApplyDeclAssocType>,
         generic_params: &GenericParams,
-    ) -> Vec<(Name, TypeIdx)> {
+    ) -> Vec<(Name, TypeId)> {
         assoc_types
             .map(|ty| {
                 let name = self.body_ctx.lower_name(ty.name());
-                let ty = self.body_ctx.lower_type(ty.ty(), &generic_params);
+                let ty = self
+                    .body_ctx
+                    .lower_type(ty.ty(), &generic_params, self.file_id);
                 (name, ty)
             })
             .collect()
@@ -444,7 +458,8 @@ impl<'a> Ctx<'a> {
                 let params = self.lower_params(method.param_list(), &generic_params);
                 let ret_ty =
                     self.lower_return_type(method.return_ty(), &generic_params, this_trait);
-                let ret_ty_span = self.body_ctx.types[ret_ty.raw()].span;
+                // let ret_ty_span = self.body_ctx.types[ret_ty.raw()].span;
+                let ret_ty_span = self.body_ctx.tchk.tenv.get_type_filespan(ret_ty).inner;
                 end = Some(ret_ty_span.range.end());
                 let name_span = name.span;
                 let f = Function {
@@ -475,7 +490,7 @@ impl<'a> Ctx<'a> {
                         .params()
                         .map(|param| {
                             let name = this.lower_name(param.name());
-                            let ty = this.lower_type(param.ty(), &generic_params);
+                            let ty = this.lower_type(param.ty(), &generic_params, self.file_id);
                             Param { name, ty }
                         })
                         .collect(),
@@ -490,26 +505,34 @@ impl<'a> Ctx<'a> {
         ty: Option<ast::FnReturnType>,
         generic_params: &GenericParams,
         this_trait: &Option<Spanned<Path>>,
-    ) -> TypeIdx {
+    ) -> TypeId {
         self.body_ctx.lower_node(
             ty,
             |this, ty| {
-                this.types
-                    .alloc(Type::Tuple(vec![]).at(ty.range().to_span()))
-                    .into()
+                this.tchk
+                    .tenv
+                    .insert_unit(ty.range().to_span().in_file(self.file_id))
+                // this.types
+                //     .alloc(Type::Tuple(vec![]).at(ty.range().to_span()))
+                //     .into()
             },
             |this, ty| match ty.ty() {
                 Some(ty) => {
                     if let Some(this_trait) = this_trait {
-                        this.lower_apply_method_type(Some(ty), generic_params, this_trait.clone())
+                        this.lower_apply_method_type(
+                            Some(ty),
+                            generic_params,
+                            this_trait.clone(),
+                            self.file_id,
+                        )
                     } else {
-                        this.lower_type(Some(ty), &generic_params)
+                        this.lower_type(Some(ty), &generic_params, self.file_id)
                     }
                 }
                 None => this
-                    .types
-                    .alloc(Type::Tuple(vec![]).at(ty.range().to_span()))
-                    .into(),
+                    .tchk
+                    .tenv
+                    .insert_unit(ty.range().to_span().in_file(self.file_id)),
             },
         )
     }

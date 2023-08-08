@@ -8,7 +8,6 @@ use once_cell::sync::Lazy;
 static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
 
 fn check(path: &str) {
-    println!("{:?}", Path::new("./").canonicalize());
     let mut file_cache = FileCache::new(&INTERNER);
     let content = &std::fs::read_to_string(path).unwrap();
     let file_id = file_cache.add_file(path, content);

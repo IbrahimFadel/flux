@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::TypeId;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Scope {
     locals: HashMap<Spur, TypeId>,
 }

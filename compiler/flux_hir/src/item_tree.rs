@@ -187,10 +187,10 @@ pub(crate) fn lower_ast_to_item_tree(
     file_id: FileId,
     string_interner: &'static ThreadedRodeo,
     types: &mut Arena<Spanned<Type>>,
+    tenv: &mut TEnv,
 ) -> ItemTree {
     let root = ast::Root::cast(root).unwrap_or_else(|| ice("root syntax node should always cast"));
-    let tenv = TEnv::new(string_interner);
     let packages = &Arena::new();
-    let ctx = lower::Ctx::new(file_id, string_interner, types, packages, &tenv);
+    let ctx = lower::Ctx::new(file_id, string_interner, types, packages, tenv);
     ctx.lower_module_items(&root)
 }

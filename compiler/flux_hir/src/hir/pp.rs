@@ -1,3 +1,4 @@
+use flux_typesystem::TEnv;
 use lasso::ThreadedRodeo;
 use pretty::{DocAllocator, DocBuilder};
 
@@ -15,6 +16,7 @@ impl DefMap {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -25,7 +27,14 @@ impl DefMap {
             self.item_trees.iter().map(|(module_id, item_tree)| {
                 let item_tree = allocator.intersperse(
                     item_tree.top_level.iter().map(|item| {
-                        item.pretty(allocator, string_interner, bodies, module_id, item_tree)
+                        item.pretty(
+                            allocator,
+                            string_interner,
+                            bodies,
+                            tenv,
+                            module_id,
+                            item_tree,
+                        )
                     }),
                     allocator.hardline(),
                 );
@@ -46,6 +55,7 @@ impl ModItem {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
         module_id: ModuleId,
         item_tree: &'b ItemTree,
     ) -> DocBuilder<'b, D, A>
@@ -59,25 +69,26 @@ impl ModItem {
                 allocator,
                 string_interner,
                 bodies,
+                tenv,
                 &item_tree.functions,
                 module_id,
             ),
-            ModItem::Enum(e_idx) => item_tree[*e_idx].pretty(allocator, string_interner, bodies),
+            ModItem::Enum(e_idx) => item_tree[*e_idx].pretty(allocator, string_interner, tenv),
             ModItem::Function(f_idx) => {
                 let body = bodies
                     .indices
                     .get(&(module_id, ModuleDefId::FunctionId(f_idx.index)))
                     .unwrap();
-                item_tree[*f_idx].pretty(allocator, string_interner, bodies)
+                item_tree[*f_idx].pretty(allocator, string_interner, tenv)
                     + allocator.space()
-                    + body.pretty(allocator, string_interner, bodies)
+                    + body.pretty(allocator, string_interner, tenv, bodies)
             }
             ModItem::Mod(m_idx) => item_tree[*m_idx].pretty(allocator, string_interner),
-            ModItem::Struct(s_idx) => item_tree[*s_idx].pretty(allocator, string_interner, bodies),
+            ModItem::Struct(s_idx) => item_tree[*s_idx].pretty(allocator, string_interner, tenv),
             ModItem::Trait(t_idx) => {
-                item_tree[*t_idx].pretty(allocator, string_interner, bodies, &item_tree.functions)
+                item_tree[*t_idx].pretty(allocator, string_interner, tenv, &item_tree.functions)
             }
-            ModItem::Use(u_idx) => item_tree[*u_idx].pretty(allocator, string_interner, bodies),
+            ModItem::Use(u_idx) => item_tree[*u_idx].pretty(allocator, string_interner, tenv),
         }
     }
 }
@@ -88,6 +99,7 @@ impl ItemTree {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
         module_id: ModuleId,
     ) -> DocBuilder<'b, D, A>
     where
@@ -101,10 +113,11 @@ impl ItemTree {
                     allocator,
                     string_interner,
                     bodies,
+                    tenv,
                     &self.functions,
                     module_id,
                 ),
-                ModItem::Enum(e_idx) => self[*e_idx].pretty(allocator, string_interner, bodies),
+                ModItem::Enum(e_idx) => self[*e_idx].pretty(allocator, string_interner, tenv),
                 ModItem::Function(f_idx) => {
                     let body = bodies
                         .indices
@@ -114,27 +127,49 @@ impl ItemTree {
                         Expr::Block(_) => true,
                         _ => false,
                     };
-                    self[*f_idx].pretty(allocator, string_interner, bodies)
+                    self[*f_idx].pretty(allocator, string_interner, tenv)
                         + allocator.space()
                         + if is_block_expr {
-                            body.pretty(allocator, string_interner, bodies)
+                            body.pretty(allocator, string_interner, tenv, bodies)
                         } else {
                             allocator.text("=>")
                                 + allocator.space()
-                                + body.pretty(allocator, string_interner, bodies)
+                                + body.pretty(allocator, string_interner, tenv, bodies)
                         }
                 }
                 ModItem::Mod(m_idx) => self[*m_idx].pretty(allocator, string_interner),
-                ModItem::Struct(s_idx) => self[*s_idx].pretty(allocator, string_interner, bodies),
+                ModItem::Struct(s_idx) => self[*s_idx].pretty(allocator, string_interner, tenv),
                 ModItem::Trait(t_idx) => {
-                    self[*t_idx].pretty(allocator, string_interner, bodies, &self.functions)
+                    self[*t_idx].pretty(allocator, string_interner, tenv, &self.functions)
                 }
-                ModItem::Use(u_idx) => self[*u_idx].pretty(allocator, string_interner, bodies),
+                ModItem::Use(u_idx) => self[*u_idx].pretty(allocator, string_interner, tenv),
             }),
             allocator.hardline(),
         )
     }
 }
+
+// fn get_type<'a>(type_id: &TypeId, bodies: &'a LoweredBodies) -> &'a Type {
+//     &bodies.tid_to_tkind[type_id]
+// }
+
+// impl TypeIdPP {
+//     pub fn pretty<'b, D, A>(
+//         &'b self,
+//         allocator: &'b D,
+//         string_interner: &'static ThreadedRodeo,
+//         bodies: &'b LoweredBodies,
+//         functions: &'b Arena<Function>,
+//         module_id: ModuleId,
+//     ) -> DocBuilder<'b, D, A>
+//     where
+//         D: DocAllocator<'b, A>,
+//         D::Doc: Clone,
+//         A: Clone,
+//     {
+//         bodies.tid_to_tkind[&self.0].pretty(allocator, string_interner, bodies)
+//     }
+// }
 
 impl Apply {
     pub fn pretty<'b, D, A>(
@@ -142,6 +177,7 @@ impl Apply {
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
         bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
         functions: &'b Arena<Function>,
         module_id: ModuleId,
     ) -> DocBuilder<'b, D, A>
@@ -158,7 +194,7 @@ impl Apply {
                     + allocator.space()
                     + allocator.text("=")
                     + allocator.space()
-                    + ty.pretty(allocator, string_interner, bodies)
+                    + ty.pretty(allocator, string_interner, tenv)
                     + allocator.text(";")
             }),
             allocator.hardline(),
@@ -173,14 +209,14 @@ impl Apply {
                     Expr::Block(_) => true,
                     _ => false,
                 };
-                functions[method.inner].pretty(allocator, string_interner, bodies)
+                functions[method.inner].pretty(allocator, string_interner, tenv)
                     + allocator.space()
                     + if is_block_expr {
-                        body.pretty(allocator, string_interner, bodies)
+                        body.pretty(allocator, string_interner, tenv, bodies)
                     } else {
                         allocator.text("=>")
                             + allocator.space()
-                            + body.pretty(allocator, string_interner, bodies)
+                            + body.pretty(allocator, string_interner, tenv, bodies)
                     }
             }),
             allocator.hardline(),
@@ -190,13 +226,13 @@ impl Apply {
             + self.generic_params.pretty(allocator, string_interner)
             + allocator.space()
             + match &self.trt {
-                Some(trt) => trt.pretty(allocator, string_interner, bodies),
+                Some(trt) => trt.pretty(allocator, string_interner, tenv),
                 None => allocator.nil(),
             }
             + allocator.space()
             + allocator.text("to")
             + allocator.space()
-            + self.ty.pretty(allocator, string_interner, bodies)
+            + self.ty.pretty(allocator, string_interner, tenv)
             + allocator.space()
             + match self.generic_params.where_predicates.0.is_empty() {
                 true => allocator.nil(),
@@ -223,7 +259,7 @@ impl Enum {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -233,7 +269,7 @@ impl Enum {
         let variants = allocator.intersperse(
             self.variants
                 .iter()
-                .map(|variant| variant.pretty(allocator, string_interner, bodies)),
+                .map(|variant| variant.pretty(allocator, string_interner, tenv)),
             allocator.text(",") + allocator.hardline(),
         );
         self.visibility.pretty(allocator)
@@ -262,7 +298,7 @@ impl EnumVariant {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -275,7 +311,7 @@ impl EnumVariant {
                     allocator.space()
                         + allocator.text("->")
                         + allocator.space()
-                        + ty.pretty(allocator, string_interner, bodies)
+                        + ty.pretty(allocator, string_interner, tenv)
                 }
                 None => allocator.nil(),
             }
@@ -287,7 +323,7 @@ impl Function {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -301,11 +337,11 @@ impl Function {
             + allocator.space()
             + allocator.text(string_interner.resolve(&self.name.inner))
             + self.generic_params.pretty(allocator, string_interner)
-            + self.params.pretty(allocator, string_interner, bodies)
+            + self.params.pretty(allocator, string_interner, tenv)
             + allocator.space()
             + allocator.text("->")
             + allocator.space()
-            + self.ret_ty.pretty(allocator, string_interner, bodies)
+            + self.ret_ty.pretty(allocator, string_interner, tenv)
             + match self.generic_params.where_predicates.0.is_empty() {
                 true => allocator.nil(),
                 false => {
@@ -342,7 +378,7 @@ impl Struct {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -353,7 +389,7 @@ impl Struct {
             self.fields
                 .fields
                 .iter()
-                .map(|field| field.pretty(allocator, string_interner, bodies)),
+                .map(|field| field.pretty(allocator, string_interner, tenv)),
             ",",
         );
         self.visibility.pretty(allocator)
@@ -384,7 +420,7 @@ impl Trait {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
         functions: &'b Arena<Function>,
     ) -> DocBuilder<'b, D, A>
     where
@@ -403,7 +439,7 @@ impl Trait {
         );
         let methods = allocator.intersperse(
             self.methods.iter().map(|method| {
-                functions[method.inner].pretty(allocator, string_interner, bodies)
+                functions[method.inner].pretty(allocator, string_interner, tenv)
                     + allocator.text(";")
             }),
             allocator.hardline(),
@@ -439,7 +475,7 @@ impl Use {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -449,7 +485,7 @@ impl Use {
         self.visibility.pretty(allocator)
             + allocator.text("use")
             + allocator.space()
-            + self.path.pretty(allocator, string_interner, bodies)
+            + self.path.pretty(allocator, string_interner, tenv)
             + allocator.text(";")
     }
 }
@@ -459,14 +495,14 @@ impl StructField {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
         D::Doc: Clone,
         A: Clone,
     {
-        self.ty.pretty(allocator, string_interner, bodies)
+        self.ty.pretty(allocator, string_interner, tenv)
             + allocator.space()
             + string_interner.resolve(&self.name)
     }
@@ -491,7 +527,7 @@ impl Params {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -502,7 +538,7 @@ impl Params {
             + allocator.intersperse(
                 self.0
                     .iter()
-                    .map(|param| param.pretty(allocator, string_interner, bodies)),
+                    .map(|param| param.pretty(allocator, string_interner, tenv)),
                 ", ",
             )
             + allocator.text(")")
@@ -514,7 +550,7 @@ impl Param {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -523,7 +559,7 @@ impl Param {
     {
         allocator.text(string_interner.resolve(&self.name))
             + allocator.text(" ")
-            + self.ty.pretty(allocator, string_interner, bodies)
+            + self.ty.pretty(allocator, string_interner, tenv)
     }
 }
 
@@ -595,30 +631,30 @@ impl WherePredicate {
     }
 }
 
-impl TypeIdx {
-    // pub fn to_doc(
-    //     &self,
-    //     string_interner: &'static ThreadedRodeo,
-    //     types: &'b Arena<Spanned<Type>>,,
-    // ) -> RcDoc<()> {
-    //     let t = types.resolve(*self);
-    //     t.to_doc(string_interner)
-    // }
-    pub fn pretty<'b, D, A>(
-        &'b self,
-        allocator: &'b D,
-        string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
-    ) -> DocBuilder<'b, D, A>
-    where
-        D: DocAllocator<'b, A>,
-        D::Doc: Clone,
-        A: Clone,
-    {
-        let t = &bodies.types[self.raw()];
-        t.pretty(allocator, string_interner, bodies)
-    }
-}
+// impl TypeIdx {
+//     // pub fn to_doc(
+//     //     &self,
+//     //     string_interner: &'static ThreadedRodeo,
+//     //     types: &'b Arena<Spanned<Type>>,,
+//     // ) -> RcDoc<()> {
+//     //     let t = types.resolve(*self);
+//     //     t.to_doc(string_interner)
+//     // }
+//     pub fn pretty<'b, D, A>(
+//         &'b self,
+//         allocator: &'b D,
+//         string_interner: &'static ThreadedRodeo,
+//         bodies: &'b LoweredBodies,
+//     ) -> DocBuilder<'b, D, A>
+//     where
+//         D: DocAllocator<'b, A>,
+//         D::Doc: Clone,
+//         A: Clone,
+//     {
+//         let t = &bodies.types[self.raw()];
+//         t.pretty(allocator, string_interner, bodies)
+//     }
+// }
 
 impl Type {
     //     pub fn to_doc(&self, string_interner: &'static ThreadedRodeo) -> RcDoc<()> {
@@ -631,7 +667,7 @@ impl Type {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -641,21 +677,21 @@ impl Type {
         match self {
             Self::Array(t, n) => {
                 allocator.text("[")
-                    + t.pretty(allocator, string_interner, bodies)
+                    + t.pretty(allocator, string_interner, tenv)
                     + allocator.text("; ")
                     + allocator.text(n.to_string())
                     + allocator.text("]")
             }
-            Self::Path(path) => path.pretty(allocator, string_interner, bodies),
+            Self::Path(path) => path.pretty(allocator, string_interner, tenv),
             Self::ThisPath(this_path, _) => {
-                allocator.text("This::") + this_path.pretty(allocator, string_interner, bodies)
+                allocator.text("This::") + this_path.pretty(allocator, string_interner, tenv)
             }
-            Self::Ptr(ty) => allocator.text("*") + ty.pretty(allocator, string_interner, bodies),
+            Self::Ptr(ty) => allocator.text("*") + ty.pretty(allocator, string_interner, tenv),
             Self::Tuple(tys) => {
                 allocator.text("(")
                     + allocator.intersperse(
                         tys.iter()
-                            .map(|ty| ty.pretty(allocator, string_interner, bodies)),
+                            .map(|ty| ty.pretty(allocator, string_interner, tenv)),
                         ", ",
                     )
                     + allocator.text(")")
@@ -685,7 +721,7 @@ impl Path {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
@@ -703,7 +739,7 @@ impl Path {
             allocator.text("<")
                 + allocator.intersperse(
                     self.generic_args.iter().map(|arg| {
-                        arg.pretty(allocator, string_interner, bodies)
+                        arg.pretty(allocator, string_interner, tenv)
                         // let ty = bodies
                         //     .tid_to_tkind
                         //     .get(arg)
@@ -723,6 +759,7 @@ impl ExprIdx {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -730,7 +767,7 @@ impl ExprIdx {
         D::Doc: Clone,
         A: Clone,
     {
-        bodies.exprs[self.raw()].pretty(allocator, string_interner, bodies)
+        bodies.exprs[self.raw()].pretty(allocator, string_interner, tenv, bodies)
     }
 }
 
@@ -739,6 +776,7 @@ impl Expr {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -747,24 +785,24 @@ impl Expr {
         A: Clone,
     {
         match self {
-            Self::Block(block) => block.pretty(allocator, string_interner, bodies),
-            Self::BinOp(binop) => binop.pretty(allocator, string_interner, bodies),
-            Self::Enum(eenum) => eenum.pretty(allocator, string_interner, bodies),
-            Self::Call(call) => call.pretty(allocator, string_interner, bodies),
+            Self::Block(block) => block.pretty(allocator, string_interner, tenv, bodies),
+            Self::BinOp(binop) => binop.pretty(allocator, string_interner, tenv, bodies),
+            Self::Enum(eenum) => eenum.pretty(allocator, string_interner, tenv),
+            Self::Call(call) => call.pretty(allocator, string_interner, tenv, bodies),
             Self::Float(float) => allocator.text(float.to_string()),
-            Self::If(if_) => if_.pretty(allocator, string_interner, bodies),
+            Self::If(if_) => if_.pretty(allocator, string_interner, tenv, bodies),
             Self::Int(int) => allocator.text(int.to_string()),
             Self::Intrinsic(intrinsic) => intrinsic.pretty(allocator, string_interner, bodies),
-            Self::Let(l) => l.pretty(allocator, string_interner, bodies),
-            Self::MemberAccess(access) => access.pretty(allocator, string_interner, bodies),
-            Self::Path(path) => path.pretty(allocator, string_interner, bodies),
+            Self::Let(l) => l.pretty(allocator, string_interner, tenv, bodies),
+            Self::MemberAccess(access) => access.pretty(allocator, string_interner, tenv, bodies),
+            Self::Path(path) => path.pretty(allocator, string_interner, tenv),
             Self::Poisoned => allocator.text("<poisoned expression>"),
-            Self::Struct(strukt) => strukt.pretty(allocator, string_interner, bodies),
+            Self::Struct(strukt) => strukt.pretty(allocator, string_interner, tenv, bodies),
             Self::Tuple(vals) => {
                 allocator.text("(")
                     + allocator.intersperse(
                         vals.iter()
-                            .map(|val| val.pretty(allocator, string_interner, bodies)),
+                            .map(|val| val.pretty(allocator, string_interner, tenv, bodies)),
                         ", ",
                     )
                     + allocator.text(")")
@@ -781,6 +819,7 @@ impl Block {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -791,7 +830,7 @@ impl Block {
         let exprs = self
             .exprs
             .iter()
-            .map(|expr| expr.pretty(allocator, string_interner, bodies));
+            .map(|expr| expr.pretty(allocator, string_interner, tenv, bodies));
         allocator.text("{")
             + allocator.line()
             + allocator.intersperse(exprs, allocator.hardline()).indent(4)
@@ -805,6 +844,7 @@ impl BinOp {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -812,11 +852,11 @@ impl BinOp {
         D::Doc: Clone,
         A: Clone,
     {
-        self.lhs.pretty(allocator, string_interner, bodies)
+        self.lhs.pretty(allocator, string_interner, tenv, bodies)
             + allocator.space()
             + self.op.pretty(allocator)
             + allocator.space()
-            + self.rhs.pretty(allocator, string_interner, bodies)
+            + self.rhs.pretty(allocator, string_interner, tenv, bodies)
     }
 }
 
@@ -850,14 +890,14 @@ impl EnumExpr {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
-        bodies: &'b LoweredBodies,
+        tenv: &'b TEnv,
     ) -> DocBuilder<'b, D, A>
     where
         D: DocAllocator<'b, A>,
         D::Doc: Clone,
         A: Clone,
     {
-        self.path.pretty(allocator, string_interner, bodies)
+        self.path.pretty(allocator, string_interner, tenv)
             + allocator.text("::")
             + allocator.text(string_interner.resolve(&self.variant))
     }
@@ -868,6 +908,7 @@ impl Call {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -875,12 +916,12 @@ impl Call {
         D::Doc: Clone,
         A: Clone,
     {
-        self.callee.pretty(allocator, string_interner, bodies)
+        self.callee.pretty(allocator, string_interner, tenv, bodies)
             + allocator.text("(")
             + allocator.intersperse(
                 self.args
                     .iter()
-                    .map(|arg| arg.pretty(allocator, string_interner, bodies)),
+                    .map(|arg| arg.pretty(allocator, string_interner, tenv, bodies)),
                 ", ",
             )
             + allocator.text(")")
@@ -892,6 +933,7 @@ impl If {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -903,17 +945,21 @@ impl If {
             self.else_ifs().map(|(cond, block)| {
                 allocator.text("else if")
                     + allocator.space()
-                    + cond.pretty(allocator, string_interner, bodies)
+                    + cond.pretty(allocator, string_interner, tenv, bodies)
                     + allocator.space()
-                    + block.pretty(allocator, string_interner, bodies)
+                    + block.pretty(allocator, string_interner, tenv, bodies)
             }),
             allocator.space(),
         );
         allocator.text("if")
             + allocator.space()
-            + self.condition().pretty(allocator, string_interner, bodies)
+            + self
+                .condition()
+                .pretty(allocator, string_interner, tenv, bodies)
             + allocator.space()
-            + self.block().pretty(allocator, string_interner, bodies)
+            + self
+                .block()
+                .pretty(allocator, string_interner, tenv, bodies)
             + allocator.space()
             + else_ifs
             + match self.else_block() {
@@ -921,7 +967,7 @@ impl If {
                     allocator.space()
                         + allocator.text("else")
                         + allocator.space()
-                        + else_block.pretty(allocator, string_interner, bodies)
+                        + else_block.pretty(allocator, string_interner, tenv, bodies)
                 }
                 None => allocator.nil(),
             }
@@ -954,6 +1000,7 @@ impl Let {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -961,17 +1008,17 @@ impl Let {
         D::Doc: Clone,
         A: Clone,
     {
-        let ty = bodies
-            .tid_to_tkind
-            .get(&self.val.tid)
-            .map(|ty| ty.pretty(allocator, string_interner, bodies))
-            .unwrap_or_else(|| allocator.text("<unknown type>"));
+        // let ty = bodies
+        //     .tid_to_tkind
+        //     .get(&self.val.tid)
+        //     .map(|ty| ty.pretty(allocator, string_interner, bodies))
+        //     .unwrap_or_else(|| allocator.text("<unknown type>"));
         (allocator.text("let ")
             + allocator.text(string_interner.resolve(&self.name))
             + allocator.text(" ")
-            + ty
+            + self.val.tid.pretty(allocator, string_interner, tenv)
             + allocator.text(" = ")
-            + self.val.pretty(allocator, string_interner, bodies)
+            + self.val.pretty(allocator, string_interner, tenv, bodies)
             + allocator.text(";"))
         .group()
     }
@@ -982,6 +1029,7 @@ impl MemberAccess {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -989,7 +1037,7 @@ impl MemberAccess {
         D::Doc: Clone,
         A: Clone,
     {
-        self.lhs.pretty(allocator, string_interner, bodies)
+        self.lhs.pretty(allocator, string_interner, tenv, bodies)
             + allocator.text(".")
             + allocator.text(string_interner.resolve(&self.rhs))
     }
@@ -1000,6 +1048,7 @@ impl StructExpr {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -1010,9 +1059,9 @@ impl StructExpr {
         let fields = self
             .fields
             .iter()
-            .map(|field| field.pretty(allocator, string_interner, bodies));
+            .map(|field| field.pretty(allocator, string_interner, tenv, bodies));
         allocator.text("struct ")
-            + self.path.pretty(allocator, string_interner, bodies)
+            + self.path.pretty(allocator, string_interner, tenv)
             + allocator.text(" {")
             + allocator.line()
             + allocator
@@ -1029,6 +1078,7 @@ impl StructExprField {
         &'b self,
         allocator: &'b D,
         string_interner: &'static ThreadedRodeo,
+        tenv: &'b TEnv,
         bodies: &'b LoweredBodies,
     ) -> DocBuilder<'b, D, A>
     where
@@ -1038,6 +1088,6 @@ impl StructExprField {
     {
         allocator.text(string_interner.resolve(&self.name))
             + allocator.text(": ")
-            + self.val.pretty(allocator, string_interner, bodies)
+            + self.val.pretty(allocator, string_interner, tenv, bodies)
     }
 }

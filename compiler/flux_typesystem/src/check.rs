@@ -11,16 +11,16 @@ mod traits;
 mod unify;
 
 #[derive(Debug)]
-pub struct TChecker {
-    pub tenv: TEnv,
+pub struct TChecker<'tenv> {
+    pub tenv: &'tenv mut TEnv,
     string_interner: &'static ThreadedRodeo,
     pub trait_applications: TraitApplicationTable,
 }
 
-impl TChecker {
-    pub fn new(string_interner: &'static ThreadedRodeo) -> Self {
+impl<'tenv> TChecker<'tenv> {
+    pub fn new(tenv: &'tenv mut TEnv, string_interner: &'static ThreadedRodeo) -> Self {
         Self {
-            tenv: TEnv::new(string_interner),
+            tenv,
             string_interner,
             trait_applications: TraitApplicationTable::new(),
         }

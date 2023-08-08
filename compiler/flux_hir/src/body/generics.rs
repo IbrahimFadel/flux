@@ -46,7 +46,7 @@ impl<'a> LowerCtx<'a> {
                     .bound
                     .generic_args
                     .iter()
-                    .map(|arg| self.types[arg.raw()].span),
+                    .map(|arg| self.tchk.tenv.get_type_filespan(*arg).inner),
             )
             .unwrap_or(where_predicate.bound.span);
             // let generic_args_span = Span::span_iter_of_span(
@@ -74,7 +74,7 @@ impl<'a> LowerCtx<'a> {
     /// and that they implement the restrictions on them
     fn verify_generic_args_match_trait_definition(
         &mut self,
-        generic_args: &[TypeIdx],
+        generic_args: &[TypeId],
         generic_args_file_span: InFile<Span>,
         generic_args_where_predicates: &[WherePredicate],
         trait_def_generic_params: &GenericParams,
@@ -108,16 +108,11 @@ impl<'a> LowerCtx<'a> {
                     .iter()
                     .filter(|predicate| predicate.name.inner == param_name.inner);
 
-                // self.tchk.tenv.
-
                 // for the every predicate on the current trait def param
                 for required_predicate in required_predicates {
-                    // let entry = self.tchk.tenv.get_entry(*arg).get_constr();
-                    // println!("{}", self.tchk.tenv.fmt_ty_id(*arg));
-                    // let arg_typekind = self.tchk.tenv.get_typekind_with_id(*arg);
+                    let arg_typekind = self.tchk.tenv.get_typekind_with_id(*arg);
                     // arg_typekind.
-                    if let Type::Generic(name, _) = &self.types[arg.raw()].inner {
-                        // if let TypeKind::Generic(name, _) = &arg_typekind.inner.inner {
+                    if let TypeKind::Generic(name, _) = &arg_typekind.inner.inner {
                         // predicate in args that matches the requirement
                         let predicate_matched = generic_args_where_predicates
                             .iter()
@@ -129,7 +124,7 @@ impl<'a> LowerCtx<'a> {
                         if let Some(_predicate_matched) = predicate_matched {
                             // todo!()
                         } else {
-                            let arg_span = self.types[arg.raw()].span;
+                            let arg_span = arg_typekind.span;
                             self.diagnostics.push(
                                 LowerError::GenericArgDoesNotMatchRestriction {
                                     generic: self.string_interner.resolve(&name).to_string(),
@@ -147,8 +142,7 @@ impl<'a> LowerCtx<'a> {
                             );
                         }
                     } else {
-                        todo!("{:#?} {:#?}", arg, self.types[arg.raw()]);
-                        // todo!("{:#?} {:#?}", arg, self.tchk.tenv.fmt_ty_id(*arg));
+                        todo!("{:#?} {:#?}", arg, arg_typekind);
                     }
                 }
             });
@@ -163,15 +157,10 @@ impl<'a> LowerCtx<'a> {
             .in_file(self.file_id());
         let (_, trait_id) = self.get_trait_with_id(path).unwrap();
         let trait_id_raw = trait_id.into_raw();
-        let args = path
-            .generic_args
-            .iter()
-            .map(|idx| self.insert_type_to_tenv(idx, self.file_id()))
-            .collect();
         ts::TraitRestriction {
             trait_id: trait_id_raw.into(),
             trait_name,
-            args,
+            args: path.generic_args.clone(),
         }
     }
 }

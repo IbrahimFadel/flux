@@ -105,7 +105,7 @@ impl Driver {
             })
             .collect();
 
-        let (def_map, mut types, hir_first_pass_diagnostics) = flux_hir::build_def_map(
+        let (def_map, mut tenv, mut types, hir_first_pass_diagnostics) = flux_hir::build_def_map(
             package_name_spur,
             entry_file_path,
             &mut self.file_cache,
@@ -118,17 +118,26 @@ impl Driver {
         let package = PackageData::new(package_name_spur, def_map, dependencies);
         let package_id = self.packages.alloc(package);
 
-        let (bodies, hir_body_diagnostics) =
-            flux_hir::lower_def_map_bodies(package_id, &self.packages, &INTERNER, &mut types);
+        let (bodies, hir_body_diagnostics) = flux_hir::lower_def_map_bodies(
+            package_id,
+            &self.packages,
+            &mut tenv,
+            &INTERNER,
+            &mut types,
+        );
 
         println!(
             "{}",
-            self.fmt_def_map(&self.packages[package_id].def_map, &bodies)
+            self.fmt_package(&self.packages[package_id], &bodies, &tenv)
         );
+        // println!(
+        //     "{}",
+        //     self.fmt_def_map(&self.packages[package_id].def_map, &bodies)
+        // );
 
-        self.file_cache
-            .report_diagnostics(&hir_first_pass_diagnostics);
-        self.file_cache.report_diagnostics(&hir_body_diagnostics);
+        // self.file_cache
+        //     .report_diagnostics(&hir_first_pass_diagnostics);
+        // self.file_cache.report_diagnostics(&hir_body_diagnostics);
 
         // let package_id = self.def_maps.alloc(Arc::new(def_map));
         self.package_name_to_id

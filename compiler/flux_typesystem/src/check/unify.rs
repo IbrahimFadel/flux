@@ -1,6 +1,6 @@
 use super::*;
 
-impl TChecker {
+impl<'tenv> TChecker<'tenv> {
     pub fn unify(
         &mut self,
         a: TypeId,
@@ -13,7 +13,6 @@ impl TChecker {
         match (&a_kind.inner.inner, &b_kind.inner.inner) {
             (Unknown, _) => {
                 let b_entry = &self.tenv.get_entry(b).inner.inner.clone();
-                println!("{} {}", self.tenv.fmt_ty_id(a), self.tenv.fmt_ty_id(b));
                 if let Some(b_params) = b_entry.get_params() {
                     let ty = Type::with_params(b_kind.inner.inner, b_params.iter().cloned());
                     self.tenv.set_type(a, ty);
@@ -101,6 +100,30 @@ impl TChecker {
                     Ok(())
                 } else {
                     Err(self.type_mismatch(a, b, unification_span))
+                }
+            }
+            (_, AssocPath(spur)) => {
+                let assoc_type = self
+                    .tenv
+                    .assoc_types
+                    .iter()
+                    .find(|(name, _)| &name.inner.inner == spur);
+                if let Some((_, ty_id)) = assoc_type {
+                    self.unify(a, *ty_id, unification_span)
+                } else {
+                    unreachable!()
+                }
+            }
+            (AssocPath(spur), _) => {
+                let assoc_type = self
+                    .tenv
+                    .assoc_types
+                    .iter()
+                    .find(|(name, _)| &name.inner.inner == spur);
+                if let Some((_, ty_id)) = assoc_type {
+                    self.unify(*ty_id, b, unification_span)
+                } else {
+                    unreachable!()
                 }
             }
             (_, _) => Err(self.type_mismatch(a, b, unification_span)),

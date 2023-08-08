@@ -13,7 +13,7 @@ use la_arena::{Arena, Idx, RawIdx};
 use lasso::{Spur, ThreadedRodeo};
 use text_size::{TextRange, TextSize};
 
-use crate::{builtin::BuiltinType, FunctionId, TraitId};
+use crate::{builtin::BuiltinType, FunctionId};
 
 pub mod pp;
 
@@ -51,8 +51,8 @@ pub struct Apply {
     pub visibility: Spanned<Visibility>,
     pub generic_params: Spanned<GenericParams>,
     pub trt: Option<Spanned<Path>>,
-    pub ty: TypeIdx,
-    pub assoc_types: Vec<(Name, TypeIdx)>,
+    pub ty: TypeId,
+    pub assoc_types: Vec<(Name, TypeId)>,
     pub methods: Spanned<Vec<Spanned<FunctionId>>>,
 }
 
@@ -70,7 +70,7 @@ pub struct Function {
     pub name: Name,
     pub generic_params: Spanned<GenericParams>,
     pub params: Spanned<Params>,
-    pub ret_ty: TypeIdx,
+    pub ret_ty: TypeId,
     pub ast: Option<ast::FnDecl>, // Trait methods will use this `Function` type but won't have the ast field
 }
 
@@ -91,7 +91,7 @@ pub struct Struct {
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct EnumVariant {
     pub name: Name,
-    pub ty: Option<TypeIdx>,
+    pub ty: Option<TypeId>,
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
@@ -108,7 +108,7 @@ impl StructFields {
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct StructField {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: TypeId,
 }
 
 #[derive(Debug, Clone, Locatable)]
@@ -152,7 +152,7 @@ impl DerefMut for Params {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug, Hash, Locatable)]
@@ -266,12 +266,12 @@ pub struct WherePredicate {
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub struct Path {
     pub segments: Vec<Spur>,
-    pub generic_args: Vec<TypeIdx>,
+    pub generic_args: Vec<TypeId>,
     // pub generic_args: Vec<TypeId>,
 }
 
 impl Path {
-    pub fn new(segments: Vec<Spur>, generic_args: Vec<TypeIdx>) -> Self {
+    pub fn new(segments: Vec<Spur>, generic_args: Vec<TypeId>) -> Self {
         Self {
             segments,
             generic_args,
@@ -415,13 +415,13 @@ pub struct TypeIdx(Idx<Spanned<Type>>);
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash, Locatable)]
 pub enum Type {
-    Array(TypeIdx, u32),
+    Array(TypeId, u32),
     Generic(Spur, Vec<Spanned<Path>>),
     Path(Path),
     /// Path itself, Path of trait referenced by `This`
     ThisPath(Path, Spanned<Path>),
-    Ptr(TypeIdx),
-    Tuple(Vec<TypeIdx>),
+    Ptr(TypeId),
+    Tuple(Vec<TypeId>),
     Never,
     Unknown,
 }
@@ -533,7 +533,7 @@ pub struct Call {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Let {
     pub name: Name,
-    pub ty: TypeIdx,
+    pub ty: TypeId,
     pub val: Typed<ExprIdx>,
 }
 
