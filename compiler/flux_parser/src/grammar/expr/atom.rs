@@ -8,7 +8,7 @@ use crate::{
     token_set::TokenSet,
 };
 
-use super::{expr, expr_no_blocks, expr_no_structs, stmt, ExprRestrictions};
+use super::{expr, expr_no_structs, stmt, ExprRestrictions};
 
 pub(super) fn atom(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker> {
     let m = match p.peek() {

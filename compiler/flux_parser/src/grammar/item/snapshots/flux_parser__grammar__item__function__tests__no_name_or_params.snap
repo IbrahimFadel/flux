@@ -18,15 +18,15 @@ Root@0..5
 
 
 Errors:
-[E0003] Error: expected syntax not found
-   ,-[fn:1:4]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:4]
    |
  1 | fn {}
    |    |  
    |    `-- expected name in function declaration
 ---'
-[E0003] Error: expected syntax not found
-   ,-[fn:1:4]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:4]
    |
  1 | fn {}
    |    |  

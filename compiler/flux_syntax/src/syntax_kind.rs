@@ -1,7 +1,10 @@
+use std::mem::transmute;
+
+use cstree::{RawSyntaxKind, Syntax};
 use flux_lexer::TokenKind;
 
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[repr(u16)]
+#[repr(u32)]
 pub enum SyntaxKind {
     Root,
 
@@ -133,6 +136,78 @@ pub enum SyntaxKind {
     Error,
 }
 
+pub type Flux = SyntaxKind;
+
+impl Syntax for Flux {
+    fn from_raw(raw: cstree::prelude::RawSyntaxKind) -> Self {
+        unsafe { transmute(raw.0) }
+        // match raw.0 {
+        //     0 => ,
+        //     n => panic!("Unknown raw syntax kind: {n}"),
+        // }
+    }
+
+    fn into_raw(self) -> cstree::prelude::RawSyntaxKind {
+        RawSyntaxKind(self as u32)
+    }
+
+    fn static_text(self) -> Option<&'static str> {
+        match self {
+            SyntaxKind::Mod => Some("mod"),
+            SyntaxKind::Use => Some("use"),
+            SyntaxKind::Pub => Some("pub"),
+            SyntaxKind::Fn => Some("fn"),
+            SyntaxKind::Apply => Some("apply"),
+            SyntaxKind::To => Some("to"),
+            SyntaxKind::Where => Some("where"),
+            SyntaxKind::Is => Some("is"),
+            SyntaxKind::Mut => Some("mut"),
+            SyntaxKind::If => Some("if"),
+            SyntaxKind::Else => Some("else"),
+            SyntaxKind::Struct => Some("struct"),
+            SyntaxKind::Trait => Some("trait"),
+            SyntaxKind::Let => Some("let"),
+            SyntaxKind::Return => Some("return"),
+            SyntaxKind::This => Some("this"),
+            SyntaxKind::Comma => Some(","),
+            SyntaxKind::CmpEq => Some("=="),
+            SyntaxKind::CmpNeq => Some("!="),
+            SyntaxKind::CmpLt => Some("<"),
+            SyntaxKind::CmpGt => Some(">"),
+            SyntaxKind::CmpLte => Some("<="),
+            SyntaxKind::CmpGte => Some(">="),
+            SyntaxKind::CmpAnd => Some("&&"),
+            SyntaxKind::CmpOr => Some("||"),
+            SyntaxKind::Colon => Some(":"),
+            SyntaxKind::DoubleColon => Some("::"),
+            SyntaxKind::Plus => Some("+"),
+            SyntaxKind::Minus => Some("-"),
+            SyntaxKind::Star => Some("*"),
+            SyntaxKind::Slash => Some("/"),
+            SyntaxKind::Arrow => Some("->"),
+            SyntaxKind::FatArrow => Some("=>"),
+            SyntaxKind::LParen => Some("("),
+            SyntaxKind::RParen => Some(")"),
+            SyntaxKind::LBrace => Some("{"),
+            SyntaxKind::RBrace => Some("}"),
+            SyntaxKind::Eq => Some("="),
+            SyntaxKind::SemiColon => Some(";"),
+            SyntaxKind::Ampersand => Some("&"),
+            SyntaxKind::Period => Some("."),
+            SyntaxKind::LSquare => Some("["),
+            SyntaxKind::RSquare => Some("]"),
+            SyntaxKind::For => Some("for"),
+            SyntaxKind::In => Some("in"),
+            SyntaxKind::Enum => Some("enum"),
+            SyntaxKind::As => Some("as"),
+            _ => None,
+        }
+    }
+}
+
+pub type SyntaxToken = cstree::prelude::SyntaxToken<Flux>;
+pub type SyntaxNode = cstree::prelude::SyntaxNode<Flux>;
+
 impl From<TokenKind> for SyntaxKind {
     fn from(token_kind: TokenKind) -> Self {
         match token_kind {
@@ -195,28 +270,3 @@ impl From<TokenKind> for SyntaxKind {
         }
     }
 }
-
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub enum FluxLanguage {}
-
-impl cstree::Language for FluxLanguage {
-    type Kind = SyntaxKind;
-
-    fn kind_from_raw(raw: cstree::SyntaxKind) -> Self::Kind {
-        unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
-    }
-
-    fn kind_to_raw(kind: Self::Kind) -> cstree::SyntaxKind {
-        kind.into()
-    }
-}
-
-impl From<SyntaxKind> for cstree::SyntaxKind {
-    fn from(kind: SyntaxKind) -> Self {
-        Self(kind as u16)
-    }
-}
-
-pub type SyntaxNode = cstree::SyntaxNode<FluxLanguage>;
-pub type SyntaxToken = cstree::SyntaxToken<FluxLanguage>;
-pub type SyntaxElement = cstree::SyntaxElement<FluxLanguage>;

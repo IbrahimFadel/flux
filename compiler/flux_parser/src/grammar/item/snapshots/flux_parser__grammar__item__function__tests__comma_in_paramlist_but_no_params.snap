@@ -30,29 +30,29 @@ Root@0..11
 
 
 Errors:
-[E0003] Error: expected syntax not found
-   ,-[fn:1:8]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:8]
    |
  1 | fn foo(,){}
    |        |  
    |        `-- expected name in function parameter
 ---'
-[E0003] Error: expected syntax not found
-   ,-[fn:1:8]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:8]
    |
  1 | fn foo(,){}
    |        |  
    |        `-- expected type in function parameter
 ---'
-[E0003] Error: expected syntax not found
-   ,-[fn:1:9]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:9]
    |
  1 | fn foo(,){}
    |         |  
    |         `-- expected name in function parameter
 ---'
-[E0003] Error: expected syntax not found
-   ,-[fn:1:9]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:9]
    |
  1 | fn foo(,){}
    |         |  

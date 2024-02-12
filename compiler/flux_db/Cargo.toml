@@ -1,15 +1,12 @@
 [package]
-name = "flux_hir"
+name = "flux_db"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-la-arena = "0.3.1"
-extension-trait = "1.0.2"
-text-size = "1.1.1"
-
+flux_hir = { path = "../flux_hir" }
 flux_span = { path = "../flux_span" }
-flux_parser = { path = "../flux_parser" }
-flux_syntax = { path = "../flux_syntax" }
+flux_proc_macros = { path = "../flux_proc_macros" }
 flux_diagnostics = { path = "../flux_diagnostics" }
+flux_parser = { path = "../flux_parser" }
 salsa = { path = "../../lib/salsa" }

@@ -146,8 +146,8 @@ impl<'a, 'src> Parser<'a, 'src> {
 
 #[cfg(test)]
 mod tests {
-    use cstree::TextRange;
     use flux_lexer::{Token, TokenKind};
+    use text_size::TextRange;
 
     use crate::{source::Source, token_set::TokenSet};
 

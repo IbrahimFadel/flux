@@ -1,32 +1,18 @@
-use ariadne::{Color, Config, Label, Report, ReportKind};
-use flux_span::{FileId, FileSpanned, InFile};
-use lasso::Spur;
-
-use crate::reporting::FileSpan;
+use ariadne::{Color, Label, Report, ReportKind};
+use flux_span::{FileSpan, FileSpanned, InputFile, ToSpan, Word};
+use text_size::{TextRange, TextSize};
 
 pub trait ToDiagnostic {
     fn to_diagnostic(&self) -> Diagnostic;
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum DiagnosticKind {
-    Error,
-    Warning,
-}
-
-impl DiagnosticKind {
-    pub fn to_ariadne_report_kind(self) -> ReportKind<'static> {
-        match self {
-            Self::Error => ReportKind::Error,
-            Self::Warning => ReportKind::Warning,
-        }
-    }
-}
+#[salsa::accumulator]
+pub struct Diagnostics(Diagnostic);
 
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     kind: DiagnosticKind,
-    offset: Option<InFile<usize>>,
+    offset: Option<FileSpan>,
     pub code: DiagnosticCode,
     msg: String,
     labels: Vec<FileSpanned<String>>,
@@ -34,25 +20,8 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn new(
-        kind: DiagnosticKind,
-        offset: InFile<usize>,
-        code: DiagnosticCode,
-        msg: String,
-        labels: Vec<FileSpanned<String>>,
-    ) -> Self {
-        Self {
-            kind,
-            offset: Some(offset),
-            code,
-            msg,
-            labels,
-            help: None,
-        }
-    }
-
     pub fn error(
-        offset: InFile<usize>,
+        offset: FileSpan,
         code: DiagnosticCode,
         msg: String,
         labels: Vec<FileSpanned<String>>,
@@ -90,20 +59,23 @@ impl Diagnostic {
         self
     }
 
-    pub(crate) fn to_report(&self, config: Config) -> Report<FileSpan> {
+    pub(crate) fn as_report(&self, db: &dyn crate::Db, config: ariadne::Config) -> Report<ASpan> {
         let (file_id, offset) = match &self.offset {
-            Some(offset) => (offset.file_id, offset.inner),
-            None => (FileId(Spur::default()), 0),
+            Some(offset) => (offset.input_file, offset.span.range.start().into()),
+            None => (
+                InputFile::new(db, Word::intern(db, ""), String::with_capacity(0)),
+                0,
+            ),
         };
 
-        let mut builder = Report::build(self.kind.to_ariadne_report_kind(), file_id, offset)
+        let mut builder = Report::build(self.kind.as_ariadne_report_kind(), file_id, offset)
             .with_config(config)
             .with_code(self.code)
             .with_message(&self.msg);
 
         if let Some(primary) = self.labels.get(0) {
             builder.add_label(
-                Label::new(FileSpan(InFile::new(primary.span, file_id)))
+                Label::new(ASpan::new(FileSpan::new(primary.file, primary.span)))
                     .with_color(Color::Red)
                     .with_message(primary.inner.inner.clone()),
             )
@@ -111,7 +83,7 @@ impl Diagnostic {
 
         if let Some(labels) = &self.labels.get(1..) {
             builder.add_labels(labels.iter().map(|msg| {
-                Label::new(FileSpan(msg.map_ref(|msg| msg.span)))
+                Label::new(ASpan::new(FileSpan::new(msg.file, msg.span)))
                     .with_color(Color::Blue)
                     .with_message(&msg.inner.inner)
             }))
@@ -125,70 +97,66 @@ impl Diagnostic {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
+pub enum DiagnosticKind {
+    Warning,
+    Error,
+}
+
+impl DiagnosticKind {
+    pub fn as_ariadne_report_kind(&self) -> ReportKind<'static> {
+        match self {
+            Self::Error => ReportKind::Error,
+            Self::Warning => ReportKind::Warning,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum DiagnosticCode {
-    CouldNotReadEntryFile,
     CouldNotReadConfigFile,
-    UnresolvedDependencies,
-
+    CouldNotReadEntryFile,
     ParserExpected,
-
-    CouldNotResolveModDecl,
-    UnknownGeneric,
-
-    StmtFollowingTerminatorExpr,
-    IncorrectNumArgsInCall,
-    TriedCallingPrivateFunction,
-    UnresolvedImport,
-    UnresolvedFunction,
-    UnresolvedTrait,
-    TriedApplyingPrivateTrait,
-    CouldNotResolvePath,
-    CannotAccessPrivatePathSegment,
-    CouldNotResolveEmptyPath,
-    UnimplementedTraitMethods,
-    MethodsDontBelongInApply,
-    IncorrectNumGenericParamsInApplyMethod,
-    WherePredicatesDontMatchInApplyMethod,
-    MissingWherePredicateInApplyMethod,
-    UnusedGenericParams,
-    IncorrectNumGenericArgsInWherePredicate,
-    GenericArgDoesNotMatchRestriction,
-    DuplicateGenerics,
-    CouldNotFindStructButFoundAnotherItem,
-    CouldNotFindFunctionButFoundAnotherItem,
-    UninitializedFieldsInStructExpr,
-    UnknownFieldsInStructExpr,
-    CouldNotFindMethodReferenced,
-    CouldNotFindFieldReferenced,
-    AssocTypeDoesntBelong,
-    UnassignedAssocTypes,
-    UnresolvedType,
-    UnresolvedStruct,
-    AccessedPrivateItem,
-    AccessedPrivateStruct,
-    UnknownEnumVariant,
-    EnumVariantMissingArg,
-    IncorrectNumArgsInEnumVariantInitialization,
-    IncorrectNumArgsInIntrinsic,
-
-    TypeMismatch,
-    ConflictingTraitImplementations,
-    TraitInTraitRestrictionDoesNotExist,
-    TraitNotImplementedForType,
-    TraitRestrictionsNotMet,
-    UnknownLocal,
-    UnknownFunction,
-    UnknownStruct,
-    UnknownType,
-    UnknownVariable,
-    TraitDoesNotExist,
-    MultiplePossibleIntSpecializations,
-    CouldNotInferType,
 }
 
 impl std::fmt::Display for DiagnosticCode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "E{:04}", *self as u8)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ASpan(FileSpan);
+
+impl ASpan {
+    pub fn new(file_span: FileSpan) -> Self {
+        Self(file_span)
+    }
+
+    pub fn empty(db: &dyn crate::Db) -> Self {
+        Self(FileSpan {
+            input_file: InputFile::new(
+                db,
+                Word::new(db, String::with_capacity(0)),
+                String::with_capacity(0),
+            ),
+            span: TextRange::empty(TextSize::new(0)).to_span(),
+        })
+    }
+}
+
+impl ariadne::Span for ASpan {
+    type SourceId = InputFile;
+
+    fn source(&self) -> &Self::SourceId {
+        &self.0.input_file
+    }
+
+    fn start(&self) -> usize {
+        self.0.span.range.start().into()
+    }
+
+    fn end(&self) -> usize {
+        self.0.span.range.end().into()
     }
 }

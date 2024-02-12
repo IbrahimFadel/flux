@@ -11,4 +11,3 @@ syn = { version = "1.0", features = [ "full" ] }
 quote = "1.0.26"
 proc-macro2 = "1.0.64"
 text-size = "1.1.0"
-flux_diagnostics = { path = "../flux_diagnostics" }

@@ -61,33 +61,22 @@ fn path(p: &mut Parser) -> PathType {
 
 #[cfg(test)]
 mod tests {
-    use lasso::ThreadedRodeo;
-    use once_cell::sync::Lazy;
-
-    static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
+    use flux_diagnostics::SourceCache;
 
     pub fn parse_and_fmt(src: &str) -> String {
-        let tokens: Vec<_> = flux_lexer::Lexer::new(src).collect();
-        let source = crate::source::Source::new(&tokens);
-        let parser = crate::parser::Parser::new(source);
-        let events = parser.parse();
-        let sink = crate::sink::Sink::new(&tokens, events, &INTERNER);
+        let mut db = flux_db::Db::default();
+        let file = db.new_input_file("test.flx", src.to_string());
+        let parse = db.cst(file);
+        let (root, diagnostics, interner) = (parse.syntax(), parse.diagnostics, parse.interner);
 
-        // let file_id = flux_span::FileId::new(&db, "test.flx".to_string());
-        let file_id = flux_span::FileId::poisoned();
-        let parse = sink.finish(file_id);
-        let (root, diagnostics) = (parse.syntax(), parse.diagnostics);
-
-        let mut file_cache = flux_diagnostics::reporting::FileCache::new(&INTERNER);
-        file_cache.add_file_with_file_id(file_id, src);
+        let mut file_cache = SourceCache::new(&mut db);
+        file_cache.add_input_file(file);
 
         let mut buf: std::io::BufWriter<Vec<u8>> = std::io::BufWriter::new(Vec::new());
         file_cache.write_diagnostics_to_buffer(&diagnostics, &mut buf);
         let bytes: Vec<u8> = buf.into_inner().unwrap();
-        let diagnostics_bytes_without_ansi = strip_ansi_escapes::strip(&bytes).unwrap();
-        let diagnostics_s = String::from_utf8(diagnostics_bytes_without_ansi).unwrap();
-        let cst = root.debug(&*INTERNER, true);
-
+        let diagnostics_s = String::from_utf8(bytes).unwrap();
+        let cst = root.debug(&interner, true);
         format!("{cst}\n\nErrors:\n{diagnostics_s}")
     }
 

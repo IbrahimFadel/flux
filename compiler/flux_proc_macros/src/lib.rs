@@ -1,28 +1,28 @@
 use ast::{DiagnosticEnum, ErrorAttribute, FieldAttribute};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput};
+use syn::parse_macro_input;
 
 extern crate proc_macro;
 
 mod ast;
 mod parse;
 
-#[proc_macro_derive(Locatable)]
-pub fn locatable(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    impl_locatable_macro(&ast)
-}
+// #[proc_macro_derive(Locatable)]
+// pub fn locatable(input: TokenStream) -> TokenStream {
+//     let ast = syn::parse(input).unwrap();
+//     impl_locatable_macro(&ast)
+// }
 
-fn impl_locatable_macro(ast: &DeriveInput) -> TokenStream {
-    let name = &ast.ident;
-    let type_params = ast.generics.type_params();
-    let (_impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
-    let gen = quote! {
-        impl <#(#type_params),*> WithSpan for #name #ty_generics #where_clause {}
-    };
-    gen.into()
-}
+// fn impl_locatable_macro(ast: &DeriveInput) -> TokenStream {
+//     let name = &ast.ident;
+//     let type_params = ast.generics.type_params();
+//     let (_impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+//     let gen = quote! {
+//         impl <#(#type_params),*> WithSpan for #name #ty_generics #where_clause {}
+//     };
+//     gen.into()
+// }
 
 #[proc_macro_attribute]
 pub fn diagnostic(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -90,7 +90,7 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                     let field = &location.field;
                     let field_file_span = format_ident!("{}_file_span", field);
                     locations.push(quote! {
-                        flux_span::InFile::map_ref::<fn(&flux_span::Span) -> usize, usize>(&#field_file_span, |span| span.range.start().into())
+                        flux_span::InFile::map_ref::<fn(&flux_span::Span) -> usize, usize>(&#field_file_span, |span| span.start)
                     });
                 }
                 ErrorAttribute::Primary(primary) => {

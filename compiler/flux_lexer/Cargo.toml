@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-logos = "0.13.0"
-text-size = "1.1.0"
+logos = "0.14.0"
+text-size = "1.1.1"
+salsa = { path = "../../lib/salsa" }

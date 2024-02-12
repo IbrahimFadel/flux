@@ -1,141 +1,68 @@
-use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
-    io::Write,
-    ops::Deref,
-    path::PathBuf,
-};
+use ariadne::CharSet;
+use ariadne::Config;
 
-use ariadne::{CharSet, Config, Source};
-use flux_span::{FileId, InFile, Span};
-use itertools::Itertools;
-use lasso::ThreadedRodeo;
+use ariadne::Source;
+use flux_span::InputFile;
+use std::collections::HashMap;
 
-use crate::Diagnostic;
+use super::Diagnostic;
 
-#[derive(Debug, Clone)]
-pub(crate) struct FileSpan(pub InFile<Span>);
-
-impl Deref for FileSpan {
-    type Target = InFile<Span>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+pub struct SourceCache<'me> {
+    db: &'me dyn crate::Db,
+    map: HashMap<InputFile, Source>,
 }
 
-impl From<InFile<Span>> for FileSpan {
-    fn from(s: InFile<flux_span::Span>) -> Self {
-        Self(s)
-    }
-}
-
-impl ariadne::Span for FileSpan {
-    type SourceId = FileId;
-
-    fn start(&self) -> usize {
-        self.range.start().into()
-    }
-
-    fn end(&self) -> usize {
-        self.range.end().into()
-    }
-
-    fn len(&self) -> usize {
-        self.range.len().into()
-    }
-
-    fn source(&self) -> &Self::SourceId {
-        &self.file_id
-    }
-
-    fn contains(&self, offset: usize) -> bool {
-        self.start() <= offset && self.end() > offset
-    }
-}
-
-pub struct FileCache {
-    interner: &'static ThreadedRodeo,
-    map: HashMap<FileId, Source>,
-}
-
-impl Debug for FileCache {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.map
-                .keys()
-                .map(|file_id| format!("{file_id:?}"))
-                .join(", ")
-        )
-    }
-}
-
-impl FileCache {
-    pub fn new(interner: &'static ThreadedRodeo) -> Self {
+impl<'me> SourceCache<'me> {
+    pub fn new(db: &'me dyn crate::Db) -> Self {
         Self {
-            interner,
-            map: HashMap::new(),
+            db,
+            map: Default::default(),
         }
-    }
-
-    pub fn add_file(&mut self, path: &str, content: &str) -> FileId {
-        let id = self.interner.get_or_intern(path);
-        let id = FileId(id);
-        let src = Source::from(content);
-        self.map.insert(id, src);
-        id
-    }
-
-    pub fn add_file_with_file_id(&mut self, file_id: FileId, content: &str) {
-        let src = Source::from(content);
-        self.map.insert(file_id, src);
-    }
-
-    pub fn get_file_path(&self, file_id: &FileId) -> &str {
-        self.interner.resolve(&file_id.0)
-    }
-
-    pub fn get_file_dir(&self, file_id: &FileId) -> String {
-        let path = self.get_file_path(file_id);
-        let buf = PathBuf::from(path);
-        buf.parent().unwrap().to_str().unwrap().to_string()
-    }
-
-    pub fn get_by_file_path(&self, path: &str) -> (FileId, String) {
-        let file_id = FileId(self.interner.get_or_intern(path));
-        let source = &self.map[&file_id];
-        (file_id, source.chars().collect())
     }
 
     pub fn report_diagnostic(&self, diagnostic: &Diagnostic) {
-        let report = diagnostic.to_report(Config::default());
-        report.eprint(self).unwrap();
+        diagnostic
+            .as_report(self.db, Config::default())
+            .eprint(self)
+            .unwrap()
     }
 
-    pub fn report_diagnostics(&self, diagnostics: &[Diagnostic]) {
-        diagnostics.iter().for_each(|d| self.report_diagnostic(d));
-    }
-
-    pub fn write_diagnostics_to_buffer<W: Write>(&self, diagnostics: &[Diagnostic], buf: &mut W) {
+    pub fn write_diagnostics_to_buffer<W: std::io::Write>(
+        &self,
+        diagnostics: &[Diagnostic],
+        buf: &mut W,
+    ) {
+        let cfg = Config::default()
+            .with_char_set(CharSet::Ascii)
+            .with_color(false);
         for diagnostic in diagnostics {
-            let report = diagnostic.to_report(
-                Config::default()
-                    .with_char_set(CharSet::Ascii)
-                    .with_color(false),
-            );
+            let report = diagnostic.as_report(self.db, cfg);
             report.write(self, &mut *buf).unwrap();
         }
     }
+
+    pub fn add_input_file(&mut self, input_file: InputFile) {
+        self.map.insert(
+            input_file,
+            Source::from(input_file.source_text(self.db).to_owned()),
+        );
+    }
 }
 
-impl ariadne::Cache<FileId> for &FileCache {
-    fn fetch(&mut self, id: &FileId) -> Result<&Source, Box<dyn fmt::Debug + '_>> {
+impl<'cache> ariadne::Cache<InputFile> for &'cache SourceCache<'_> {
+    type Storage = String;
+
+    // I think Cache needs to be implemented for immutable reference. If i can figure out a way to allow &mut to be implemented, then we wont have to worry about inserting files, and just insert them automatically here
+    fn fetch(&mut self, id: &InputFile) -> Result<&Source, Box<dyn std::fmt::Debug + '_>> {
         Ok(&self.map[id])
+        // Ok(self.map.entry(*id).or_insert_with(|| {
+        //     let source_text = id.source_text(self.db);
+        //     Source::from(source_text.to_owned())
+        // }))
     }
 
-    fn display<'a>(&self, id: &'a FileId) -> Option<Box<dyn fmt::Display + 'a>> {
-        Some(Box::new(self.interner.resolve(&id.0)))
+    fn display<'a>(&self, id: &'a InputFile) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let s = id.name(self.db).as_str(self.db).to_string();
+        Some(Box::new(s))
     }
 }

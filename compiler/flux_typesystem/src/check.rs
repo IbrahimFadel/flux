@@ -1,28 +1,44 @@
-use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::{InFile, Span};
-use lasso::ThreadedRodeo;
+// mod traits;
+// mod unify;
 
-use crate::{
-    diagnostics::TypeError, trait_solver::TraitApplicationTable, ConcreteKind, TEnv, Type, TypeId,
-    TypeKind,
-};
+use flux_diagnostics::Diagnostic;
 
-mod traits;
-mod unify;
+use crate::{env::TEnv, r#type::TypeId};
 
 #[derive(Debug)]
 pub struct TChecker<'tenv> {
     pub tenv: &'tenv mut TEnv,
-    string_interner: &'static ThreadedRodeo,
-    pub trait_applications: TraitApplicationTable,
+    // pub trait_applications: TraitApplicationTable,
 }
 
 impl<'tenv> TChecker<'tenv> {
-    pub fn new(tenv: &'tenv mut TEnv, string_interner: &'static ThreadedRodeo) -> Self {
-        Self {
-            tenv,
-            string_interner,
-            trait_applications: TraitApplicationTable::new(),
+    pub fn new(tenv: &'tenv mut TEnv) -> Self {
+        Self { tenv }
+    }
+}
+
+impl<'tenv> TChecker<'tenv> {
+    pub fn unify(&mut self, a: TypeId, b: TypeId) -> Result<(), Diagnostic> {
+        let a_kind = self.tenv.get(&a);
+        let b_kind = self.tenv.get(&b);
+        match (a_kind, b_kind) {
+            (_, _) => Err(self.type_mismatch(a, b)),
         }
+    }
+
+    fn type_mismatch(&self, a: TypeId, b: TypeId) -> Diagnostic {
+        todo!()
+        // let a_file_span = self.tenv.get_type_filespan(a);
+        // let b_file_span = self.tenv.get_type_filespan(b);
+
+        // TypeError::TypeMismatch {
+        //     a: self.tenv.fmt_ty_id(a),
+        //     a_file_span,
+        //     b: self.tenv.fmt_ty_id(b),
+        //     b_file_span,
+        //     span: (),
+        //     span_file_span: unification_span,
+        // }
+        // .to_diagnostic()
     }
 }

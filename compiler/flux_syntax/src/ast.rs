@@ -1,9 +1,10 @@
-use cstree::{SyntaxElementRef, TextRange};
-
 use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
+
+use cstree::syntax::SyntaxElementRef;
 
 mod def;
 pub use def::*;
+use text_size::TextRange;
 
 macro_rules! getter {
     ($name:ident -> tok($tok_kind:ident); $($rest:tt)*) => {

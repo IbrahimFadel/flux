@@ -32,15 +32,15 @@ Root@0..14
 
 
 Errors:
-[E0003] Error: expected syntax not found
-   ,-[fn:1:12]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:12]
    |
  1 | fn foo(x X,){}
    |            |  
    |            `-- expected name in function parameter
 ---'
-[E0003] Error: expected syntax not found
-   ,-[fn:1:12]
+[E0001] Error: expected syntax not found
+   ,-[test.flx:1:12]
    |
  1 | fn foo(x X,){}
    |            |  

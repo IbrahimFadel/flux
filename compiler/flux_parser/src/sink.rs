@@ -1,14 +1,13 @@
-use cstree::{interning::TokenInterner, GreenNodeBuilder, Language, TextRange};
+use cstree::{build::GreenNodeBuilder, text::TextRange};
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_lexer::Token;
-use flux_span::{FileId, ToSpan, WithSpan};
-use flux_syntax::{FluxLanguage, SyntaxKind};
-use lasso::ThreadedRodeo;
+use flux_span::{InputFile, ToSpan, WithSpan};
+use flux_syntax::{Flux, SyntaxKind};
 
 use crate::{diagnostics::ParserDiagnostic, event::Event, Parse};
 
 pub struct Sink<'t, 'src> {
-    builder: GreenNodeBuilder<'static, 'static, &'static ThreadedRodeo>,
+    builder: GreenNodeBuilder<'static, 'static, Flux>,
     tokens: &'t [Token<'src>],
     cursor: usize,
     events: Vec<Event>,
@@ -16,13 +15,9 @@ pub struct Sink<'t, 'src> {
 }
 
 impl<'t, 'src> Sink<'t, 'src> {
-    pub(crate) fn new(
-        tokens: &'t [Token<'src>],
-        events: Vec<Event>,
-        interner: &'static ThreadedRodeo,
-    ) -> Self {
+    pub(crate) fn new(tokens: &'t [Token<'src>], events: Vec<Event>) -> Self {
         Self {
-            builder: GreenNodeBuilder::from_interner(interner),
+            builder: GreenNodeBuilder::default(),
             tokens,
             cursor: 0,
             events,
@@ -30,7 +25,7 @@ impl<'t, 'src> Sink<'t, 'src> {
         }
     }
 
-    pub(crate) fn finish(mut self, file_id: FileId) -> Parse {
+    pub(crate) fn finish(mut self, file: InputFile) -> Parse {
         for idx in 0..self.events.len() {
             match std::mem::replace(&mut self.events[idx], Event::Placeholder) {
                 Event::StartNode {
@@ -59,7 +54,7 @@ impl<'t, 'src> Sink<'t, 'src> {
                     }
 
                     for kind in kinds.into_iter().rev() {
-                        self.builder.start_node(FluxLanguage::kind_to_raw(kind));
+                        self.builder.start_node(kind);
                     }
                 }
                 Event::AddToken => self.token(),
@@ -76,12 +71,11 @@ impl<'t, 'src> Sink<'t, 'src> {
                         });
                     self.diagnostics.push(
                         ParserDiagnostic::Unxpected {
-                            expected: msg.file_span(file_id, range.to_span()),
+                            expected: msg.file_span(file, range.to_span()),
                         }
                         .to_diagnostic(),
                     );
-                    self.builder
-                        .start_node(FluxLanguage::kind_to_raw(SyntaxKind::Poisoned));
+                    self.builder.start_node(SyntaxKind::Poisoned);
                     self.builder.finish_node();
                 }
                 Event::Placeholder => {}
@@ -91,18 +85,18 @@ impl<'t, 'src> Sink<'t, 'src> {
         }
 
         let (tree, cache) = self.builder.finish();
-
+        let interner = cache.unwrap().into_interner().unwrap();
         Parse {
             green_node: tree,
             diagnostics: self.diagnostics,
+            interner,
         }
     }
 
     fn token(&mut self) {
         let Token { kind, text, .. } = self.tokens[self.cursor];
 
-        self.builder
-            .token(FluxLanguage::kind_to_raw(kind.into()), text);
+        self.builder.token(kind.into(), text);
 
         self.cursor += 1;
     }

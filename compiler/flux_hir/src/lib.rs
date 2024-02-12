@@ -1,50 +1,33 @@
+#![feature(trait_upcasting)]
+
+use flux_span::InputFile;
+use pkg::PkgBuilder;
+
 mod body;
-mod builtin;
-mod diagnostics;
-pub mod hir;
-mod intrinsics;
+mod hir;
+mod item;
 mod item_scope;
 mod item_tree;
-mod name_res;
-#[cfg(test)]
-mod tests;
-mod traits;
+mod module;
+mod pkg;
 
-use builtin::BuiltinType;
-use hir::{Apply, Enum, Function, Struct, Trait, Use};
-use la_arena::Idx;
-use name_res::ModuleData;
-
-pub use body::{lower_def_map_bodies, LoweredBodies};
-pub use item_tree::{FileItemTreeId, ItemTree, ModItem};
-pub use name_res::{
-    build_def_map,
-    mod_res::{BasicFileResolver, FileResolver, RelativePath},
-    DefMap, PackageData, PackageDependency, PackageId,
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ModuleDefId {
-    ApplyId(ApplyId),
-    EnumId(EnumId),
-    FunctionId(FunctionId),
-    ModuleId(ModuleId),
-    StructId(StructId),
-    TraitId(TraitId),
-    UseId(UseId),
-    BuiltinType(BuiltinType),
+fn lower_package(db: &dyn Db, entry: InputFile) {
+    let mut pkg_builder = PkgBuilder::new(db);
+    pkg_builder.seed_with_entry(entry);
 }
 
-impl From<BuiltinType> for ModuleDefId {
-    fn from(it: BuiltinType) -> ModuleDefId {
-        ModuleDefId::BuiltinType(it)
+#[extension_trait::extension_trait]
+pub impl FluxParseInputFileExt for InputFile {
+    fn package(self, db: &dyn crate::Db) {
+        lower_package(db, self)
     }
+
+    fn item_tree(self, db: &dyn Db) {}
 }
 
-pub type ApplyId = Idx<Apply>;
-pub type EnumId = Idx<Enum>;
-pub type FunctionId = Idx<Function>;
-pub type ModuleId = Idx<ModuleData>;
-pub type StructId = Idx<Struct>;
-pub type TraitId = Idx<Trait>;
-pub type UseId = Idx<Use>;
+#[salsa::jar(db = Db)]
+pub struct Jar(crate::hir::Function);
+
+pub trait Db: salsa::DbWithJar<Jar> + flux_parser::Db {}
+
+impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> + flux_parser::Db {}

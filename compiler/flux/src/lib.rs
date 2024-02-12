@@ -2,17 +2,11 @@ use std::ffi::OsString;
 
 use clap::{Parser, Subcommand};
 use commands::build;
-use lasso::ThreadedRodeo;
-use once_cell::sync::Lazy;
 
-mod cfg;
 mod commands;
 mod diagnostics;
-mod driver;
 
-static INTERNER: Lazy<ThreadedRodeo> = Lazy::new(ThreadedRodeo::new);
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitStatus {
     Success,
     Failure,

@@ -1,54 +1,20 @@
+#![feature(trait_upcasting)]
+
 mod diagnostic;
-pub mod reporting;
+mod reporting;
+
+use std::fmt::Display;
+
 pub use diagnostic::*;
-mod ice;
-pub use ice::ice;
-use itertools::Itertools;
+pub use reporting::*;
 
-pub trait Plural {
-    fn plural(&self, suffix: &'static str) -> &str;
-    fn singular(&self, suffix: &'static str) -> &str;
+pub fn ice(msg: impl Display) -> ! {
+    panic!("{msg}")
 }
 
-impl Plural for usize {
-    fn plural(&self, suffix: &'static str) -> &str {
-        if *self == 1 {
-            ""
-        } else {
-            suffix
-        }
-    }
+#[salsa::jar(db = Db)]
+pub struct Jar(crate::Diagnostics);
 
-    fn singular(&self, suffix: &'static str) -> &str {
-        if *self == 1 {
-            suffix
-        } else {
-            ""
-        }
-    }
-}
+pub trait Db: salsa::DbWithJar<Jar> + flux_span::Db {}
 
-impl<T> Plural for Vec<T> {
-    fn plural(&self, suffix: &'static str) -> &str {
-        if self.len() == 1 {
-            ""
-        } else {
-            suffix
-        }
-    }
-
-    fn singular(&self, suffix: &'static str) -> &str {
-        if self.len() == 1 {
-            suffix
-        } else {
-            ""
-        }
-    }
-}
-
-pub fn quote_and_listify<S>(iter: impl Iterator<Item = S>) -> String
-where
-    S: Into<String>,
-{
-    iter.map(|item| format!("`{}`", item.into())).join(", ")
-}
+impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> + flux_span::Db {}

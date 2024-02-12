@@ -1,6 +1,0 @@
-{
-	"[flux]": {
-    "editor.defaultFormatter": "ibrahimfadel.flux-lsp",
-    "editor.formatOnSave": true // Optional
-  },
-}

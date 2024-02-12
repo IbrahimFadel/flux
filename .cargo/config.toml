@@ -1,3 +1,0 @@
-[alias]
-single = "run -- build --root-path examples/singlepackage"
-multi = "run -- build --root-path examples/multipackage"

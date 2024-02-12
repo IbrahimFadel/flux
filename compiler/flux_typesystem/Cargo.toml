@@ -4,17 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-lasso = { version = "0.6.0", features = ["multi-threaded"] }
-owo-colors = "3.5.0"
-itertools = "0.10.5"
-tinyvec = { version = "1.6.0", features = ["alloc"] }
-pretty = { version = "0.12.1", features = ["termcolor"] }
-# hashbrown = "0.12.3"
-tracing = "0.1.37"
-flux_span = { path = "../flux_span" }
-flux_diagnostics = { path = "../flux_diagnostics" }
-flux_proc_macros = { path = "../flux_proc_macros" }
+itertools = "0.12.1"
 
-[dev-dependencies]
-once_cell = "1.15.0"
-text-size = "*"
+flux_diagnostics = { path = "../flux_diagnostics" }
+flux_span = { path = "../flux_span" }
