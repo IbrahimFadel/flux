@@ -1,11 +1,14 @@
 use la_arena::Idx;
 
-use crate::{hir::Function, module::ModuleId};
+use crate::{
+    hir::{ApplyDecl, FnDecl, ModDecl, TraitDecl},
+    module::ModuleId,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ItemId {
-    mod_id: ModuleId,
-    idx: ItemTreeIdx,
+    pub mod_id: ModuleId,
+    pub idx: ItemTreeIdx,
 }
 
 impl ItemId {
@@ -16,5 +19,19 @@ impl ItemId {
 
 #[derive(Debug, Clone)]
 pub enum ItemTreeIdx {
-    Function(Idx<Function>),
+    Apply(Idx<ApplyDecl>),
+    Function(Idx<FnDecl>),
+    Module(Idx<ModDecl>),
+    Trait(Idx<TraitDecl>),
+}
+
+impl TryFrom<ItemTreeIdx> for Idx<FnDecl> {
+    type Error = ();
+
+    fn try_from(value: ItemTreeIdx) -> Result<Self, Self::Error> {
+        match value {
+            ItemTreeIdx::Function(fn_id) => Ok(fn_id),
+            _ => Err(()),
+        }
+    }
 }

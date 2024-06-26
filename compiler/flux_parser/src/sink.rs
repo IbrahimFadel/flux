@@ -1,23 +1,27 @@
 use cstree::{build::GreenNodeBuilder, text::TextRange};
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_lexer::Token;
-use flux_span::{InputFile, ToSpan, WithSpan};
+use flux_span::{FileId, Interner, ToSpan, WithSpan};
 use flux_syntax::{Flux, SyntaxKind};
 
 use crate::{diagnostics::ParserDiagnostic, event::Event, Parse};
 
-pub struct Sink<'t, 'src> {
-    builder: GreenNodeBuilder<'static, 'static, Flux>,
+pub struct Sink<'cache, 't, 'src> {
+    builder: GreenNodeBuilder<'cache, 'static, Flux, &'static Interner>,
     tokens: &'t [Token<'src>],
     cursor: usize,
     events: Vec<Event>,
     diagnostics: Vec<Diagnostic>,
 }
 
-impl<'t, 'src> Sink<'t, 'src> {
-    pub(crate) fn new(tokens: &'t [Token<'src>], events: Vec<Event>) -> Self {
+impl<'cache, 't, 'src> Sink<'cache, 't, 'src> {
+    pub(crate) fn new(
+        interner: &'static Interner,
+        tokens: &'t [Token<'src>],
+        events: Vec<Event>,
+    ) -> Self {
         Self {
-            builder: GreenNodeBuilder::default(),
+            builder: GreenNodeBuilder::from_interner(interner),
             tokens,
             cursor: 0,
             events,
@@ -25,7 +29,7 @@ impl<'t, 'src> Sink<'t, 'src> {
         }
     }
 
-    pub(crate) fn finish(mut self, file: InputFile) -> Parse {
+    pub(crate) fn finish(mut self, file: FileId) -> Parse {
         for idx in 0..self.events.len() {
             match std::mem::replace(&mut self.events[idx], Event::Placeholder) {
                 Event::StartNode {
@@ -84,12 +88,11 @@ impl<'t, 'src> Sink<'t, 'src> {
             self.eat_trivia();
         }
 
-        let (tree, cache) = self.builder.finish();
-        let interner = cache.unwrap().into_interner().unwrap();
+        let (tree, _) = self.builder.finish();
+
         Parse {
             green_node: tree,
             diagnostics: self.diagnostics,
-            interner,
         }
     }
 

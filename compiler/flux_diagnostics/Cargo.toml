@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 ariadne = "0.4.0"
 text-size = "1.1.1"
+lasso = { version = "0.7.2", features = ["multi-threaded"] }
+colored = "2.1.0"
+itertools = "0.13.0"
 
 flux_span = { path = "../flux_span" }
-salsa = { path = "../../lib/salsa" }

@@ -1,18 +1,14 @@
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_span::{FileSpan, FileSpanned, InputFile, ToSpan, Word};
-use text_size::{TextRange, TextSize};
+use flux_span::{FileId, FileSpan, FileSpanned};
 
 pub trait ToDiagnostic {
     fn to_diagnostic(&self) -> Diagnostic;
 }
 
-#[salsa::accumulator]
-pub struct Diagnostics(Diagnostic);
-
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     kind: DiagnosticKind,
-    offset: Option<FileSpan>,
+    offset: FileSpan,
     pub code: DiagnosticCode,
     msg: String,
     labels: Vec<FileSpanned<String>>,
@@ -28,7 +24,7 @@ impl Diagnostic {
     ) -> Self {
         Self {
             kind: DiagnosticKind::Error,
-            offset: Some(offset),
+            offset: offset,
             code,
             msg,
             labels,
@@ -36,18 +32,18 @@ impl Diagnostic {
         }
     }
 
-    /// Create a diagnostic that does not exist in a file
-    /// For example, an error writing/reading from disk
-    pub fn new_without_file(kind: DiagnosticKind, code: DiagnosticCode, msg: String) -> Self {
-        Self {
-            kind,
-            offset: None,
-            code,
-            msg,
-            labels: vec![],
-            help: None,
-        }
-    }
+    // /// Create a diagnostic that does not exist in a file
+    // /// For example, an error writing/reading from disk
+    // pub fn new_without_file(kind: DiagnosticKind, code: DiagnosticCode, msg: String) -> Self {
+    //     Self {
+    //         kind,
+    //         offset: None,
+    //         code,
+    //         msg,
+    //         labels: vec![],
+    //         help: None,
+    //     }
+    // }
 
     pub fn with_help(mut self, help: String) -> Self {
         self.help = Some(help);
@@ -59,14 +55,12 @@ impl Diagnostic {
         self
     }
 
-    pub(crate) fn as_report(&self, db: &dyn crate::Db, config: ariadne::Config) -> Report<ASpan> {
-        let (file_id, offset) = match &self.offset {
-            Some(offset) => (offset.input_file, offset.span.range.start().into()),
-            None => (
-                InputFile::new(db, Word::intern(db, ""), String::with_capacity(0)),
-                0,
-            ),
-        };
+    pub(crate) fn as_report(&self, config: ariadne::Config) -> Report<ASpan> {
+        // let (file_id, offset) = match &self.offset {
+        //     Some(offset) => (Some(offset.file_id), offset.span.range.start().into()),
+        //     None => (None, 0),
+        // };
+        let (file_id, offset) = (self.offset.file_id, self.offset.span.range.start().into());
 
         let mut builder = Report::build(self.kind.as_ariadne_report_kind(), file_id, offset)
             .with_config(config)
@@ -75,7 +69,7 @@ impl Diagnostic {
 
         if let Some(primary) = self.labels.get(0) {
             builder.add_label(
-                Label::new(ASpan::new(FileSpan::new(primary.file, primary.span)))
+                Label::new(ASpan::new(FileSpan::new(primary.file_id, primary.span)))
                     .with_color(Color::Red)
                     .with_message(primary.inner.inner.clone()),
             )
@@ -83,7 +77,7 @@ impl Diagnostic {
 
         if let Some(labels) = &self.labels.get(1..) {
             builder.add_labels(labels.iter().map(|msg| {
-                Label::new(ASpan::new(FileSpan::new(msg.file, msg.span)))
+                Label::new(ASpan::new(FileSpan::new(msg.file_id, msg.span)))
                     .with_color(Color::Blue)
                     .with_message(&msg.inner.inner)
             }))
@@ -117,6 +111,10 @@ pub enum DiagnosticCode {
     CouldNotReadConfigFile,
     CouldNotReadEntryFile,
     ParserExpected,
+
+    UnknownGeneric,
+    CouldNotResolveModDecl,
+    DuplicateGenericParams,
 }
 
 impl std::fmt::Display for DiagnosticCode {
@@ -132,24 +130,13 @@ impl ASpan {
     pub fn new(file_span: FileSpan) -> Self {
         Self(file_span)
     }
-
-    pub fn empty(db: &dyn crate::Db) -> Self {
-        Self(FileSpan {
-            input_file: InputFile::new(
-                db,
-                Word::new(db, String::with_capacity(0)),
-                String::with_capacity(0),
-            ),
-            span: TextRange::empty(TextSize::new(0)).to_span(),
-        })
-    }
 }
 
 impl ariadne::Span for ASpan {
-    type SourceId = InputFile;
+    type SourceId = FileId;
 
     fn source(&self) -> &Self::SourceId {
-        &self.0.input_file
+        &self.0.file_id
     }
 
     fn start(&self) -> usize {

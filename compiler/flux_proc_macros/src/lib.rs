@@ -89,9 +89,10 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                 ErrorAttribute::Location(location) => {
                     let field = &location.field;
                     let field_file_span = format_ident!("{}_file_span", field);
-                    locations.push(quote! {
-                        flux_span::InFile::map_ref::<fn(&flux_span::Span) -> usize, usize>(&#field_file_span, |span| span.start)
-                    });
+                    locations.push(quote!{#field_file_span.to_file_span()});
+                    // locations.push(quote! {
+                    //     flux_span::InFile::map_ref::<fn(&flux_span::Span) -> usize, usize>(&#field_file_span, |span| span.range.start().into())
+                    // });
                 }
                 ErrorAttribute::Primary(primary) => {
                     primaries.push(primary);
@@ -151,8 +152,6 @@ fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
     });
 
     let visibility = &input.visibility;
-
-    // println!("{:#?}", extra_labels);
 
     let gen = quote! {
         #[derive(Debug, Clone)]

@@ -13,11 +13,9 @@ toml = "0.8.8"
 serde = { version = "1.0.159", features = ["derive"] }
 clap = { version = "4.2.5", default-features = true, features = ["std", "derive"] }
 pretty = "0.12.1"
+lasso = { version = "0.7.2", features = ["multi-threaded"] }
 
-flux_db = { path = "../flux_db" }
 flux_hir = { path = "../flux_hir" }
 flux_cfg = { path = "../flux_cfg" }
 flux_diagnostics = { path = "../flux_diagnostics" }
-# flux_hir = { path = "../flux_hir" }
-# flux_typesystem = { path = "../flux_typesystem" }
-salsa = { path = "../../lib/salsa" }
+flux_span = { path = "../flux_span" }

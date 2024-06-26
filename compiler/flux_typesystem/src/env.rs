@@ -2,7 +2,19 @@ use flux_diagnostics::ice;
 
 use crate::r#type::{TypeId, TypeKind};
 
-#[derive(Debug, Clone)]
+pub trait Insert<T> {
+    fn insert(&mut self, ty: T) -> TypeId;
+}
+
+impl Insert<TypeKind> for TEnv {
+    fn insert(&mut self, ty: TypeKind) -> TypeId {
+        let idx = self.types.len();
+        self.types.push(ty);
+        TypeId::new(idx)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct TEnv {
     types: Vec<TypeKind>,
     // entries: Vec<FileSpanned<TEntry>>,

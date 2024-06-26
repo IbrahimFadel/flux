@@ -168,7 +168,7 @@ impl Syntax for Flux {
             SyntaxKind::Trait => Some("trait"),
             SyntaxKind::Let => Some("let"),
             SyntaxKind::Return => Some("return"),
-            SyntaxKind::This => Some("this"),
+            SyntaxKind::This => Some("This"),
             SyntaxKind::Comma => Some(","),
             SyntaxKind::CmpEq => Some("=="),
             SyntaxKind::CmpNeq => Some("!="),

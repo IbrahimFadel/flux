@@ -1,17 +1,5 @@
-trait Bar {}
 
-enum Foo<X> where X is Bar {
-    A -> X,
-    B,
-}
 
-apply Bar to u64 {}
-
-// Uncomment this for an error
-// apply Bar to u32 {}
-
-fn main() {
-    let x = Foo::A(0);
-
-    let y = Foo::B;
+pub fn main() {
+    
 }

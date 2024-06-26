@@ -2,29 +2,40 @@ use ariadne::CharSet;
 use ariadne::Config;
 
 use ariadne::Source;
-use flux_span::InputFile;
+use flux_span::FileId;
+use flux_span::Interner;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use super::Diagnostic;
 
-pub struct SourceCache<'me> {
-    db: &'me dyn crate::Db,
-    map: HashMap<InputFile, Source>,
+pub struct SourceCache {
+    interner: &'static Interner,
+    map: HashMap<FileId, Source<String>>,
 }
 
-impl<'me> SourceCache<'me> {
-    pub fn new(db: &'me dyn crate::Db) -> Self {
+impl SourceCache {
+    pub fn new(interner: &'static Interner) -> Self {
         Self {
-            db,
+            interner,
             map: Default::default(),
         }
     }
 
     pub fn report_diagnostic(&self, diagnostic: &Diagnostic) {
         diagnostic
-            .as_report(self.db, Config::default())
+            .as_report(Config::default())
             .eprint(self)
             .unwrap()
+    }
+
+    pub fn report_diagnostics(&self, diagnostics: impl Iterator<Item = Diagnostic>) {
+        diagnostics.for_each(|diagnostic| {
+            diagnostic
+                .as_report(Config::default())
+                .eprint(self)
+                .unwrap()
+        })
     }
 
     pub fn write_diagnostics_to_buffer<W: std::io::Write>(
@@ -36,33 +47,54 @@ impl<'me> SourceCache<'me> {
             .with_char_set(CharSet::Ascii)
             .with_color(false);
         for diagnostic in diagnostics {
-            let report = diagnostic.as_report(self.db, cfg);
+            let report = diagnostic.as_report(cfg);
             report.write(self, &mut *buf).unwrap();
         }
     }
 
-    pub fn add_input_file(&mut self, input_file: InputFile) {
-        self.map.insert(
-            input_file,
-            Source::from(input_file.source_text(self.db).to_owned()),
-        );
+    pub fn add_input_file(&mut self, path: &str, content: String) -> FileId {
+        let id = self.interner.get_or_intern(path);
+        let id = FileId::new(id);
+        let src = Source::from(content);
+        self.map.insert(id, src);
+        id
+    }
+
+    #[inline]
+    pub fn get_file_path(&self, file_id: &FileId) -> &str {
+        self.interner.resolve(&file_id.key())
+    }
+
+    pub fn get_file_dir(&self, file_id: &FileId) -> String {
+        let path = self.get_file_path(file_id);
+        let buf = PathBuf::from(path);
+        buf.parent().unwrap().to_str().unwrap().to_string()
+    }
+
+    pub fn get_file_content(&self, file_id: &FileId) -> String {
+        self.map[file_id].chars().collect()
+    }
+
+    pub fn get_by_file_path(&self, path: &str) -> (FileId, String) {
+        let id = FileId::new(self.interner.get_or_intern(path));
+        let source = &self.map[&id];
+        let s = source.chars().collect();
+        (id, s)
     }
 }
 
-impl<'cache> ariadne::Cache<InputFile> for &'cache SourceCache<'_> {
+impl<'cache> ariadne::Cache<FileId> for &'cache SourceCache {
     type Storage = String;
 
-    // I think Cache needs to be implemented for immutable reference. If i can figure out a way to allow &mut to be implemented, then we wont have to worry about inserting files, and just insert them automatically here
-    fn fetch(&mut self, id: &InputFile) -> Result<&Source, Box<dyn std::fmt::Debug + '_>> {
+    fn fetch(
+        &mut self,
+        id: &FileId,
+    ) -> Result<&Source<Self::Storage>, Box<dyn std::fmt::Debug + '_>> {
         Ok(&self.map[id])
-        // Ok(self.map.entry(*id).or_insert_with(|| {
-        //     let source_text = id.source_text(self.db);
-        //     Source::from(source_text.to_owned())
-        // }))
     }
 
-    fn display<'a>(&self, id: &'a InputFile) -> Option<Box<dyn std::fmt::Display + 'a>> {
-        let s = id.name(self.db).as_str(self.db).to_string();
+    fn display<'b>(&self, id: &'b FileId) -> Option<Box<dyn std::fmt::Display + 'b>> {
+        let s = self.interner.resolve(id.key()).to_string();
         Some(Box::new(s))
     }
 }

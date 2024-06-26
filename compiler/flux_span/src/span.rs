@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use text_size::TextRange;
+use text_size::{TextRange, TextSize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
@@ -22,6 +22,15 @@ impl Span {
     pub fn poisoned() -> Self {
         Self {
             range: TextRange::new(0.into(), 0.into()),
+        }
+    }
+
+    pub fn end_span(&self) -> Self {
+        Self {
+            range: TextRange::new(
+                self.range.end(),
+                self.range.end().checked_add(TextSize::new(1)).unwrap(),
+            ),
         }
     }
 }

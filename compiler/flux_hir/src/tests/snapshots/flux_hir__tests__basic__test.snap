@@ -1,0 +1,21 @@
+---
+source: compiler/flux_hir/src/tests/basic.rs
+expression: s
+---
++-------------+
+| Module Tree |
++-------------+
+ main
+ ├─ math
+ │  └─ addition
+ └─ foo
+    └─ bar
++-------------+
+|  Item Tree  |
++-------------+
+main
+fnmath
+addition
+
+foo
+fnbar

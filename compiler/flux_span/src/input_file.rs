@@ -1,19 +1,33 @@
 use std::ops::Deref;
 
-use crate::{span::Spanned, word::Word, Span};
+use cstree::interning::TokenKey;
 
-#[salsa::input]
-pub struct InputFile {
-    pub name: Word,
+use crate::{span::Spanned, Span};
 
-    #[return_ref]
-    pub source_text: String,
+pub type Word = TokenKey;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[repr(transparent)]
+pub struct FileId(TokenKey);
+
+impl FileId {
+    // pub fn poisoned() -> Self {
+    //     Self(interner.get_or_intern_static(POISONED_FILE_ID))
+    // }
+
+    pub fn new(key: TokenKey) -> Self {
+        Self(key)
+    }
+
+    pub fn key(&self) -> &TokenKey {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct InFile<T> {
     pub inner: T,
-    pub file: InputFile,
+    pub file_id: FileId,
 }
 
 impl<T> Deref for InFile<T> {
@@ -25,8 +39,8 @@ impl<T> Deref for InFile<T> {
 }
 
 impl<T> InFile<T> {
-    pub fn new(inner: T, file: InputFile) -> Self {
-        Self { inner, file }
+    pub fn new(inner: T, file_id: FileId) -> Self {
+        Self { inner, file_id }
     }
 
     /// Maps the inner value of an [`InFile`]
@@ -36,7 +50,7 @@ impl<T> InFile<T> {
     where
         F: FnOnce(T) -> B,
     {
-        InFile::new(f(self.inner), self.file)
+        InFile::new(f(self.inner), self.file_id)
     }
 
     /// Maps the inner value of an [`InFile`] passing the values to the closure by reference
@@ -46,7 +60,7 @@ impl<T> InFile<T> {
     where
         F: FnOnce(&T) -> B,
     {
-        InFile::new(f(&self.inner), self.file)
+        InFile::new(f(&self.inner), self.file_id)
     }
 }
 
@@ -54,34 +68,41 @@ pub type FileSpanned<T> = InFile<Spanned<T>>;
 
 impl InFile<Span> {
     pub fn to_file_spanned<T>(&self, inner: T) -> FileSpanned<T> {
-        FileSpanned::new(Spanned::new(inner, self.inner), self.file)
+        FileSpanned::new(Spanned::new(inner, self.inner), self.file_id)
     }
 
     pub fn to_file_span(&self) -> FileSpan {
         FileSpan {
-            input_file: self.file,
+            file_id: self.file_id,
             span: self.inner,
         }
     }
 }
 
 impl<T> InFile<Spanned<T>> {
-    pub fn to_file_span(&self) -> FileSpan {
-        FileSpan {
-            input_file: self.file,
-            span: self.span,
-        }
+    pub fn to_file_span(&self) -> InFile<Span> {
+        InFile::new(self.span, self.file_id)
+    }
+
+    /// Maps the inner value of an `InFile<Spanned<T>` passing the values to the closure by reference
+    ///
+    /// `InFile<Spanned<A>>` -> `InFile<Spanned<B>>`
+    pub fn map_inner_ref<F, B>(&self, f: F) -> InFile<Spanned<B>>
+    where
+        F: FnOnce(&T) -> B,
+    {
+        InFile::new(self.inner.map_ref(|v| f(v)), self.file_id)
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FileSpan {
-    pub input_file: InputFile,
+    pub file_id: FileId,
     pub span: Span,
 }
 
 impl FileSpan {
-    pub fn new(input_file: InputFile, span: Span) -> Self {
-        Self { input_file, span }
+    pub fn new(file_id: FileId, span: Span) -> Self {
+        Self { file_id, span }
     }
 }

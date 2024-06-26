@@ -186,6 +186,7 @@ getters! {
         type_bound_list -> node(TypeBoundList);
     }
     TraitMethodDecl {
+        fn_kw -> tok(Fn);
         name -> node(Name);
         generic_param_list -> node(GenericParamList);
         param_list -> node(ParamList);

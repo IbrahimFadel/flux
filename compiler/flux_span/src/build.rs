@@ -1,30 +1,30 @@
 use text_size::TextRange;
 
-use crate::{InFile, InputFile, Span, Spanned};
+use crate::{FileId, InFile, Span, Spanned};
 
 pub trait WithSpan: Sized {
     fn at(self, span: Span) -> Spanned<Self> {
         Spanned::new(self, span)
     }
 
-    fn in_file(self, file: InputFile) -> InFile<Self> {
-        InFile::new(self, file)
+    fn in_file(self, file_id: FileId) -> InFile<Self> {
+        InFile::new(self, file_id)
     }
 
-    fn file_span(self, file: InputFile, span: Span) -> InFile<Spanned<Self>> {
-        InFile::new(Spanned::new(self, span), file)
+    fn file_span(self, file_id: FileId, span: Span) -> InFile<Spanned<Self>> {
+        InFile::new(Spanned::new(self, span), file_id)
     }
 
     fn at_ref(&self, span: Span) -> Spanned<&Self> {
         Spanned::new(self, span)
     }
 
-    fn in_file_ref(&self, file: InputFile) -> InFile<&Self> {
-        InFile::new(self, file)
+    fn in_file_ref(&self, file_id: FileId) -> InFile<&Self> {
+        InFile::new(self, file_id)
     }
 
-    fn file_span_ref(&self, file: InputFile, span: Span) -> InFile<Spanned<&Self>> {
-        InFile::new(Spanned::new(self, span), file)
+    fn file_span_ref(&self, file_id: FileId, span: Span) -> InFile<Spanned<&Self>> {
+        InFile::new(Spanned::new(self, span), file_id)
     }
 }
 

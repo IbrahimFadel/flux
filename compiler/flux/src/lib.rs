@@ -1,10 +1,13 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, sync::OnceLock};
 
 use clap::{Parser, Subcommand};
 use commands::build;
+use flux_span::Interner;
 
 mod commands;
 mod diagnostics;
+
+static INTERNER: OnceLock<Interner> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitStatus {

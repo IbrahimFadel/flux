@@ -6,5 +6,11 @@ use crate::{hir::Visibility, item::ItemId};
 
 #[derive(Debug, Default)]
 pub(crate) struct ItemScope {
-    functions: HashMap<Word, (Visibility, ItemId)>,
+    pub items: HashMap<Word, (Visibility, ItemId)>,
+}
+
+impl ItemScope {
+    pub fn declare(&mut self, name: Word, visibility: Visibility, item_id: ItemId) {
+        self.items.insert(name, (visibility, item_id));
+    }
 }

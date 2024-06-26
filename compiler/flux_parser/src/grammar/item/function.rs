@@ -105,15 +105,15 @@ fn fn_param(p: &mut Parser) {
     m.complete(p, SyntaxKind::Param);
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::test_str;
+// #[cfg(test)]
+// mod tests {
+//     use crate::test_str;
 
-    test_str!(no_name, "fn (){}");
-    test_str!(no_name_or_params, "fn {}");
-    test_str!(missing_params, "fn foo{}");
-    test_str!(missing_rparen, "fn foo({}");
-    test_str!(missing_lparen, "fn foo){}");
-    test_str!(comma_in_paramlist_but_no_params, "fn foo(,){}");
-    test_str!(missing_param_after_comma, "fn foo(x X,){}");
-}
+//     test_str!(no_name, "fn (){}");
+//     test_str!(no_name_or_params, "fn {}");
+//     test_str!(missing_params, "fn foo{}");
+//     test_str!(missing_rparen, "fn foo({}");
+//     test_str!(missing_lparen, "fn foo){}");
+//     test_str!(comma_in_paramlist_but_no_params, "fn foo(,){}");
+//     test_str!(missing_param_after_comma, "fn foo(x X,){}");
+// }

@@ -34,9 +34,21 @@ pub enum TypeKind {
     Int(Option<TypeId>),
     Float(Option<TypeId>),
     Ref(TypeId),
-    Generic(Word, Vec<TraitRestriction>),
+    Generic(Generic),
     Never,
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Generic {
+    pub name: Word,
+    pub restrictions: Vec<TraitRestriction>,
+}
+
+impl Generic {
+    pub fn new(name: Word, restrictions: Vec<TraitRestriction>) -> Self {
+        Self { name, restrictions }
+    }
 }
 
 impl Display for TypeKind {
@@ -45,7 +57,7 @@ impl Display for TypeKind {
             Self::AssocPath(_) => write!(f, "todo"),
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
-            Self::Generic(name, _) => write!(f, "{name:?}"),
+            Self::Generic(Generic { name, .. }) => write!(f, "{name:?}"),
             Self::Int(_) => write!(f, "int"),
             Self::Ref(id) => write!(f, "Ref({id}"),
             Self::Never => write!(f, "!"),
@@ -57,11 +69,11 @@ impl Display for TypeKind {
 /// A `flux_typesystem` concrete kind
 ///
 /// The kind of [`TypeKind::Concrete`]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ConcreteKind {
     Array(TypeId, u32),
     Ptr(TypeId),
-    Path(Word, Vec<TypeId>),
+    Path(Vec<Word>, Vec<TypeId>),
     Tuple(Vec<TypeId>),
 }
 

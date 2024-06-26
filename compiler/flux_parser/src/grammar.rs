@@ -59,37 +59,36 @@ fn path(p: &mut Parser) -> PathType {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use flux_diagnostics::SourceCache;
+// #[cfg(test)]
+// mod tests {
+//     use flux_diagnostics::SourceCache;
 
-    pub fn parse_and_fmt(src: &str) -> String {
-        let mut db = flux_db::Db::default();
-        let file = db.new_input_file("test.flx", src.to_string());
-        let parse = db.cst(file);
-        let (root, diagnostics, interner) = (parse.syntax(), parse.diagnostics, parse.interner);
+//     pub fn parse_and_fmt(src: &str) -> String {
+//         let file = db.new_input_file("test.flx", src.to_string());
+//         let parse = db.cst(file);
+//         let (root, diagnostics, interner) = (parse.syntax(), parse.diagnostics, parse.interner);
 
-        let mut file_cache = SourceCache::new(&mut db);
-        file_cache.add_input_file(file);
+//         let mut file_cache = SourceCache::new(&mut db);
+//         file_cache.add_input_file(file);
 
-        let mut buf: std::io::BufWriter<Vec<u8>> = std::io::BufWriter::new(Vec::new());
-        file_cache.write_diagnostics_to_buffer(&diagnostics, &mut buf);
-        let bytes: Vec<u8> = buf.into_inner().unwrap();
-        let diagnostics_s = String::from_utf8(bytes).unwrap();
-        let cst = root.debug(&interner, true);
-        format!("{cst}\n\nErrors:\n{diagnostics_s}")
-    }
+//         let mut buf: std::io::BufWriter<Vec<u8>> = std::io::BufWriter::new(Vec::new());
+//         file_cache.write_diagnostics_to_buffer(&diagnostics, &mut buf);
+//         let bytes: Vec<u8> = buf.into_inner().unwrap();
+//         let diagnostics_s = String::from_utf8(bytes).unwrap();
+//         let cst = root.debug(&interner, true);
+//         format!("{cst}\n\nErrors:\n{diagnostics_s}")
+//     }
 
-    #[macro_export]
-    macro_rules! test_str {
-        ($name:ident, $src:literal) => {
-            paste::paste! {
-                #[test]
-                fn [<$name>]() {
-                    let s = crate::grammar::tests::parse_and_fmt($src);
-                    insta::assert_snapshot!(s);
-                }
-            }
-        };
-    }
-}
+//     #[macro_export]
+//     macro_rules! test_str {
+//         ($name:ident, $src:literal) => {
+//             paste::paste! {
+//                 #[test]
+//                 fn [<$name>]() {
+//                     let s = crate::grammar::tests::parse_and_fmt($src);
+//                     insta::assert_snapshot!(s);
+//                 }
+//             }
+//         };
+//     }
+// }
