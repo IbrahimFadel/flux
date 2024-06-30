@@ -1,8 +1,7 @@
 use std::ops::Index;
 use std::{collections::HashMap, ops::IndexMut};
 
-use cstree::interning::{InternKey, TokenKey};
-use flux_span::{FileId, Word};
+use flux_span::Word;
 use la_arena::{Arena, Idx};
 
 use crate::item_scope::ItemScope;
@@ -25,10 +24,6 @@ impl ModuleTree {
 
     pub fn get(&self) -> &Arena<ModuleData> {
         &self.0
-    }
-
-    pub fn get_mut(&mut self) -> &mut Arena<ModuleData> {
-        &mut self.0
     }
 }
 
@@ -54,7 +49,7 @@ pub(crate) struct ModuleData {
 }
 
 impl ModuleData {
-    pub(crate) fn new(parent: Option<ModuleId>, file_id: FileId) -> Self {
+    pub(crate) fn new(parent: Option<ModuleId>) -> Self {
         Self {
             parent,
             children: HashMap::new(),

@@ -4,7 +4,6 @@ use flux_typesystem::TEnv;
 
 use crate::{
     cfg::Config,
-    hir::ModDecl,
     item::ItemId,
     item_tree::{lower_cst_to_item_tree, ItemTree},
     module::{collect::ModCollector, ModuleData, ModuleId, ModuleTree},
@@ -14,8 +13,9 @@ use crate::{
 mod prettyprint;
 
 pub struct Package {
-    pub item_tree: ItemTree,
-    pub module_tree: ModuleTree,
+    pub(crate) item_tree: ItemTree,
+    pub(crate) module_tree: ModuleTree,
+    pub tenv: TEnv,
 }
 
 pub(crate) struct PkgBuilder<'a, R: FileResolver> {
@@ -53,6 +53,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             Package {
                 item_tree: self.item_tree,
                 module_tree: self.module_tree,
+                tenv: self.tenv,
             },
             self.diagnostics,
         )
@@ -87,7 +88,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         let mut parse_diagnostics = cst.diagnostics;
         self.diagnostics.append(&mut parse_diagnostics);
 
-        let module_data = ModuleData::new(parent, file_id);
+        let module_data = ModuleData::new(parent);
         let module_id = self.module_tree.alloc(module_data);
         let items = lower_cst_to_item_tree(
             root,
@@ -119,14 +120,4 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
     //         }
     //     }
     // }
-
-    fn lower_child_module(&self, mod_decl: &ModDecl, mod_dir: &ModDir) {
-        // Resolve module
-        // Get file content
-        // Generate / Lower CST
-
-        // mod_dir.resolve_declaration(file_id, name, source_cache, resolver);
-    }
 }
-
-fn collect_module() {}

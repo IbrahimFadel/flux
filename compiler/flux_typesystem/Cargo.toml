@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.12.1"
+pretty = "0.12.3"
+colored = "2.1.0"
 
 flux_diagnostics = { path = "../flux_diagnostics" }
 flux_span = { path = "../flux_span" }

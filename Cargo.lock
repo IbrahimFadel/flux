@@ -282,6 +282,7 @@ name = "flux_hir"
 version = "0.1.0"
 dependencies = [
  "ascii_tree",
+ "colored",
  "cstree",
  "extension-trait",
  "flux_diagnostics",
@@ -355,9 +356,11 @@ dependencies = [
 name = "flux_typesystem"
 version = "0.1.0"
 dependencies = [
+ "colored",
  "flux_diagnostics",
  "flux_span",
  "itertools 0.12.1",
+ "pretty",
 ]
 
 [[package]]

@@ -16,7 +16,7 @@ impl DriverError {
                     "create the file `{candidate}` or change its permissions if it already exists"
                 )],
             ),
-            DriverError::ReadEntryFile { package, candidate } => IOError::new(
+            DriverError::ReadEntryFile { candidate, .. } => IOError::new(
                 DiagnosticCode::CouldNotReadEntryFile,
                 format!("could not read entry file for project"),
                 vec![format!(

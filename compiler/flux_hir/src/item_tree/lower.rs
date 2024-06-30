@@ -321,7 +321,7 @@ impl<'a> Ctx<'a> {
                 let span = method_generic_params.span;
                 let mut generic_params = method_generic_params.map(|method_generic_params| {
                     method_generic_params
-                        .union(trait_generic_params, span, self)
+                        .union(trait_generic_params)
                         .unwrap_or_else(|(fallback_generic_params, duplicates)| {
                             let diagnostic = LowerError::DuplicateGenericParams {
                                 generics_that_were_chilling: (),

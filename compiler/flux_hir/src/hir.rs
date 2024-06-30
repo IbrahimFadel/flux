@@ -1,13 +1,11 @@
 use std::collections::HashSet;
 
-use flux_span::{Span, Spanned, WithSpan, Word};
+use flux_span::{Spanned, WithSpan, Word};
 use flux_syntax::ast;
 use flux_typesystem as ts;
 use flux_typesystem::{TEnv, TypeId};
 use la_arena::{Arena, Idx, RawIdx};
 use ts::ConcreteKind;
-
-use crate::item_tree::lower::Ctx;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -142,12 +140,7 @@ impl GenericParams {
     /// Combine two sets of generic parameters
     ///
     /// If there are duplicates, it will error but still provide a fallback set of generic params (self)
-    pub fn union(
-        self,
-        other: &Spanned<Self>,
-        span: Span,
-        ctx: &Ctx,
-    ) -> Result<Self, (Self, Vec<Word>)> {
+    pub fn union(self, other: &Spanned<Self>) -> Result<Self, (Self, Vec<Word>)> {
         let mut union = self.clone();
 
         let a_keys: HashSet<Word> = self.types.iter().map(|(_, name)| name.inner).collect();
@@ -371,6 +364,10 @@ impl TypeBoundList {
 
     pub fn iter(&self) -> impl Iterator<Item = &Spanned<TypeBound>> {
         self.0.iter()
+    }
+
+    pub fn as_slice(&self) -> &[Spanned<TypeBound>] {
+        &self.0
     }
 }
 

@@ -1,17 +1,17 @@
-use flux_diagnostics::{ice, Diagnostic};
+use flux_diagnostics::ice;
 use flux_span::{Interner, Spanned, ToSpan, WithSpan, Word};
 use flux_syntax::ast::{self, AstNode};
 use flux_typesystem::{Insert, TEnv, TypeId};
 
 use crate::{
-    hir::{ExprIdx, GenericParams, Path, Type, Typed},
+    hir::{GenericParams, Path, Type},
     POISONED_NAME,
 };
 
 mod r#type;
 
 pub(crate) struct LowerCtx<'a> {
-    diagnostics: Vec<Diagnostic>,
+    // diagnostics: Vec<Diagnostic>,
     pub interner: &'static Interner,
     // Every module will modify a type environment global to the package, stored in the pkg builder
     pub tenv: &'a mut TEnv,
@@ -20,7 +20,7 @@ pub(crate) struct LowerCtx<'a> {
 impl<'a> LowerCtx<'a> {
     pub(crate) fn new(interner: &'static Interner, tenv: &'a mut TEnv) -> Self {
         Self {
-            diagnostics: vec![],
+            // diagnostics: vec![],
             interner,
             tenv,
         }
@@ -78,7 +78,7 @@ impl<'a> LowerCtx<'a> {
             |_, ty| Type::Unknown.at(ty.range().to_span()),
             |this, ty| match ty {
                 ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
-                ast::Type::ThisPathType(this_path_type) => {
+                ast::Type::ThisPathType(_) => {
                     ice("should not encounter this path outside of apply method")
                 }
                 ast::Type::TupleType(_) => todo!(),
@@ -119,7 +119,7 @@ impl<'a> LowerCtx<'a> {
                     .get_or_intern_static(POISONED_NAME)
                     .at(name.range().to_span())
             },
-            |this, name| {
+            |_, name| {
                 let name = name
                     .ident()
                     .unwrap_or_else(|| ice("name parsed without identifier token"));
@@ -160,7 +160,7 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    pub(crate) fn lower_expr(&mut self, expr: Option<ast::Expr>) -> Typed<ExprIdx> {
-        todo!()
-    }
+    // pub(crate) fn lower_expr(&mut self, expr: Option<ast::Expr>) -> Typed<ExprIdx> {
+    //     todo!()
+    // }
 }

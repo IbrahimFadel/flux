@@ -1,5 +1,6 @@
 mod check;
 mod env;
+mod prettyprint;
 mod r#trait;
 mod r#type;
 
