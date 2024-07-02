@@ -1,4 +1,4 @@
-use std::convert::identity;
+use std::{collections::HashMap, convert::identity};
 
 use ascii_tree::{write_tree, Tree};
 use colored::Colorize;
@@ -9,8 +9,10 @@ use pretty::RcDoc;
 
 use crate::{
     hir::{
-        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, FnDecl, GenericParams, ModDecl,
-        Param, ParamList, Path, TraitDecl, TypeBound, TypeBoundList, Visibility,
+        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariant,
+        EnumDeclVariantList, FnDecl, GenericParams, ModDecl, Param, ParamList, Path, StructDecl,
+        StructFieldDecl, StructFieldDeclList, TraitDecl, TypeBound, TypeBoundList, UseDecl,
+        Visibility,
     },
     item_tree::ItemTree,
     module::{ModuleData, ModuleId, ModuleTree},
@@ -47,11 +49,12 @@ impl ItemTree {
         let (module_id, root) = module_tree
             .get()
             .iter()
-            .find(|(_, module)| module.parent.is_none())
+            .find(|(module_id, module)| {
+                module.parent.is_none() && *module_id != ModuleTree::PRELUDE_ID
+            })
             .expect("missing root module");
         let name = interner.get_or_intern_static("main");
         root.to_doc(&[name], &module_id, self, module_tree, interner, tenv)
-        // RcDoc::intersperse(self.top_level.iter().map(|item_id| RcDoc::nil()), "\n")
     }
 }
 
@@ -99,11 +102,35 @@ impl GenericParams {
         }
     }
 
-    pub fn where_clause_to_doc(&self, _interner: &'static Interner) -> RcDoc {
+    pub fn where_clause_to_doc(&self, interner: &'static Interner) -> RcDoc {
         if self.where_predicates.is_empty() {
             RcDoc::nil()
         } else {
-            RcDoc::text("TODO")
+            let mut bound_lists = HashMap::new();
+            self.where_predicates.iter().for_each(|p| {
+                let text = p.bound.to_string(interner);
+                bound_lists.entry(p.name).or_insert(vec![]).push(text);
+            });
+            let predicates = RcDoc::intersperse(
+                bound_lists.iter().map(|(name, bounds)| {
+                    RcDoc::text(interner.resolve(name).yellow().to_string())
+                        .append(RcDoc::space())
+                        .append(RcDoc::text("is".red().to_string()))
+                        .append(RcDoc::space())
+                        .append(RcDoc::intersperse(
+                            bounds
+                                .iter()
+                                .map(|bound| RcDoc::text(bound.yellow().to_string())),
+                            RcDoc::space()
+                                .append(RcDoc::text("+".black().to_string()))
+                                .append(RcDoc::space()),
+                        ))
+                }),
+                RcDoc::text(",".black().to_string()).append(RcDoc::space()),
+            );
+            RcDoc::text("where".red().to_string())
+                .append(RcDoc::space())
+                .append(predicates)
         }
     }
 }
@@ -213,7 +240,7 @@ impl Path {
             self.segments
                 .iter()
                 .map(|segment| RcDoc::text(interner.resolve(segment).yellow().to_string())),
-            RcDoc::text("::"),
+            RcDoc::text("::".black().to_string()),
         );
         let generics = if self.generic_args.is_empty() {
             RcDoc::nil()
@@ -302,10 +329,116 @@ impl ModDecl {
     }
 }
 
+impl StructDecl {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        self.visibility
+            .to_doc()
+            .append(RcDoc::text("struct".red().to_string()))
+            .append(RcDoc::space())
+            .append(RcDoc::text(
+                interner.resolve(&self.name).yellow().to_string(),
+            ))
+            .append(self.generic_params.params_to_doc(interner))
+            .append(RcDoc::space())
+            .append(self.generic_params.where_clause_to_doc(interner))
+            .append(RcDoc::space())
+            .append(RcDoc::text("{"))
+            .append(RcDoc::line())
+            .append(self.fields.to_doc(interner, tenv))
+            .nest(INDENT_SIZE)
+            .append(RcDoc::line())
+            .append(RcDoc::text("}"))
+    }
+}
+
+impl StructFieldDeclList {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        RcDoc::intersperse(
+            self.iter()
+                .map(|field_decl| field_decl.to_doc(interner, tenv)),
+            RcDoc::text(",".black().to_string()).append(RcDoc::line()),
+        )
+    }
+}
+
+impl StructFieldDecl {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        RcDoc::text(interner.resolve(&self.name).blue().to_string())
+            .append(RcDoc::space())
+            .append(type_id_to_doc(&self.ty, interner, tenv))
+    }
+}
+
+impl EnumDecl {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        self.visibility
+            .to_doc()
+            .append(RcDoc::text("enum".red().to_string()))
+            .append(RcDoc::space())
+            .append(RcDoc::text(
+                interner.resolve(&self.name).yellow().to_string(),
+            ))
+            .append(self.generic_params.params_to_doc(interner))
+            .append(RcDoc::space())
+            .append(self.generic_params.where_clause_to_doc(interner))
+            .append(RcDoc::space())
+            .append(RcDoc::text("{"))
+            .append(RcDoc::line())
+            .append(self.variants.to_doc(interner, tenv))
+            .nest(INDENT_SIZE)
+            .append(RcDoc::line())
+            .append(RcDoc::text("}"))
+    }
+}
+
+impl EnumDeclVariantList {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        RcDoc::intersperse(
+            self.iter().map(|variant| variant.to_doc(interner, tenv)),
+            RcDoc::text(",".black().to_string()).append(RcDoc::line()),
+        )
+    }
+}
+
+impl EnumDeclVariant {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        RcDoc::text(interner.resolve(&self.name).blue().to_string()).append(
+            self.ty.as_ref().map_or(RcDoc::nil(), |tid| {
+                RcDoc::space()
+                    .append(RcDoc::text("→".black().to_string()))
+                    .append(RcDoc::space())
+                    .append(type_id_to_doc(tid, interner, tenv))
+            }),
+        )
+    }
+}
+
+impl UseDecl {
+    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+        RcDoc::text("use".red().to_string())
+            .append(RcDoc::space())
+            .append(self.path.to_doc(interner, tenv))
+            .append(self.alias.as_ref().map_or(RcDoc::nil(), |alias| {
+                RcDoc::space()
+                    .append(RcDoc::text("as".red().to_string()))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text(interner.resolve(&alias).blue().to_string()))
+            }))
+            .append(RcDoc::text(";".black().to_string()))
+    }
+}
+
 fn type_id_to_doc<'a>(tid: &TypeId, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc<'a> {
     use flux_typesystem::TypeKind::*;
     match tenv.get(tid) {
-        AssocPath(_) => todo!(),
+        ThisPath(this_path) => RcDoc::text("This".red().to_string())
+            .append(RcDoc::text("::".black().to_string()))
+            .append(RcDoc::intersperse(
+                this_path
+                    .iter()
+                    .map(|segment| interner.resolve(segment).yellow().to_string()),
+                RcDoc::text("::".black().to_string()),
+            )),
         Concrete(concrete) => concrete_tkind_to_doc(concrete, interner, tenv),
         Int(_) => todo!(),
         Float(_) => todo!(),
@@ -366,10 +499,12 @@ impl ModuleTree {
     }
 
     pub fn to_string(&self, interner: &'static Interner) -> String {
-        let root = self
+        let (_, root) = self
             .get()
-            .values()
-            .find(|module| module.parent.is_none())
+            .iter()
+            .find(|(module_id, module)| {
+                module.parent.is_none() && *module_id != ModuleTree::PRELUDE_ID
+            })
             .expect("missing root module");
 
         let tree = root.to_tree(self, &interner.get_or_intern_static("main"), interner);
@@ -425,14 +560,23 @@ impl ModuleData {
                             crate::item::ItemTreeIdx::Apply(apply_decl) => {
                                 item_tree.applies[apply_decl].to_doc(interner, tenv, item_tree)
                             }
+                            crate::item::ItemTreeIdx::Enum(enum_decl) => {
+                                item_tree.enums[enum_decl].to_doc(interner, tenv)
+                            }
                             crate::item::ItemTreeIdx::Function(fn_decl) => {
                                 item_tree.functions[fn_decl].to_doc(interner, tenv)
                             }
                             crate::item::ItemTreeIdx::Module(mod_decl) => {
                                 item_tree.mods[mod_decl].to_doc(interner)
                             }
+                            crate::item::ItemTreeIdx::Struct(struct_decl) => {
+                                item_tree.structs[struct_decl].to_doc(interner, tenv)
+                            }
                             crate::item::ItemTreeIdx::Trait(trait_decl) => {
                                 item_tree.traits[trait_decl].to_doc(interner, tenv, item_tree)
+                            }
+                            crate::item::ItemTreeIdx::Use(use_decl) => {
+                                item_tree.uses[use_decl].to_doc(interner, tenv)
                             }
                         })
                     } else {

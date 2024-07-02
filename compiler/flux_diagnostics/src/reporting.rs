@@ -29,7 +29,7 @@ impl SourceCache {
             .unwrap()
     }
 
-    pub fn report_diagnostics(&self, diagnostics: impl Iterator<Item = Diagnostic>) {
+    pub fn report_diagnostics<'a>(&self, diagnostics: impl Iterator<Item = &'a Diagnostic>) {
         diagnostics.for_each(|diagnostic| {
             diagnostic
                 .as_report(Config::default())

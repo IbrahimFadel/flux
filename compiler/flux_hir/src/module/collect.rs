@@ -34,6 +34,14 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 ItemTreeIdx::Module(mod_id) => {
                     self.collect_child_module(mod_id);
                 }
+                ItemTreeIdx::Struct(struct_id) => {
+                    let s = &self.pkg_builder.item_tree.structs[struct_id];
+                    self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
+                        s.name.inner,
+                        s.visibility.inner,
+                        item_id.clone(),
+                    );
+                }
                 ItemTreeIdx::Trait(trait_id) => {
                     let trt = &self.pkg_builder.item_tree.traits[trait_id];
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
@@ -43,6 +51,15 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                     );
                 }
                 ItemTreeIdx::Apply(_) => {}
+                ItemTreeIdx::Enum(enum_id) => {
+                    let e = &self.pkg_builder.item_tree.enums[enum_id];
+                    self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
+                        e.name.inner,
+                        e.visibility.inner,
+                        item_id.clone(),
+                    );
+                }
+                ItemTreeIdx::Use(use_id) => {}
             }
         }
         self.diagnostics

@@ -29,6 +29,7 @@ pub fn lower_package(
     let mut pkg_builder = PkgBuilder::new(interner, source_cache, config, BasicFileResolver);
     pkg_builder.seed_with_entry(entry_file_id, entry_src);
     let (pkg, diagnostics) = pkg_builder.finish();
+    // println!("{:#?}", pkg);
     if config.debug_item_tree {
         println!("{}", pkg.to_pretty(10, interner, &pkg.tenv));
     }

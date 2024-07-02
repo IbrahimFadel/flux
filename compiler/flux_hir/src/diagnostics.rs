@@ -5,10 +5,10 @@ use itertools::Itertools;
 #[diagnostic]
 pub enum LowerError {
     #[error(
-			location = name,
-			primary = "unknown generic referenced",
-			label at name = "unknown generic `{name}` referenced",
-		)]
+        location = name,
+        primary = "unknown generic referenced",
+        label at name = "unknown generic `{name}` referenced",
+    )]
     UnknownGeneric {
         #[filespanned]
         name: String,

@@ -8,12 +8,14 @@ use crate::{
     body::LowerCtx,
     diagnostics::LowerError,
     hir::{
-        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, FnDecl, GenericParams, ModDecl,
-        Param, ParamList, Path, TraitDecl, Type, TypeBound, TypeBoundList, Visibility,
-        WherePredicate,
+        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariant,
+        EnumDeclVariantList, FnDecl, GenericParams, ModDecl, Param, ParamList, Path, StructDecl,
+        StructFieldDecl, StructFieldDeclList, TraitDecl, Type, TypeBound, TypeBoundList, UseDecl,
+        Visibility, WherePredicate,
     },
     item::{ItemId, ItemTreeIdx},
-    module::ModuleId,
+    module::{ModuleId, ModuleTree},
+    name_res::item::ItemResolver,
 };
 
 use super::ItemTree;
@@ -29,13 +31,19 @@ pub struct Ctx<'a> {
 impl<'a> Ctx<'a> {
     pub(crate) fn new(
         item_tree: &'a mut ItemTree,
+        module_tree: &'a ModuleTree,
         module_id: ModuleId,
         interner: &'static Interner,
         file_id: FileId,
         tenv: &'a mut TEnv,
     ) -> Self {
         Self {
-            body_ctx: LowerCtx::new(interner, tenv),
+            body_ctx: LowerCtx::new(
+                ItemResolver::new(module_tree, interner),
+                interner,
+                tenv,
+                module_id,
+            ),
             diagnostics: vec![],
             item_tree,
             module_id,
@@ -50,12 +58,12 @@ impl<'a> Ctx<'a> {
     fn lower_item(&mut self, item: &ast::Item) -> ItemId {
         let item_id = match item {
             ast::Item::ApplyDecl(apply_decl) => self.lower_apply_decl(apply_decl),
-            ast::Item::EnumDecl(_) => todo!(),
+            ast::Item::EnumDecl(enum_decl) => self.lower_enum_decl(enum_decl),
             ast::Item::FnDecl(fn_decl) => self.lower_fn_decl(fn_decl, None),
             ast::Item::ModDecl(mod_decl) => self.lower_mod_decl(mod_decl),
-            ast::Item::StructDecl(_) => todo!(),
+            ast::Item::StructDecl(struct_decl) => self.lower_struct_decl(struct_decl),
             ast::Item::TraitDecl(trait_decl) => self.lower_trait_decl(trait_decl),
-            ast::Item::UseDecl(_) => todo!(),
+            ast::Item::UseDecl(use_decl) => self.lower_use_decl(use_decl),
         };
 
         self.item_tree.top_level.push(item_id.clone());
@@ -78,6 +86,18 @@ impl<'a> Ctx<'a> {
         let apply = ApplyDecl::new(visibility, generic_params, trt, to_ty, assoc_types, methods);
         let apply_id = self.item_tree.applies.alloc(apply);
         ItemId::new(self.module_id, ItemTreeIdx::Apply(apply_id))
+    }
+
+    fn lower_enum_decl(&mut self, enum_decl: &ast::EnumDecl) -> ItemId {
+        let visibility = self.lower_visibility(enum_decl.visibility());
+        let name = self.body_ctx.lower_name(enum_decl.name());
+        let mut generic_params =
+            self.lower_generic_param_list(enum_decl.generic_param_list(), name.span);
+        self.update_generic_params_with_where_clause(&mut generic_params, enum_decl.where_clause());
+        let variants = self.lower_enum_decl_variants(enum_decl.variants(), &generic_params);
+        let enum_decl = EnumDecl::new(visibility, name, generic_params, variants);
+        let enum_decl_id = self.item_tree.enums.alloc(enum_decl);
+        ItemId::new(self.module_id, ItemTreeIdx::Enum(enum_decl_id))
     }
 
     fn lower_fn_decl(&mut self, function: &ast::FnDecl, this_trait: Option<&Path>) -> ItemId {
@@ -117,6 +137,21 @@ impl<'a> Ctx<'a> {
         ItemId::new(self.module_id, ItemTreeIdx::Module(mod_decl_id))
     }
 
+    fn lower_struct_decl(&mut self, struct_decl: &ast::StructDecl) -> ItemId {
+        let visibility = self.lower_visibility(struct_decl.visibility());
+        let name = self.body_ctx.lower_name(struct_decl.name());
+        let mut generic_params =
+            self.lower_generic_param_list(struct_decl.generic_param_list(), name.span);
+        self.update_generic_params_with_where_clause(
+            &mut generic_params,
+            struct_decl.where_clause(),
+        );
+        let fields = self.lower_struct_field_decl_list(struct_decl.field_list(), &generic_params);
+        let struct_decl = StructDecl::new(visibility, name, generic_params, fields);
+        let struct_decl_id = self.item_tree.structs.alloc(struct_decl);
+        ItemId::new(self.module_id, ItemTreeIdx::Struct(struct_decl_id))
+    }
+
     fn lower_trait_decl(&mut self, trait_decl: &ast::TraitDecl) -> ItemId {
         let visibility = self.lower_visibility(trait_decl.visibility());
         let name = self.body_ctx.lower_name(trait_decl.name());
@@ -139,6 +174,18 @@ impl<'a> Ctx<'a> {
             TraitDecl::new(visibility, name, generic_params, associated_types, methods);
         let trait_id = self.item_tree.traits.alloc(trait_decl);
         ItemId::new(self.module_id, ItemTreeIdx::Trait(trait_id))
+    }
+
+    fn lower_use_decl(&mut self, use_decl: &ast::UseDecl) -> ItemId {
+        let path = self
+            .body_ctx
+            .lower_path(use_decl.path(), &GenericParams::empty());
+        let alias = use_decl
+            .alias()
+            .map(|alias| self.body_ctx.lower_name(Some(alias)));
+        let use_decl = UseDecl::new(path, alias);
+        let use_decl_id = self.item_tree.uses.alloc(use_decl);
+        ItemId::new(self.module_id, ItemTreeIdx::Use(use_decl_id))
     }
 
     fn lower_visibility(&mut self, visibility: Option<ast::Visibility>) -> Spanned<Visibility> {
@@ -401,6 +448,47 @@ impl<'a> Ctx<'a> {
                     })
             })
             .collect()
+    }
+
+    fn lower_struct_field_decl_list(
+        &mut self,
+        field_list: Option<ast::StructDeclFieldList>,
+        generic_params: &GenericParams,
+    ) -> StructFieldDeclList {
+        self.body_ctx.lower_node(
+            field_list,
+            |_, _| StructFieldDeclList::poisoned(),
+            |this, field_list| {
+                StructFieldDeclList::new(
+                    field_list
+                        .fields()
+                        .map(|field| {
+                            let name = this.lower_name(field.name());
+                            let ty = this.lower_type(field.ty(), generic_params);
+                            StructFieldDecl::new(name, ty)
+                        })
+                        .collect(),
+                )
+            },
+        )
+    }
+
+    fn lower_enum_decl_variants(
+        &mut self,
+        variants: impl Iterator<Item = ast::EnumDeclVariant>,
+        generic_params: &GenericParams,
+    ) -> EnumDeclVariantList {
+        EnumDeclVariantList::new(
+            variants
+                .map(|variant| {
+                    let name = self.body_ctx.lower_name(variant.name());
+                    let ty = variant
+                        .ty()
+                        .map(|ty| self.body_ctx.lower_type(Some(ty), generic_params));
+                    EnumDeclVariant::new(name, ty)
+                })
+                .collect(),
+        )
     }
 }
 

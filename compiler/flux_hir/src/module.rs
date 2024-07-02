@@ -2,7 +2,7 @@ use std::ops::Index;
 use std::{collections::HashMap, ops::IndexMut};
 
 use flux_span::Word;
-use la_arena::{Arena, Idx};
+use la_arena::{Arena, Idx, RawIdx};
 
 use crate::item_scope::ItemScope;
 
@@ -14,8 +14,12 @@ pub(crate) type ModuleId = Idx<ModuleData>;
 pub(crate) struct ModuleTree(Arena<ModuleData>);
 
 impl ModuleTree {
+    pub(crate) const PRELUDE_ID: ModuleId = Idx::from_raw(RawIdx::from_u32(0));
+
     pub fn new() -> Self {
-        Self(Arena::new())
+        let mut arena = Arena::with_capacity(1);
+        arena.alloc(ModuleData::prelude());
+        Self(arena)
     }
 
     pub fn alloc(&mut self, module: ModuleData) -> ModuleId {
@@ -52,6 +56,14 @@ impl ModuleData {
     pub(crate) fn new(parent: Option<ModuleId>) -> Self {
         Self {
             parent,
+            children: HashMap::new(),
+            scope: ItemScope::default(),
+        }
+    }
+
+    fn prelude() -> Self {
+        Self {
+            parent: None,
             children: HashMap::new(),
             scope: ItemScope::default(),
         }

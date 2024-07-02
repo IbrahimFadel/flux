@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
-use flux_span::{Spanned, WithSpan, Word};
+use flux_diagnostics::ice;
+use flux_span::{Interner, Spanned, WithSpan, Word};
 use flux_syntax::ast;
 use flux_typesystem as ts;
 use flux_typesystem::{TEnv, TypeId};
+use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
-use ts::ConcreteKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -52,6 +53,83 @@ pub struct ModDecl {
 impl ModDecl {
     pub fn new(visibility: Spanned<Visibility>, name: Spanned<Word>) -> Self {
         Self { visibility, name }
+    }
+}
+
+#[derive(Debug)]
+pub struct StructDecl {
+    pub visibility: Spanned<Visibility>,
+    pub name: Spanned<Word>,
+    pub generic_params: Spanned<GenericParams>,
+    pub fields: StructFieldDeclList,
+}
+
+impl StructDecl {
+    pub fn new(
+        visibility: Spanned<Visibility>,
+        name: Spanned<Word>,
+        generic_params: Spanned<GenericParams>,
+        fields: StructFieldDeclList,
+    ) -> Self {
+        Self {
+            visibility,
+            name,
+            generic_params,
+            fields,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EnumDecl {
+    pub visibility: Spanned<Visibility>,
+    pub name: Spanned<Word>,
+    pub generic_params: Spanned<GenericParams>,
+    pub variants: EnumDeclVariantList,
+}
+
+impl EnumDecl {
+    pub fn new(
+        visibility: Spanned<Visibility>,
+        name: Spanned<Word>,
+        generic_params: Spanned<GenericParams>,
+        variants: EnumDeclVariantList,
+    ) -> Self {
+        Self {
+            visibility,
+            name,
+            generic_params,
+            variants,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EnumDeclVariantList(Vec<EnumDeclVariant>);
+
+impl EnumDeclVariantList {
+    pub fn new(variants: Vec<EnumDeclVariant>) -> Self {
+        Self(variants)
+    }
+
+    pub fn poisoned() -> Self {
+        Self(vec![])
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &EnumDeclVariant> {
+        self.0.iter()
+    }
+}
+
+#[derive(Debug)]
+pub struct EnumDeclVariant {
+    pub name: Spanned<Word>,
+    pub ty: Option<Spanned<TypeId>>,
+}
+
+impl EnumDeclVariant {
+    pub fn new(name: Spanned<Word>, ty: Option<Spanned<TypeId>>) -> Self {
+        Self { name, ty }
     }
 }
 
@@ -112,6 +190,47 @@ impl ApplyDecl {
     }
 }
 
+#[derive(Debug)]
+pub struct UseDecl {
+    pub path: Spanned<Path>,
+    pub alias: Option<Spanned<Word>>,
+}
+
+impl UseDecl {
+    pub fn new(path: Spanned<Path>, alias: Option<Spanned<Word>>) -> Self {
+        Self { path, alias }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructFieldDeclList(Vec<StructFieldDecl>);
+
+impl StructFieldDeclList {
+    pub fn new(fields: Vec<StructFieldDecl>) -> Self {
+        Self(fields)
+    }
+
+    pub fn poisoned() -> Self {
+        Self(vec![])
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &StructFieldDecl> {
+        self.0.iter()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructFieldDecl {
+    pub name: Spanned<Word>,
+    pub ty: Spanned<TypeId>,
+}
+
+impl StructFieldDecl {
+    pub fn new(name: Spanned<Word>, ty: Spanned<TypeId>) -> Self {
+        Self { name, ty }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssociatedTypeDefinition {
     pub name: Spanned<Word>,
@@ -135,6 +254,13 @@ impl GenericParams {
 
     pub const fn invalid_idx(&self) -> Idx<Spanned<Word>> {
         Idx::from_raw(RawIdx::from_u32(Self::INVALID_IDX))
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            types: Arena::new(),
+            where_predicates: vec![],
+        }
     }
 
     /// Combine two sets of generic parameters
@@ -231,6 +357,13 @@ impl Path {
             .find(|(_, name)| name.inner == *self.get(0))
             .is_some();
     }
+
+    pub fn to_string(&self, interner: &'static Interner) -> String {
+        self.segments
+            .iter()
+            .map(|segment| interner.resolve(segment))
+            .join("::")
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -274,17 +407,60 @@ impl ts::Insert<Type> for TEnv {
             Type::Never => self.insert(ts::TypeKind::Never),
             Type::Unknown => self.insert(ts::TypeKind::Unknown),
             Type::ThisPath(this_path) => self.insert(this_path_to_tkind(this_path, None)),
+            // Type::ThisPath(_) => ice("should use `insert_with_trait_ctx` for `Type::ThisPath`"),
         }
     }
+
+    fn insert_with_trait_ctx(
+        &mut self,
+        ty: Type,
+        assoc_types: &mut impl Iterator<Item = (Word, TypeId)>,
+    ) -> TypeId {
+        match ty {
+            Type::ThisPath(this_path) => {
+                let tid = assoc_types
+                    .find_map(|(name, tid)| {
+                        if name == *this_path.path.get(0) {
+                            Some(tid)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        ice("programmer was too lazy to make a real diagnostic!!! shame")
+                    });
+                todo!()
+            }
+            _ => self.insert(ty),
+        }
+    }
+
+    // fn this_path_to_tkind(
+    //     &mut self,
+    //     this_path: &Path,
+    //     this_type: &Spanned<Path>,
+    //     apply: &Apply,
+    //     file_id: FileId,
+    // ) -> TypeKind {
+    //     // let (trt, trait_id) = if let Some(res) = self.get_trait_with_id(this_type) {
+    //     //     res
+    //     // } else {
+    //     //     ice("`This` couldn't be resolved");
+    //     // };
+
+    //     apply
+    //         .assoc_types
+    //         .iter()
+    //         .find(|(name, _)| name.inner == *this_path.nth(0))
+    //         .map(|(_, ty)| self.type_to_tkind(ty, file_id, None))
+    //         .unwrap()
+    // }
 }
 
 fn this_path_to_tkind(this_path: ThisPath, apply_decl: Option<()>) -> ts::TypeKind {
     match apply_decl {
         Some(_) => todo!(),
-        None => ts::TypeKind::Concrete(ConcreteKind::Path(
-            this_path.path.segments,
-            this_path.path.generic_args,
-        )),
+        None => ts::TypeKind::ThisPath(this_path.path.segments),
     }
 }
 
@@ -300,6 +476,14 @@ impl ThisPath {
             path,
             path_to_trait,
         }
+    }
+
+    pub fn resolve_type(&self, interner: &'static Interner) {
+        println!(
+            "{:#?} {:#?}",
+            self.path.to_string(interner),
+            self.path_to_trait.to_string(interner)
+        );
     }
 }
 

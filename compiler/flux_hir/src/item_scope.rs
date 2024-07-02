@@ -10,7 +10,15 @@ pub(crate) struct ItemScope {
 }
 
 impl ItemScope {
+    pub fn builtin() -> Self {
+        Self::default()
+    }
+
     pub fn declare(&mut self, name: Word, visibility: Visibility, item_id: ItemId) {
         self.items.insert(name, (visibility, item_id));
+    }
+
+    pub fn get(&self, name: &Word) -> Option<(Visibility, ItemId)> {
+        self.items.get(name).cloned()
     }
 }

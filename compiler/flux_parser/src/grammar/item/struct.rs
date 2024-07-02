@@ -15,7 +15,11 @@ use crate::{
 pub(super) fn decl(p: &mut Parser, visibility: CompletedMarker) {
     let m = visibility.precede(p);
     p.bump(TokenKind::Struct);
-    name(p, TokenSet::new(&[TokenKind::LBrace]), "struct declaration");
+    name(
+        p,
+        TokenSet::new(&[TokenKind::LBrace, TokenKind::CmpLt]),
+        "struct declaration",
+    );
     opt_generic_param_list(p);
     opt_where_clause(p, TokenSet::new(&[TokenKind::LBrace]));
     if !p.eat(TokenKind::LBrace) {

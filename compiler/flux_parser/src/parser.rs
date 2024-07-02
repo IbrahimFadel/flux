@@ -133,6 +133,10 @@ impl<'a, 'src> Parser<'a, 'src> {
 
     pub(crate) fn recover_for(&mut self, tokens: TokenSet) -> TokenKind {
         loop {
+            if self.at_end() {
+                break TokenKind::EOF;
+            }
+
             let t = self.peek();
 
             if tokens.contains(t) {

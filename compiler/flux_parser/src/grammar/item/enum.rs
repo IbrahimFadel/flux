@@ -15,15 +15,18 @@ use crate::{
 pub(crate) fn decl(p: &mut Parser, visibility: CompletedMarker) {
     let m = visibility.precede(p);
     p.bump(TokenKind::Enum);
-    name(p, TokenSet::new(&[TokenKind::LBrace]), "enum declaration");
+    name(
+        p,
+        TokenSet::new(&[TokenKind::LBrace, TokenKind::CmpLt]),
+        "enum declaration",
+    );
     opt_generic_param_list(p);
     opt_where_clause(p, TokenSet::new(&[TokenKind::LBrace]));
     if !p.eat(TokenKind::LBrace) {
         p.error("`{` in struct declaration");
     }
     while p.loop_safe_not_at(TokenKind::RBrace) {
-        enum_decl_variant(p);
-        if !p.eat(TokenKind::Comma) {
+        if !enum_decl_variant(p) {
             break;
         }
     }
@@ -31,16 +34,22 @@ pub(crate) fn decl(p: &mut Parser, visibility: CompletedMarker) {
     m.complete(p, SyntaxKind::EnumDecl);
 }
 
-fn enum_decl_variant(p: &mut Parser) {
+fn enum_decl_variant(p: &mut Parser) -> bool {
     let m = p.start();
     name(
         p,
         TokenSet::new(&[TokenKind::Arrow, TokenKind::Comma]),
         "enum variant declaration",
     );
-    if !p.at(TokenKind::Comma) {
+    if !p.at_set(TokenSet::new(&[TokenKind::Arrow, TokenKind::RBrace])) {
+        p.expect(TokenKind::Comma, "enum variant declaration");
+        m.complete(p, SyntaxKind::EnumDeclVariant);
+        return true;
+    } else if !p.at_set(TokenSet::new(&[TokenKind::Comma, TokenKind::RBrace])) {
         p.expect(TokenKind::Arrow, "enum variant declaration");
         type_(p, "enum variant declaration");
     }
     m.complete(p, SyntaxKind::EnumDeclVariant);
+
+    return p.eat(TokenKind::Comma);
 }

@@ -115,6 +115,8 @@ pub enum DiagnosticCode {
     UnknownGeneric,
     CouldNotResolveModDecl,
     DuplicateGenericParams,
+
+    CannotResolveEmptyPath,
 }
 
 impl std::fmt::Display for DiagnosticCode {

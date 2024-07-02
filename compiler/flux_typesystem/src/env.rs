@@ -1,9 +1,18 @@
 use flux_diagnostics::ice;
+use flux_span::Word;
 
 use crate::r#type::{TypeId, TypeKind};
 
 pub trait Insert<T> {
     fn insert(&mut self, ty: T) -> TypeId;
+
+    fn insert_with_trait_ctx(
+        &mut self,
+        ty: T,
+        _assoc_types: &mut impl Iterator<Item = (Word, TypeId)>,
+    ) -> TypeId {
+        self.insert(ty)
+    }
 }
 
 impl Insert<TypeKind> for TEnv {

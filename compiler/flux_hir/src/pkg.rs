@@ -12,6 +12,7 @@ use crate::{
 
 mod prettyprint;
 
+#[derive(Debug)]
 pub struct Package {
     pub(crate) item_tree: ItemTree,
     pub(crate) module_tree: ModuleTree,
@@ -94,6 +95,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             root,
             file_id,
             &mut self.item_tree,
+            &self.module_tree,
             module_id,
             self.interner,
             &mut self.tenv,

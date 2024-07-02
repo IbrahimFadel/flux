@@ -3,6 +3,9 @@ use flux_span::{FileId, FileSpanned};
 
 use crate::diagnostics::LowerError;
 
+mod diagnostics;
+pub(crate) mod item;
+
 const MOD_DEPTH_LIMIT: u32 = 16;
 
 #[derive(Debug)]

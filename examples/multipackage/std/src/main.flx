@@ -1,1 +1,14 @@
-mod math;
+// mod math;
+
+use math::Add;
+
+struct Foo {
+	foo u32,
+	bar s32,
+}
+
+enum Bar {
+	X -> s32,
+	Y,
+	Z -> u8
+}

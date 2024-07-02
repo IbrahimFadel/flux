@@ -5,6 +5,8 @@ use flux_typesystem::{Insert, TEnv, TypeId};
 
 use crate::{
     hir::{GenericParams, Path, Type},
+    module::ModuleId,
+    name_res::item::ItemResolver,
     POISONED_NAME,
 };
 
@@ -12,17 +14,26 @@ mod r#type;
 
 pub(crate) struct LowerCtx<'a> {
     // diagnostics: Vec<Diagnostic>,
+    item_resolver: ItemResolver<'a>,
     pub interner: &'static Interner,
     // Every module will modify a type environment global to the package, stored in the pkg builder
     pub tenv: &'a mut TEnv,
+    module_id: ModuleId,
 }
 
 impl<'a> LowerCtx<'a> {
-    pub(crate) fn new(interner: &'static Interner, tenv: &'a mut TEnv) -> Self {
+    pub(crate) fn new(
+        item_resolver: ItemResolver<'a>,
+        interner: &'static Interner,
+        tenv: &'a mut TEnv,
+        module_id: ModuleId,
+    ) -> Self {
         Self {
             // diagnostics: vec![],
+            item_resolver,
             interner,
             tenv,
+            module_id,
         }
     }
 
@@ -79,11 +90,9 @@ impl<'a> LowerCtx<'a> {
             |this, ty| match ty {
                 ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
                 ast::Type::ThisPathType(_) => {
-                    ice("should not encounter this path outside of apply method")
+                    ice("should not encounter this path outside of trait method")
                 }
-                ast::Type::TupleType(_) => todo!(),
-                ast::Type::ArrayType(_) => todo!(),
-                ast::Type::PtrType(_) => todo!(),
+                _ => ice("unimplemented"),
             },
         );
         self.tenv.insert(ty.inner).at(ty.span)
@@ -103,12 +112,22 @@ impl<'a> LowerCtx<'a> {
                 ast::Type::ThisPathType(this_path_type) => {
                     this.lower_this_path_type(this_path_type, generic_params, this_trait)
                 }
-                ast::Type::TupleType(_) => todo!(),
-                ast::Type::ArrayType(_) => todo!(),
-                ast::Type::PtrType(_) => todo!(),
+                _ => ice("unimplemented"),
             },
         );
-        self.tenv.insert(ty.inner).at(ty.span)
+        ty.map(|ty| self.tenv.insert(ty))
+        // ty.map(|ty| match ty {
+        //     Type::ThisPath(this_path) => {
+        //         // this_path.resolve_type(self.interner);
+        //         // let trt = self
+        //         //     .item_resolver
+        //         //     .resolve_path(&this_path.path_to_trait, self.module_id);
+        //         // let assoc_types: &mut _ = todo!();
+        //         // self.tenv.insert_with_trait_ctx(ty, assoc_types)
+        //         todo!()
+        //     }
+        //     _ => self.tenv.insert(ty),
+        // })
     }
 
     pub(crate) fn lower_name(&mut self, name: Option<ast::Name>) -> Spanned<Word> {

@@ -1,7 +1,7 @@
 use la_arena::Idx;
 
 use crate::{
-    hir::{ApplyDecl, FnDecl, ModDecl, TraitDecl},
+    hir::{ApplyDecl, EnumDecl, FnDecl, ModDecl, StructDecl, TraitDecl, UseDecl},
     module::ModuleId,
 };
 
@@ -20,9 +20,12 @@ impl ItemId {
 #[derive(Debug, Clone)]
 pub enum ItemTreeIdx {
     Apply(Idx<ApplyDecl>),
+    Enum(Idx<EnumDecl>),
     Function(Idx<FnDecl>),
     Module(Idx<ModDecl>),
+    Struct(Idx<StructDecl>),
     Trait(Idx<TraitDecl>),
+    Use(Idx<UseDecl>),
 }
 
 impl TryFrom<ItemTreeIdx> for Idx<FnDecl> {

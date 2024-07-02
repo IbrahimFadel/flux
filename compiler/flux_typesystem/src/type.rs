@@ -29,7 +29,7 @@ impl Display for TypeId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
-    AssocPath(Word),
+    ThisPath(Vec<Word>),
     Concrete(ConcreteKind),
     Int(Option<TypeId>),
     Float(Option<TypeId>),
@@ -54,7 +54,7 @@ impl Generic {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::AssocPath(_) => write!(f, "todo"),
+            Self::ThisPath(_) => write!(f, "todo"),
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
             Self::Generic(Generic { name, .. }) => write!(f, "{name:?}"),

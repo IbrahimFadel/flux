@@ -87,7 +87,9 @@ pub fn build_package(root_dir: &Path, config: &flux_hir::cfg::Config) -> Vec<IOE
 
     let entry_file_id = source_cache.add_input_file(&entry_path, content.clone());
 
-    lower_package(entry_file_id, &content, interner, &mut source_cache, config);
+    let (_pkg, diagnostics) =
+        lower_package(entry_file_id, &content, interner, &mut source_cache, config);
+    source_cache.report_diagnostics(diagnostics.iter());
 
     vec![]
 }
