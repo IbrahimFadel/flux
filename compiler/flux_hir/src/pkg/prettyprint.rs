@@ -5,6 +5,7 @@ use colored::Colorize;
 use cstree::interning::TokenKey;
 use flux_span::Interner;
 use flux_typesystem::{ConcreteKind, TEnv, TypeId};
+use la_arena::ArenaMap;
 use pretty::RcDoc;
 
 use crate::{
@@ -23,18 +24,27 @@ use super::Package;
 const INDENT_SIZE: isize = 2;
 
 impl Package {
-    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+    pub(crate) fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        tenvs: &'a ArenaMap<ModuleId, TEnv>,
+    ) -> RcDoc {
         RcDoc::text("+-------------+\n| Module Tree |\n+-------------+\n")
             .append(self.module_tree.to_doc(interner))
             .append(RcDoc::text(
                 "+-------------+\n|  Item Tree  |\n+-------------+\n",
             ))
-            .append(self.item_tree.to_doc(&self.module_tree, interner, tenv))
+            .append(self.item_tree.to_doc(&self.module_tree, interner, tenvs))
     }
 
-    pub fn to_pretty(&self, width: usize, interner: &'static Interner, tenv: &TEnv) -> String {
+    pub(crate) fn to_pretty(
+        &self,
+        width: usize,
+        interner: &'static Interner,
+        tenvs: &ArenaMap<ModuleId, TEnv>,
+    ) -> String {
         let mut w = Vec::new();
-        self.to_doc(interner, tenv).render(width, &mut w).unwrap();
+        self.to_doc(interner, tenvs).render(width, &mut w).unwrap();
         String::from_utf8(w).unwrap()
     }
 }
@@ -44,7 +54,7 @@ impl ItemTree {
         &'a self,
         module_tree: &'a ModuleTree,
         interner: &'static Interner,
-        tenv: &'a TEnv,
+        tenvs: &'a ArenaMap<ModuleId, TEnv>,
     ) -> RcDoc {
         let (module_id, root) = module_tree
             .get()
@@ -54,7 +64,15 @@ impl ItemTree {
             })
             .expect("missing root module");
         let name = interner.get_or_intern_static("main");
-        root.to_doc(&[name], &module_id, self, module_tree, interner, tenv)
+        root.to_doc(
+            &[name],
+            &module_id,
+            self,
+            module_tree,
+            interner,
+            &tenvs[module_id],
+            tenvs,
+        )
     }
 }
 
@@ -544,6 +562,7 @@ impl ModuleData {
         module_tree: &'a ModuleTree,
         interner: &'static Interner,
         tenv: &'a TEnv,
+        tenvs: &'a ArenaMap<ModuleId, TEnv>,
     ) -> RcDoc {
         let name = RcDoc::intersperse(
             path.iter()
@@ -589,7 +608,15 @@ impl ModuleData {
         let children = RcDoc::intersperse(
             self.children.iter().map(|(name, mod_id)| {
                 let path = &[path, &[*name]].concat();
-                module_tree[*mod_id].to_doc(path, mod_id, item_tree, module_tree, interner, tenv)
+                module_tree[*mod_id].to_doc(
+                    path,
+                    mod_id,
+                    item_tree,
+                    module_tree,
+                    interner,
+                    &tenvs[*mod_id],
+                    tenvs,
+                )
             }),
             RcDoc::hardline(),
         );

@@ -1,13 +1,14 @@
 use flux_diagnostics::{Diagnostic, SourceCache};
 use flux_span::{FileId, Interner};
 use flux_typesystem::TEnv;
+use la_arena::ArenaMap;
 
 use crate::{
     cfg::Config,
     item::ItemId,
     item_tree::{lower_cst_to_item_tree, ItemTree},
     module::{collect::ModCollector, ModuleData, ModuleId, ModuleTree},
-    name_res::{FileResolver, ModDir},
+    name_res::{import::Import, FileResolver, ModDir},
 };
 
 mod prettyprint;
@@ -16,7 +17,7 @@ mod prettyprint;
 pub struct Package {
     pub(crate) item_tree: ItemTree,
     pub(crate) module_tree: ModuleTree,
-    pub tenv: TEnv,
+    pub(crate) tenvs: ArenaMap<ModuleId, TEnv>,
 }
 
 pub(crate) struct PkgBuilder<'a, R: FileResolver> {
@@ -25,9 +26,10 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
     pub interner: &'static Interner,
     pub source_cache: &'a mut SourceCache,
     pub diagnostics: Vec<Diagnostic>,
-    tenv: TEnv,
+    tenvs: ArenaMap<ModuleId, TEnv>,
     config: &'a Config,
     pub resolver: R,
+    unresolved_imports: Vec<Import>,
 }
 
 impl<'a, R: FileResolver> PkgBuilder<'a, R> {
@@ -41,11 +43,12 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             item_tree: ItemTree::new(),
             module_tree: ModuleTree::new(),
             interner,
-            tenv: TEnv::default(),
+            tenvs: ArenaMap::new(),
             source_cache,
             config,
             resolver,
             diagnostics: vec![],
+            unresolved_imports: vec![],
         }
     }
 
@@ -54,7 +57,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             Package {
                 item_tree: self.item_tree,
                 module_tree: self.module_tree,
-                tenv: self.tenv,
+                tenvs: self.tenvs,
             },
             self.diagnostics,
         )
@@ -79,26 +82,27 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         src: &str,
         parent: Option<ModuleId>,
     ) -> (ModuleId, Vec<ItemId>) {
-        let cst = flux_parser::parse(src, file_id, self.interner);
+        let mut cst = flux_parser::parse(src, file_id, self.interner);
         let root = cst.syntax();
 
         if self.config.debug_cst {
             println!("{}", root.debug(self.interner, true));
         }
 
-        let mut parse_diagnostics = cst.diagnostics;
-        self.diagnostics.append(&mut parse_diagnostics);
+        self.diagnostics.append(&mut cst.diagnostics);
 
         let module_data = ModuleData::new(parent);
         let module_id = self.module_tree.alloc(module_data);
+        self.tenvs.insert(module_id, TEnv::default());
+
         let items = lower_cst_to_item_tree(
             root,
             file_id,
             &mut self.item_tree,
-            &self.module_tree,
+            &mut self.module_tree,
             module_id,
             self.interner,
-            &mut self.tenv,
+            &mut self.tenvs[module_id],
         );
 
         (module_id, items)

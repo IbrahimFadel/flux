@@ -31,18 +31,18 @@ pub struct Ctx<'a> {
 impl<'a> Ctx<'a> {
     pub(crate) fn new(
         item_tree: &'a mut ItemTree,
-        module_tree: &'a ModuleTree,
+        module_tree: &'a mut ModuleTree,
         module_id: ModuleId,
+        tenv: &'a mut TEnv,
         interner: &'static Interner,
         file_id: FileId,
-        tenv: &'a mut TEnv,
     ) -> Self {
         Self {
             body_ctx: LowerCtx::new(
                 ItemResolver::new(module_tree, interner),
                 interner,
+                &module_tree[module_id],
                 tenv,
-                module_id,
             ),
             diagnostics: vec![],
             item_tree,

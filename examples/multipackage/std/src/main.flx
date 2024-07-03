@@ -1,4 +1,4 @@
-// mod math;
+mod math;
 
 use math::Add;
 
@@ -7,8 +7,10 @@ struct Foo {
 	bar s32,
 }
 
-enum Bar {
+enum Bar<T>
+	where T is Foo
+{
 	X -> s32,
 	Y,
-	Z -> u8
+	Z -> T
 }

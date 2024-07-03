@@ -1,11 +1,11 @@
-use flux_diagnostics::ice;
+use flux_diagnostics::{ice, Diagnostic};
 use flux_span::{Interner, Spanned, ToSpan, WithSpan, Word};
 use flux_syntax::ast::{self, AstNode};
 use flux_typesystem::{Insert, TEnv, TypeId};
 
 use crate::{
     hir::{GenericParams, Path, Type},
-    module::ModuleId,
+    module::ModuleData,
     name_res::item::ItemResolver,
     POISONED_NAME,
 };
@@ -16,25 +16,29 @@ pub(crate) struct LowerCtx<'a> {
     // diagnostics: Vec<Diagnostic>,
     item_resolver: ItemResolver<'a>,
     pub interner: &'static Interner,
-    // Every module will modify a type environment global to the package, stored in the pkg builder
     pub tenv: &'a mut TEnv,
-    module_id: ModuleId,
+    pub(crate) module_data: &'a ModuleData, // module_tree: Option<&'a ModuleTree>,
 }
 
 impl<'a> LowerCtx<'a> {
     pub(crate) fn new(
         item_resolver: ItemResolver<'a>,
         interner: &'static Interner,
+        module_data: &'a ModuleData,
         tenv: &'a mut TEnv,
-        module_id: ModuleId,
     ) -> Self {
         Self {
             // diagnostics: vec![],
             item_resolver,
             interner,
+            module_data,
             tenv,
-            module_id,
+            // module_tree,
         }
+    }
+
+    pub(crate) fn lower_module_bodies(&mut self) -> Vec<Diagnostic> {
+        vec![]
     }
 
     pub fn lower_node<N, T, P, F>(
