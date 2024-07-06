@@ -40,6 +40,10 @@ impl Marker {
 
         CompletedMarker { pos: self.pos }
     }
+
+    pub(crate) fn discard(mut self) {
+        self.completed = true;
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -5,7 +5,7 @@ use flux_span::Word;
 use crate::{hir::Visibility, item::ItemId};
 
 #[derive(Debug, Default)]
-pub(crate) struct ItemScope {
+pub struct ItemScope {
     pub items: HashMap<Word, (Visibility, ItemId)>,
 }
 

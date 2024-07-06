@@ -8,6 +8,7 @@ use crate::{diagnostics::DriverError, ExitStatus, INTERNER};
 use flux_cfg::{Config, CFG_FILE_NAME};
 use flux_diagnostics::{ice, IOError, SourceCache};
 use flux_hir::{lower_package, lower_package_bodies};
+use la_arena::ArenaMap;
 use lasso::ThreadedRodeo;
 
 #[derive(clap::Args, Debug)]
@@ -87,10 +88,18 @@ pub fn build_package(root_dir: &Path, config: &flux_hir::cfg::Config) -> Vec<IOE
 
     let entry_file_id = source_cache.add_input_file(&entry_path, content.clone());
 
-    let (mut pkg, diagnostics) =
-        lower_package(entry_file_id, &content, interner, &mut source_cache, config);
+    let mut module_file_map = ArenaMap::new();
+
+    let (mut pkg, diagnostics) = lower_package(
+        entry_file_id,
+        &content,
+        interner,
+        &mut source_cache,
+        &mut module_file_map,
+        config,
+    );
     source_cache.report_diagnostics(diagnostics.iter());
-    let diagnostics = lower_package_bodies(&mut pkg, interner);
+    let diagnostics = lower_package_bodies(&mut pkg, &module_file_map, interner);
     source_cache.report_diagnostics(diagnostics.iter());
 
     vec![]

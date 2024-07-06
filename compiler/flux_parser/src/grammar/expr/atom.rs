@@ -95,6 +95,7 @@ pub(crate) fn block_expr(p: &mut Parser) -> CompletedMarker {
 
 fn path_or_complex_type_expr(p: &mut Parser, restrictions: ExprRestrictions) -> CompletedMarker {
     let m = p.start();
+    let path_marker = p.start();
     p.bump(TokenKind::Ident);
     while p.at(TokenKind::DoubleColon) {
         p.bump(TokenKind::DoubleColon);
@@ -107,8 +108,10 @@ fn path_or_complex_type_expr(p: &mut Parser, restrictions: ExprRestrictions) -> 
         let path = m.complete(p, SyntaxKind::Path);
         let m = path.precede(p);
         struct_expr_field_list(p);
+        path_marker.discard();
         m.complete(p, SyntaxKind::StructExpr)
     } else {
+        path_marker.complete(p, SyntaxKind::Path);
         m.complete(p, SyntaxKind::PathExpr)
     }
 }

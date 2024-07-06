@@ -24,7 +24,6 @@ apply Add<u64> to u64 {
     fn add_unchecked(other u64) -> This::Output => this + other
 }
 
-/*
 
 apply Add<u32> to u32 {
     type Output = s32;
@@ -67,4 +66,3 @@ apply Add<s8> to s8 {
     fn add(other s8) -> This::Output => this + other
     fn add_unchecked(other s8) -> This::Output => this + other
 }
-*/

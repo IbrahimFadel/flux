@@ -37,14 +37,11 @@ impl Package {
             .append(self.item_tree.to_doc(&self.module_tree, interner, tenvs))
     }
 
-    pub(crate) fn to_pretty(
-        &self,
-        width: usize,
-        interner: &'static Interner,
-        tenvs: &ArenaMap<ModuleId, TEnv>,
-    ) -> String {
+    pub(crate) fn to_pretty(&self, width: usize, interner: &'static Interner) -> String {
         let mut w = Vec::new();
-        self.to_doc(interner, tenvs).render(width, &mut w).unwrap();
+        self.to_doc(interner, &self.tenvs)
+            .render(width, &mut w)
+            .unwrap();
         String::from_utf8(w).unwrap()
     }
 }
@@ -448,8 +445,8 @@ impl UseDecl {
 
 fn type_id_to_doc<'a>(tid: &TypeId, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc<'a> {
     use flux_typesystem::TypeKind::*;
-    match tenv.get(tid) {
-        ThisPath(this_path) => RcDoc::text("This".red().to_string())
+    match &tenv.get(tid).inner.inner {
+        ThisPath(this_path, _) => RcDoc::text("This".red().to_string())
             .append(RcDoc::text("::".black().to_string()))
             .append(RcDoc::intersperse(
                 this_path
@@ -457,7 +454,7 @@ fn type_id_to_doc<'a>(tid: &TypeId, interner: &'static Interner, tenv: &'a TEnv)
                     .map(|segment| interner.resolve(segment).yellow().to_string()),
                 RcDoc::text("::".black().to_string()),
             )),
-        Concrete(concrete) => concrete_tkind_to_doc(concrete, interner, tenv),
+        Concrete(concrete) => concrete_tkind_to_doc(&concrete, interner, tenv),
         Int(_) => todo!(),
         Float(_) => todo!(),
         Ref(_) => todo!(),
@@ -481,26 +478,26 @@ fn concrete_tkind_to_doc<'a>(
             .append(RcDoc::text(n.to_string()))
             .append("]"),
         Ptr(tid) => RcDoc::text("*").append(type_id_to_doc(tid, interner, tenv)),
-        Path(segments, generic_args) => {
-            let path = RcDoc::intersperse(
-                segments
+        Path(path) => {
+            let path_segments = RcDoc::intersperse(
+                path.segments
                     .iter()
                     .map(|key| RcDoc::text(interner.resolve(key).yellow().to_string())),
                 RcDoc::text("::".blue().to_string()),
             );
-            let generics = if generic_args.is_empty() {
+            let generics = if path.generic_args.is_empty() {
                 RcDoc::nil()
             } else {
                 RcDoc::text("<")
                     .append(RcDoc::intersperse(
-                        generic_args
+                        path.generic_args
                             .iter()
                             .map(|tid| type_id_to_doc(tid, interner, tenv)),
                         RcDoc::text(", "),
                     ))
                     .append(RcDoc::text(">"))
             };
-            path.append(generics)
+            path_segments.append(generics)
         }
         Tuple(types) => RcDoc::text("(".bright_blue().to_string())
             .append(RcDoc::intersperse(

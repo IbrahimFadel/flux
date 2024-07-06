@@ -84,6 +84,13 @@ impl<T> InFile<Spanned<T>> {
         InFile::new(self.span, self.file_id)
     }
 
+    pub fn map_inner<F, B>(self, f: F) -> InFile<Spanned<B>>
+    where
+        F: FnOnce(T) -> B,
+    {
+        InFile::new(self.inner.map(|v| f(v)), self.file_id)
+    }
+
     /// Maps the inner value of an `InFile<Spanned<T>` passing the values to the closure by reference
     ///
     /// `InFile<Spanned<A>>` -> `InFile<Spanned<B>>`

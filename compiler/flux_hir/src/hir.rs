@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
 use flux_diagnostics::ice;
-use flux_span::{Interner, Spanned, WithSpan, Word};
+use flux_span::{FileSpanned, Interner, Spanned, WithSpan, Word};
 use flux_syntax::ast;
 use flux_typesystem as ts;
 use flux_typesystem::{TEnv, TypeId};
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
+use ts::{ApplicationId, TypeKind, Typed, WithType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -364,9 +365,13 @@ impl Path {
             .map(|segment| interner.resolve(segment))
             .join("::")
     }
+
+    pub fn len(&self) -> usize {
+        self.segments.len()
+    }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub enum Type {
     Array(ArrayType),
     Generic(Generic),
@@ -384,106 +389,103 @@ impl Type {
     }
 }
 
+#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TypeInfo {
+    Trait,
+    Apply(ApplicationId),
+    None,
+}
+
 impl ts::Insert<Type> for TEnv {
-    fn insert(&mut self, ty: Type) -> TypeId {
-        match ty {
+    fn insert(&mut self, ty: FileSpanned<Type>) -> TypeId {
+        let tkind = ty.map_inner(|ty| match ty {
             Type::Array(_) => todo!(),
-            Type::Generic(generic) => self.insert(ts::TypeKind::Generic(ts::Generic::new(
+            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
                 generic.name.inner,
                 generic
                     .restrictions
                     .iter()
                     .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
                     .collect(),
-            ))),
-            Type::Path(path) => self.insert(ts::TypeKind::Concrete(ts::ConcreteKind::Path(
+            )),
+            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
                 path.segments,
                 path.generic_args,
             ))),
-            Type::Ptr(to) => self.insert(ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to))),
-            Type::Tuple(types) => {
-                self.insert(ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)))
+            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
+            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
+            Type::Never => ts::TypeKind::Never,
+            Type::Unknown => ts::TypeKind::Unknown,
+            // Type::ThisPath(this_path) => this_path_to_tkind(this_path, None),
+            Type::ThisPath(_) => {
+                ice("should only insert `Type::ThisPath` to `TEnv` with `insert_in_apply`")
             }
-            Type::Never => self.insert(ts::TypeKind::Never),
-            Type::Unknown => self.insert(ts::TypeKind::Unknown),
-            Type::ThisPath(this_path) => self.insert(this_path_to_tkind(this_path, None)),
-            // Type::ThisPath(_) => ice("should use `insert_with_trait_ctx` for `Type::ThisPath`"),
-        }
+        });
+        self.insert(tkind)
     }
 
-    fn insert_with_trait_ctx(
-        &mut self,
-        ty: Type,
-        assoc_types: &mut impl Iterator<Item = (Word, TypeId)>,
-    ) -> TypeId {
-        match ty {
-            Type::ThisPath(this_path) => {
-                let tid = assoc_types
-                    .find_map(|(name, tid)| {
-                        if name == *this_path.path.get(0) {
-                            Some(tid)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        ice("programmer was too lazy to make a real diagnostic!!! shame")
-                    });
-                todo!()
-            }
-            _ => self.insert(ty),
-        }
+    fn insert_in_apply(&mut self, ty: FileSpanned<Type>, aid: ApplicationId) -> TypeId {
+        let tkind = ty.map_inner(|ty| match ty {
+            Type::Array(_) => todo!(),
+            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
+                generic.name.inner,
+                generic
+                    .restrictions
+                    .iter()
+                    .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
+                    .collect(),
+            )),
+            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
+                path.segments,
+                path.generic_args,
+            ))),
+            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
+            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
+            Type::Never => ts::TypeKind::Never,
+            Type::Unknown => ts::TypeKind::Unknown,
+            Type::ThisPath(this_path) => ts::TypeKind::ThisPath(this_path.path.segments, Some(aid)),
+        });
+        self.insert_in_apply(tkind, aid)
     }
 
-    // fn this_path_to_tkind(
-    //     &mut self,
-    //     this_path: &Path,
-    //     this_type: &Spanned<Path>,
-    //     apply: &Apply,
-    //     file_id: FileId,
-    // ) -> TypeKind {
-    //     // let (trt, trait_id) = if let Some(res) = self.get_trait_with_id(this_type) {
-    //     //     res
-    //     // } else {
-    //     //     ice("`This` couldn't be resolved");
-    //     // };
-
-    //     apply
-    //         .assoc_types
-    //         .iter()
-    //         .find(|(name, _)| name.inner == *this_path.nth(0))
-    //         .map(|(_, ty)| self.type_to_tkind(ty, file_id, None))
-    //         .unwrap()
-    // }
-}
-
-fn this_path_to_tkind(this_path: ThisPath, apply_decl: Option<()>) -> ts::TypeKind {
-    match apply_decl {
-        Some(_) => todo!(),
-        None => ts::TypeKind::ThisPath(this_path.path.segments),
+    fn insert_in_trait(&mut self, ty: FileSpanned<Type>, trid: ()) -> TypeId {
+        let tkind = ty.map_inner(|ty| match ty {
+            Type::Array(_) => todo!(),
+            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
+                generic.name.inner,
+                generic
+                    .restrictions
+                    .iter()
+                    .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
+                    .collect(),
+            )),
+            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
+                path.segments,
+                path.generic_args,
+            ))),
+            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
+            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
+            Type::Never => ts::TypeKind::Never,
+            Type::Unknown => ts::TypeKind::Unknown,
+            Type::ThisPath(this_path) => ts::TypeKind::ThisPath(this_path.path.segments, None),
+        });
+        self.insert_in_trait(tkind, trid)
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ThisPath {
     pub path: Path,
-    pub path_to_trait: Path,
+    pub tinfo: TypeInfo,
 }
 
 impl ThisPath {
-    pub fn new(path: Path, path_to_trait: Path) -> Self {
-        Self {
-            path,
-            path_to_trait,
-        }
+    pub fn new(path: Path, tinfo: TypeInfo) -> Self {
+        Self { path, tinfo }
     }
 
     pub fn resolve_type(&self, interner: &'static Interner) {
-        println!(
-            "{:#?} {:#?}",
-            self.path.to_string(interner),
-            self.path_to_trait.to_string(interner)
-        );
+        println!("{:#?} {:#?}", self.path.to_string(interner), self.tinfo);
     }
 }
 
@@ -583,30 +585,98 @@ impl AssociatedTypeDecl {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct Typed<T> {
-    tid: TypeId,
-    inner: T,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
     // Block(Block),
-    // BinOp(BinOp),
+    BinOp(BinOp),
     // Enum(EnumExpr),
     // Call(Call),
     // Float(f64),
-    // Int(u64),
-    // Tuple(Vec<ExprIdx>),
+    Int(u64),
+    Tuple(Vec<ExprIdx>),
     // Path(Path),
     // Let(Let),
     // Struct(StructExpr),
     // MemberAccess(MemberAccess),
-    // If(If),
+    If(If),
     // Intrinsic(Intrinsic),
     // Str(Str),
-    // Poisoned,
+    Poisoned,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct ExprIdx(Idx<Spanned<Expr>>);
+pub struct ExprIdx(Idx<Expr>);
+
+impl ExprIdx {
+    pub fn new(idx: Idx<Expr>) -> Self {
+        Self(idx)
+    }
+
+    pub fn idx(&self) -> Idx<Expr> {
+        self.0
+    }
+}
+
+impl WithType for ExprIdx {}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BinOp {
+    lhs: ExprIdx,
+    rhs: ExprIdx,
+    op: Spanned<Op>,
+}
+
+impl BinOp {
+    pub fn new(lhs: ExprIdx, rhs: ExprIdx, op: Spanned<Op>) -> Self {
+        Self { lhs, rhs, op }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum Op {
+    Eq,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    CmpAnd,
+    CmpEq,
+    CmpGt,
+    CmpGte,
+    CmpLt,
+    CmpLte,
+    CmpNeq,
+    CmpOr,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct If {
+    num_blocks: usize,
+    exprs: Vec<Typed<ExprIdx>>,
+}
+
+impl If {
+    pub fn new(
+        condition: Typed<ExprIdx>,
+        then: Typed<ExprIdx>,
+        else_ifs: impl Iterator<Item = (Typed<ExprIdx>, Typed<ExprIdx>)>,
+        r#else: Option<Typed<ExprIdx>>,
+    ) -> Self {
+        let (mut conds, mut blocks): (Vec<_>, Vec<_>) = else_ifs.unzip();
+        let else_number = r#else.as_ref().map_or(0, |_| 1);
+
+        let mut exprs = Vec::with_capacity(2 + conds.len() + blocks.len() + else_number);
+        exprs.push(condition);
+        exprs.push(then);
+        exprs.append(&mut conds);
+        exprs.append(&mut blocks);
+        if let Some(block) = r#else {
+            exprs.push(block);
+        }
+
+        Self {
+            num_blocks: 1 + blocks.len() + else_number,
+            exprs,
+        }
+    }
+}

@@ -67,10 +67,11 @@ getters! {
         v -> tok(FloatLit);
     }
     PathExpr {
-        segments -> toks(Ident);
+        path -> node(Path);
     }
     BlockExpr {
         stmts -> nodes(Stmt);
+        rbrace -> tok(RBrace);
     }
     BinExpr {
         lhs -> node(Expr);

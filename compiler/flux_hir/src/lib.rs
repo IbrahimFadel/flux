@@ -1,7 +1,8 @@
 use cfg::Config;
 use flux_diagnostics::{Diagnostic, SourceCache};
 use flux_span::{FileId, Interner};
-use module::ModuleTree;
+use la_arena::ArenaMap;
+use module::{ModuleId, ModuleTree};
 use name_res::{item::ItemResolver, BasicFileResolver};
 use pkg::{Package, PkgBuilder};
 
@@ -9,6 +10,7 @@ mod body;
 pub mod cfg;
 mod diagnostics;
 mod hir;
+mod intrinsics;
 mod item;
 mod item_scope;
 pub(crate) mod item_tree;
@@ -25,18 +27,29 @@ pub fn lower_package(
     entry_src: &str,
     interner: &'static Interner,
     source_cache: &mut SourceCache,
+    module_file_map: &mut ArenaMap<ModuleId, FileId>,
     config: &Config,
 ) -> (Package, Vec<Diagnostic>) {
-    let mut pkg_builder = PkgBuilder::new(interner, source_cache, config, BasicFileResolver);
+    let mut pkg_builder: PkgBuilder<'_, BasicFileResolver> = PkgBuilder::new(
+        interner,
+        source_cache,
+        config,
+        BasicFileResolver,
+        module_file_map,
+    );
     pkg_builder.seed_with_entry(entry_file_id, entry_src);
     let (pkg, diagnostics) = pkg_builder.finish();
     if config.debug_item_tree {
-        println!("{}", pkg.to_pretty(10, interner, &pkg.tenvs));
+        println!("{}", pkg.to_pretty(10, interner));
     }
     (pkg, diagnostics)
 }
 
-pub fn lower_package_bodies(package: &mut Package, interner: &'static Interner) -> Vec<Diagnostic> {
+pub fn lower_package_bodies(
+    package: &mut Package,
+    module_file_map: &ArenaMap<ModuleId, FileId>,
+    interner: &'static Interner,
+) -> Vec<Diagnostic> {
     let mut diagnostics = vec![];
     for (module_id, _) in package
         .module_tree
@@ -45,11 +58,14 @@ pub fn lower_package_bodies(package: &mut Package, interner: &'static Interner) 
         .filter(|(module_id, _)| *module_id != ModuleTree::PRELUDE_ID)
     {
         let item_resolver = ItemResolver::new(&package.module_tree, interner);
-        let mut ctx = body::LowerCtx::new(
+        let file_id = module_file_map[module_id];
+        let ctx = body::LowerCtx::new(
             item_resolver,
-            interner,
-            &package.module_tree[module_id],
+            Some(&package.item_tree),
             &mut package.tenvs[module_id],
+            interner,
+            file_id,
+            module_id,
         );
         let mut d = ctx.lower_module_bodies();
         diagnostics.append(&mut d);

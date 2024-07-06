@@ -1,44 +1,106 @@
 use flux_diagnostics::{ice, Diagnostic};
-use flux_span::{Interner, Spanned, ToSpan, WithSpan, Word};
-use flux_syntax::ast::{self, AstNode};
-use flux_typesystem::{Insert, TEnv, TypeId};
+use flux_span::{FileId, Interner, Spanned, ToSpan, WithSpan, Word};
+use flux_syntax::{
+    ast::{self, AstNode},
+    SyntaxToken,
+};
+use flux_typesystem::{Insert, TChecker, TEnv, TypeId, Typed, WithType};
+use la_arena::{Arena, Idx};
 
 use crate::{
-    hir::{GenericParams, Path, Type},
-    module::ModuleData,
+    hir::{ApplyDecl, Expr, ExprIdx, FnDecl, GenericParams, Op, Path, Type},
+    item::ItemTreeIdx,
+    item_tree::ItemTree,
+    module::ModuleId,
     name_res::item::ItemResolver,
     POISONED_NAME,
 };
 
+mod expr;
+mod stmt;
 mod r#type;
 
 pub(crate) struct LowerCtx<'a> {
-    // diagnostics: Vec<Diagnostic>,
+    diagnostics: Vec<Diagnostic>,
     item_resolver: ItemResolver<'a>,
     pub interner: &'static Interner,
-    pub tenv: &'a mut TEnv,
-    pub(crate) module_data: &'a ModuleData, // module_tree: Option<&'a ModuleTree>,
+    pub tckh: TChecker<'a>,
+    pub(crate) item_tree: Option<&'a ItemTree>,
+    exprs: Arena<Expr>,
+    pub(super) file_id: FileId,
+    pub(crate) module_id: ModuleId,
 }
 
 impl<'a> LowerCtx<'a> {
     pub(crate) fn new(
         item_resolver: ItemResolver<'a>,
-        interner: &'static Interner,
-        module_data: &'a ModuleData,
+        item_tree: Option<&'a ItemTree>,
         tenv: &'a mut TEnv,
+        interner: &'static Interner,
+        file_id: FileId,
+        module_id: ModuleId,
     ) -> Self {
         Self {
-            // diagnostics: vec![],
+            diagnostics: vec![],
             item_resolver,
             interner,
-            module_data,
-            tenv,
-            // module_tree,
+            item_tree,
+            tckh: TChecker::new(tenv),
+            exprs: Arena::new(),
+            file_id,
+            module_id,
         }
     }
 
-    pub(crate) fn lower_module_bodies(&mut self) -> Vec<Diagnostic> {
-        vec![]
+    pub(crate) fn lower_module_bodies(mut self) -> Vec<Diagnostic> {
+        debug_assert!(self.item_tree.is_some());
+        let this_mod_id = self.module_id;
+        let item_tree = self.item_tree.as_ref().unwrap();
+        for item in item_tree
+            .top_level
+            .iter()
+            .filter(|item| item.mod_id == this_mod_id)
+        {
+            match &item.idx {
+                ItemTreeIdx::Apply(apply_idx) => self.handle_apply_decl(*apply_idx),
+                ItemTreeIdx::Function(fn_idx) => {
+                    self.lower_function_body(*fn_idx);
+                }
+                _ => {}
+            }
+        }
+        self.diagnostics
+    }
+
+    fn handle_apply_decl(&mut self, apply_idx: Idx<ApplyDecl>) {
+        let apply_decl = &self.item_tree.as_ref().unwrap().applies[apply_idx];
+        self.tckh.tenv.insert_local(
+            self.interner.get_or_intern_static("this"),
+            apply_decl.to_ty.inner,
+        );
+        apply_decl.methods.iter().for_each(|method| {
+            self.lower_function_body(*method);
+        });
+    }
+
+    fn lower_function_body(&mut self, fn_idx: Idx<FnDecl>) {
+        let fn_decl = &self.item_tree.as_ref().unwrap().functions[fn_idx];
+        if let Some(ast) = &fn_decl.ast {
+            fn_decl.params.iter().for_each(|param| {
+                self.tckh
+                    .tenv
+                    .insert_local(param.name.inner, param.ty.inner);
+            });
+
+            let body = self.lower_expr(ast.body(), &fn_decl.generic_params);
+            self.tckh
+                .unify(
+                    fn_decl.return_ty.inner,
+                    body.tid,
+                    self.tckh.tenv.get_filespan(&body.tid),
+                )
+                .unwrap_or_else(|err| self.diagnostics.push(err));
+        }
     }
 
     pub fn lower_node<N, T, P, F>(
@@ -81,57 +143,6 @@ impl<'a> LowerCtx<'a> {
             }
             None => poison_function(self),
         }
-    }
-
-    pub(crate) fn lower_type(
-        &mut self,
-        ty: Option<ast::Type>,
-        generic_params: &GenericParams,
-    ) -> Spanned<TypeId> {
-        let ty = self.lower_node(
-            ty,
-            |_, ty| Type::Unknown.at(ty.range().to_span()),
-            |this, ty| match ty {
-                ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
-                ast::Type::ThisPathType(_) => {
-                    ice("should not encounter this path outside of trait method")
-                }
-                _ => ice("unimplemented"),
-            },
-        );
-        self.tenv.insert(ty.inner).at(ty.span)
-    }
-
-    pub(crate) fn lower_trait_method_type(
-        &mut self,
-        ty: Option<ast::Type>,
-        generic_params: &GenericParams,
-        this_trait: &Path,
-    ) -> Spanned<TypeId> {
-        let ty = self.lower_node(
-            ty,
-            |_, ty| Type::Unknown.at(ty.range().to_span()),
-            |this, ty| match ty {
-                ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
-                ast::Type::ThisPathType(this_path_type) => {
-                    this.lower_this_path_type(this_path_type, generic_params, this_trait)
-                }
-                _ => ice("unimplemented"),
-            },
-        );
-        ty.map(|ty| self.tenv.insert(ty))
-        // ty.map(|ty| match ty {
-        //     Type::ThisPath(this_path) => {
-        //         // this_path.resolve_type(self.interner);
-        //         // let trt = self
-        //         //     .item_resolver
-        //         //     .resolve_path(&this_path.path_to_trait, self.module_id);
-        //         // let assoc_types: &mut _ = todo!();
-        //         // self.tenv.insert_with_trait_ctx(ty, assoc_types)
-        //         todo!()
-        //     }
-        //     _ => self.tenv.insert(ty),
-        // })
     }
 
     pub(crate) fn lower_name(&mut self, name: Option<ast::Name>) -> Spanned<Word> {
@@ -183,7 +194,25 @@ impl<'a> LowerCtx<'a> {
         )
     }
 
-    // pub(crate) fn lower_expr(&mut self, expr: Option<ast::Expr>) -> Typed<ExprIdx> {
-    //     todo!()
-    // }
+    fn lower_op(&mut self, op: Option<&SyntaxToken>) -> Spanned<Op> {
+        use flux_syntax::SyntaxKind::*;
+        let op = op.unwrap_or_else(|| ice("there should always be an op token"));
+        match op.kind() {
+            Eq => Op::Eq,
+            Plus => Op::Add,
+            Minus => Op::Sub,
+            Star => Op::Mul,
+            Slash => Op::Div,
+            CmpAnd => Op::CmpAnd,
+            CmpEq => Op::CmpEq,
+            CmpGt => Op::CmpGt,
+            CmpGte => Op::CmpGte,
+            CmpLt => Op::CmpLt,
+            CmpLte => Op::CmpLte,
+            CmpNeq => Op::CmpNeq,
+            CmpOr => Op::CmpOr,
+            _ => ice("invalid op token encountered"),
+        }
+        .at(op.text_range().to_span())
+    }
 }

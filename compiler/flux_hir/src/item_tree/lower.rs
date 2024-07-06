@@ -1,7 +1,7 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Interner, Span, Spanned, ToSpan, WithSpan};
 use flux_syntax::ast::{self, AstNode, Root};
-use flux_typesystem::{Insert, TEnv, TypeId};
+use flux_typesystem::{ApplicationId, TEnv, TraitApplication, TypeId};
 use la_arena::Idx;
 
 use crate::{
@@ -10,8 +10,8 @@ use crate::{
     hir::{
         ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariant,
         EnumDeclVariantList, FnDecl, GenericParams, ModDecl, Param, ParamList, Path, StructDecl,
-        StructFieldDecl, StructFieldDeclList, TraitDecl, Type, TypeBound, TypeBoundList, UseDecl,
-        Visibility, WherePredicate,
+        StructFieldDecl, StructFieldDeclList, TraitDecl, TypeBound, TypeBoundList, TypeInfo,
+        UseDecl, Visibility, WherePredicate,
     },
     item::{ItemId, ItemTreeIdx},
     module::{ModuleId, ModuleTree},
@@ -23,9 +23,7 @@ use super::ItemTree;
 pub struct Ctx<'a> {
     pub(crate) body_ctx: crate::body::LowerCtx<'a>,
     diagnostics: Vec<Diagnostic>,
-    pub(crate) file_id: FileId,
     item_tree: &'a mut ItemTree,
-    module_id: ModuleId,
 }
 
 impl<'a> Ctx<'a> {
@@ -40,14 +38,14 @@ impl<'a> Ctx<'a> {
         Self {
             body_ctx: LowerCtx::new(
                 ItemResolver::new(module_tree, interner),
-                interner,
-                &module_tree[module_id],
+                None,
                 tenv,
+                interner,
+                file_id,
+                module_id,
             ),
             diagnostics: vec![],
             item_tree,
-            module_id,
-            file_id,
         }
     }
 
@@ -59,7 +57,7 @@ impl<'a> Ctx<'a> {
         let item_id = match item {
             ast::Item::ApplyDecl(apply_decl) => self.lower_apply_decl(apply_decl),
             ast::Item::EnumDecl(enum_decl) => self.lower_enum_decl(enum_decl),
-            ast::Item::FnDecl(fn_decl) => self.lower_fn_decl(fn_decl, None),
+            ast::Item::FnDecl(fn_decl) => self.lower_fn_decl(fn_decl, TypeInfo::None),
             ast::Item::ModDecl(mod_decl) => self.lower_mod_decl(mod_decl),
             ast::Item::StructDecl(struct_decl) => self.lower_struct_decl(struct_decl),
             ast::Item::TraitDecl(trait_decl) => self.lower_trait_decl(trait_decl),
@@ -80,12 +78,23 @@ impl<'a> Ctx<'a> {
         let to_ty = self.lower_apply_to_ty(apply_decl.to_ty(), &generic_params);
         let assoc_types =
             self.lower_associated_type_definitions(apply_decl.associated_types(), &generic_params);
-        let methods =
-            self.lower_apply_methods(apply_decl.methods(), trt.as_ref().map(|path| &path.inner));
+
+        let aid = self
+            .body_ctx
+            .tckh
+            .tenv
+            .insert_application(TraitApplication::new(
+                assoc_types
+                    .iter()
+                    .map(|tdef| (tdef.name.inner, tdef.ty.inner))
+                    .collect(),
+            ));
+
+        let methods = self.lower_apply_methods(apply_decl.methods(), aid);
 
         let apply = ApplyDecl::new(visibility, generic_params, trt, to_ty, assoc_types, methods);
         let apply_id = self.item_tree.applies.alloc(apply);
-        ItemId::new(self.module_id, ItemTreeIdx::Apply(apply_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Apply(apply_id))
     }
 
     fn lower_enum_decl(&mut self, enum_decl: &ast::EnumDecl) -> ItemId {
@@ -97,10 +106,10 @@ impl<'a> Ctx<'a> {
         let variants = self.lower_enum_decl_variants(enum_decl.variants(), &generic_params);
         let enum_decl = EnumDecl::new(visibility, name, generic_params, variants);
         let enum_decl_id = self.item_tree.enums.alloc(enum_decl);
-        ItemId::new(self.module_id, ItemTreeIdx::Enum(enum_decl_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Enum(enum_decl_id))
     }
 
-    fn lower_fn_decl(&mut self, function: &ast::FnDecl, this_trait: Option<&Path>) -> ItemId {
+    fn lower_fn_decl(&mut self, function: &ast::FnDecl, tinfo: TypeInfo) -> ItemId {
         let visibility = self.lower_visibility(function.visibility());
         let name = self.body_ctx.lower_name(function.name());
         let mut generic_param_list =
@@ -114,7 +123,7 @@ impl<'a> Ctx<'a> {
             function.return_type(),
             &generic_param_list,
             param_list.span.end_span(),
-            this_trait,
+            tinfo,
         );
         let function = FnDecl::new(
             name,
@@ -126,7 +135,7 @@ impl<'a> Ctx<'a> {
         );
 
         let fn_id = self.item_tree.functions.alloc(function);
-        ItemId::new(self.module_id, ItemTreeIdx::Function(fn_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Function(fn_id))
     }
 
     fn lower_mod_decl(&mut self, mod_decl: &ast::ModDecl) -> ItemId {
@@ -134,7 +143,7 @@ impl<'a> Ctx<'a> {
         let name = self.body_ctx.lower_name(mod_decl.name());
         let mod_decl = ModDecl::new(visibility, name);
         let mod_decl_id = self.item_tree.mods.alloc(mod_decl);
-        ItemId::new(self.module_id, ItemTreeIdx::Module(mod_decl_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Module(mod_decl_id))
     }
 
     fn lower_struct_decl(&mut self, struct_decl: &ast::StructDecl) -> ItemId {
@@ -149,7 +158,7 @@ impl<'a> Ctx<'a> {
         let fields = self.lower_struct_field_decl_list(struct_decl.field_list(), &generic_params);
         let struct_decl = StructDecl::new(visibility, name, generic_params, fields);
         let struct_decl_id = self.item_tree.structs.alloc(struct_decl);
-        ItemId::new(self.module_id, ItemTreeIdx::Struct(struct_decl_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Struct(struct_decl_id))
     }
 
     fn lower_trait_decl(&mut self, trait_decl: &ast::TraitDecl) -> ItemId {
@@ -164,16 +173,16 @@ impl<'a> Ctx<'a> {
         let associated_types =
             self.lower_associated_type_decls(trait_decl.associated_types(), &generic_params);
 
-        let path_to_trait = Path::new(vec![name.inner], vec![]);
+        // let path_to_trait = Path::new(vec![name.inner], vec![]);
         let methods = self.lower_trait_method_decls(
             trait_decl.method_decls(),
             &generic_params,
-            Some(&path_to_trait),
+            TypeInfo::Trait,
         );
         let trait_decl =
             TraitDecl::new(visibility, name, generic_params, associated_types, methods);
         let trait_id = self.item_tree.traits.alloc(trait_decl);
-        ItemId::new(self.module_id, ItemTreeIdx::Trait(trait_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Trait(trait_id))
     }
 
     fn lower_use_decl(&mut self, use_decl: &ast::UseDecl) -> ItemId {
@@ -185,7 +194,7 @@ impl<'a> Ctx<'a> {
             .map(|alias| self.body_ctx.lower_name(Some(alias)));
         let use_decl = UseDecl::new(path, alias);
         let use_decl_id = self.item_tree.uses.alloc(use_decl);
-        ItemId::new(self.module_id, ItemTreeIdx::Use(use_decl_id))
+        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Use(use_decl_id))
     }
 
     fn lower_visibility(&mut self, visibility: Option<ast::Visibility>) -> Spanned<Visibility> {
@@ -244,8 +253,8 @@ impl<'a> Ctx<'a> {
                         .unwrap_or_else(|| {
                             self.diagnostics.push(
                                 LowerError::UnknownGeneric {
-                                    name: self.body_ctx.interner.resolve(&name.inner).to_string(),
-                                    name_file_span: name.span.in_file(self.file_id),
+                                    name: this.interner.resolve(&name.inner).to_string(),
+                                    name_file_span: name.span.in_file(this.file_id),
                                 }
                                 .to_diagnostic(),
                             );
@@ -295,19 +304,22 @@ impl<'a> Ctx<'a> {
         return_type: Option<ast::FnReturnType>,
         generic_params: &GenericParams,
         fallback_span: Span,
-        this_trait: Option<&Path>,
+        tinfo: TypeInfo,
     ) -> Spanned<TypeId> {
         self.body_ctx.lower_node(
             return_type,
-            |this, _| this.tenv.insert(Type::unit()).at(fallback_span),
-            |this, ret_ty| match ret_ty.ty() {
-                Some(ty) => match this_trait {
-                    Some(this_trait) => {
-                        this.lower_trait_method_type(Some(ty), generic_params, this_trait)
-                    }
-                    None => this.lower_type(Some(ty), generic_params),
-                },
-                None => this.tenv.insert(Type::unit()).at(ret_ty.range().to_span()),
+            |this, _| this.insert_unit(fallback_span).at(fallback_span),
+            |this, ret_ty| {
+                let span = ret_ty.range().to_span();
+                match ret_ty.ty() {
+                    Some(ty) => match tinfo {
+                        TypeInfo::Trait | TypeInfo::Apply(_) => {
+                            this.lower_trait_method_type(Some(ty), generic_params, tinfo)
+                        }
+                        TypeInfo::None => this.lower_type(Some(ty), generic_params),
+                    },
+                    None => this.insert_unit(span).at(span),
+                }
             },
         )
     }
@@ -353,7 +365,7 @@ impl<'a> Ctx<'a> {
         &mut self,
         trait_method_decls: impl Iterator<Item = ast::TraitMethodDecl>,
         trait_generic_params: &Spanned<GenericParams>,
-        this_trait: Option<&Path>,
+        tinfo: TypeInfo,
     ) -> Vec<Idx<FnDecl>> {
         trait_method_decls
             .map(|method_decl| {
@@ -374,13 +386,13 @@ impl<'a> Ctx<'a> {
                                 generics_that_were_chilling: (),
                                 generics_that_were_chilling_file_span: trait_generic_params
                                     .span
-                                    .in_file(self.file_id),
+                                    .in_file(self.body_ctx.file_id),
                                 generics_that_caused_duplication: duplicates
                                     .iter()
                                     .map(|key| self.body_ctx.interner.resolve(key).to_string())
                                     .collect(),
                                 generics_that_caused_duplication_file_span: span
-                                    .in_file(self.file_id),
+                                    .in_file(self.body_ctx.file_id),
                             }
                             .to_diagnostic();
                             self.diagnostics.push(diagnostic);
@@ -397,7 +409,7 @@ impl<'a> Ctx<'a> {
                     method_decl.return_ty(),
                     &generic_params,
                     param_list.span,
-                    this_trait,
+                    tinfo,
                 );
 
                 let fn_decl =
@@ -414,7 +426,10 @@ impl<'a> Ctx<'a> {
     ) -> Spanned<TypeId> {
         self.body_ctx.lower_node(
             to_ty,
-            |this, to_ty| this.tenv.insert(Type::Unknown).at(to_ty.range().to_span()),
+            |this, to_ty| {
+                let span = to_ty.range().to_span();
+                this.insert_unknown(span).at(span)
+            },
             |this, to_ty| this.lower_type(to_ty.ty(), generic_params),
         )
     }
@@ -436,11 +451,11 @@ impl<'a> Ctx<'a> {
     fn lower_apply_methods(
         &mut self,
         methods: impl Iterator<Item = ast::FnDecl>,
-        this_trait: Option<&Path>,
+        aid: ApplicationId,
     ) -> Vec<Idx<FnDecl>> {
         methods
             .map(|method| {
-                self.lower_fn_decl(&method, this_trait)
+                self.lower_fn_decl(&method, TypeInfo::Apply(aid))
                     .idx
                     .try_into()
                     .unwrap_or_else(|_| {

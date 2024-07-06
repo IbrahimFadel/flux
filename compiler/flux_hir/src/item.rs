@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct ItemId {
+pub struct ItemId {
     pub mod_id: ModuleId,
     pub idx: ItemTreeIdx,
 }

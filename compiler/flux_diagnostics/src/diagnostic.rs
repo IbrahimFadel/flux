@@ -117,6 +117,11 @@ pub enum DiagnosticCode {
     DuplicateGenericParams,
 
     CannotResolveEmptyPath,
+
+    PositiveIntegerOverflow,
+    StmtFollowingTerminatorExpr,
+
+    TypeMismatch,
 }
 
 impl std::fmt::Display for DiagnosticCode {

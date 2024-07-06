@@ -2,9 +2,12 @@ use std::sync::OnceLock;
 
 use flux_diagnostics::{Diagnostic, SourceCache};
 use flux_span::Interner;
+use flux_typesystem::TEnv;
+use la_arena::ArenaMap;
 
 use crate::{
     cfg::Config,
+    module::ModuleId,
     name_res::{FileResolver, RelativePath},
     pkg::{Package, PkgBuilder},
 };
@@ -16,7 +19,10 @@ static INTERNER: OnceLock<Interner> = OnceLock::new();
 fn check(content: &str) -> (Package, Vec<Diagnostic>) {
     let interner = INTERNER.get_or_init(|| Interner::new());
     let mut source_cache = SourceCache::new(interner);
-    let config = Config { debug_cst: false };
+    let config = Config {
+        debug_cst: false,
+        debug_item_tree: false,
+    };
 
     let files = content.split("//-").skip(1);
     let mut entry_file = None;
@@ -37,7 +43,15 @@ fn check(content: &str) -> (Package, Vec<Diagnostic>) {
         Some(entry) => (entry, source_cache.get_file_content(&entry)),
         None => panic!("malformated input to `check` function in hir lowering unit test"),
     };
-    let mut pkg_builder = PkgBuilder::new(interner, &mut source_cache, &config, TestFileResolver);
+
+    let mut module_file_map = ArenaMap::new();
+    let mut pkg_builder = PkgBuilder::new(
+        interner,
+        &mut source_cache,
+        &config,
+        TestFileResolver,
+        &mut module_file_map,
+    );
     pkg_builder.seed_with_entry(file_id, &src);
     pkg_builder.finish()
 }

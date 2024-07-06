@@ -248,6 +248,7 @@ dependencies = [
  "flux_diagnostics",
  "flux_hir",
  "flux_span",
+ "la-arena",
  "lasso",
  "pretty",
  "serde",
@@ -358,9 +359,11 @@ version = "0.1.0"
 dependencies = [
  "colored",
  "flux_diagnostics",
+ "flux_proc_macros",
  "flux_span",
  "itertools 0.12.1",
  "pretty",
+ "tracing",
 ]
 
 [[package]]

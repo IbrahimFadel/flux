@@ -30,6 +30,7 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
     config: &'a Config,
     pub resolver: R,
     unresolved_imports: Vec<Import>,
+    module_file_map: &'a mut ArenaMap<ModuleId, FileId>,
 }
 
 impl<'a, R: FileResolver> PkgBuilder<'a, R> {
@@ -38,6 +39,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         source_cache: &'a mut SourceCache,
         config: &'a Config,
         resolver: R,
+        module_file_map: &'a mut ArenaMap<ModuleId, FileId>,
     ) -> Self {
         Self {
             item_tree: ItemTree::new(),
@@ -49,6 +51,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             resolver,
             diagnostics: vec![],
             unresolved_imports: vec![],
+            module_file_map,
         }
     }
 
@@ -93,7 +96,8 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
 
         let module_data = ModuleData::new(parent);
         let module_id = self.module_tree.alloc(module_data);
-        self.tenvs.insert(module_id, TEnv::default());
+        self.tenvs.insert(module_id, TEnv::new(self.interner));
+        self.module_file_map.insert(module_id, file_id);
 
         let items = lower_cst_to_item_tree(
             root,

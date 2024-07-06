@@ -46,7 +46,7 @@ impl IndexMut<ModuleId> for ModuleTree {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ModuleData {
+pub struct ModuleData {
     pub parent: Option<ModuleId>,
     pub children: HashMap<Word, ModuleId>,
     pub scope: ItemScope,

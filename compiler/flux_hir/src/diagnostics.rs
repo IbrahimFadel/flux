@@ -41,4 +41,26 @@ pub enum LowerError {
         #[filespanned]
         generics_that_caused_duplication: Vec<String>,
     },
+    #[error(
+        location = val,
+        primary = "integer too large",
+        label at val = "integer value {val} too large",
+        help = "max value is u64::MAX"
+    )]
+    PositiveIntegerOverflow {
+        #[filespanned]
+        val: String,
+    },
+    #[error(
+        location = following_expr,
+        primary =  "statements cannot follow a terminator expression in a block",
+        label at terminator = "terminator expression",
+        label at following_expr = "illegal statement",
+    )]
+    StmtFollowingTerminatorExpr {
+        #[filespanned]
+        terminator: (),
+        #[filespanned]
+        following_expr: (),
+    },
 }
