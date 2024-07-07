@@ -20,10 +20,12 @@ impl Insert<TypeKind> for TEnv {
         TypeId::new(idx)
     }
 
+    #[inline]
     fn insert_in_apply(&mut self, ty: FileSpanned<TypeKind>, _: ApplicationId) -> TypeId {
         self.insert(ty)
     }
 
+    #[inline]
     fn insert_in_trait(&mut self, ty: FileSpanned<TypeKind>, _: ()) -> TypeId {
         self.insert(ty)
     }
@@ -34,7 +36,6 @@ pub struct TEnv {
     types: Vec<FileSpanned<TypeKind>>,
     trait_applications: Vec<TraitApplication>,
     locals: Vec<Scope>,
-    // trait_assoc_types: HashMap<Vec<Word>, Vec<(Word, TypeId)>>,
     pub(crate) interner: &'static Interner,
 }
 

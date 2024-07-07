@@ -2,12 +2,6 @@ use flux_span::Word;
 
 use crate::r#type::TypeId;
 
-// Trait ID, Apply ID just like TypeID
-
-// ThisPath({
-//      trait_id,
-// })
-
 #[derive(Debug, Clone)]
 pub struct TraitApplication {
     pub assoc_types: Vec<(Word, TypeId)>,

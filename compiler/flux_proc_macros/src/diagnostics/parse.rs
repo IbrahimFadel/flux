@@ -6,7 +6,7 @@ use syn::{
     Expr, LitStr, Result, Token,
 };
 
-use crate::ast::{
+use crate::diagnostics::ast::{
     DiagnosticEnum, ErrorAttribute, Field, FieldAttribute, Help, Label, Labels, Location, Variant,
 };
 

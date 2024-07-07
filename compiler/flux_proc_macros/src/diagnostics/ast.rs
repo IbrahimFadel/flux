@@ -1,7 +1,7 @@
 use proc_macro2::Ident;
 use syn::{punctuated::Punctuated, Expr, LitStr, Token, Type, Visibility};
 
-pub(super) struct DiagnosticEnum {
+pub(crate) struct DiagnosticEnum {
     pub(super) visibility: Visibility,
     pub(super) name: Ident,
     pub(super) variants: Punctuated<Variant, Token![,]>,
