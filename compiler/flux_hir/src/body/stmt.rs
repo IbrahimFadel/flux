@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> LowerCtx<'a> {
+impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
     pub(crate) fn lower_stmt(
         &mut self,
         stmt: ast::Stmt,

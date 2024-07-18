@@ -20,3 +20,4 @@ flux_hir = { path = "../flux_hir" }
 flux_cfg = { path = "../flux_cfg" }
 flux_diagnostics = { path = "../flux_diagnostics" }
 flux_span = { path = "../flux_span" }
+flux_typesystem= { path = "../flux_typesystem" }

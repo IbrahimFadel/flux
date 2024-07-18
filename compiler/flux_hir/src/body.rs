@@ -1,61 +1,141 @@
-use flux_diagnostics::{ice, Diagnostic};
+use std::collections::HashMap;
+
+use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Interner, Spanned, ToSpan, WithSpan, Word};
 use flux_syntax::{
     ast::{self, AstNode},
     SyntaxToken,
 };
-use flux_typesystem::{Insert, TChecker, TEnv, TypeId, Typed, WithType};
+use flux_typesystem::{
+    self as ts, ConcreteKind, Insert, TChecker, TEnv, TypeId, TypeKind, Typed, WithType,
+};
 use la_arena::{Arena, Idx};
+use ts::TraitId;
 
 use crate::{
-    hir::{ApplyDecl, Expr, ExprIdx, FnDecl, GenericParams, Op, Path, Type},
-    item::ItemTreeIdx,
+    diagnostics::LowerError,
+    hir::{ApplyDecl, Expr, ExprIdx, FnDecl, GenericParams, Op, Path, StructDecl, TraitDecl, Type},
+    item::{ItemId, ItemTreeIdx},
     item_tree::ItemTree,
-    module::ModuleId,
+    module::{ModuleData, ModuleId, ModuleTree},
     name_res::item::ItemResolver,
-    POISONED_NAME,
+    pkg::PackageBodies,
+    PackageDefs, PackageId, POISONED_NAME,
 };
 
 mod expr;
 mod stmt;
 mod r#type;
 
-pub(crate) struct LowerCtx<'a> {
+pub(crate) struct LowerCtx<'a, 'pkgs> {
     diagnostics: Vec<Diagnostic>,
-    item_resolver: ItemResolver<'a>,
+    item_resolver: Option<ItemResolver<'a>>,
     pub interner: &'static Interner,
     pub tckh: TChecker<'a>,
-    pub(crate) item_tree: Option<&'a ItemTree>,
-    exprs: Arena<Expr>,
+    package_bodies: &'a mut PackageBodies,
     pub(super) file_id: FileId,
     pub(crate) module_id: ModuleId,
+    package_id: Option<PackageId>,
+    packages: Option<&'pkgs Arena<PackageDefs>>,
+    pub trait_map: HashMap<(PackageId, Idx<TraitDecl>), TraitId>,
 }
 
-impl<'a> LowerCtx<'a> {
+impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
     pub(crate) fn new(
-        item_resolver: ItemResolver<'a>,
-        item_tree: Option<&'a ItemTree>,
+        item_resolver: Option<ItemResolver<'a>>,
+        packages: Option<&'pkgs Arena<PackageDefs>>,
+        package_id: Option<PackageId>,
+        module_id: ModuleId,
+        package_bodies: &'a mut PackageBodies,
         tenv: &'a mut TEnv,
         interner: &'static Interner,
         file_id: FileId,
-        module_id: ModuleId,
     ) -> Self {
         Self {
             diagnostics: vec![],
             item_resolver,
             interner,
-            item_tree,
             tckh: TChecker::new(tenv),
-            exprs: Arena::new(),
+            package_bodies,
             file_id,
             module_id,
+            package_id,
+            packages,
+            trait_map: HashMap::new(),
         }
     }
 
-    pub(crate) fn lower_module_bodies(mut self) -> Vec<Diagnostic> {
-        debug_assert!(self.item_tree.is_some());
+    fn item_tree(&self, package_id: PackageId) -> &'pkgs ItemTree {
+        debug_assert!(self.packages.is_some());
+        &self.packages.unwrap()[package_id].item_tree
+    }
+
+    fn item_resolver(&self) -> &ItemResolver<'a> {
+        self.item_resolver.as_ref().unwrap()
+    }
+
+    fn prelude(&self) -> &ModuleData {
+        &self.packages.unwrap()[self.package_id.unwrap()].module_tree[ModuleTree::PRELUDE_ID]
+    }
+
+    fn file_id(&self, package_id: PackageId, module_id: ModuleId) -> FileId {
+        self.packages.unwrap()[package_id].module_tree[module_id].file_id
+    }
+
+    fn resolve_path(&mut self, path: &Spanned<Path>) -> Option<(PackageId, ItemId)> {
+        self.item_resolver()
+            .resolve_path(&path, self.module_id)
+            .map_err(|resolution_error| {
+                self.diagnostics.push(resolution_error.to_diagnostic(
+                    self.file_id,
+                    path.span,
+                    self.interner,
+                ));
+            })
+            .ok()
+    }
+
+    pub(crate) fn set_module_id(&mut self, module_id: ModuleId) {
+        self.module_id = module_id;
+    }
+
+    pub(crate) fn set_file_id(&mut self, file_id: FileId) {
+        self.file_id = file_id;
+    }
+
+    pub(crate) fn populate_trait_map(&mut self) {
+        let item_tree = self.item_tree(self.package_id.unwrap());
+        item_tree.top_level.iter().for_each(|item| match item.idx {
+            ItemTreeIdx::Trait(trait_idx) => self.add_trait(trait_idx),
+            _ => {}
+        })
+    }
+
+    pub(crate) fn populate_applications(&mut self) {
+        let og_mod_id = self.module_id;
+        let item_tree = self.item_tree(self.package_id.unwrap());
+        item_tree.top_level.iter().for_each(|item| {
+            self.set_module_id(item.mod_id);
+            match item.idx {
+                ItemTreeIdx::Apply(apply_idx) => self.add_application(apply_idx),
+                _ => {}
+            }
+        });
+        // println!("{:#?}", self.trait_map);
+        self.set_module_id(og_mod_id);
+    }
+
+    pub(crate) fn finish(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+
+    pub(crate) fn lower_module_bodies(&mut self) {
         let this_mod_id = self.module_id;
-        let item_tree = self.item_tree.as_ref().unwrap();
+        let item_tree = self.item_tree(
+            self.package_id
+                .unwrap_or_else(|| ice("tried lowering body without active item tree")),
+        );
+        self.add_builtin_applications();
         for item in item_tree
             .top_level
             .iter()
@@ -66,14 +146,23 @@ impl<'a> LowerCtx<'a> {
                 ItemTreeIdx::Function(fn_idx) => {
                     self.lower_function_body(*fn_idx);
                 }
+                ItemTreeIdx::Struct(struct_idx) => self.handle_struct_decl(*struct_idx),
                 _ => {}
             }
         }
-        self.diagnostics
+    }
+
+    fn add_builtin_applications(&mut self) {
+        // self.tckh.tenv.insert_application(trid, application);
     }
 
     fn handle_apply_decl(&mut self, apply_idx: Idx<ApplyDecl>) {
-        let apply_decl = &self.item_tree.as_ref().unwrap().applies[apply_idx];
+        let apply_decl = &self
+            .item_tree(
+                self.package_id
+                    .unwrap_or_else(|| ice("tried lowering body without active item tree")),
+            )
+            .applies[apply_idx];
         self.tckh.tenv.insert_local(
             self.interner.get_or_intern_static("this"),
             apply_decl.to_ty.inner,
@@ -83,8 +172,58 @@ impl<'a> LowerCtx<'a> {
         });
     }
 
+    fn add_application(&mut self, apply_idx: Idx<ApplyDecl>) {
+        let apply_decl = &self.item_tree(self.package_id.unwrap()).applies[apply_idx];
+        // resolve trait path, then get trid
+        let trid = apply_decl
+            .trt
+            .as_ref()
+            .map(|trt| {
+                self.item_resolver()
+                    .resolve_path(&trt, self.module_id)
+                    .map(|(package_id, item_id)| {
+                        let trait_idx = match item_id.idx {
+                            ItemTreeIdx::Trait(trait_idx) => trait_idx,
+                            _ => ice("progammer got lazy to impl this diagnostic"),
+                        };
+                        Some(
+                            self.trait_map
+                                .get(&(package_id, trait_idx))
+                                .unwrap_or_else(|| ice("trait wasn't added to trait map")),
+                        )
+                    })
+                    .unwrap_or_else(|resolution_err| {
+                        self.diagnostics.push(resolution_err.to_diagnostic(
+                            self.file_id,
+                            trt.span,
+                            self.interner,
+                        ));
+                        None
+                    })
+            })
+            .flatten()
+            .copied();
+        if let Some(trid) = trid {
+            let assoc_types = apply_decl
+                .assoc_types
+                .iter()
+                .map(|assoc_type| assoc_type.as_ts_assoc_type())
+                .collect();
+
+            self.tckh.tenv.insert_application(
+                trid,
+                ts::TraitApplication::new(apply_decl.to_ty.inner, assoc_types),
+            );
+        }
+    }
+
     fn lower_function_body(&mut self, fn_idx: Idx<FnDecl>) {
-        let fn_decl = &self.item_tree.as_ref().unwrap().functions[fn_idx];
+        let fn_decl = &self
+            .item_tree(
+                self.package_id
+                    .unwrap_or_else(|| ice("tried lowering body without active item tree")),
+            )
+            .functions[fn_idx];
         if let Some(ast) = &fn_decl.ast {
             fn_decl.params.iter().for_each(|param| {
                 self.tckh
@@ -93,6 +232,9 @@ impl<'a> LowerCtx<'a> {
             });
 
             let body = self.lower_expr(ast.body(), &fn_decl.generic_params);
+            self.package_bodies
+                .fn_exprs
+                .insert((self.module_id, fn_idx), body.inner);
             self.tckh
                 .unify(
                     fn_decl.return_ty.inner,
@@ -101,6 +243,83 @@ impl<'a> LowerCtx<'a> {
                 )
                 .unwrap_or_else(|err| self.diagnostics.push(err));
         }
+    }
+
+    fn handle_struct_decl(&mut self, struct_idx: Idx<StructDecl>) {
+        let struct_decl = &self
+            .item_tree(
+                self.package_id
+                    .unwrap_or_else(|| ice("tried lowering body without active item tree")),
+            )
+            .structs[struct_idx];
+
+        struct_decl.fields.iter().for_each(|field| {
+            if let TypeKind::Concrete(ConcreteKind::Path(path)) =
+                &self.tckh.tenv.get(&field.ty).inner.inner
+            {
+                let span = self.tckh.tenv.get_span(&field.ty);
+                let path: Path = path.clone().into();
+                let path = path.at(span);
+                self.resolve_path(&path)
+                    .map(|(package_id, item_id)| match item_id.idx {
+                        ItemTreeIdx::Enum(enum_idx) => {
+                            let eenum = &self.item_tree(package_id).enums[enum_idx];
+                        }
+                        ItemTreeIdx::Struct(struct_idx) => {
+                            let strukt = &self.item_tree(package_id).structs[struct_idx];
+                            let num_generics_expected = strukt.generic_params.types.len();
+                            let num_generis_got = path.generic_args.len();
+                            if num_generics_expected != num_generis_got {
+                                self.diagnostics.push(
+                                    LowerError::MissingGenericArguments {
+                                        got_names: path
+                                            .generic_args
+                                            .iter()
+                                            .map(|tid| self.tckh.tenv.fmt_tid(tid))
+                                            .collect(),
+                                        got_names_file_span: path.span.in_file(self.file_id),
+                                        expected_names: strukt
+                                            .generic_params
+                                            .types
+                                            .values()
+                                            .map(|generic| {
+                                                self.interner.resolve(&generic).to_string()
+                                            })
+                                            .collect(),
+                                        expected_names_file_span: strukt
+                                            .generic_params
+                                            .span
+                                            .in_file(self.file_id(package_id, item_id.mod_id)),
+                                    }
+                                    .to_diagnostic(),
+                                );
+                            }
+                        }
+                        _ => {}
+                    });
+            }
+        });
+    }
+
+    fn add_trait(&mut self, trait_idx: Idx<TraitDecl>) {
+        let item_tree = self.item_tree(self.package_id.unwrap());
+        let trt = &item_tree.traits[trait_idx];
+        let signatures = trt
+            .methods
+            .iter()
+            .map(|method_idx| {
+                let method = &item_tree.functions[*method_idx];
+                method
+                    .params
+                    .iter()
+                    .map(|param| param.ty.inner)
+                    .chain(std::iter::once(method.return_ty.inner))
+                    .collect()
+            })
+            .collect();
+        let trid = self.tckh.tenv.insert_trait(ts::Trait::new(signatures));
+        self.trait_map
+            .insert((self.package_id.unwrap(), trait_idx), trid);
     }
 
     pub fn lower_node<N, T, P, F>(

@@ -1,4 +1,8 @@
+/*
+
 fn main(argc s32) -> s32 {
 	let x = 0;
 	x
 }
+
+*/

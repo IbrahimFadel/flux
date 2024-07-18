@@ -7,7 +7,7 @@ use flux_typesystem as ts;
 use flux_typesystem::{TEnv, TypeId};
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
-use ts::{ApplicationId, TypeKind, Typed, WithType};
+use ts::{ApplicationId, Typed, WithType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -242,6 +242,10 @@ impl AssociatedTypeDefinition {
     pub fn new(name: Spanned<Word>, ty: Spanned<TypeId>) -> Self {
         Self { name, ty }
     }
+
+    pub fn as_ts_assoc_type(&self) -> (Word, TypeId) {
+        (self.name.inner, self.ty.inner)
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
@@ -324,6 +328,12 @@ pub struct Path {
     pub generic_args: Vec<TypeId>,
 }
 
+impl From<ts::Path> for Path {
+    fn from(value: ts::Path) -> Self {
+        Self::new(value.segments, value.generic_args)
+    }
+}
+
 impl Path {
     pub fn new(segments: Vec<Word>, generic_args: Vec<TypeId>) -> Self {
         Self {
@@ -389,17 +399,10 @@ impl Type {
     }
 }
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TypeInfo {
-    Trait,
-    Apply(ApplicationId),
-    None,
-}
-
 impl ts::Insert<Type> for TEnv {
     fn insert(&mut self, ty: FileSpanned<Type>) -> TypeId {
         let tkind = ty.map_inner(|ty| match ty {
-            Type::Array(_) => todo!(),
+            Type::Array(arr) => ts::TypeKind::Concrete(ts::ConcreteKind::Array(arr.ty, arr.num)),
             Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
                 generic.name.inner,
                 generic
@@ -417,82 +420,36 @@ impl ts::Insert<Type> for TEnv {
             Type::Never => ts::TypeKind::Never,
             Type::Unknown => ts::TypeKind::Unknown,
             // Type::ThisPath(this_path) => this_path_to_tkind(this_path, None),
-            Type::ThisPath(_) => {
-                ice("should only insert `Type::ThisPath` to `TEnv` with `insert_in_apply`")
+            Type::ThisPath(this_path) => {
+                ts::TypeKind::ThisPath(ts::ThisPath::new(this_path.path.segments))
+                // ice("should only insert `Type::ThisPath` to `TEnv` with `insert_in_apply`")
             }
         });
         self.insert(tkind)
-    }
-
-    fn insert_in_apply(&mut self, ty: FileSpanned<Type>, aid: ApplicationId) -> TypeId {
-        let tkind = ty.map_inner(|ty| match ty {
-            Type::Array(_) => todo!(),
-            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
-                generic.name.inner,
-                generic
-                    .restrictions
-                    .iter()
-                    .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
-                    .collect(),
-            )),
-            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
-                path.segments,
-                path.generic_args,
-            ))),
-            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
-            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
-            Type::Never => ts::TypeKind::Never,
-            Type::Unknown => ts::TypeKind::Unknown,
-            Type::ThisPath(this_path) => ts::TypeKind::ThisPath(this_path.path.segments, Some(aid)),
-        });
-        self.insert_in_apply(tkind, aid)
-    }
-
-    fn insert_in_trait(&mut self, ty: FileSpanned<Type>, trid: ()) -> TypeId {
-        let tkind = ty.map_inner(|ty| match ty {
-            Type::Array(_) => todo!(),
-            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
-                generic.name.inner,
-                generic
-                    .restrictions
-                    .iter()
-                    .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
-                    .collect(),
-            )),
-            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
-                path.segments,
-                path.generic_args,
-            ))),
-            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
-            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
-            Type::Never => ts::TypeKind::Never,
-            Type::Unknown => ts::TypeKind::Unknown,
-            Type::ThisPath(this_path) => ts::TypeKind::ThisPath(this_path.path.segments, None),
-        });
-        self.insert_in_trait(tkind, trid)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct ThisPath {
     pub path: Path,
-    pub tinfo: TypeInfo,
 }
 
 impl ThisPath {
-    pub fn new(path: Path, tinfo: TypeInfo) -> Self {
-        Self { path, tinfo }
-    }
-
-    pub fn resolve_type(&self, interner: &'static Interner) {
-        println!("{:#?} {:#?}", self.path.to_string(interner), self.tinfo);
+    pub fn new(path: Path) -> Self {
+        Self { path }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ArrayType {
     pub ty: TypeId,
-    pub num: u32,
+    pub num: u64,
+}
+
+impl ArrayType {
+    pub fn new(ty: TypeId, num: u64) -> Self {
+        Self { ty, num }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -587,6 +544,7 @@ impl AssociatedTypeDecl {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
+    Address(ExprIdx),
     // Block(Block),
     BinOp(BinOp),
     // Enum(EnumExpr),
@@ -594,9 +552,9 @@ pub enum Expr {
     // Float(f64),
     Int(u64),
     Tuple(Vec<ExprIdx>),
-    // Path(Path),
+    Path(Path),
     // Let(Let),
-    // Struct(StructExpr),
+    Struct(StructExpr),
     // MemberAccess(MemberAccess),
     If(If),
     // Intrinsic(Intrinsic),
@@ -621,9 +579,9 @@ impl WithType for ExprIdx {}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOp {
-    lhs: ExprIdx,
-    rhs: ExprIdx,
-    op: Spanned<Op>,
+    pub lhs: ExprIdx,
+    pub rhs: ExprIdx,
+    pub op: Spanned<Op>,
 }
 
 impl BinOp {
@@ -650,8 +608,31 @@ pub enum Op {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructExpr {
+    pub path: Spanned<Path>,
+    pub fields: Spanned<Vec<StructExprField>>,
+}
+
+impl StructExpr {
+    pub fn new(path: Spanned<Path>, fields: Spanned<Vec<StructExprField>>) -> Self {
+        Self { path, fields }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructExprField {
+    pub name: Spanned<Word>,
+    pub val: Typed<ExprIdx>,
+}
+
+impl StructExprField {
+    pub fn new(name: Spanned<Word>, val: Typed<ExprIdx>) -> Self {
+        Self { name, val }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct If {
-    num_blocks: usize,
     exprs: Vec<Typed<ExprIdx>>,
 }
 
@@ -662,21 +643,47 @@ impl If {
         else_ifs: impl Iterator<Item = (Typed<ExprIdx>, Typed<ExprIdx>)>,
         r#else: Option<Typed<ExprIdx>>,
     ) -> Self {
-        let (mut conds, mut blocks): (Vec<_>, Vec<_>) = else_ifs.unzip();
-        let else_number = r#else.as_ref().map_or(0, |_| 1);
-
-        let mut exprs = Vec::with_capacity(2 + conds.len() + blocks.len() + else_number);
-        exprs.push(condition);
-        exprs.push(then);
-        exprs.append(&mut conds);
-        exprs.append(&mut blocks);
-        if let Some(block) = r#else {
-            exprs.push(block);
-        }
-
         Self {
-            num_blocks: 1 + blocks.len() + else_number,
-            exprs,
+            exprs: [condition, then]
+                .into_iter()
+                .chain(else_ifs.flat_map(<[_; 2]>::from))
+                .chain(r#else)
+                .collect(),
+        }
+    }
+
+    #[inline]
+    pub fn has_else(&self) -> bool {
+        self.exprs.len() % 2 != 0
+    }
+
+    pub fn condition(&self) -> &Typed<ExprIdx> {
+        &self
+            .exprs
+            .get(0)
+            .unwrap_or_else(|| ice("if expression missing condition expression"))
+    }
+
+    pub fn then(&self) -> &Typed<ExprIdx> {
+        &self
+            .exprs
+            .get(1)
+            .unwrap_or_else(|| ice("if expression missing then block expression"))
+    }
+
+    pub fn else_ifs(&self) -> Option<&[Typed<ExprIdx>]> {
+        if self.has_else() {
+            self.exprs.get(2..self.exprs.len() - 1)
+        } else {
+            self.exprs.get(2..)
+        }
+    }
+
+    pub fn else_block(&self) -> Option<&Typed<ExprIdx>> {
+        if self.has_else() {
+            self.exprs.last()
+        } else {
+            None
         }
     }
 }

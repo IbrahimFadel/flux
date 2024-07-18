@@ -10,8 +10,13 @@ impl TEnv {
     pub fn fmt_tkind(&self, tkind: &TypeKind) -> String {
         use crate::TypeKind::*;
         match tkind {
-            ThisPath(this_path, _) => std::iter::once("This")
-                .chain(this_path.iter().map(|key| self.interner.resolve(key)))
+            ThisPath(this_path) => std::iter::once("This")
+                .chain(
+                    this_path
+                        .segments
+                        .iter()
+                        .map(|key| self.interner.resolve(key)),
+                )
                 .join("::"),
             Concrete(concrete_kind) => self.fmt_concrete_kind(concrete_kind),
             Int(_) => format!("int"),
@@ -28,7 +33,7 @@ impl TEnv {
         use ConcreteKind::*;
         match concrete_kind {
             Array(tid, n) => format!("[{}; {n}]", self.fmt_tid(tid)),
-            Ptr(tid) => format!("*{}", self.fmt_tid(tid)),
+            Ptr(tid) => format!("{}*", self.fmt_tid(tid)),
             Path(path) => format!(
                 "{}{}",
                 path.segments

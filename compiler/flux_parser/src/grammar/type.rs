@@ -12,16 +12,16 @@ pub(crate) fn poisoned_type(p: &mut Parser, parent: &str) {
 }
 
 pub(crate) fn type_(p: &mut Parser, parent: &str) {
-    let m = match p.peek() {
+    let mut m = match p.peek() {
         TokenKind::LParen => tuple_type(p),
         TokenKind::Ident | TokenKind::This => path_type(p),
         TokenKind::LSquare => array_type(p),
         _ => return p.expected("type", parent),
     };
     while p.at(TokenKind::Star) {
-        let m = m.clone().precede(p);
+        let ptr_m = m.clone().precede(p);
         p.bump(TokenKind::Star);
-        m.complete(p, SyntaxKind::PtrType);
+        m = ptr_m.complete(p, SyntaxKind::PtrType);
     }
 }
 

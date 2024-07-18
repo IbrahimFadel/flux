@@ -1,11 +1,11 @@
 use flux_span::Span;
 
-use crate::hir::{Generic, ThisPath, TypeBound, TypeBoundList, TypeInfo};
+use crate::hir::{ArrayType, Generic, ThisPath, TypeBound, TypeBoundList};
 
 use super::*;
 use flux_typesystem as ts;
 
-impl<'a> LowerCtx<'a> {
+impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
     #[inline]
     pub(crate) fn insert_int_type(&mut self, span: Span) -> TypeId {
         self.tckh
@@ -37,41 +37,19 @@ impl<'a> LowerCtx<'a> {
             |_, ty| Type::Unknown.at(ty.range().to_span()),
             |this, ty| match ty {
                 ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
-                ast::Type::ThisPathType(_) => {
-                    ice("should not encounter this path outside of trait method")
+                ast::Type::TupleType(tuple_type) => {
+                    this.lower_tuple_type(tuple_type, generic_params)
                 }
-                _ => ice("unimplemented"),
+                ast::Type::ArrayType(arr_type) => this.lower_arr_type(arr_type, generic_params),
+                ast::Type::PtrType(ptr_type) => this.lower_ptr_type(ptr_type, generic_params),
+                ast::Type::ThisPathType(this_path_type) => {
+                    this.lower_this_path_type(this_path_type, generic_params)
+                    // ice("should not encounter this path outside of trait method")
+                }
             },
         );
         let span = ty.span;
         self.tckh.tenv.insert(ty.in_file(self.file_id)).at(span)
-    }
-
-    pub(crate) fn lower_trait_method_type(
-        &mut self,
-        ty: Option<ast::Type>,
-        generic_params: &GenericParams,
-        tinfo: TypeInfo,
-    ) -> Spanned<TypeId> {
-        let ty = self.lower_node(
-            ty,
-            |_, ty| Type::Unknown.at(ty.range().to_span()),
-            |this, ty| match ty {
-                ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
-                ast::Type::ThisPathType(this_path_type) => {
-                    this.lower_this_path_type(this_path_type, generic_params, tinfo)
-                }
-                _ => ice("unimplemented"),
-            },
-        );
-        let span = ty.span;
-        let ty = ty.in_file(self.file_id);
-        match tinfo {
-            TypeInfo::Trait => self.tckh.tenv.insert_in_trait(ty, ()),
-            TypeInfo::Apply(aid) => self.tckh.tenv.insert_in_apply(ty, aid),
-            TypeInfo::None => self.tckh.tenv.insert(ty),
-        }
-        .at(span)
     }
 
     pub(super) fn lower_path_type(
@@ -97,10 +75,44 @@ impl<'a> LowerCtx<'a> {
         &mut self,
         this_path_type: ast::ThisPathType,
         generic_params: &GenericParams,
-        tinfo: TypeInfo,
     ) -> Spanned<Type> {
         let path = self.lower_path(this_path_type.path(), generic_params);
-        path.map(|path| Type::ThisPath(ThisPath::new(path, tinfo)))
+        path.map(|path| Type::ThisPath(ThisPath::new(path)))
+    }
+
+    fn lower_tuple_type(
+        &mut self,
+        tuple_type: ast::TupleType,
+        generic_params: &GenericParams,
+    ) -> Spanned<Type> {
+        let types = tuple_type
+            .types()
+            .map(|ty| self.lower_type(Some(ty), generic_params).inner)
+            .collect();
+        Type::Tuple(types).at(tuple_type.range().to_span())
+    }
+
+    fn lower_arr_type(
+        &mut self,
+        arr_type: ast::ArrayType,
+        generic_params: &GenericParams,
+    ) -> Spanned<Type> {
+        let ty = self.lower_type(arr_type.ty(), generic_params);
+        let n = self.lower_int_expr(arr_type.n().unwrap());
+        let n = match self.package_bodies.exprs[n.idx()] {
+            Expr::Int(n) => n,
+            _ => unreachable!(),
+        };
+        Type::Array(ArrayType::new(ty.inner, n)).at(arr_type.range().to_span())
+    }
+
+    fn lower_ptr_type(
+        &mut self,
+        ptr_type: ast::PtrType,
+        generic_params: &GenericParams,
+    ) -> Spanned<Type> {
+        let to_ty = self.lower_type(ptr_type.ty(), generic_params);
+        Type::Ptr(to_ty.inner).at(ptr_type.range().to_span())
     }
 }
 

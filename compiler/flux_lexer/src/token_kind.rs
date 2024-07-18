@@ -11,7 +11,11 @@ pub enum TokenKind {
     Intrinsic,
 
     #[regex("//.*")]
-    #[regex(r"/\*([^*]|\**[^*/])*\*+/")]
+    #[token("/*", |lex| {
+        let len = lex.remainder().find("*/")?;
+        lex.bump(len + 2); // include len of `*/`
+        Some(())
+    })]
     Comment,
     #[regex("[A-Za-z][A-Za-z0-9_]*")]
     Ident,

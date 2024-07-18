@@ -1,4 +1,64 @@
+// mod math;
+
+fn main(argc u8) -> u8
+	=> if argc == 1 { 1 } else { 2 }
+
+/*
+fn main() {
+	//	let x u8 = &&&&&&&&0;
+	//	if x == y {};
+
+	let x = 0;
+	let y = 1;
+	if x == y {}
+}
+
+
+mod cmp;
+
+fn main() {
+	if 0 == 1 {
+
+	}
+}
+
+/*
+
+trait ToString {
+	fn to_string() -> String;
+}
+
+struct Foo {
+	foo s8,
+	bar u32,
+	bazz Bazz,
+	p u8**,
+	arr [T; 128],
+	tup (s32*, Foo*),
+}
+
+enum Maybe<T> {
+
+}
+
+struct Bazz {}
+
+fn main() {
+	let x = 10;
+	let my_foo = Foo {
+		foo: 1,
+		bar: 0,
+		bazz: Bazz {
+			t: 0
+		},
+		p: &&x,
+		tup: (&x, &bar)
+	};
+}
+
 mod math;
+
+fn foo() -> Bar => 0
 
 use math::Add;
 
@@ -14,3 +74,5 @@ enum Bar<T>
 	Y,
 	Z -> T
 }
+
+/*

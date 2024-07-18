@@ -1,0 +1,67 @@
+pub trait Add<T> {
+	type Output;
+
+	fn add(other T) -> This::Output;
+}
+
+apply Add<u8> to u8 {
+	type Output = u8;
+
+	fn add(other u8) -> This::Output
+		=> @flux.intrinsics.add_u8(this, other)
+}
+
+pub trait CmpEq {
+	fn cmp_eq(other This) -> bool;
+}
+
+/*
+apply CmpEq to s64 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u64(this, other)
+	}
+}
+
+apply CmpEq to s32 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u32(this, other)
+	}
+}
+
+apply CmpEq to s16 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u16(this, other)
+	}
+}
+
+
+apply CmpEq to s8 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u8(this, other)
+	}
+}
+
+apply CmpEq to u64 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u64(this, other)
+	}
+}
+
+apply CmpEq to u32 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u32(this, other)
+	}
+}
+
+apply CmpEq to u16 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u16(this, other)
+	}
+}
+*/
+
+apply CmpEq to u8 {
+	fn cmp_eq(other This) -> bool {
+		@flux.intrinsics.cmp_eq_u8(this, other)
+	}
+}

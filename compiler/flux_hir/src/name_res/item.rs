@@ -7,22 +7,29 @@ use crate::{
     item_scope::ItemScope,
     module::{ModuleId, ModuleTree},
     name_res::diagnostics::ResolutionError,
+    PackageId,
 };
 
 pub(crate) struct ItemResolver<'a> {
-    module_tree: &'a ModuleTree,
     builtin_scope: ItemScope,
     interner: &'static Interner,
+    package_id: PackageId,
+    module_tree: &'a ModuleTree,
 }
 
-pub(crate) type ResolvedItem = ();
+pub(crate) type ResolvedItem = (PackageId, ItemId);
 
 impl<'a> ItemResolver<'a> {
-    pub(crate) fn new(module_tree: &'a ModuleTree, interner: &'static Interner) -> Self {
+    pub(crate) fn new(
+        package_id: PackageId,
+        module_tree: &'a ModuleTree,
+        interner: &'static Interner,
+    ) -> Self {
         Self {
-            module_tree,
-            builtin_scope: ItemScope::builtin(),
+            builtin_scope: ItemScope::builtin(interner),
             interner,
+            package_id,
+            module_tree,
         }
     }
 
@@ -67,12 +74,12 @@ impl<'a> ItemResolver<'a> {
                             segment: i,
                         })
                     }
-                    Visibility::Public => return Ok(()),
+                    Visibility::Public => return Ok((self.package_id, item_id)),
                 },
             };
 
             match &cur_ns {
-                Some((vis, item_id)) => {
+                Some((vis, _item_id)) => {
                     if *vis == Visibility::Private {
                         return Err(ResolutionError::PrivateModule {
                             path: path.clone(),
@@ -89,7 +96,8 @@ impl<'a> ItemResolver<'a> {
             }
         }
 
-        Ok(())
+        let (vis, item_id) = cur_ns.unwrap(); // I think unwrap is okay here? but confirm
+        Ok((self.package_id, item_id))
     }
 
     fn resolve_name_in_module(
@@ -97,16 +105,11 @@ impl<'a> ItemResolver<'a> {
         name: &Word,
         module_id: ModuleId,
     ) -> Option<(Visibility, ItemId)> {
-        println!(
-            "{:?} in {:?}",
-            self.interner.resolve(name),
-            self.module_tree[module_id].scope
-        );
         let from_scope: Option<(crate::hir::Visibility, crate::item::ItemId)> =
             self.module_tree[module_id].scope.get(name);
         let from_builtin = || self.builtin_scope.get(name);
-        let from_prelude = || self.module_tree[ModuleTree::PRELUDE_ID].scope.get(name);
-        from_scope.or_else(from_builtin).or_else(from_prelude)
+        // let from_prelude = || self.module_tree[ModuleTree::PRELUDE_ID].scope.get(name);
+        from_scope.or_else(from_builtin)
     }
 
     fn try_resolve_in_dependency(&self, path: &Path) -> Result<ResolvedItem, ResolutionError> {

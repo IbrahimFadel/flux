@@ -31,6 +31,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                         item_id.clone(),
                     );
                 }
+                ItemTreeIdx::BuiltinType(_) => {}
                 ItemTreeIdx::Module(mod_id) => {
                     self.collect_child_module(mod_id);
                 }

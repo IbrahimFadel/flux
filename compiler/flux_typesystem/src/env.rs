@@ -1,16 +1,17 @@
+use std::collections::HashMap;
+
 use flux_diagnostics::ice;
 use flux_span::{FileId, FileSpanned, InFile, Interner, Span, WithSpan, Word};
 
 use crate::{
-    r#trait::{ApplicationId, TraitApplication},
+    r#trait::{ApplicationId, Trait, TraitApplication},
     r#type::{TypeId, TypeKind},
     scope::Scope,
+    TraitId,
 };
 
 pub trait Insert<T> {
     fn insert(&mut self, ty: FileSpanned<T>) -> TypeId;
-    fn insert_in_apply(&mut self, ty: FileSpanned<T>, aid: ApplicationId) -> TypeId;
-    fn insert_in_trait(&mut self, ty: FileSpanned<T>, trid: ()) -> TypeId;
 }
 
 impl Insert<TypeKind> for TEnv {
@@ -19,31 +20,23 @@ impl Insert<TypeKind> for TEnv {
         self.types.push(ty);
         TypeId::new(idx)
     }
-
-    #[inline]
-    fn insert_in_apply(&mut self, ty: FileSpanned<TypeKind>, _: ApplicationId) -> TypeId {
-        self.insert(ty)
-    }
-
-    #[inline]
-    fn insert_in_trait(&mut self, ty: FileSpanned<TypeKind>, _: ()) -> TypeId {
-        self.insert(ty)
-    }
 }
 
 #[derive(Debug)]
 pub struct TEnv {
     types: Vec<FileSpanned<TypeKind>>,
-    trait_applications: Vec<TraitApplication>,
+    traits: Vec<Trait>,
+    pub(super) trait_applications: HashMap<TraitId, Vec<TraitApplication>>,
     locals: Vec<Scope>,
-    pub(crate) interner: &'static Interner,
+    pub interner: &'static Interner,
 }
 
 impl TEnv {
     pub fn new(interner: &'static Interner) -> Self {
         Self {
             types: vec![],
-            trait_applications: vec![],
+            traits: vec![],
+            trait_applications: HashMap::new(),
             locals: vec![Scope::new()],
             interner,
         }
@@ -60,14 +53,25 @@ impl TEnv {
         self.types[tid.raw()] = self.types[tid.raw()].map_inner_ref(|_| tkind);
     }
 
-    pub fn insert_application(&mut self, application: TraitApplication) -> ApplicationId {
-        let idx = self.trait_applications.len();
-        self.trait_applications.push(application);
+    pub fn insert_trait(&mut self, trt: Trait) -> TraitId {
+        let idx = self.traits.len();
+        self.traits.push(trt);
+        TraitId::new(idx)
+    }
+
+    pub fn insert_application(
+        &mut self,
+        trid: TraitId,
+        application: TraitApplication,
+    ) -> ApplicationId {
+        let applications = self.trait_applications.entry(trid).or_insert(vec![]);
+        let idx = applications.len();
+        applications.push(application);
         ApplicationId::new(idx)
     }
 
-    pub fn get_application(&self, aid: &ApplicationId) -> &TraitApplication {
-        &self.trait_applications[aid.raw()]
+    pub fn get_application(&self, trid: &TraitId, aid: &ApplicationId) -> &TraitApplication {
+        &self.trait_applications[trid][aid.raw()]
     }
 
     pub fn make_ref(&mut self, tid: TypeId, new_span: Span) -> TypeId {

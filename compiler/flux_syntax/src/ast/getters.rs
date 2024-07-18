@@ -84,6 +84,12 @@ getters! {
         lparen -> tok(LParen);
         rparen -> tok(RParen);
     }
+    AddressExpr {
+        of -> node(Expr);
+    }
+    TupleExpr {
+        vals -> nodes(Expr);
+    }
     // ExprCallExpr {
     //     callee -> node(Expr);
     //     args -> node(ArgList);

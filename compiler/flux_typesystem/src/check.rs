@@ -1,15 +1,11 @@
-// mod traits;
-// mod unify;
+use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
+use flux_span::{FileId, InFile, Span, WithSpan};
 
-use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_span::{InFile, Span};
-
-use crate::{diagnostics::TypeError, env::TEnv, ConcreteKind, TypeId, TypeKind};
+use crate::{diagnostics::TypeError, env::TEnv, ConcreteKind, TraitId, TypeId, TypeKind};
 
 #[derive(Debug)]
 pub struct TChecker<'tenv> {
     pub tenv: &'tenv mut TEnv,
-    // pub trait_applications: TraitApplicationTable,
 }
 
 impl<'tenv> TChecker<'tenv> {
@@ -19,6 +15,51 @@ impl<'tenv> TChecker<'tenv> {
 }
 
 impl<'tenv> TChecker<'tenv> {
+    pub fn type_implements_trait(&mut self, tid: TypeId, trid: &TraitId) -> bool {
+        let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
+        match self.tenv.trait_applications.get(trid) {
+            Some(applications) => {
+                let valid_impls: Vec<_> = applications
+                    .clone()
+                    .iter()
+                    .map(|application| {
+                        println!(
+                            "{} and {}",
+                            self.tenv.fmt_tid(&tid),
+                            self.tenv.fmt_tid(&application.tid)
+                        );
+                        self.unify(tid, application.tid, poisoned_filespan.clone())
+                            .ok()
+                            .map(|_| application.tid)
+                    })
+                    .flatten()
+                    .collect();
+                match valid_impls.len() {
+                    0 => false,
+                    1 => true,
+                    2.. => ice("too lazy to do this"),
+                }
+            }
+            None => false,
+        }
+    }
+
+    fn is_int_supertype(&self, tid: TypeId) -> bool {
+        match &self.tenv.get(&tid).inner.inner {
+            TypeKind::Ref(tid) => self.is_int_supertype(*tid),
+            TypeKind::Int(_) => true,
+            _ => false,
+        }
+    }
+
+    fn is_int_subtype(&self, tid: TypeId) -> bool {
+        match &self.tenv.get(&tid).inner.inner {
+            TypeKind::Ref(tid) => self.is_int_subtype(*tid),
+            TypeKind::Concrete(ConcreteKind::Path(path)) => path.is_int(self.tenv.interner),
+            _ => false,
+        }
+    }
+
     pub fn unify(
         &mut self,
         a: TypeId,
@@ -76,6 +117,19 @@ impl<'tenv> TChecker<'tenv> {
                     _ => return Err(self.type_mismatch(&a, &b, unification_span)),
                 }
             }
+            (Int(a_id), Int(b_id)) => match (a_id, b_id) {
+                (None, None) => {}
+                (None, Some(b_id)) => {
+                    self.tenv.set(a, TypeKind::Int(Some(*b_id)));
+                }
+                (Some(a_id), None) => {
+                    self.tenv.set(b, TypeKind::Int(Some(*a_id)));
+                }
+                (Some(a_id), Some(b_id)) => self.unify(*a_id, *b_id, unification_span)?,
+            },
+            (Int(int_id), Generic(generic)) => {
+                // Check all int types if they fit the description, choose default int type if there's more than one
+            }
             (Int(int_id), Concrete(ConcreteKind::Path(path))) => match int_id {
                 Some(id) => self.unify(*id, b, unification_span)?,
                 None => {
@@ -96,18 +150,48 @@ impl<'tenv> TChecker<'tenv> {
                     }
                 }
             },
-            (ThisPath(segments, Some(aid)), _) => {
-                let app = self.tenv.get_application(aid);
-                let name = &segments[0];
-                let assoc_type =
-                    app.assoc_types
-                        .iter()
-                        .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None });
-                match assoc_type {
-                    Some(assoc_tid) => self.unify(*assoc_tid, b, unification_span)?,
-                    None => return Err(self.type_mismatch(&a, &b, unification_span)),
+            (Float(a_id), Float(b_id)) => match (a_id, b_id) {
+                (None, None) => {}
+                (None, Some(b_id)) => {
+                    self.tenv.set(a, TypeKind::Float(Some(*b_id)));
                 }
-            }
+                (Some(a_id), None) => {
+                    self.tenv.set(b, TypeKind::Float(Some(*a_id)));
+                }
+                (Some(a_id), Some(b_id)) => self.unify(*a_id, *b_id, unification_span)?,
+            },
+            (Float(float_id), Concrete(ConcreteKind::Path(path))) => match float_id {
+                Some(id) => self.unify(*id, b, unification_span)?,
+                None => {
+                    if path.is_float(self.tenv.interner) {
+                        self.tenv.set(a, TypeKind::Float(Some(b)));
+                    } else {
+                        return Err(self.type_mismatch(&a, &b, unification_span));
+                    }
+                }
+            },
+            (Concrete(ConcreteKind::Path(path)), Float(float_id)) => match float_id {
+                Some(id) => self.unify(a, *id, unification_span)?,
+                None => {
+                    if path.is_int(self.tenv.interner) {
+                        self.tenv.set(b, TypeKind::Float(Some(a)));
+                    } else {
+                        return Err(self.type_mismatch(&a, &b, unification_span));
+                    }
+                }
+            },
+            // (ThisPath(crate::r#type::ThisPath { segments }), _) => {
+            // let app = self.tenv.get_application(trid, aid);
+            // let name = &segments[0];
+            // let assoc_type =
+            //     app.assoc_types
+            //         .iter()
+            //         .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None });
+            // match assoc_type {
+            //     Some(assoc_tid) => self.unify(*assoc_tid, b, unification_span)?,
+            //     None => return Err(self.type_mismatch(&a, &b, unification_span)),
+            // }
+            // }
             (_, _) => return Err(self.type_mismatch(&a, &b, unification_span)),
         }
         Ok(())

@@ -1,8 +1,13 @@
 use itertools::Itertools;
+use num_traits::AsPrimitive;
 
 pub trait Plural {
     fn plural(&self, suffix: &'static str) -> &str;
     fn singular(&self, suffix: &'static str) -> &str;
+}
+
+pub trait NthSuffix {
+    fn nth_suffix(self) -> &'static str;
 }
 
 impl Plural for usize {
@@ -37,6 +42,20 @@ impl<T> Plural for Vec<T> {
             suffix
         } else {
             ""
+        }
+    }
+}
+
+impl<T> NthSuffix for T
+where
+    T: AsPrimitive<i64>,
+{
+    fn nth_suffix(self) -> &'static str {
+        match self.as_() {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
         }
     }
 }

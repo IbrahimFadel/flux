@@ -1,4 +1,4 @@
-use flux_diagnostics::fmt::quote_and_listify;
+use flux_diagnostics::fmt::{quote_and_listify, Plural};
 use flux_proc_macros::diagnostic;
 use itertools::Itertools;
 
@@ -62,5 +62,65 @@ pub enum LowerError {
         terminator: (),
         #[filespanned]
         following_expr: (),
+    },
+    #[error(
+        location = path,
+        primary = "path resolved to incorrect item kind",
+        label at path = "expected {path} to resolve to a {expected} but it was a {got}",
+    )]
+    ExpectedDifferentItem {
+        #[filespanned]
+        path: String,
+        expected: &'static str,
+        got: &'static str,
+    },
+    #[error(
+        location = struct_name,
+        primary = "missing fields in struct expression",
+        label at struct_name = "missing fields in `{struct_name}` initialization",
+        label at missing_fields = "missing fields {}" with (
+            quote_and_listify(missing_fields.iter())
+        )
+    )]
+    MissingFieldsInStructExpr {
+        #[filespanned]
+        struct_name: String,
+        #[filespanned]
+        missing_fields: Vec<String>,
+    },
+    #[error(
+        location = got_names,
+        primary = "missing generic arguments",
+        label at got_names = "got {} generic argument{}, {}" with (got_names.len(), got_names.plural("s"), quote_and_listify(got_names.iter())),
+        label at expected_names = "expected {} generic argument{}, {}" with (expected_names.len(), expected_names.plural("s"), quote_and_listify(expected_names.iter()))
+    )]
+    MissingGenericArguments {
+        #[filespanned]
+        got_names: Vec<String>,
+        #[filespanned]
+        expected_names: Vec<String>,
+    },
+    #[error(
+        location = item_name,
+        primary = "unused generics",
+        label at item_name = "unused generics in `{item_name}`",
+        label at unused_generics = "{} unused" with (
+            quote_and_listify(unused_generics.iter().sorted())
+        ),
+    )]
+    UnusedGenerics {
+        #[filespanned]
+        item_name: String,
+        #[filespanned]
+        unused_generics: Vec<String>,
+    },
+    #[error(
+        location = local,
+        primary = "unknown local referenced",
+        label at local = "unknown local `{local}` referenced"
+    )]
+    UnknownLocal {
+        #[filespanned]
+        local: String,
     },
 }

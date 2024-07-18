@@ -9,5 +9,6 @@ text-size = "1.1.1"
 lasso = { version = "0.7.2", features = ["multi-threaded"] }
 colored = "2.1.0"
 itertools = "0.13.0"
+num-traits = "0.2.19"
 
 flux_span = { path = "../flux_span" }

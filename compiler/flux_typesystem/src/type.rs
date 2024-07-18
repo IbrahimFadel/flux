@@ -4,7 +4,10 @@ use std::ops::Deref;
 use flux_span::{Interner, Word};
 use itertools::Itertools;
 
-use crate::r#trait::{ApplicationId, TraitRestriction};
+use crate::{
+    r#trait::{ApplicationId, TraitRestriction},
+    TraitId,
+};
 
 /// A `flux_typesystem` type id
 ///
@@ -31,7 +34,7 @@ impl Display for TypeId {
 
 #[derive(Debug, Clone)]
 pub enum TypeKind {
-    ThisPath(Vec<Word>, Option<ApplicationId>),
+    ThisPath(ThisPath),
     Concrete(ConcreteKind),
     Int(Option<TypeId>),
     Float(Option<TypeId>),
@@ -39,6 +42,17 @@ pub enum TypeKind {
     Generic(Generic),
     Never,
     Unknown,
+}
+
+#[derive(Debug, Clone)]
+pub struct ThisPath {
+    pub segments: Vec<Word>,
+}
+
+impl ThisPath {
+    pub fn new(segments: Vec<Word>) -> Self {
+        Self { segments }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +70,7 @@ impl Generic {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ThisPath(_, _) => write!(f, "todo"),
+            Self::ThisPath(_) => write!(f, "todo"),
             Self::Concrete(concrete) => write!(f, "{concrete}"),
             Self::Float(_) => write!(f, "float"),
             Self::Generic(Generic { name, .. }) => write!(f, "{name:?}"),
@@ -73,7 +87,7 @@ impl Display for TypeKind {
 /// The kind of [`TypeKind::Concrete`]
 #[derive(Debug, Clone)]
 pub enum ConcreteKind {
-    Array(TypeId, u32),
+    Array(TypeId, u64),
     Ptr(TypeId),
     Path(Path),
     Tuple(Vec<TypeId>),
@@ -87,6 +101,7 @@ pub struct Path {
 
 impl Path {
     const INT_PATHS: [&'static str; 8] = ["u64", "u32", "u16", "u8", "s64", "s32", "s16", "s8"];
+    const FLOAT_PATHS: [&'static str; 2] = ["f64", "f32"];
 
     pub fn new(segments: Vec<Word>, generic_args: Vec<TypeId>) -> Self {
         Self {
@@ -106,6 +121,25 @@ impl Path {
             false
         }
     }
+
+    pub fn is_float(&self, interner: &'static Interner) -> bool {
+        if self.segments.len() == 1 {
+            let name = self.segments[0];
+            Self::FLOAT_PATHS
+                .iter()
+                .find(|path| interner.get_or_intern_static(path) == name)
+                .is_some()
+        } else {
+            false
+        }
+    }
+
+    pub fn to_string(&self, interner: &'static Interner) -> String {
+        self.segments
+            .iter()
+            .map(|seg| interner.resolve(seg))
+            .join("::")
+    }
 }
 
 impl Display for ConcreteKind {
@@ -113,7 +147,7 @@ impl Display for ConcreteKind {
         match self {
             Self::Array(ty, n) => write!(f, "[{ty}; {n}]"),
             Self::Path(path) => write!(f, "{path:?}"),
-            Self::Ptr(ptr) => write!(f, "*{ptr}"),
+            Self::Ptr(ptr) => write!(f, "{ptr}*"),
             Self::Tuple(types) => {
                 write!(f, "({})", types.iter().map(|id| id.to_string()).join(", "))
             }

@@ -71,6 +71,9 @@ fn expr_binding_power(
     let mut lhs = lhs(p, restrictions)?;
     loop {
         let op = p.peek();
+        if op == TokenKind::Ampersand {
+            p.bump(TokenKind::Ampersand);
+        }
         let op_bp = current_op_prec(p);
         if op_bp < minimum_binding_power {
             break;
@@ -92,15 +95,23 @@ fn expr_binding_power(
 
 fn lhs(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker> {
     let m;
+    let mut double_ref = false;
     let kind = match p.peek() {
         TokenKind::Ampersand => {
             m = p.start();
             p.bump(TokenKind::Ampersand);
             SyntaxKind::AddressExpr
         }
+        // If there's a double reference, it will be tokenized as CmpAnd
+        TokenKind::CmpAnd => {
+            double_ref = true;
+            m = p.start();
+            p.bump(TokenKind::CmpAnd);
+            SyntaxKind::AddressExpr
+        }
         TokenKind::Star => {
             m = p.start();
-            p.bump(TokenKind::Ampersand);
+            p.bump(TokenKind::Star);
             SyntaxKind::DerefExpr
         }
         // TokenKind::LBrace => {
@@ -122,6 +133,10 @@ fn lhs(p: &mut Parser, restrictions: ExprRestrictions) -> Option<CompletedMarker
     };
     expr_binding_power(p, 255, restrictions);
     let m = m.complete(p, kind);
+    if double_ref {
+        let outer = m.precede(p);
+        return Some(outer.complete(p, SyntaxKind::AddressExpr));
+    }
     Some(m)
 }
 

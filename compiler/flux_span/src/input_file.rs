@@ -1,8 +1,8 @@
-use std::ops::Deref;
+use std::{mem::transmute, ops::Deref};
 
 use cstree::interning::TokenKey;
 
-use crate::{span::Spanned, Span};
+use crate::{span::Spanned, Interner, Span};
 
 pub type Word = TokenKey;
 
@@ -11,9 +11,10 @@ pub type Word = TokenKey;
 pub struct FileId(TokenKey);
 
 impl FileId {
-    // pub fn poisoned() -> Self {
-    //     Self(interner.get_or_intern_static(POISONED_FILE_ID))
-    // }
+    // This should only be used when you know for certain the file id won't end up being used (the diagnostic won't be reported)
+    pub unsafe fn poisoned() -> Self {
+        Self(transmute(u32::MAX))
+    }
 
     pub fn new(key: TokenKey) -> Self {
         Self(key)
@@ -21,6 +22,14 @@ impl FileId {
 
     pub fn key(&self) -> &TokenKey {
         &self.0
+    }
+
+    pub fn prelude(interner: &'static Interner) -> Self {
+        Self(interner.get_or_intern_static("<~~~prelude~~~>"))
+    }
+
+    pub fn as_str(&self, interner: &'static Interner) -> &str {
+        interner.resolve(&self.0)
     }
 }
 
@@ -65,6 +74,8 @@ impl<T> InFile<T> {
 }
 
 pub type FileSpanned<T> = InFile<Spanned<T>>;
+
+impl Copy for InFile<Span> {}
 
 impl InFile<Span> {
     pub fn to_file_spanned<T>(&self, inner: T) -> FileSpanned<T> {

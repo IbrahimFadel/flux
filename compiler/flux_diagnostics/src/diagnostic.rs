@@ -115,11 +115,18 @@ pub enum DiagnosticCode {
     UnknownGeneric,
     CouldNotResolveModDecl,
     DuplicateGenericParams,
+    UnusedGenerics,
 
     CannotResolveEmptyPath,
+    UnresolvedPath,
+    PrivateModule,
 
     PositiveIntegerOverflow,
     StmtFollowingTerminatorExpr,
+    ExpectedDifferentItem,
+    MissingFieldsInStructExpr,
+    MissingGenericArguments,
+    UnknownLocal,
 
     TypeMismatch,
 }

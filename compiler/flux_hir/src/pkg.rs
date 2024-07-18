@@ -1,23 +1,34 @@
+use std::collections::HashMap;
+
 use flux_diagnostics::{Diagnostic, SourceCache};
 use flux_span::{FileId, Interner};
 use flux_typesystem::TEnv;
-use la_arena::ArenaMap;
+use la_arena::{Arena, Idx};
 
 use crate::{
     cfg::Config,
+    hir::{Expr, ExprIdx, FnDecl},
     item::ItemId,
     item_tree::{lower_cst_to_item_tree, ItemTree},
     module::{collect::ModCollector, ModuleData, ModuleId, ModuleTree},
     name_res::{import::Import, FileResolver, ModDir},
+    prelude::PRELUDE_SRC,
 };
 
 mod prettyprint;
 
 #[derive(Debug)]
-pub struct Package {
+pub struct PackageDefs {
     pub(crate) item_tree: ItemTree,
     pub(crate) module_tree: ModuleTree,
-    pub(crate) tenvs: ArenaMap<ModuleId, TEnv>,
+}
+
+pub type PackageId = Idx<PackageDefs>;
+
+#[derive(Debug)]
+pub struct PackageBodies {
+    pub(crate) exprs: Arena<Expr>,
+    pub(crate) fn_exprs: HashMap<(ModuleId, Idx<FnDecl>), ExprIdx>,
 }
 
 pub(crate) struct PkgBuilder<'a, R: FileResolver> {
@@ -26,11 +37,11 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
     pub interner: &'static Interner,
     pub source_cache: &'a mut SourceCache,
     pub diagnostics: Vec<Diagnostic>,
-    tenvs: ArenaMap<ModuleId, TEnv>,
+    package_bodies: PackageBodies,
+    tenv: TEnv,
     config: &'a Config,
     pub resolver: R,
     unresolved_imports: Vec<Import>,
-    module_file_map: &'a mut ArenaMap<ModuleId, FileId>,
 }
 
 impl<'a, R: FileResolver> PkgBuilder<'a, R> {
@@ -39,35 +50,50 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         source_cache: &'a mut SourceCache,
         config: &'a Config,
         resolver: R,
-        module_file_map: &'a mut ArenaMap<ModuleId, FileId>,
     ) -> Self {
         Self {
             item_tree: ItemTree::new(),
             module_tree: ModuleTree::new(),
             interner,
-            tenvs: ArenaMap::new(),
+            package_bodies: PackageBodies {
+                exprs: Arena::new(),
+                fn_exprs: HashMap::new(),
+            },
+            tenv: TEnv::new(interner),
             source_cache,
             config,
             resolver,
             diagnostics: vec![],
             unresolved_imports: vec![],
-            module_file_map,
         }
     }
 
-    pub fn finish(self) -> (Package, Vec<Diagnostic>) {
+    pub fn finish(self) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
         (
-            Package {
+            PackageDefs {
                 item_tree: self.item_tree,
                 module_tree: self.module_tree,
-                tenvs: self.tenvs,
             },
+            self.package_bodies,
+            self.tenv,
             self.diagnostics,
         )
     }
 
     pub(crate) fn seed_with_entry(&mut self, file_id: FileId, src: &str) {
         let (root, items) = self.new_module(file_id, src, None);
+
+        let prelude_fileid = FileId::prelude(self.interner);
+        let (prelude, prelude_items) = self.new_module(prelude_fileid, PRELUDE_SRC, Some(root));
+        ModCollector {
+            file_id: prelude_fileid,
+            mod_dir: ModDir::prelude(),
+            mod_id: prelude,
+            diagnostics: vec![],
+            pkg_builder: self,
+        }
+        .collect(&prelude_items);
+
         let root_mod_collector = ModCollector {
             file_id,
             mod_dir: ModDir::root(),
@@ -94,20 +120,20 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
 
         self.diagnostics.append(&mut cst.diagnostics);
 
-        let module_data = ModuleData::new(parent);
+        let module_data = ModuleData::new(parent, file_id);
         let module_id = self.module_tree.alloc(module_data);
-        self.tenvs.insert(module_id, TEnv::new(self.interner));
-        self.module_file_map.insert(module_id, file_id);
 
-        let items = lower_cst_to_item_tree(
+        let (items, mut diagnostics) = lower_cst_to_item_tree(
             root,
             file_id,
             &mut self.item_tree,
-            &mut self.module_tree,
             module_id,
             self.interner,
-            &mut self.tenvs[module_id],
+            &mut self.package_bodies,
+            &mut self.tenv,
         );
+
+        self.diagnostics.append(&mut diagnostics);
 
         (module_id, items)
     }

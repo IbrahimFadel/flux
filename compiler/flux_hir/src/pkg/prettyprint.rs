@@ -4,42 +4,55 @@ use ascii_tree::{write_tree, Tree};
 use colored::Colorize;
 use cstree::interning::TokenKey;
 use flux_span::Interner;
-use flux_typesystem::{ConcreteKind, TEnv, TypeId};
-use la_arena::ArenaMap;
+use flux_typesystem::{ConcreteKind, TEnv, TypeId, Typed};
+use la_arena::Idx;
 use pretty::RcDoc;
 
 use crate::{
     hir::{
-        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariant,
-        EnumDeclVariantList, FnDecl, GenericParams, ModDecl, Param, ParamList, Path, StructDecl,
-        StructFieldDecl, StructFieldDeclList, TraitDecl, TypeBound, TypeBoundList, UseDecl,
-        Visibility,
+        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, BinOp, EnumDecl, EnumDeclVariant,
+        EnumDeclVariantList, FnDecl, GenericParams, If, ModDecl, Param, ParamList, Path,
+        StructDecl, StructFieldDecl, StructFieldDeclList, TraitDecl, TypeBound, TypeBoundList,
+        UseDecl, Visibility,
     },
     item_tree::ItemTree,
     module::{ModuleData, ModuleId, ModuleTree},
+    Expr, ExprIdx, PackageBodies,
 };
 
-use super::Package;
+use super::PackageDefs;
 
 const INDENT_SIZE: isize = 2;
 
-impl Package {
+impl PackageDefs {
     pub(crate) fn to_doc<'a>(
         &'a self,
         interner: &'static Interner,
-        tenvs: &'a ArenaMap<ModuleId, TEnv>,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+        with_bodies: bool,
     ) -> RcDoc {
         RcDoc::text("+-------------+\n| Module Tree |\n+-------------+\n")
             .append(self.module_tree.to_doc(interner))
             .append(RcDoc::text(
                 "+-------------+\n|  Item Tree  |\n+-------------+\n",
             ))
-            .append(self.item_tree.to_doc(&self.module_tree, interner, tenvs))
+            .append(
+                self.item_tree
+                    .to_doc(&self.module_tree, interner, bodies, tenv, with_bodies),
+            )
     }
 
-    pub(crate) fn to_pretty(&self, width: usize, interner: &'static Interner) -> String {
+    pub(crate) fn to_pretty(
+        &self,
+        width: usize,
+        bodies: &PackageBodies,
+        tenv: &TEnv,
+        interner: &'static Interner,
+        with_bodies: bool,
+    ) -> String {
         let mut w = Vec::new();
-        self.to_doc(interner, &self.tenvs)
+        self.to_doc(interner, bodies, tenv, with_bodies)
             .render(width, &mut w)
             .unwrap();
         String::from_utf8(w).unwrap()
@@ -51,7 +64,9 @@ impl ItemTree {
         &'a self,
         module_tree: &'a ModuleTree,
         interner: &'static Interner,
-        tenvs: &'a ArenaMap<ModuleId, TEnv>,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+        with_bodies: bool,
     ) -> RcDoc {
         let (module_id, root) = module_tree
             .get()
@@ -67,8 +82,9 @@ impl ItemTree {
             self,
             module_tree,
             interner,
-            &tenvs[module_id],
-            tenvs,
+            bodies,
+            tenv,
+            with_bodies,
         )
     }
 }
@@ -83,7 +99,24 @@ impl Visibility {
 }
 
 impl FnDecl {
-    pub fn to_doc<'a>(&'a self, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc {
+    pub fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+        id: Option<(ModuleId, Idx<FnDecl>)>,
+    ) -> RcDoc {
+        let opt_body = if let Some(id) = id {
+            RcDoc::space()
+                .append(RcDoc::text("{"))
+                .append(RcDoc::line())
+                .append(bodies.fn_exprs[&id].to_doc(interner, bodies, tenv))
+                .nest(INDENT_SIZE)
+                .append(RcDoc::line())
+                .append(RcDoc::text("}"))
+        } else {
+            RcDoc::text(";".black().to_string())
+        };
         self.visibility
             .to_doc()
             .append(RcDoc::text("fn".red().to_string()))
@@ -98,7 +131,7 @@ impl FnDecl {
             .append(RcDoc::space())
             .append(type_id_to_doc(&self.return_ty, interner, tenv))
             .append(self.generic_params.where_clause_to_doc(interner))
-            .append(RcDoc::text(";".black().to_string()))
+            .append(opt_body)
     }
 }
 
@@ -179,6 +212,7 @@ impl TraitDecl {
     pub(crate) fn to_doc<'a>(
         &'a self,
         interner: &'static Interner,
+        bodies: &'a PackageBodies,
         tenv: &'a TEnv,
         item_tree: &'a ItemTree,
     ) -> RcDoc {
@@ -191,7 +225,7 @@ impl TraitDecl {
         let methods = RcDoc::intersperse(
             self.methods.iter().map(|method_idx| {
                 let method = &item_tree.functions[*method_idx];
-                method.to_doc(interner, tenv)
+                method.to_doc(interner, bodies, tenv, None)
             }),
             RcDoc::line(),
         );
@@ -208,7 +242,11 @@ impl TraitDecl {
             .append(RcDoc::text("{".black().to_string()))
             .append(RcDoc::line())
             .append(assoc_type_decls)
-            .append(RcDoc::line())
+            .append(if self.assoc_type_decls.is_empty() {
+                RcDoc::nil()
+            } else {
+                RcDoc::line()
+            })
             .append(methods)
             .nest(INDENT_SIZE)
             .append(RcDoc::line())
@@ -278,8 +316,10 @@ impl ApplyDecl {
     pub(crate) fn to_doc<'a>(
         &'a self,
         interner: &'static Interner,
+        bodies: &'a PackageBodies,
         tenv: &'a TEnv,
         item_tree: &'a ItemTree,
+        module_id: ModuleId,
     ) -> RcDoc {
         let assoc_types = RcDoc::intersperse(
             self.assoc_types
@@ -288,9 +328,14 @@ impl ApplyDecl {
             RcDoc::line(),
         );
         let methods = RcDoc::intersperse(
-            self.methods
-                .iter()
-                .map(|method_idx| item_tree.functions[*method_idx].to_doc(interner, tenv)),
+            self.methods.iter().map(|method_idx| {
+                item_tree.functions[*method_idx].to_doc(
+                    interner,
+                    bodies,
+                    tenv,
+                    Some((module_id, *method_idx)),
+                )
+            }),
             RcDoc::line(),
         );
         RcDoc::text("apply".red().to_string())
@@ -443,13 +488,139 @@ impl UseDecl {
     }
 }
 
+impl ExprIdx {
+    pub fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+    ) -> RcDoc {
+        bodies.exprs[self.idx()].to_doc(interner, bodies, tenv)
+    }
+}
+
+impl Expr {
+    pub fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+    ) -> RcDoc {
+        match self {
+            Expr::Address(address_expr) => {
+                RcDoc::text("&").append(address_expr.to_doc(interner, bodies, tenv))
+            }
+            Expr::BinOp(bin_op_expr) => bin_op_expr.to_doc(interner, bodies, tenv),
+            Expr::Int(int_expr) => RcDoc::text(int_expr.to_string().purple().to_string()),
+            Expr::Tuple(vals) => RcDoc::text("(")
+                .append(RcDoc::intersperse(
+                    vals.iter().map(|idx| idx.to_doc(interner, bodies, tenv)),
+                    RcDoc::text(", "),
+                ))
+                .append(RcDoc::text(")")),
+            Expr::Path(path_expr) => path_expr.to_doc(interner, tenv),
+            Expr::Struct(_) => todo!(),
+            Expr::If(if_expr) => if_expr.to_doc(interner, bodies, tenv),
+            Expr::Poisoned => todo!(),
+        }
+    }
+}
+
+impl BinOp {
+    pub fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+    ) -> RcDoc {
+        use crate::hir::Op::*;
+        let op = match self.op.inner {
+            Eq => "=",
+            Add => "+",
+            Sub => "-",
+            Mul => "*",
+            Div => "/",
+            CmpAnd => "&&",
+            CmpEq => "==",
+            CmpGt => ">",
+            CmpGte => ">=",
+            CmpLt => "<",
+            CmpLte => "<=",
+            CmpNeq => "!=",
+            CmpOr => "||",
+        }
+        .black()
+        .to_string();
+        self.lhs
+            .to_doc(interner, bodies, tenv)
+            .append(RcDoc::space())
+            .append(RcDoc::text(op))
+            .append(RcDoc::space().append(self.rhs.to_doc(interner, bodies, tenv)))
+    }
+}
+
+impl If {
+    pub fn to_doc<'a>(
+        &'a self,
+        interner: &'static Interner,
+        bodies: &'a PackageBodies,
+        tenv: &'a TEnv,
+    ) -> RcDoc {
+        RcDoc::text("if".red().to_string())
+            .append(RcDoc::space())
+            .append(self.condition().to_doc(interner, bodies, tenv))
+            .append(RcDoc::space())
+            .append(RcDoc::text("{"))
+            .append(RcDoc::line())
+            .append(self.then().to_doc(interner, bodies, tenv))
+            .nest(INDENT_SIZE)
+            .append(RcDoc::line())
+            .append(RcDoc::text("}"))
+            .append(self.else_ifs().map(|else_ifs| {
+                RcDoc::intersperse(
+                    else_ifs
+                        .iter()
+                        .array_chunks()
+                        .map(|exprs: [&Typed<ExprIdx>; 2]| {
+                            RcDoc::space()
+                                .append(RcDoc::text("else".red().to_string()))
+                                .append(RcDoc::space())
+                                .append(RcDoc::text("if".red().to_string()))
+                                .append(RcDoc::space())
+                                .append(exprs[0].to_doc(interner, bodies, tenv))
+                                .append(RcDoc::space())
+                                .append(RcDoc::text("{"))
+                                .append(RcDoc::line())
+                                .append(exprs[1].to_doc(interner, bodies, tenv))
+                                .nest(INDENT_SIZE)
+                                .append(RcDoc::line())
+                                .append(RcDoc::text("}"))
+                        }),
+                    RcDoc::nil(),
+                )
+            }))
+            .append(self.else_block().map_or(RcDoc::nil(), |else_block| {
+                RcDoc::space()
+                    .append(RcDoc::text("else".red().to_string()))
+                    .append(RcDoc::space())
+                    .append(RcDoc::text("{"))
+                    .append(RcDoc::line())
+                    .append(else_block.to_doc(interner, bodies, tenv))
+                    .nest(INDENT_SIZE)
+                    .append(RcDoc::line())
+                    .append(RcDoc::text("}"))
+            }))
+    }
+}
+
 fn type_id_to_doc<'a>(tid: &TypeId, interner: &'static Interner, tenv: &'a TEnv) -> RcDoc<'a> {
     use flux_typesystem::TypeKind::*;
     match &tenv.get(tid).inner.inner {
-        ThisPath(this_path, _) => RcDoc::text("This".red().to_string())
+        ThisPath(this_path) => RcDoc::text("This".red().to_string())
             .append(RcDoc::text("::".black().to_string()))
             .append(RcDoc::intersperse(
                 this_path
+                    .segments
                     .iter()
                     .map(|segment| interner.resolve(segment).yellow().to_string()),
                 RcDoc::text("::".black().to_string()),
@@ -551,15 +722,16 @@ impl ModuleData {
         }
     }
 
-    pub fn to_doc<'a>(
+    pub(crate) fn to_doc<'a>(
         &'a self,
         path: &[TokenKey],
         module_id: &ModuleId,
         item_tree: &'a ItemTree,
         module_tree: &'a ModuleTree,
         interner: &'static Interner,
+        bodies: &'a PackageBodies,
         tenv: &'a TEnv,
-        tenvs: &'a ArenaMap<ModuleId, TEnv>,
+        with_bodies: bool,
     ) -> RcDoc {
         let name = RcDoc::intersperse(
             path.iter()
@@ -573,14 +745,24 @@ impl ModuleData {
                 .map(|item_id| {
                     if item_id.mod_id == *module_id {
                         Some(match item_id.idx {
-                            crate::item::ItemTreeIdx::Apply(apply_decl) => {
-                                item_tree.applies[apply_decl].to_doc(interner, tenv, item_tree)
-                            }
+                            crate::item::ItemTreeIdx::Apply(apply_decl) => item_tree.applies
+                                [apply_decl]
+                                .to_doc(interner, bodies, tenv, item_tree, *module_id),
+                            crate::item::ItemTreeIdx::BuiltinType(_) => RcDoc::text("builtin"),
                             crate::item::ItemTreeIdx::Enum(enum_decl) => {
                                 item_tree.enums[enum_decl].to_doc(interner, tenv)
                             }
                             crate::item::ItemTreeIdx::Function(fn_decl) => {
-                                item_tree.functions[fn_decl].to_doc(interner, tenv)
+                                item_tree.functions[fn_decl].to_doc(
+                                    interner,
+                                    bodies,
+                                    tenv,
+                                    if with_bodies {
+                                        Some((*module_id, fn_decl))
+                                    } else {
+                                        None
+                                    },
+                                )
                             }
                             crate::item::ItemTreeIdx::Module(mod_decl) => {
                                 item_tree.mods[mod_decl].to_doc(interner)
@@ -588,9 +770,9 @@ impl ModuleData {
                             crate::item::ItemTreeIdx::Struct(struct_decl) => {
                                 item_tree.structs[struct_decl].to_doc(interner, tenv)
                             }
-                            crate::item::ItemTreeIdx::Trait(trait_decl) => {
-                                item_tree.traits[trait_decl].to_doc(interner, tenv, item_tree)
-                            }
+                            crate::item::ItemTreeIdx::Trait(trait_decl) => item_tree.traits
+                                [trait_decl]
+                                .to_doc(interner, bodies, tenv, item_tree),
                             crate::item::ItemTreeIdx::Use(use_decl) => {
                                 item_tree.uses[use_decl].to_doc(interner, tenv)
                             }
@@ -611,8 +793,9 @@ impl ModuleData {
                     item_tree,
                     module_tree,
                     interner,
-                    &tenvs[*mod_id],
-                    tenvs,
+                    bodies,
+                    tenv,
+                    with_bodies,
                 )
             }),
             RcDoc::hardline(),

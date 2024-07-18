@@ -1,0 +1,9 @@
+pub trait CmpEq {
+	fn eq(other This) -> u8;
+}
+
+apply CmpEq to u32 {
+	fn eq(other u32) -> u8 {
+		0
+	}
+}

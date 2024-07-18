@@ -1,15 +1,20 @@
+use std::collections::HashMap;
+
+use flux_diagnostics::Diagnostic;
 use flux_span::{FileId, Interner};
 use flux_syntax::{
     ast::{self, AstNode},
     SyntaxNode,
 };
-use flux_typesystem::TEnv;
-use la_arena::Arena;
+use flux_typesystem::{TEnv, TraitId};
+use la_arena::{Arena, Idx};
 
 use crate::{
-    hir::{ApplyDecl, EnumDecl, FnDecl, ModDecl, StructDecl, TraitDecl, UseDecl},
+    hir::{ApplyDecl, EnumDecl, Expr, ExprIdx, FnDecl, ModDecl, StructDecl, TraitDecl, UseDecl},
     item::ItemId,
-    module::{ModuleId, ModuleTree},
+    module::ModuleId,
+    pkg::PackageBodies,
+    PackageId,
 };
 
 pub(crate) mod lower;
@@ -45,13 +50,20 @@ pub(crate) fn lower_cst_to_item_tree(
     root: SyntaxNode,
     file_id: FileId,
     item_tree: &mut ItemTree,
-    module_tree: &mut ModuleTree,
     module_id: ModuleId,
     interner: &'static Interner,
+    package_bodies: &mut PackageBodies,
     tenv: &mut TEnv,
-) -> Vec<ItemId> {
+) -> (Vec<ItemId>, Vec<Diagnostic>) {
     let root = ast::Root::cast(root)
         .unwrap_or_else(|| flux_diagnostics::ice("root syntax node should always cast"));
-    let ctx = lower::Ctx::new(item_tree, module_tree, module_id, tenv, interner, file_id);
+    let ctx = lower::Ctx::new(
+        item_tree,
+        module_id,
+        package_bodies,
+        tenv,
+        interner,
+        file_id,
+    );
     ctx.lower_module_items(&root)
 }

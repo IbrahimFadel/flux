@@ -248,6 +248,7 @@ dependencies = [
  "flux_diagnostics",
  "flux_hir",
  "flux_span",
+ "flux_typesystem",
  "la-arena",
  "lasso",
  "pretty",
@@ -275,6 +276,7 @@ dependencies = [
  "flux_span",
  "itertools 0.13.0",
  "lasso",
+ "num-traits",
  "text-size",
 ]
 
@@ -564,6 +566,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c073d3c1930d0751774acf49e66653acecb416c3a54c6ec095a9b11caddb5a68"
 dependencies = [
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
