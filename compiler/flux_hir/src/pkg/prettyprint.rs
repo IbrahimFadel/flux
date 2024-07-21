@@ -353,7 +353,11 @@ impl ApplyDecl {
             .append(RcDoc::text("{".black().to_string()))
             .append(RcDoc::line())
             .append(assoc_types)
-            .append(RcDoc::line())
+            .append(if self.assoc_types.is_empty() {
+                RcDoc::nil()
+            } else {
+                RcDoc::line()
+            })
             .append(methods)
             .nest(INDENT_SIZE)
             .append(RcDoc::line())
@@ -521,6 +525,7 @@ impl Expr {
             Expr::Path(path_expr) => path_expr.to_doc(interner, tenv),
             Expr::Struct(_) => todo!(),
             Expr::If(if_expr) => if_expr.to_doc(interner, bodies, tenv),
+            Expr::Intrinsic => RcDoc::text("intrinsic (TODO)"),
             Expr::Poisoned => todo!(),
         }
     }
@@ -617,7 +622,11 @@ fn type_id_to_doc<'a>(tid: &TypeId, interner: &'static Interner, tenv: &'a TEnv)
     use flux_typesystem::TypeKind::*;
     match &tenv.get(tid).inner.inner {
         ThisPath(this_path) => RcDoc::text("This".red().to_string())
-            .append(RcDoc::text("::".black().to_string()))
+            .append(if this_path.segments.is_empty() {
+                RcDoc::nil()
+            } else {
+                RcDoc::text("::".black().to_string())
+            })
             .append(RcDoc::intersperse(
                 this_path
                     .segments

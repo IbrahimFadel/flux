@@ -4,6 +4,7 @@ mod io;
 mod reporting;
 
 use std::{
+    backtrace::Backtrace,
     fmt::Display,
     iter::{once, repeat},
     process::exit,
@@ -32,12 +33,13 @@ pub fn ice(msg: impl Display) -> ! {
     );
 
     eprintln!(
-        "{}\n| {} |\n|\t{} |\n{}\n{}",
+        "{}\n| {} |\n|\t{} |\n{}\n{}\nStack Trace:\n{}",
         box_top.clone(),
         ice.red(),
         formatted_msg.blue(),
         box_top,
-        "Exiting...".black()
+        "Exiting...".black(),
+        Backtrace::force_capture()
     );
     exit(0)
 }

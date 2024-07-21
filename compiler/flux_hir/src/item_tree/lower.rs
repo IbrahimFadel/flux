@@ -1,8 +1,9 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, Interner, Span, Spanned, ToSpan, WithSpan, Word};
 use flux_syntax::ast::{self, AstNode, Root};
-use flux_typesystem::{TEnv, TypeId, TypeKind};
+use flux_typesystem::{self as ts, TEnv, TypeId, TypeKind};
 use la_arena::Idx;
+use ts::{FnSignature, ThisCtx, TraitId};
 
 use crate::{
     body::LowerCtx,
@@ -83,19 +84,6 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         let to_ty = self.lower_apply_to_ty(apply_decl.to_ty(), &generic_params);
         let assoc_types =
             self.lower_associated_type_definitions(apply_decl.associated_types(), &generic_params);
-
-        // let trid = self.trait_map.get()
-        // self.body_ctx.tckh.tenv.insert_application(trid, application);
-        // let aid = self
-        //     .body_ctx
-        //     .tckh
-        //     .tenv
-        //     .insert_application(TraitApplication::new(
-        //         assoc_types
-        //             .iter()
-        //             .map(|tdef| (tdef.name.inner, tdef.ty.inner))
-        //             .collect(),
-        //     ));
 
         let methods = self.lower_apply_methods(apply_decl.methods());
 
@@ -179,13 +167,10 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         );
         let associated_types =
             self.lower_associated_type_decls(trait_decl.associated_types(), &generic_params);
-
         let methods = self.lower_trait_method_decls(trait_decl.method_decls(), &generic_params);
-
         let trait_decl =
             TraitDecl::new(visibility, name, generic_params, associated_types, methods);
         let trait_id = self.item_tree.traits.alloc(trait_decl);
-
         ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Trait(trait_id))
     }
 

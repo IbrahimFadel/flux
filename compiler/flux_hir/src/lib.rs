@@ -78,10 +78,14 @@ pub fn lower_package_bodies(
         interner,
         FileId::prelude(interner),
     );
-    ctx.populate_trait_map();
-    ctx.populate_applications();
+    ctx.attach_trait_type_contexts();
 
-    for (module_id, _) in package.module_tree.get().iter() {
+    for (module_id, _) in package
+        .module_tree
+        .get()
+        .iter()
+        .filter(|(module_id, _)| *module_id != ModuleTree::PRELUDE_ID)
+    {
         let file_id = packages[package_id].module_tree[module_id].file_id;
 
         // This is gross.

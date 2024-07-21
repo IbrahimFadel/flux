@@ -1,3 +1,5 @@
+use flux_span::FileSpanned;
+
 use super::*;
 
 impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
@@ -33,6 +35,26 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                         .map(|name| self.interner.resolve(&name).to_string())
                         .collect(),
                     missing_fields_file_span: struct_expr.fields.span.in_file(self.file_id),
+                }
+                .to_diagnostic(),
+            );
+        }
+    }
+
+    pub(super) fn verify_call_args(
+        &mut self,
+        args: FileSpanned<&[TypeId]>,
+        signature: FileSpanned<&[TypeId]>,
+    ) {
+        let args_count = args.len();
+        let sig_count = signature.len();
+        if args_count != sig_count {
+            self.diagnostics.push(
+                LowerError::IncorrectNumberOfArgs {
+                    got_num: args_count,
+                    got_num_file_span: args.to_file_span(),
+                    expected_num: sig_count,
+                    expected_num_file_span: signature.to_file_span(),
                 }
                 .to_diagnostic(),
             );

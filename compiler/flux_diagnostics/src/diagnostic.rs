@@ -11,7 +11,7 @@ pub struct Diagnostic {
     offset: FileSpan,
     pub code: DiagnosticCode,
     msg: String,
-    labels: Vec<FileSpanned<String>>,
+    pub labels: Vec<FileSpanned<String>>,
     help: Option<String>,
 }
 
@@ -127,6 +127,9 @@ pub enum DiagnosticCode {
     MissingFieldsInStructExpr,
     MissingGenericArguments,
     UnknownLocal,
+    UnknownIntrinsic,
+    IncorrectNumberOfArgs,
+    TypeDoesNotImplementTrait,
 
     TypeMismatch,
 }

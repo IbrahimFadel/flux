@@ -10,7 +10,7 @@ use flux_typesystem::{
     self as ts, ConcreteKind, Insert, TChecker, TEnv, TypeId, TypeKind, Typed, WithType,
 };
 use la_arena::{Arena, Idx};
-use ts::TraitId;
+use ts::{ApplicationId, FnSignature, ThisCtx, TraitId};
 
 use crate::{
     diagnostics::LowerError,
@@ -20,7 +20,7 @@ use crate::{
     module::{ModuleData, ModuleId, ModuleTree},
     name_res::item::ItemResolver,
     pkg::PackageBodies,
-    PackageDefs, PackageId, POISONED_NAME,
+    prelude, PackageDefs, PackageId, POISONED_NAME,
 };
 
 mod expr;
@@ -37,7 +37,8 @@ pub(crate) struct LowerCtx<'a, 'pkgs> {
     pub(crate) module_id: ModuleId,
     package_id: Option<PackageId>,
     packages: Option<&'pkgs Arena<PackageDefs>>,
-    pub trait_map: HashMap<(PackageId, Idx<TraitDecl>), TraitId>,
+    trait_map: HashMap<(PackageId, Idx<TraitDecl>), TraitId>,
+    application_map: HashMap<(PackageId, Idx<ApplyDecl>), ApplicationId>,
 }
 
 impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
@@ -62,6 +63,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             package_id,
             packages,
             trait_map: HashMap::new(),
+            application_map: HashMap::new(),
         }
     }
 
@@ -103,27 +105,105 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         self.file_id = file_id;
     }
 
-    pub(crate) fn populate_trait_map(&mut self) {
-        let item_tree = self.item_tree(self.package_id.unwrap());
-        item_tree.top_level.iter().for_each(|item| match item.idx {
-            ItemTreeIdx::Trait(trait_idx) => self.add_trait(trait_idx),
-            _ => {}
-        })
+    // pub(crate) fn populate_trait_map(&mut self) {
+    //     let item_tree = self.item_tree(self.package_id.unwrap());
+    //     item_tree.top_level.iter().for_each(|item| match item.idx {
+    //         ItemTreeIdx::Trait(trait_idx) => self.add_trait(trait_idx),
+    //         _ => {}
+    //     })
+    // }
+
+    fn get_trait_id(&mut self, path: &Spanned<Path>) -> Option<TraitId> {
+        self.item_resolver()
+            .resolve_path(&path, self.module_id)
+            .map(|(package_id, item_id)| {
+                let trait_idx = match item_id.idx {
+                    ItemTreeIdx::Trait(trait_idx) => trait_idx,
+                    _ => ice("progammer got lazy to impl this diagnostic"),
+                };
+                Some(
+                    self.trait_map
+                        .get(&(package_id, trait_idx))
+                        .unwrap_or_else(|| ice("trait wasn't added to trait map")),
+                )
+            })
+            .unwrap_or_else(|resolution_err| {
+                self.diagnostics.push(resolution_err.to_diagnostic(
+                    self.file_id,
+                    path.span,
+                    self.interner,
+                ));
+                None
+            })
+            .copied()
     }
 
-    pub(crate) fn populate_applications(&mut self) {
+    pub(crate) fn attach_trait_type_contexts(&mut self) {
         let og_mod_id = self.module_id;
         let item_tree = self.item_tree(self.package_id.unwrap());
         item_tree.top_level.iter().for_each(|item| {
             self.set_module_id(item.mod_id);
             match item.idx {
-                ItemTreeIdx::Apply(apply_idx) => self.add_application(apply_idx),
+                ItemTreeIdx::Trait(trait_idx) => self.handle_trait_decl(trait_idx),
                 _ => {}
             }
         });
-        // println!("{:#?}", self.trait_map);
+        item_tree.top_level.iter().for_each(|item| {
+            self.set_module_id(item.mod_id);
+            match item.idx {
+                ItemTreeIdx::Apply(apply_idx) => self.handle_apply_decl(apply_idx),
+                _ => {}
+            }
+        });
+        // prelude::bin_op_trait_map(self.prelude(), self.interner)
+        //     .iter()
+        //     .for_each(|(_, item_id)| {
+        //         if let ItemTreeIdx::Trait(trait_idx) = item_id.idx {
+        //             let package_id = self.package_id.unwrap();
+        //             let trait_decl = &self.item_tree(package_id).traits[trait_idx];
+        //             let trid = self
+        //                 .trait_map
+        //                 .get(&(package_id, trait_idx))
+        //                 .unwrap_or_else(|| ice("binop trait not in trait map"));
+        //             let this_ctx = ThisCtx::new(*trid, None);
+        //             trait_decl.methods.iter().for_each(|method_idx| {
+        //                 self.attach_this_ctx_to_fn_dec(*method_idx, this_ctx.clone())
+        //             });
+        //         }
+        //     });
         self.set_module_id(og_mod_id);
     }
+
+    fn handle_trait_decl(&mut self, trait_idx: Idx<TraitDecl>) {
+        let package_id = self.package_id.unwrap();
+        let item_tree = self.item_tree(package_id);
+        let trait_decl = &item_tree.traits[trait_idx];
+
+        let trid = self
+            .tckh
+            .tenv
+            .insert_trait(ts::Trait::new(trait_decl.method_signatures(item_tree)));
+        let this_ctx = ThisCtx::new(trid, None);
+
+        trait_decl.methods.iter().for_each(|method_idx| {
+            self.attach_this_ctx_to_fn_dec(*method_idx, this_ctx.clone());
+        });
+
+        self.trait_map.insert((package_id, trait_idx), trid);
+    }
+
+    // pub(crate) fn populate_applications(&mut self) {
+    //     let og_mod_id = self.module_id;
+    //     let item_tree = self.item_tree(self.package_id.unwrap());
+    //     item_tree.top_level.iter().for_each(|item| {
+    //         self.set_module_id(item.mod_id);
+    //         match item.idx {
+    //             ItemTreeIdx::Apply(apply_idx) => self.add_application(apply_idx),
+    //             _ => {}
+    //         }
+    //     });
+    //     self.set_module_id(og_mod_id);
+    // }
 
     pub(crate) fn finish(self) -> Vec<Diagnostic> {
         self.diagnostics
@@ -135,14 +215,13 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             self.package_id
                 .unwrap_or_else(|| ice("tried lowering body without active item tree")),
         );
-        self.add_builtin_applications();
         for item in item_tree
             .top_level
             .iter()
             .filter(|item| item.mod_id == this_mod_id)
         {
             match &item.idx {
-                ItemTreeIdx::Apply(apply_idx) => self.handle_apply_decl(*apply_idx),
+                // ItemTreeIdx::Apply(apply_idx) => self.handle_apply_decl(*apply_idx),
                 ItemTreeIdx::Function(fn_idx) => {
                     self.lower_function_body(*fn_idx);
                 }
@@ -152,70 +231,78 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         }
     }
 
-    fn add_builtin_applications(&mut self) {
-        // self.tckh.tenv.insert_application(trid, application);
-    }
-
     fn handle_apply_decl(&mut self, apply_idx: Idx<ApplyDecl>) {
-        let apply_decl = &self
-            .item_tree(
-                self.package_id
-                    .unwrap_or_else(|| ice("tried lowering body without active item tree")),
-            )
-            .applies[apply_idx];
-        self.tckh.tenv.insert_local(
-            self.interner.get_or_intern_static("this"),
-            apply_decl.to_ty.inner,
-        );
-        apply_decl.methods.iter().for_each(|method| {
-            self.lower_function_body(*method);
-        });
-    }
-
-    fn add_application(&mut self, apply_idx: Idx<ApplyDecl>) {
-        let apply_decl = &self.item_tree(self.package_id.unwrap()).applies[apply_idx];
-        // resolve trait path, then get trid
+        let item_tree = self.item_tree(self.package_id.unwrap());
+        let apply_decl = &item_tree.applies[apply_idx];
+        let to_ty = apply_decl.to_ty.inner;
         let trid = apply_decl
             .trt
             .as_ref()
-            .map(|trt| {
-                self.item_resolver()
-                    .resolve_path(&trt, self.module_id)
-                    .map(|(package_id, item_id)| {
-                        let trait_idx = match item_id.idx {
-                            ItemTreeIdx::Trait(trait_idx) => trait_idx,
-                            _ => ice("progammer got lazy to impl this diagnostic"),
-                        };
-                        Some(
-                            self.trait_map
-                                .get(&(package_id, trait_idx))
-                                .unwrap_or_else(|| ice("trait wasn't added to trait map")),
-                        )
-                    })
-                    .unwrap_or_else(|resolution_err| {
-                        self.diagnostics.push(resolution_err.to_diagnostic(
-                            self.file_id,
-                            trt.span,
-                            self.interner,
-                        ));
-                        None
-                    })
-            })
-            .flatten()
-            .copied();
-        if let Some(trid) = trid {
+            .map(|trt| self.get_trait_id(trt))
+            .flatten();
+        let this_ctx = trid.map(|trid| {
             let assoc_types = apply_decl
                 .assoc_types
                 .iter()
                 .map(|assoc_type| assoc_type.as_ts_assoc_type())
                 .collect();
+            let signatures = apply_decl.method_signatures(item_tree);
+            let application = ts::TraitApplication::new(to_ty, assoc_types, signatures);
+            let aid = self.tckh.tenv.insert_application(trid, application);
+            ThisCtx::new(trid, Some(aid))
+        });
+        // println!("{:?}", this_ctx);
 
-            self.tckh.tenv.insert_application(
-                trid,
-                ts::TraitApplication::new(apply_decl.to_ty.inner, assoc_types),
-            );
-        }
+        self.tckh
+            .tenv
+            .insert_local(self.interner.get_or_intern_static("this"), to_ty);
+        apply_decl.methods.iter().for_each(|method_idx| {
+            if let Some(this_ctx) = this_ctx.clone() {
+                self.attach_this_ctx_to_fn_dec(*method_idx, this_ctx.clone());
+
+                apply_decl.assoc_types.iter().for_each(|assoc_ty| {
+                    self.tckh
+                        .tenv
+                        .attach_this_ctx(&assoc_ty.ty, this_ctx.clone());
+                });
+            }
+            self.lower_function_body(*method_idx);
+        });
     }
+
+    fn attach_this_ctx_to_fn_dec(&mut self, idx: Idx<FnDecl>, this_ctx: ThisCtx) {
+        let item_tree = self.item_tree(self.package_id.unwrap());
+        let f = &item_tree.functions[idx];
+        f.params.iter().for_each(|param| {
+            self.tckh.tenv.attach_this_ctx(&param.ty, this_ctx.clone());
+        });
+        self.tckh
+            .tenv
+            .attach_this_ctx(&f.return_ty, this_ctx.clone());
+    }
+
+    // fn add_application(&mut self, apply_idx: Idx<ApplyDecl>) {
+    //     let apply_decl = &self.item_tree(self.package_id.unwrap()).applies[apply_idx];
+    //     let trid = apply_decl
+    //         .trt
+    //         .as_ref()
+    //         .map(|trt| self.get_trait_id(trt))
+    //         .flatten();
+    //     if let Some(trid) = trid {
+    //         let assoc_types = apply_decl
+    //             .assoc_types
+    //             .iter()
+    //             .map(|assoc_type| assoc_type.as_ts_assoc_type())
+    //             .collect();
+
+    //         let aid = self.tckh.tenv.insert_application(
+    //             trid,
+    //             ts::TraitApplication::new(apply_decl.to_ty.inner, assoc_types),
+    //         );
+    //         self.application_map
+    //             .insert((self.package_id.unwrap(), apply_idx), aid);
+    //     }
+    // }
 
     fn lower_function_body(&mut self, fn_idx: Idx<FnDecl>) {
         let fn_decl = &self
@@ -264,6 +351,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                     .map(|(package_id, item_id)| match item_id.idx {
                         ItemTreeIdx::Enum(enum_idx) => {
                             let eenum = &self.item_tree(package_id).enums[enum_idx];
+                            tracing::error!("this was left unhandled.. stupidly");
                         }
                         ItemTreeIdx::Struct(struct_idx) => {
                             let strukt = &self.item_tree(package_id).structs[struct_idx];
@@ -301,26 +389,23 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         });
     }
 
-    fn add_trait(&mut self, trait_idx: Idx<TraitDecl>) {
-        let item_tree = self.item_tree(self.package_id.unwrap());
-        let trt = &item_tree.traits[trait_idx];
-        let signatures = trt
-            .methods
-            .iter()
-            .map(|method_idx| {
-                let method = &item_tree.functions[*method_idx];
-                method
-                    .params
-                    .iter()
-                    .map(|param| param.ty.inner)
-                    .chain(std::iter::once(method.return_ty.inner))
-                    .collect()
-            })
-            .collect();
-        let trid = self.tckh.tenv.insert_trait(ts::Trait::new(signatures));
-        self.trait_map
-            .insert((self.package_id.unwrap(), trait_idx), trid);
-    }
+    // fn add_trait(&mut self, trait_idx: Idx<TraitDecl>) {
+    //     let item_tree = self.item_tree(self.package_id.unwrap());
+    //     let trt = &item_tree.traits[trait_idx];
+    //     let signatures = trt
+    //         .methods
+    //         .iter()
+    //         .map(|method_idx| {
+    //             let method = &item_tree.functions[*method_idx];
+    //             FnSignature::new(
+    //                 method.params.iter().map(|param| param.ty.inner),
+    //                 method.return_ty.inner,
+    //             )
+    //         })
+    //         .collect();
+    //     self.trait_map
+    //         .insert((self.package_id.unwrap(), trait_idx), trid);
+    // }
 
     pub fn lower_node<N, T, P, F>(
         &mut self,

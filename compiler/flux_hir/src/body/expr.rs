@@ -37,7 +37,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                 ast::Expr::FloatExpr(_) => todo!(),
                 ast::Expr::IntExpr(int_expr) => this.lower_int_expr(int_expr),
                 ast::Expr::BinExpr(bin_expr) => this.lower_bin_expr(bin_expr, generic_params),
-                ast::Expr::CallExpr(_) => todo!(),
+                ast::Expr::CallExpr(call_expr) => this.lower_call_expr(call_expr, generic_params),
                 ast::Expr::StructExpr(struct_expr) => {
                     this.lower_struct_expr(struct_expr, generic_params)
                 }
@@ -54,7 +54,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                 ast::Expr::MemberAccessExpr(_) => todo!(),
                 ast::Expr::IfExpr(if_expr) => this.lower_if_expr(if_expr, generic_params),
                 ast::Expr::IntrinsicExpr(intrinsic_expr) => {
-                    this.lower_intrinsic_expr(intrinsic_expr)
+                    this.lower_intrinsic_expr(intrinsic_expr, generic_params)
                 }
                 ast::Expr::StringExpr(_) => todo!(),
             },
@@ -147,19 +147,77 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             .unify(lhs.tid, rhs.tid, unification_span.in_file(self.file_id))
             .unwrap_or_else(|err| self.diagnostics.push(err));
 
-        if let Some(binop_trait) = prelude::bin_op_trait_map(self.prelude(), self.interner).get(&op)
+        let tid = if let Some(binop_trait) =
+            prelude::bin_op_trait_map(self.prelude(), self.interner).get(&op)
         {
+            tracing::warn!("assuming builtin binop traits have just one method, this probably won't work in the future");
+            let package_id = self.package_id.unwrap();
             let trid = self
                 .trait_map
-                .get(&(self.package_id.unwrap(), binop_trait.idx.clone().into()))
+                .get(&(package_id, binop_trait.idx.clone().into()))
                 .unwrap_or_else(|| ice("prelude traits should always be in trait map"));
-            if !self.tckh.type_implements_trait(lhs.tid, trid) {
-                ice("ruh roh, doestn satifsfy triat");
+            let trait_idx: Idx<TraitDecl> = binop_trait.idx.clone().into();
+            let trait_decl = &self.item_tree(package_id).traits[trait_idx];
+
+            // I think we only need to check one side (either lhs or rhs) since we unified them already
+            let signature = if let Some(aid) = self.tckh.valid_applications(lhs.tid, trid) {
+                let application = self.tckh.tenv.get_application(trid, &aid);
+                Some(&application.signatures[0])
+            } else {
+                let lhs_filespan: flux_span::InFile<Span> = self.tckh.tenv.get_filespan(&lhs.tid);
+                self.diagnostics.push(
+                    LowerError::TypeDoesNotImplementTrait {
+                        ty: self.tckh.tenv.fmt_tid(&lhs.tid),
+                        ty_file_span: lhs_filespan,
+                        trt: self.interner.resolve(&trait_decl.name).to_string(),
+                    }
+                    .to_diagnostic(),
+                );
+                None
+            };
+
+            match signature {
+                Some(signature) => *signature.return_ty(),
+                None => self
+                    .tckh
+                    .tenv
+                    .insert_unknown(self.file_id, unification_span),
             }
-        }
+        } else {
+            ice("this needs a diagnostic");
+            // self.tckh
+            //     .tenv
+            //     .insert_unknown(self.file_id, unification_span)
+        };
 
         self.alloc_expr(Expr::BinOp(BinOp::new(lhs.inner, rhs.inner, op)))
-            .with_type(self.tckh.tenv.make_ref(rhs.tid, unification_span))
+            .with_type(tid)
+    }
+
+    fn lower_call_expr(
+        &mut self,
+        call_expr: ast::CallExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        self.lower_arg_list(call_expr.args(), generic_params);
+        todo!()
+    }
+
+    fn lower_arg_list(
+        &mut self,
+        arg_list: Option<ast::ArgList>,
+        generic_params: &GenericParams,
+    ) -> Vec<Typed<ExprIdx>> {
+        self.lower_node(
+            arg_list,
+            |_, _| vec![],
+            |this, arg_list| {
+                arg_list
+                    .args()
+                    .map(|arg| this.lower_expr(Some(arg), generic_params))
+                    .collect()
+            },
+        )
     }
 
     fn lower_struct_expr(
@@ -292,7 +350,21 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         if_expr: ast::IfExpr,
         generic_params: &GenericParams,
     ) -> Typed<ExprIdx> {
+        let span = if_expr.range().to_span();
         let cond = self.lower_expr(if_expr.condition(), generic_params);
+        let cond_filespan = self.tckh.tenv.get_filespan(&cond.tid);
+        let bool = self
+            .tckh
+            .tenv
+            .insert_bool(self.file_id, cond_filespan.inner);
+        tracing::debug!(
+            "if unifying {} and {}",
+            self.tckh.tenv.fmt_tid(&cond.tid),
+            self.tckh.tenv.fmt_tid(&bool)
+        );
+        self.tckh
+            .unify(cond.tid, bool, cond_filespan)
+            .unwrap_or_else(|err| self.diagnostics.push(err));
         let then = self.lower_if_block_expr(if_expr.block(), generic_params);
         let r#else = if_expr
             .else_block()
@@ -304,6 +376,13 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         });
         let tid = then.tid;
         let if_expr = If::new(cond, then, else_ifs, r#else);
+
+        for block in if_expr.blocks().skip(1) {
+            self.tckh
+                .unify(tid, block.tid, span.in_file(self.file_id))
+                .unwrap_or_else(|err| self.diagnostics.push(err));
+        }
+
         self.alloc_expr(Expr::If(if_expr)).with_type(tid)
     }
 
@@ -322,49 +401,40 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         )
     }
 
-    fn lower_intrinsic_expr(&mut self, intrinsic_expr: ast::IntrinsicExpr) -> Typed<ExprIdx> {
-        let name = intrinsic_expr
+    fn lower_intrinsic_expr(
+        &mut self,
+        intrinsic_expr: ast::IntrinsicExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let name_syntax = intrinsic_expr
             .name()
-            .unwrap_or_else(|| ice("intrinsic missing name"))
+            .unwrap_or_else(|| ice("intrinsic missing name"));
+        let name = name_syntax
             .text_key()
             .unwrap_or_else(|| ice("intrinsic missing name"));
+        let span = name_syntax.text_range().to_span();
+        let args = self.lower_arg_list(intrinsic_expr.arg_list(), generic_params);
+        let arg_tids = args.iter().map(|arg| arg.tid).collect::<Vec<_>>();
 
-        if intrinsics::all(self.interner).contains(&name) {}
-
-        if name == intrinsics::panic::name_text_key(self.interner) {
-            self.lower_intrinsic_panic_expr(intrinsic_expr)
-        } else if name == intrinsics::cmp_eq_u8::name_text_key(self.interner) {
-            self.lower_intrinsic_cmp_eq_u8_expr(intrinsic_expr)
-        } else if name == intrinsics::add_u8::name_text_key(self.interner) {
-            self.lower_intrinsic_add_u8_expr(intrinsic_expr)
+        if let Some(signature) =
+            intrinsics::get_signature(name, self.file_id, span, self.tckh.tenv, self.interner)
+        {
+            self.verify_call_args(
+                arg_tids.as_slice().file_span(self.file_id, span),
+                signature.parameters().file_span(self.file_id, span),
+            );
+            self.alloc_expr(Expr::Intrinsic)
+                .with_type(*signature.return_ty())
         } else {
-            ice("programmer hasnt handled this yet!!!")
+            self.diagnostics.push(
+                LowerError::UnknownIntrinsic {
+                    intrinsic: self.interner.resolve(&name).to_string(),
+                    intrinsic_file_span: span.in_file(self.file_id),
+                }
+                .to_diagnostic(),
+            );
+            self.alloc_expr(Expr::Poisoned)
+                .with_type(self.insert_unknown(intrinsic_expr.range().to_span()))
         }
-    }
-
-    fn lower_intrinsic_panic_expr(&mut self, intrinsic_expr: ast::IntrinsicExpr) -> Typed<ExprIdx> {
-        // intrinsic_expr.arg_list()
-        // todo!()
-        tracing::warn!("TODO: implement panic lowering");
-        self.alloc_expr(Expr::Poisoned)
-            .with_type(self.insert_unknown(intrinsic_expr.range().to_span()))
-    }
-
-    fn lower_intrinsic_cmp_eq_u8_expr(
-        &mut self,
-        intrinsic_expr: ast::IntrinsicExpr,
-    ) -> Typed<ExprIdx> {
-        tracing::warn!("TODO: implement cmp intrinsic lowering");
-        self.alloc_expr(Expr::Poisoned)
-            .with_type(self.insert_unknown(intrinsic_expr.range().to_span()))
-    }
-
-    fn lower_intrinsic_add_u8_expr(
-        &mut self,
-        intrinsic_expr: ast::IntrinsicExpr,
-    ) -> Typed<ExprIdx> {
-        tracing::warn!("TODO: implement add intrinsic lowering");
-        self.alloc_expr(Expr::Poisoned)
-            .with_type(self.insert_unknown(intrinsic_expr.range().to_span()))
     }
 }

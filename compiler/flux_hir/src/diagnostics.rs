@@ -123,4 +123,35 @@ pub enum LowerError {
         #[filespanned]
         local: String,
     },
+    #[error(
+        location = intrinsic,
+        primary = "unknown intrinsic",
+        label at intrinsic = "unknown intrinsic {intrinsic}"
+    )]
+    UnknownIntrinsic {
+        #[filespanned]
+        intrinsic: String,
+    },
+    #[error(
+        location = got_num,
+        primary = "incorrect number of arguments in call",
+        label at got_num = "got {got_num} argument{}" with (got_num.plural("s")),
+        label at expected_num = "expected {expected_num} argument{}" with (expected_num.plural("s"))
+    )]
+    IncorrectNumberOfArgs {
+        #[filespanned]
+        got_num: usize,
+        #[filespanned]
+        expected_num: usize,
+    },
+    #[error(
+        location = ty,
+        primary = "type does not implement trait",
+        label at ty = "type `{ty}` does not implement trait `{trt}`"
+    )]
+    TypeDoesNotImplementTrait {
+        #[filespanned]
+        ty: String,
+        trt: String,
+    },
 }

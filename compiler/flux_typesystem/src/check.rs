@@ -1,7 +1,10 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, WithSpan};
 
-use crate::{diagnostics::TypeError, env::TEnv, ConcreteKind, TraitId, TypeId, TypeKind};
+use crate::{
+    diagnostics::TypeError, env::TEnv, ApplicationId, ConcreteKind, TraitApplication, TraitId,
+    TypeId, TypeKind,
+};
 
 #[derive(Debug)]
 pub struct TChecker<'tenv> {
@@ -15,33 +18,31 @@ impl<'tenv> TChecker<'tenv> {
 }
 
 impl<'tenv> TChecker<'tenv> {
-    pub fn type_implements_trait(&mut self, tid: TypeId, trid: &TraitId) -> bool {
+    pub fn valid_applications(&mut self, tid: TypeId, trid: &TraitId) -> Option<ApplicationId> {
         let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
-        match self.tenv.trait_applications.get(trid) {
-            Some(applications) => {
+        self.tenv
+            .trait_applications
+            .get(trid)
+            .cloned()
+            .map(|applications| {
                 let valid_impls: Vec<_> = applications
                     .clone()
                     .iter()
-                    .map(|application| {
-                        println!(
-                            "{} and {}",
-                            self.tenv.fmt_tid(&tid),
-                            self.tenv.fmt_tid(&application.tid)
-                        );
+                    .enumerate()
+                    .map(|(idx, application)| {
                         self.unify(tid, application.tid, poisoned_filespan.clone())
                             .ok()
-                            .map(|_| application.tid)
+                            .map(|_| ApplicationId::new(idx + 1))
                     })
                     .flatten()
                     .collect();
                 match valid_impls.len() {
-                    0 => false,
-                    1 => true,
+                    0 => None,
+                    1 => Some(valid_impls[0]),
                     2.. => ice("too lazy to do this"),
                 }
-            }
-            None => false,
-        }
+            })
+            .flatten()
     }
 
     fn is_int_supertype(&self, tid: TypeId) -> bool {
@@ -127,9 +128,9 @@ impl<'tenv> TChecker<'tenv> {
                 }
                 (Some(a_id), Some(b_id)) => self.unify(*a_id, *b_id, unification_span)?,
             },
-            (Int(int_id), Generic(generic)) => {
-                // Check all int types if they fit the description, choose default int type if there's more than one
-            }
+            // (Int(int_id), Generic(generic)) => {
+            // Check all int types if they fit the description, choose default int type if there's more than one
+            // }
             (Int(int_id), Concrete(ConcreteKind::Path(path))) => match int_id {
                 Some(id) => self.unify(*id, b, unification_span)?,
                 None => {
@@ -180,18 +181,52 @@ impl<'tenv> TChecker<'tenv> {
                     }
                 }
             },
-            // (ThisPath(crate::r#type::ThisPath { segments }), _) => {
-            // let app = self.tenv.get_application(trid, aid);
-            // let name = &segments[0];
-            // let assoc_type =
-            //     app.assoc_types
-            //         .iter()
-            //         .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None });
-            // match assoc_type {
-            //     Some(assoc_tid) => self.unify(*assoc_tid, b, unification_span)?,
-            //     None => return Err(self.type_mismatch(&a, &b, unification_span)),
-            // }
-            // }
+            (ThisPath(crate::r#type::ThisPath { segments, this_ctx }), _) => {
+                debug_assert_ne!(this_ctx.trait_id, TraitId::UNSET);
+                match &this_ctx.application_id {
+                    Some(aid) => {
+                        let app = self.tenv.get_application(&this_ctx.trait_id, aid);
+                        let name = &segments[0];
+                        let assoc_type = app.assoc_types.iter().find_map(|(aname, tid)| {
+                            if aname == name {
+                                Some(tid)
+                            } else {
+                                None
+                            }
+                        });
+                        match assoc_type {
+                            Some(assoc_tid) => self.unify(*assoc_tid, b, unification_span)?,
+                            None => return Err(self.type_mismatch(&a, &b, unification_span)),
+                        }
+                    }
+                    None => {
+                        todo!()
+                    }
+                }
+            }
+            (_, ThisPath(crate::r#type::ThisPath { segments, this_ctx })) => {
+                debug_assert_ne!(this_ctx.trait_id, TraitId::UNSET);
+                match &this_ctx.application_id {
+                    Some(aid) => {
+                        let app = self.tenv.get_application(&this_ctx.trait_id, aid);
+                        let name = &segments[0];
+                        let assoc_type = app.assoc_types.iter().find_map(|(aname, tid)| {
+                            if aname == name {
+                                Some(tid)
+                            } else {
+                                None
+                            }
+                        });
+                        match assoc_type {
+                            Some(assoc_tid) => self.unify(a, *assoc_tid, unification_span)?,
+                            None => return Err(self.type_mismatch(&a, &b, unification_span)),
+                        }
+                    }
+                    None => {
+                        todo!()
+                    }
+                }
+            }
             (_, _) => return Err(self.type_mismatch(&a, &b, unification_span)),
         }
         Ok(())

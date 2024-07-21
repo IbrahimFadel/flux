@@ -7,7 +7,9 @@ use flux_typesystem as ts;
 use flux_typesystem::{TEnv, TypeId};
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
-use ts::{ApplicationId, Typed, WithType};
+use ts::{FnSignature, ThisCtx, Typed, WithType};
+
+use crate::item_tree::ItemTree;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -42,6 +44,13 @@ impl FnDecl {
             return_ty,
             ast,
         }
+    }
+
+    pub fn to_signature(&self) -> FnSignature {
+        FnSignature::new(
+            self.params.iter().map(|param| param.ty.inner),
+            self.return_ty.inner,
+        )
     }
 }
 
@@ -159,6 +168,13 @@ impl TraitDecl {
             methods,
         }
     }
+
+    pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
+        self.methods
+            .iter()
+            .map(|method_idx| item_tree.functions[*method_idx].to_signature())
+            .collect()
+    }
 }
 
 #[derive(Debug)]
@@ -188,6 +204,13 @@ impl ApplyDecl {
             assoc_types,
             methods,
         }
+    }
+
+    pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
+        self.methods
+            .iter()
+            .map(|method_idx| item_tree.functions[*method_idx].to_signature())
+            .collect()
     }
 }
 
@@ -419,10 +442,8 @@ impl ts::Insert<Type> for TEnv {
             Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
             Type::Never => ts::TypeKind::Never,
             Type::Unknown => ts::TypeKind::Unknown,
-            // Type::ThisPath(this_path) => this_path_to_tkind(this_path, None),
             Type::ThisPath(this_path) => {
-                ts::TypeKind::ThisPath(ts::ThisPath::new(this_path.path.segments))
-                // ice("should only insert `Type::ThisPath` to `TEnv` with `insert_in_apply`")
+                ts::TypeKind::ThisPath(ts::ThisPath::new(this_path.path.segments, ThisCtx::unset()))
             }
         });
         self.insert(tkind)
@@ -557,7 +578,7 @@ pub enum Expr {
     Struct(StructExpr),
     // MemberAccess(MemberAccess),
     If(If),
-    // Intrinsic(Intrinsic),
+    Intrinsic,
     // Str(Str),
     Poisoned,
 }
@@ -652,6 +673,10 @@ impl If {
         }
     }
 
+    pub fn blocks(&self) -> impl Iterator<Item = &Typed<ExprIdx>> {
+        self.exprs.iter().step_by(2)
+    }
+
     #[inline]
     pub fn has_else(&self) -> bool {
         self.exprs.len() % 2 != 0
@@ -686,4 +711,11 @@ impl If {
             None
         }
     }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Intrinsic {
+    Panic,
+    CmpEqU8,
+    AddU8,
 }

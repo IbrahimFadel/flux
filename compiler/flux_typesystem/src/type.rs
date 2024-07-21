@@ -1,9 +1,10 @@
-use std::fmt::Display;
 use std::ops::Deref;
+use std::{fmt::Display, iter::once};
 
 use flux_span::{Interner, Word};
 use itertools::Itertools;
 
+use crate::r#trait::ThisCtx;
 use crate::{
     r#trait::{ApplicationId, TraitRestriction},
     TraitId,
@@ -47,11 +48,12 @@ pub enum TypeKind {
 #[derive(Debug, Clone)]
 pub struct ThisPath {
     pub segments: Vec<Word>,
+    pub this_ctx: ThisCtx,
 }
 
 impl ThisPath {
-    pub fn new(segments: Vec<Word>) -> Self {
-        Self { segments }
+    pub fn new(segments: Vec<Word>, this_ctx: ThisCtx) -> Self {
+        Self { segments, this_ctx }
     }
 }
 
@@ -175,5 +177,22 @@ pub trait WithType {
         Self: Sized,
     {
         Typed { tid, inner: self }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnSignature(Vec<TypeId>);
+
+impl FnSignature {
+    pub fn new(parameters: impl Iterator<Item = TypeId>, return_ty: TypeId) -> Self {
+        Self(parameters.chain(once(return_ty)).collect())
+    }
+
+    pub fn parameters(&self) -> &[TypeId] {
+        self.0.get(..self.0.len() - 1).unwrap_or(&[])
+    }
+
+    pub fn return_ty(&self) -> &TypeId {
+        self.0.last().unwrap()
     }
 }

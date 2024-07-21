@@ -44,7 +44,6 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                 ast::Type::PtrType(ptr_type) => this.lower_ptr_type(ptr_type, generic_params),
                 ast::Type::ThisPathType(this_path_type) => {
                     this.lower_this_path_type(this_path_type, generic_params)
-                    // ice("should not encounter this path outside of trait method")
                 }
             },
         );
