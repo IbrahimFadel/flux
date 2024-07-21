@@ -568,6 +568,7 @@ pub enum Expr {
     Address(ExprIdx),
     // Block(Block),
     BinOp(BinOp),
+    Cast(Cast),
     // Enum(EnumExpr),
     // Call(Call),
     // Float(f64),
@@ -576,7 +577,7 @@ pub enum Expr {
     Path(Path),
     // Let(Let),
     Struct(StructExpr),
-    // MemberAccess(MemberAccess),
+    MemberAccess(MemberAccess),
     If(If),
     Intrinsic,
     // Str(Str),
@@ -629,6 +630,18 @@ pub enum Op {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Cast {
+    pub val: Typed<ExprIdx>,
+    pub to_ty: TypeId,
+}
+
+impl Cast {
+    pub fn new(val: Typed<ExprIdx>, to_ty: TypeId) -> Self {
+        Self { val, to_ty }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExpr {
     pub path: Spanned<Path>,
     pub fields: Spanned<Vec<StructExprField>>,
@@ -649,6 +662,18 @@ pub struct StructExprField {
 impl StructExprField {
     pub fn new(name: Spanned<Word>, val: Typed<ExprIdx>) -> Self {
         Self { name, val }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MemberAccess {
+    pub lhs: Typed<ExprIdx>,
+    pub field: Spanned<Word>,
+}
+
+impl MemberAccess {
+    pub fn new(lhs: Typed<ExprIdx>, field: Spanned<Word>) -> Self {
+        Self { lhs, field }
     }
 }
 

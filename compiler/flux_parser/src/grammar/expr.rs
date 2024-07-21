@@ -70,6 +70,11 @@ fn expr_binding_power(
 ) -> Option<CompletedMarker> {
     let mut lhs = lhs(p, restrictions)?;
     loop {
+        if p.at(TokenKind::As) {
+            lhs = cast_expr(p, lhs);
+            continue;
+        }
+
         let op = p.peek();
         if op == TokenKind::Ampersand {
             p.bump(TokenKind::Ampersand);
@@ -77,11 +82,6 @@ fn expr_binding_power(
         let op_bp = current_op_prec(p);
         if op_bp < minimum_binding_power {
             break;
-        }
-
-        if p.at(TokenKind::As) {
-            lhs = cast_expr(p, lhs);
-            continue;
         }
 
         let m = lhs.precede(p);

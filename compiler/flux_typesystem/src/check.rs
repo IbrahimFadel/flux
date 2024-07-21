@@ -2,8 +2,8 @@ use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, InFile, Span, WithSpan};
 
 use crate::{
-    diagnostics::TypeError, env::TEnv, ApplicationId, ConcreteKind, TraitApplication, TraitId,
-    TypeId, TypeKind,
+    diagnostics::TypeError, env::TEnv, Application, ApplicationId, ConcreteKind, FnSignature,
+    Generic, ThisPath, TraitId, TypeId, TypeKind,
 };
 
 #[derive(Debug)]
@@ -18,11 +18,61 @@ impl<'tenv> TChecker<'tenv> {
 }
 
 impl<'tenv> TChecker<'tenv> {
+    pub fn insert_trait_application(
+        &mut self,
+        trid: TraitId,
+        application: Application,
+    ) -> ApplicationId {
+        let applications = self
+            .tenv
+            .trait_applications
+            .get_mut(trid.raw() - 1)
+            .unwrap_or_else(|| ice(format!("invalid `TraitID` {:?}", trid)));
+        let idx = applications.len() + 1;
+        applications.push(application);
+        debug_assert_ne!(idx, 0);
+        ApplicationId::new(idx)
+    }
+
+    pub fn insert_application(
+        &mut self,
+        tid: TypeId,
+        mut signatures: Vec<FnSignature>,
+    ) -> ApplicationId {
+        let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
+
+        for (idx, (ty, _)) in self.tenv.applications.clone().iter().enumerate() {
+            if self.unify(tid, *ty, poisoned_filespan).is_ok() {
+                self.tenv.applications[idx].1.append(&mut signatures);
+                return ApplicationId::new(idx + 1);
+            }
+        }
+
+        let idx = self.tenv.applications.len() + 1;
+        self.tenv.applications.push((tid, signatures));
+        debug_assert_ne!(idx, 0);
+        ApplicationId::new(idx)
+    }
+
+    pub fn get_trait_application(&mut self, trid: &TraitId, aid: &ApplicationId) -> &Application {
+        &self
+            .tenv
+            .trait_applications
+            .get(trid.raw() - 1)
+            .unwrap_or_else(|| ice(format!("invalid `TraitID` {:?}", trid)))
+            .get(aid.raw() - 1)
+            .unwrap_or_else(|| ice(format!("invalid `ApplicationId` {:?}", aid)))
+    }
+
+    pub fn get_application(&mut self, aid: &ApplicationId) -> &(TypeId, Vec<FnSignature>) {
+        &self.tenv.applications[aid.raw() - 1]
+    }
+
     pub fn valid_applications(&mut self, tid: TypeId, trid: &TraitId) -> Option<ApplicationId> {
         let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
         self.tenv
             .trait_applications
-            .get(trid)
+            .get(trid.raw() - 1)
             .cloned()
             .map(|applications| {
                 let valid_impls: Vec<_> = applications
@@ -61,6 +111,16 @@ impl<'tenv> TChecker<'tenv> {
         }
     }
 
+    fn push_generic_arg_to_path(&mut self, tid: TypeId, generic_arg: TypeId) {
+        if let TypeKind::Concrete(ConcreteKind::Path(path)) =
+            &mut self.tenv.get_mut(&tid).inner.inner
+        {
+            path.generic_args.push(generic_arg);
+        } else {
+            ice("cannot push generic arg to non path type");
+        }
+    }
+
     pub fn unify(
         &mut self,
         a: TypeId,
@@ -93,18 +153,29 @@ impl<'tenv> TChecker<'tenv> {
                         if a_path.segments != b_path.segments {
                             return Err(self.type_mismatch(&a, &b, unification_span));
                         }
-                        if a_path.generic_args.len() != b_path.generic_args.len() {
-                            return Err(self.type_mismatch(&a, &b, unification_span));
+                        let a_generic_args = a_path.generic_args.clone();
+                        let b_generic_args = b_path.generic_args.clone();
+                        let a_args_len = a_generic_args.len();
+                        let b_args_len = b_generic_args.len();
+                        if a_args_len < b_args_len {
+                            for i in 0..a_args_len {
+                                let a_arg = a_generic_args[i];
+                                let b_arg = b_generic_args[i];
+                                self.unify(a_arg, b_arg, unification_span)?;
+                            }
+                            for i in a_args_len..b_args_len {
+                                self.push_generic_arg_to_path(a, b_generic_args[i]);
+                            }
+                        } else if b_args_len < a_args_len {
+                            for i in 0..b_args_len {
+                                let a_arg = a_generic_args[i];
+                                let b_arg = b_generic_args[i];
+                                self.unify(a_arg, b_arg, unification_span)?;
+                            }
+                            for i in b_args_len..a_args_len {
+                                self.push_generic_arg_to_path(b, a_generic_args[i]);
+                            }
                         }
-                        a_path
-                            .generic_args
-                            .clone()
-                            .iter()
-                            .zip(b_path.generic_args.clone().iter())
-                            .map(|(a_inner, b_inner)| {
-                                self.unify(*a_inner, *b_inner, unification_span.clone())
-                            })
-                            .collect::<Result<(), _>>()?
                     }
                     (Ptr(a_ptr), Ptr(b_ptr)) => self.unify(*a_ptr, *b_ptr, unification_span)?,
                     (Tuple(a_tup), Tuple(b_tup)) => a_tup
@@ -181,55 +252,81 @@ impl<'tenv> TChecker<'tenv> {
                     }
                 }
             },
-            (ThisPath(crate::r#type::ThisPath { segments, this_ctx }), _) => {
-                debug_assert_ne!(this_ctx.trait_id, TraitId::UNSET);
-                match &this_ctx.application_id {
-                    Some(aid) => {
-                        let app = self.tenv.get_application(&this_ctx.trait_id, aid);
-                        let name = &segments[0];
-                        let assoc_type = app.assoc_types.iter().find_map(|(aname, tid)| {
-                            if aname == name {
-                                Some(tid)
-                            } else {
-                                None
-                            }
-                        });
-                        match assoc_type {
-                            Some(assoc_tid) => self.unify(*assoc_tid, b, unification_span)?,
-                            None => return Err(self.type_mismatch(&a, &b, unification_span)),
-                        }
-                    }
-                    None => {
-                        todo!()
-                    }
-                }
+            (ThisPath(this_path), _) => {
+                self.check_this_path(&this_path.clone(), a, b, unification_span)?
             }
-            (_, ThisPath(crate::r#type::ThisPath { segments, this_ctx })) => {
-                debug_assert_ne!(this_ctx.trait_id, TraitId::UNSET);
-                match &this_ctx.application_id {
-                    Some(aid) => {
-                        let app = self.tenv.get_application(&this_ctx.trait_id, aid);
-                        let name = &segments[0];
-                        let assoc_type = app.assoc_types.iter().find_map(|(aname, tid)| {
-                            if aname == name {
-                                Some(tid)
-                            } else {
-                                None
-                            }
-                        });
-                        match assoc_type {
-                            Some(assoc_tid) => self.unify(a, *assoc_tid, unification_span)?,
-                            None => return Err(self.type_mismatch(&a, &b, unification_span)),
-                        }
-                    }
-                    None => {
-                        todo!()
-                    }
+            (_, ThisPath(this_path)) => {
+                self.check_this_path(&this_path.clone(), b, a, unification_span)?
+            }
+            (Generic(a_gen), Generic(b_gen)) => {
+                if !self.generics_equal(&a_gen.clone(), &b_gen.clone()) {
+                    return Err(self.type_mismatch(&a, &b, unification_span));
                 }
             }
             (_, _) => return Err(self.type_mismatch(&a, &b, unification_span)),
         }
         Ok(())
+    }
+
+    fn generics_equal(&mut self, a_gen: &Generic, b_gen: &Generic) -> bool {
+        if a_gen.restrictions.len() != b_gen.restrictions.len() {
+            return false;
+        }
+        let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
+        for a_restriction in &a_gen.restrictions {
+            for b_restriciton in &b_gen.restrictions {
+                if a_restriction.absolute_path != b_restriciton.absolute_path {
+                    return false;
+                }
+                if a_restriction.args.len() != b_restriciton.args.len() {
+                    return false;
+                }
+                let successful_unifications = a_restriction
+                    .args
+                    .iter()
+                    .zip(b_restriciton.args.iter())
+                    .map(|(a, b)| self.unify(*a, *b, poisoned_filespan.clone()))
+                    .flatten()
+                    .count();
+                if successful_unifications != a_restriction.args.len() {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    fn check_this_path(
+        &mut self,
+        this_path: &ThisPath,
+        this_tid: TypeId,
+        b: TypeId,
+        span: InFile<Span>,
+    ) -> Result<(), Diagnostic> {
+        let ThisPath { segments, this_ctx } = this_path;
+        match (this_ctx.trait_id, this_ctx.application_id) {
+            (Some(trid), Some(aid)) => {
+                let app = self.get_trait_application(&trid, &aid);
+                let name = &segments[0];
+                let assoc_type = app
+                    .assoc_types
+                    .iter()
+                    .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None })
+                    .copied();
+                match assoc_type {
+                    Some(assoc_tid) => self.unify(b, assoc_tid, span),
+                    None => Err(self.type_mismatch(&this_tid, &b, span)),
+                }
+            }
+            (None, Some(aid)) => {
+                let (tid, _) = self.get_application(&aid);
+                let tid = *tid;
+                self.unify(tid, b, span)
+            }
+            (None, None) => ice("`ThisPath` cannot have missing `TraitId` and `ApplicationId`"),
+            (Some(_), None) => todo!(),
+        }
     }
 
     fn type_mismatch(&self, a: &TypeId, b: &TypeId, unification_span: InFile<Span>) -> Diagnostic {

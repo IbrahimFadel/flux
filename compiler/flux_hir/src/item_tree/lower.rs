@@ -85,7 +85,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         let assoc_types =
             self.lower_associated_type_definitions(apply_decl.associated_types(), &generic_params);
 
-        let methods = self.lower_apply_methods(apply_decl.methods());
+        let methods = self.lower_apply_methods(apply_decl.methods(), &generic_params);
 
         let apply = ApplyDecl::new(visibility, generic_params, trt, to_ty, assoc_types, methods);
         let apply_id = self.item_tree.applies.alloc(apply);
@@ -432,15 +432,41 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
     fn lower_apply_methods(
         &mut self,
         methods: impl Iterator<Item = ast::FnDecl>,
+        apply_generic_params: &Spanned<GenericParams>,
     ) -> Vec<Idx<FnDecl>> {
         methods
             .map(|method| {
-                self.lower_fn_decl(&method)
-                    .idx
-                    .try_into()
-                    .unwrap_or_else(|_| {
-                        ice("lower_fn_decl returned ItemId not associated with function")
-                    })
+                let f: Idx<FnDecl> =
+                    self.lower_fn_decl(&method)
+                        .idx
+                        .try_into()
+                        .unwrap_or_else(|_| {
+                            ice("lower_fn_decl returned ItemId not associated with function")
+                        });
+                let f_decl = &mut self.item_tree.functions[f];
+                let span = f_decl.generic_params.span;
+                let f_params = f_decl.generic_params.inner.clone();
+                f_decl.generic_params = f_params
+                    .union(apply_generic_params)
+                    .map(|params| params.at(span))
+                    .unwrap_or_else(|(fallback_generic_params, duplicates)| {
+                        let diagnostic = LowerError::DuplicateGenericParams {
+                            generics_that_were_chilling: (),
+                            generics_that_were_chilling_file_span: apply_generic_params
+                                .span
+                                .in_file(self.body_ctx.file_id),
+                            generics_that_caused_duplication: duplicates
+                                .iter()
+                                .map(|key| self.body_ctx.interner.resolve(key).to_string())
+                                .collect(),
+                            generics_that_caused_duplication_file_span: span
+                                .in_file(self.body_ctx.file_id),
+                        }
+                        .to_diagnostic();
+                        self.diagnostics.push(diagnostic);
+                        fallback_generic_params.at(span)
+                    });
+                f
             })
             .collect()
     }
@@ -461,14 +487,11 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                         .fields()
                         .map(|field| {
                             let name = this.lower_name(field.name());
-                            let ty = this.lower_type(field.ty(), generic_params);
-
-                            if let TypeKind::Generic(generic) = &this.tckh.tenv.get(&ty).inner.inner
-                            {
-                                generic_params_used.push(generic.name);
+                            let tid = this.lower_type(field.ty(), generic_params);
+                            if let Some(generic_name) = this.tckh.tenv.generic_used(&tid) {
+                                generic_params_used.push(generic_name);
                             }
-
-                            StructFieldDecl::new(name, ty)
+                            StructFieldDecl::new(name, tid)
                         })
                         .collect(),
                 )
@@ -491,10 +514,8 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                     let name = self.body_ctx.lower_name(variant.name());
                     let ty = variant.ty().map(|ty| {
                         let tid = self.body_ctx.lower_type(Some(ty), generic_params);
-                        if let TypeKind::Generic(generic) =
-                            &self.body_ctx.tckh.tenv.get(&tid).inner.inner
-                        {
-                            generic_params_used.push(generic.name);
+                        if let Some(generic_name) = self.body_ctx.tckh.tenv.generic_used(&tid) {
+                            generic_params_used.push(generic_name);
                         }
                         tid
                     });

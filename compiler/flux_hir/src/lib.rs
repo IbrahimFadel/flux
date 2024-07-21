@@ -78,21 +78,12 @@ pub fn lower_package_bodies(
         interner,
         FileId::prelude(interner),
     );
+
     ctx.attach_trait_type_contexts();
-
-    for (module_id, _) in package
-        .module_tree
-        .get()
-        .iter()
-        .filter(|(module_id, _)| *module_id != ModuleTree::PRELUDE_ID)
-    {
-        let file_id = packages[package_id].module_tree[module_id].file_id;
-
-        // This is gross.
-        ctx.set_module_id(module_id);
-        ctx.set_file_id(file_id);
-        ctx.lower_module_bodies();
+    for (module_id, _) in package.module_tree.get().iter() {
+        ctx.lower_module_bodies(module_id);
     }
+
     diagnostics.append(&mut ctx.finish());
 
     if config.debug_with_bodies {

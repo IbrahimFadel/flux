@@ -90,6 +90,10 @@ getters! {
     TupleExpr {
         vals -> nodes(Expr);
     }
+    CastExpr {
+        val -> node(Expr);
+        to_ty -> node(Type);
+    }
     // ExprCallExpr {
     //     callee -> node(Expr);
     //     args -> node(ArgList);

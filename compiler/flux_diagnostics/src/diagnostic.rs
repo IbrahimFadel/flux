@@ -8,7 +8,7 @@ pub trait ToDiagnostic {
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     kind: DiagnosticKind,
-    offset: FileSpan,
+    pub offset: FileSpan,
     pub code: DiagnosticCode,
     msg: String,
     pub labels: Vec<FileSpanned<String>>,
@@ -130,6 +130,7 @@ pub enum DiagnosticCode {
     UnknownIntrinsic,
     IncorrectNumberOfArgs,
     TypeDoesNotImplementTrait,
+    UnknownStructField,
 
     TypeMismatch,
 }

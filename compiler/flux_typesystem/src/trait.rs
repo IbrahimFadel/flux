@@ -18,28 +18,26 @@ impl Trait {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TraitId(usize);
+pub struct TraitId(NonZeroUsize);
 
 impl TraitId {
-    pub const UNSET: Self = Self(usize::MAX);
-
-    pub const fn new(id: usize) -> Self {
-        Self(id)
+    pub fn new(id: usize) -> Self {
+        Self(NonZeroUsize::new(id).unwrap_or_else(|| ice("cannot create `TraitId` with value 0")))
     }
 
     pub fn raw(&self) -> usize {
-        self.0
+        self.0.into()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct TraitApplication {
+pub struct Application {
     pub tid: TypeId,
     pub assoc_types: Vec<(Word, TypeId)>,
     pub signatures: Vec<FnSignature>,
 }
 
-impl TraitApplication {
+impl Application {
     pub fn new(
         tid: TypeId,
         assoc_types: Vec<(Word, TypeId)>,
@@ -60,7 +58,7 @@ pub struct ApplicationId(NonZeroUsize);
 
 impl ApplicationId {
     // SAFETY: it's obviously all good chill out
-    const UNSET: Self = Self(unsafe { NonZeroUsize::new_unchecked(usize::MAX) });
+    // const UNSET: Self = Self(unsafe { NonZeroUsize::new_unchecked(usize::MAX) });
 
     pub fn new(id: usize) -> Self {
         Self(
@@ -91,12 +89,12 @@ impl TraitRestriction {
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct ThisCtx {
-    pub trait_id: TraitId,
+    pub trait_id: Option<TraitId>,
     pub application_id: Option<ApplicationId>,
 }
 
 impl ThisCtx {
-    pub fn new(trait_id: TraitId, application_id: Option<ApplicationId>) -> Self {
+    pub fn new(trait_id: Option<TraitId>, application_id: Option<ApplicationId>) -> Self {
         Self {
             trait_id,
             application_id,
@@ -105,7 +103,7 @@ impl ThisCtx {
 
     pub const fn unset() -> Self {
         Self {
-            trait_id: TraitId::UNSET,
+            trait_id: None,
             application_id: None,
         }
     }

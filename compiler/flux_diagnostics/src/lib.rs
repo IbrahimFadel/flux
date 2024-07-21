@@ -39,7 +39,7 @@ pub fn ice(msg: impl Display) -> ! {
         formatted_msg.blue(),
         box_top,
         "Exiting...".black(),
-        Backtrace::force_capture()
+        "" // Backtrace::force_capture()
     );
     exit(0)
 }

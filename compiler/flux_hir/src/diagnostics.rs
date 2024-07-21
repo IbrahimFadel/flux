@@ -154,4 +154,16 @@ pub enum LowerError {
         ty: String,
         trt: String,
     },
+    #[error(
+        location = field,
+        primary = "unknown struct field referenced",
+        label at field = "unknown struct field `{field}` referenced",
+        label at strukt = "struct `{strukt}` defined here"
+    )]
+    UnknownStructField {
+        #[filespanned]
+        field: String,
+        #[filespanned]
+        strukt: String,
+    },
 }

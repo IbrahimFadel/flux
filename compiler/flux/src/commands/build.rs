@@ -96,6 +96,14 @@ pub fn build(args: Args) -> ExitStatus {
             &interner,
             &lowering_config,
         );
+        // println!("{:#?}", diagnostics);
+        // println!(
+        //     "{}",
+        //     diagnostics
+        //         .get(0)
+        //         .map(|diagnostic| diagnostic.offset.file_id.as_str(interner))
+        //         .unwrap_or("")
+        // );
         source_cache.report_diagnostics(diagnostics.iter());
     }
 

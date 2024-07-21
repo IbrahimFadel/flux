@@ -526,6 +526,17 @@ impl Expr {
             Expr::Struct(_) => todo!(),
             Expr::If(if_expr) => if_expr.to_doc(interner, bodies, tenv),
             Expr::Intrinsic => RcDoc::text("intrinsic (TODO)"),
+            Expr::Cast(cast) => cast
+                .val
+                .to_doc(interner, bodies, tenv)
+                .append(RcDoc::space())
+                .append(RcDoc::text("as"))
+                .append(RcDoc::space().append(type_id_to_doc(&cast.to_ty, interner, tenv))),
+            Expr::MemberAccess(member_access) => member_access
+                .lhs
+                .to_doc(interner, bodies, tenv)
+                .append(RcDoc::text("."))
+                .append(RcDoc::text(interner.resolve(&member_access.field))),
             Expr::Poisoned => todo!(),
         }
     }

@@ -1,7 +1,31 @@
+struct Vector<T> {
+	buf T*,
+	len u64,
+	cap u64,
+}
+
+apply<T> to Vector<T> {
+	fn new() -> This {
+		Vector {
+			buf: @flux.intrinsics.malloc(128) as T*,
+			len: 0,
+			cap: 128
+		}
+	}
+
+	fn push(v T) {
+		let buf = if this.len == this.cap {
+			@flux.intrinsics.malloc(this.cap * 2) as T*
+		} else {
+			this.buf
+		};
+		// buf[this.len] = v;
+	}
+}
+
 fn main() {
 	let x s32 = 0;
 	let y u32 = 1;
-	let z = x + y;
 	let z = x + 10;
 	let final = z + x;
 }

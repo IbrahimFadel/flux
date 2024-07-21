@@ -3,7 +3,7 @@ use flux_typesystem::{self as ts};
 
 use crate::{
     diagnostics::LowerError,
-    hir::{BinOp, If, StructExpr, StructExprField},
+    hir::{BinOp, Cast, If, MemberAccess, StructExpr, StructExprField},
     intrinsics, prelude,
 };
 
@@ -51,12 +51,15 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                     this.lower_address_expr(address_expr, generic_params)
                 }
                 ast::Expr::IdxExpr(_) => todo!(),
-                ast::Expr::MemberAccessExpr(_) => todo!(),
+                ast::Expr::MemberAccessExpr(member_access_expr) => {
+                    this.lower_member_access_expr(member_access_expr, generic_params)
+                }
                 ast::Expr::IfExpr(if_expr) => this.lower_if_expr(if_expr, generic_params),
                 ast::Expr::IntrinsicExpr(intrinsic_expr) => {
                     this.lower_intrinsic_expr(intrinsic_expr, generic_params)
                 }
                 ast::Expr::StringExpr(_) => todo!(),
+                ast::Expr::CastExpr(cast_expr) => this.lower_cast_expr(cast_expr, generic_params),
             },
         )
     }
@@ -161,10 +164,10 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
 
             // I think we only need to check one side (either lhs or rhs) since we unified them already
             let signature = if let Some(aid) = self.tckh.valid_applications(lhs.tid, trid) {
-                let application = self.tckh.tenv.get_application(trid, &aid);
-                Some(&application.signatures[0])
+                let application = self.tckh.get_trait_application(trid, &aid);
+                Some(application.signatures[0].clone())
             } else {
-                let lhs_filespan: flux_span::InFile<Span> = self.tckh.tenv.get_filespan(&lhs.tid);
+                let lhs_filespan = self.tckh.tenv.get_filespan(&lhs.tid);
                 self.diagnostics.push(
                     LowerError::TypeDoesNotImplementTrait {
                         ty: self.tckh.tenv.fmt_tid(&lhs.tid),
@@ -345,6 +348,62 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         self.alloc_expr(Expr::Address(v.inner)).with_type(tid)
     }
 
+    fn lower_member_access_expr(
+        &mut self,
+        member_access_expr: ast::MemberAccessExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let lhs = self.lower_expr(member_access_expr.lhs(), generic_params);
+        let lhs_span = self.tckh.tenv.get_span(&lhs.tid);
+        let lhs_inner = self.tckh.tenv.get_inner_tid(&lhs.tid);
+        let rhs = self.lower_name(member_access_expr.rhs());
+
+        let tid = if let TypeKind::Concrete(ConcreteKind::Path(path)) =
+            &self.tckh.tenv.get(&lhs_inner).inner.inner
+        {
+            let path = Path::new(path.segments.clone(), path.generic_args.clone());
+            self.resolve_path(&path.at(lhs_span))
+                .map(|(package_id, item_id)| match item_id.idx {
+                    ItemTreeIdx::Struct(struct_idx) => {
+                        let strukt = &self.item_tree(package_id).structs[struct_idx];
+                        let file_id = self.file_id(package_id, item_id.mod_id);
+                        strukt
+                            .fields
+                            .iter()
+                            .find_map(|field| {
+                                if field.name.inner == rhs.inner {
+                                    Some(field.ty.inner)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                self.diagnostics.push(
+                                    LowerError::UnknownStructField {
+                                        field: self.interner.resolve(&rhs).to_string(),
+                                        field_file_span: rhs.span.in_file(self.file_id),
+                                        strukt: self.interner.resolve(&strukt.name).to_string(),
+                                        strukt_file_span: strukt.name.span.in_file(file_id),
+                                    }
+                                    .to_diagnostic(),
+                                );
+                                self.tckh.tenv.insert_unknown(self.file_id, rhs.span)
+                            })
+                    }
+                    _ => {
+                        todo!("diagnostic. This can only happen in structs")
+                        // self.tckh.tenv.insert_unknown(self.file_id, rhs.span)
+                    }
+                })
+                .unwrap_or_else(|| self.tckh.tenv.insert_unknown(self.file_id, rhs.span))
+        } else {
+            todo!("diagnostic. This can only happen in structs")
+        };
+
+        self.alloc_expr(Expr::MemberAccess(MemberAccess::new(lhs, rhs)))
+            .with_type(tid)
+    }
+
     fn lower_if_expr(
         &mut self,
         if_expr: ast::IfExpr,
@@ -436,5 +495,17 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             self.alloc_expr(Expr::Poisoned)
                 .with_type(self.insert_unknown(intrinsic_expr.range().to_span()))
         }
+    }
+
+    fn lower_cast_expr(
+        &mut self,
+        cast_expr: ast::CastExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<ExprIdx> {
+        let val = self.lower_expr(cast_expr.val(), generic_params);
+        let to_ty = self.lower_type(cast_expr.to_ty(), generic_params);
+        let tid = to_ty.inner;
+        let cast = Cast::new(val, tid);
+        self.alloc_expr(Expr::Cast(cast)).with_type(tid)
     }
 }

@@ -4,10 +4,10 @@ use flux_diagnostics::ice;
 use flux_span::{FileId, FileSpanned, InFile, Interner, Span, WithSpan, Word};
 
 use crate::{
-    r#trait::{ApplicationId, Trait, TraitApplication},
+    r#trait::{Application, Trait},
     r#type::{TypeId, TypeKind},
     scope::Scope,
-    ConcreteKind, Path, ThisCtx, TraitId,
+    ConcreteKind, FnSignature, Path, ThisCtx, TraitId,
 };
 
 pub trait Insert<T> {
@@ -26,7 +26,8 @@ impl Insert<TypeKind> for TEnv {
 pub struct TEnv {
     types: Vec<FileSpanned<TypeKind>>,
     traits: Vec<Trait>,
-    pub(super) trait_applications: HashMap<TraitId, Vec<TraitApplication>>,
+    pub(super) applications: Vec<(TypeId, Vec<FnSignature>)>,
+    pub(super) trait_applications: Vec<Vec<Application>>,
     locals: Vec<Scope>,
     pub interner: &'static Interner,
 }
@@ -48,7 +49,8 @@ impl TEnv {
         Self {
             types: vec![],
             traits: vec![],
-            trait_applications: HashMap::new(),
+            applications: vec![],
+            trait_applications: vec![],
             locals: vec![Scope::new()],
             interner,
         }
@@ -107,23 +109,15 @@ impl TEnv {
         self.insert(TypeKind::Never.file_span(file_id, span))
     }
 
-    pub fn insert_trait(&mut self, trt: Trait) -> TraitId {
-        let idx = self.traits.len();
-        self.traits.push(trt);
-        TraitId::new(idx)
+    pub fn insert_ptr(&mut self, tid: TypeId, file_id: FileId, span: Span) -> TypeId {
+        self.insert(TypeKind::Concrete(ConcreteKind::Ptr(tid)).file_span(file_id, span))
     }
 
-    pub fn insert_application(
-        &mut self,
-        trid: TraitId,
-        application: TraitApplication,
-    ) -> ApplicationId {
-        let applications = self.trait_applications.entry(trid).or_insert(vec![]);
-        let idx = applications.len() + 1;
-        applications.push(application);
-
-        debug_assert_ne!(idx, 0);
-        ApplicationId::new(idx)
+    pub fn insert_trait(&mut self, trt: Trait) -> TraitId {
+        let idx: usize = self.traits.len() + 1;
+        self.traits.push(trt);
+        self.trait_applications.push(vec![]);
+        TraitId::new(idx)
     }
 
     pub fn attach_this_ctx(&mut self, tid: &TypeId, this_ctx: ThisCtx) {
@@ -131,10 +125,6 @@ impl TEnv {
         if let TypeKind::ThisPath(this_path) = &mut self.get_mut(&tid).inner.inner {
             this_path.this_ctx = this_ctx;
         }
-    }
-
-    pub fn get_application(&self, trid: &TraitId, aid: &ApplicationId) -> &TraitApplication {
-        &self.trait_applications[trid][aid.raw() - 1]
     }
 
     pub fn make_ref(&mut self, tid: TypeId, new_span: Span) -> TypeId {
@@ -181,11 +171,35 @@ impl TEnv {
         tids
     }
 
-    fn get_inner_tid(&self, tid: &TypeId) -> TypeId {
+    pub fn get_inner_tid(&self, tid: &TypeId) -> TypeId {
         let mut inner_tid = tid;
         while let TypeKind::Ref(id) = &self.get(inner_tid).inner.inner {
             inner_tid = id;
         }
         *inner_tid
+    }
+
+    pub fn generic_used(&self, tid: &TypeId) -> Option<Word> {
+        let inner_tid = self.get_inner_tid(tid);
+        match &self.get(&inner_tid).inner.inner {
+            TypeKind::Concrete(concrete_kind) => match concrete_kind {
+                ConcreteKind::Array(tid, _) => self.generic_used(tid),
+                ConcreteKind::Ptr(tid) => self.generic_used(tid),
+                ConcreteKind::Path(path) => path
+                    .generic_args
+                    .iter()
+                    .map(|arg| self.generic_used(arg))
+                    .find(|x| x.is_some())
+                    .flatten(),
+                ConcreteKind::Tuple(types) => types
+                    .iter()
+                    .map(|tid| self.generic_used(tid))
+                    .find(|x| x.is_some())
+                    .flatten(),
+            },
+            TypeKind::Generic(generic) => Some(generic.name),
+            TypeKind::Ref(_) => unreachable!(),
+            _ => None,
+        }
     }
 }

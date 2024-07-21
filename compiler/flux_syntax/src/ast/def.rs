@@ -49,6 +49,7 @@ basic_node!(ElseIfBlock);
 basic_node!(ElseBlock);
 basic_node!(IntrinsicExpr);
 basic_node!(StringExpr);
+basic_node!(CastExpr);
 
 basic_node!(LetStmt);
 basic_node!(ExprStmt);
@@ -69,7 +70,8 @@ enum_node!(
     MemberAccessExpr,
     IfExpr,
     IntrinsicExpr,
-    StringExpr
+    StringExpr,
+    CastExpr
 );
 
 enum_node!(Type: PathType, ThisPathType, TupleType, ArrayType, PtrType);
