@@ -10,7 +10,7 @@ pub(crate) mod item;
 const MOD_DEPTH_LIMIT: u32 = 16;
 
 #[derive(Debug)]
-pub(super) struct ModDir {
+pub(crate) struct ModDir {
     dir_path: DirPath,
     depth: u32,
 }

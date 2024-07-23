@@ -1,0 +1,9 @@
+[package]
+name = "flux_id"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+paste = "1.0.15"
+
+flux_diagnostics = { path = "../flux_diagnostics" }

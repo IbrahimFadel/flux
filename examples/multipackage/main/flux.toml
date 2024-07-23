@@ -3,7 +3,7 @@ name = "main"
 version = "0.1.0"
 
 [dependencies]
-local = [ "../std" ]
+local = [ "../../std" ]
 
 [build]
 opt-level = 1

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use flux_id::id::InMod;
 use flux_span::{Interner, Word};
 
 use crate::{
@@ -23,7 +24,9 @@ impl ItemScope {
                     name,
                     (
                         Visibility::Public,
-                        ItemId::new(ModuleTree::PRELUDE_ID, ItemTreeIdx::BuiltinType(builtin_ty)),
+                        ItemId::new(
+                            ItemTreeIdx::BuiltinType(builtin_ty).in_mod(ModuleTree::PRELUDE_ID),
+                        ),
                     ),
                 )
             })

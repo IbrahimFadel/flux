@@ -1,63 +1,50 @@
+use std::collections::HashSet;
+
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
+use flux_id::id::{self, InMod};
 use flux_span::{FileId, Interner, Span, Spanned, ToSpan, WithSpan, Word};
 use flux_syntax::ast::{self, AstNode, Root};
-use flux_typesystem::{self as ts, TEnv, TypeId, TypeKind};
 use la_arena::Idx;
-use ts::{FnSignature, ThisCtx, TraitId};
 
 use crate::{
-    body::LowerCtx,
+    common_lower,
     diagnostics::LowerError,
     hir::{
-        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariant,
-        EnumDeclVariantList, FnDecl, GenericParams, ModDecl, Param, ParamList, StructDecl,
-        StructFieldDecl, StructFieldDeclList, TraitDecl, TypeBound, TypeBoundList, UseDecl,
-        Visibility, WherePredicate,
+        ApplyDecl, AssociatedTypeDecl, AssociatedTypeDefinition, EnumDecl, EnumDeclVariantList,
+        FnDecl, GenericParams, ModDecl, Param, ParamList, StructDecl, StructFieldDecl,
+        StructFieldDeclList, TraitDecl, Type, TypeBound, TypeBoundList, UseDecl, Visibility,
+        WherePredicate,
     },
     item::{ItemId, ItemTreeIdx},
-    module::ModuleId,
-    pkg::PackageBodies,
 };
 
 use super::ItemTree;
 
-pub struct Ctx<'a, 'pkgs> {
-    pub(crate) body_ctx: crate::body::LowerCtx<'a, 'pkgs>,
-    diagnostics: Vec<Diagnostic>,
+pub struct LoweringCtx<'a> {
+    pub(crate) common_lowerer: common_lower::LoweringCtx,
+    diagnostics: &'a mut Vec<Diagnostic>,
     item_tree: &'a mut ItemTree,
+    module_id: id::Mod,
 }
 
-impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
+impl<'a> LoweringCtx<'a> {
     pub(crate) fn new(
         item_tree: &'a mut ItemTree,
-        module_id: ModuleId,
-        package_bodies: &'a mut PackageBodies,
-        tenv: &'a mut TEnv,
         interner: &'static Interner,
         file_id: FileId,
+        module_id: id::Mod,
+        diagnostics: &'a mut Vec<Diagnostic>,
     ) -> Self {
         Self {
-            body_ctx: LowerCtx::new(
-                None,
-                None,
-                None,
-                module_id,
-                &[],
-                package_bodies,
-                tenv,
-                interner,
-                file_id,
-            ),
-            diagnostics: vec![],
+            common_lowerer: common_lower::LoweringCtx::new(file_id, interner),
+            diagnostics,
             item_tree,
+            module_id,
         }
     }
 
-    pub(super) fn lower_module_items(mut self, root: &Root) -> (Vec<ItemId>, Vec<Diagnostic>) {
-        (
-            root.items().map(|item| self.lower_item(&item)).collect(),
-            self.diagnostics,
-        )
+    pub(super) fn lower_module_items(mut self, root: &Root) -> Vec<ItemId> {
+        root.items().map(|item| self.lower_item(&item)).collect()
     }
 
     fn lower_item(&mut self, item: &ast::Item) -> ItemId {
@@ -81,7 +68,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
             self.lower_generic_param_list(apply_decl.generic_param_list(), visibility.span);
         let trt = apply_decl
             .trt()
-            .map(|trt| self.body_ctx.lower_path(trt.path(), &generic_params));
+            .map(|trt| self.common_lowerer.lower_path(trt.path(), &generic_params));
         let to_ty = self.lower_apply_to_ty(apply_decl.to_ty(), &generic_params);
         let assoc_types =
             self.lower_associated_type_definitions(apply_decl.associated_types(), &generic_params);
@@ -89,25 +76,25 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         let methods = self.lower_apply_methods(apply_decl.methods(), &generic_params);
 
         let apply = ApplyDecl::new(visibility, generic_params, trt, to_ty, assoc_types, methods);
-        let apply_id = self.item_tree.applies.alloc(apply);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Apply(apply_id))
+        let apply_id = self.item_tree.applies.insert(apply);
+        ItemId::new(ItemTreeIdx::Apply(apply_id).in_mod(self.module_id))
     }
 
     fn lower_enum_decl(&mut self, enum_decl: &ast::EnumDecl) -> ItemId {
         let visibility = self.lower_visibility(enum_decl.visibility());
-        let name = self.body_ctx.lower_name(enum_decl.name());
+        let name = self.common_lowerer.lower_name(enum_decl.name());
         let mut generic_params =
             self.lower_generic_param_list(enum_decl.generic_param_list(), name.span);
         self.update_generic_params_with_where_clause(&mut generic_params, enum_decl.where_clause());
         let variants = self.lower_enum_decl_variants(&name, enum_decl.variants(), &generic_params);
         let enum_decl = EnumDecl::new(visibility, name, generic_params, variants);
-        let enum_decl_id = self.item_tree.enums.alloc(enum_decl);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Enum(enum_decl_id))
+        let enum_decl_id = self.item_tree.enums.insert(enum_decl);
+        ItemId::new(ItemTreeIdx::Enum(enum_decl_id).in_mod(self.module_id))
     }
 
     fn lower_fn_decl(&mut self, function: &ast::FnDecl) -> ItemId {
         let visibility = self.lower_visibility(function.visibility());
-        let name = self.body_ctx.lower_name(function.name());
+        let name = self.common_lowerer.lower_name(function.name());
         let mut generic_param_list =
             self.lower_generic_param_list(function.generic_param_list(), name.span);
         self.update_generic_params_with_where_clause(
@@ -129,21 +116,21 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
             Some(function.clone()),
         );
 
-        let fn_id = self.item_tree.functions.alloc(function);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Function(fn_id))
+        let fn_id = self.item_tree.functions.insert(function);
+        ItemId::new(ItemTreeIdx::Function(fn_id).in_mod(self.module_id))
     }
 
     fn lower_mod_decl(&mut self, mod_decl: &ast::ModDecl) -> ItemId {
         let visibility = self.lower_visibility(mod_decl.visibility());
-        let name = self.body_ctx.lower_name(mod_decl.name());
+        let name = self.common_lowerer.lower_name(mod_decl.name());
         let mod_decl = ModDecl::new(visibility, name);
-        let mod_decl_id = self.item_tree.mods.alloc(mod_decl);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Module(mod_decl_id))
+        let mod_decl_id = self.item_tree.mods.insert(mod_decl);
+        ItemId::new(ItemTreeIdx::Module(mod_decl_id).in_mod(self.module_id))
     }
 
     fn lower_struct_decl(&mut self, struct_decl: &ast::StructDecl) -> ItemId {
         let visibility = self.lower_visibility(struct_decl.visibility());
-        let name = self.body_ctx.lower_name(struct_decl.name());
+        let name = self.common_lowerer.lower_name(struct_decl.name());
         let mut generic_params =
             self.lower_generic_param_list(struct_decl.generic_param_list(), name.span);
         self.update_generic_params_with_where_clause(
@@ -153,13 +140,13 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         let fields =
             self.lower_struct_field_decl_list(&name, struct_decl.field_list(), &generic_params);
         let struct_decl = StructDecl::new(visibility, name, generic_params, fields);
-        let struct_decl_id = self.item_tree.structs.alloc(struct_decl);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Struct(struct_decl_id))
+        let struct_decl_id = self.item_tree.structs.insert(struct_decl);
+        ItemId::new(ItemTreeIdx::Struct(struct_decl_id).in_mod(self.module_id))
     }
 
     fn lower_trait_decl(&mut self, trait_decl: &ast::TraitDecl) -> ItemId {
         let visibility = self.lower_visibility(trait_decl.visibility());
-        let name = self.body_ctx.lower_name(trait_decl.name());
+        let name = self.common_lowerer.lower_name(trait_decl.name());
         let mut generic_params =
             self.lower_generic_param_list(trait_decl.generic_param_list(), name.span);
         self.update_generic_params_with_where_clause(
@@ -171,24 +158,24 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         let methods = self.lower_trait_method_decls(trait_decl.method_decls(), &generic_params);
         let trait_decl =
             TraitDecl::new(visibility, name, generic_params, associated_types, methods);
-        let trait_id = self.item_tree.traits.alloc(trait_decl);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Trait(trait_id))
+        let trait_id = self.item_tree.traits.insert(trait_decl);
+        ItemId::new(ItemTreeIdx::Trait(trait_id).in_mod(self.module_id))
     }
 
     fn lower_use_decl(&mut self, use_decl: &ast::UseDecl) -> ItemId {
         let path = self
-            .body_ctx
+            .common_lowerer
             .lower_path(use_decl.path(), &GenericParams::empty());
         let alias = use_decl
             .alias()
-            .map(|alias| self.body_ctx.lower_name(Some(alias)));
+            .map(|alias| self.common_lowerer.lower_name(Some(alias)));
         let use_decl = UseDecl::new(path, alias);
-        let use_decl_id = self.item_tree.uses.alloc(use_decl);
-        ItemId::new(self.body_ctx.module_id, ItemTreeIdx::Use(use_decl_id))
+        let use_decl_id = self.item_tree.uses.insert(use_decl);
+        ItemId::new(ItemTreeIdx::Use(use_decl_id).in_mod(self.module_id))
     }
 
     fn lower_visibility(&mut self, visibility: Option<ast::Visibility>) -> Spanned<Visibility> {
-        self.body_ctx.lower_node(
+        self.common_lowerer.lower_node(
             visibility,
             |_, visibility| Visibility::Private.at(visibility.range().to_span()),
             |_, visibility| {
@@ -205,7 +192,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         generic_param_list: Option<ast::GenericParamList>,
         fallback_span: Span,
     ) -> Spanned<GenericParams> {
-        self.body_ctx.lower_optional_node(
+        self.common_lowerer.lower_optional_node(
             generic_param_list,
             |_| GenericParams::default().at(fallback_span),
             |this, generic_params| {
@@ -224,7 +211,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         generic_params: &mut Spanned<GenericParams>,
         where_clause: Option<ast::WhereClause>,
     ) {
-        self.body_ctx.lower_optional_node(
+        self.common_lowerer.lower_optional_node(
             where_clause,
             |_| (),
             |this, where_clause| {
@@ -271,7 +258,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         param_list: Option<ast::ParamList>,
         generic_params: &GenericParams,
     ) -> Spanned<ParamList> {
-        self.body_ctx.lower_node(
+        self.common_lowerer.lower_node(
             param_list,
             |_, param_list| ParamList::poisoned().at(param_list.range().to_span()),
             |this, param_list| {
@@ -294,15 +281,15 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         return_type: Option<ast::FnReturnType>,
         generic_params: &GenericParams,
         fallback_span: Span,
-    ) -> Spanned<TypeId> {
-        self.body_ctx.lower_node(
+    ) -> Spanned<Type> {
+        self.common_lowerer.lower_node(
             return_type,
-            |this, _| this.insert_unit(fallback_span).at(fallback_span),
+            |_, _| Type::UNIT.at(fallback_span),
             |this, ret_ty| {
                 let span = ret_ty.range().to_span();
                 match ret_ty.ty() {
                     Some(ty) => this.lower_type(Some(ty), generic_params),
-                    None => this.insert_unit(span).at(span),
+                    None => Type::UNIT.at(span),
                 }
             },
         )
@@ -315,7 +302,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
     ) -> Vec<AssociatedTypeDecl> {
         associated_type_decls
             .map(|associated_type_decl| {
-                let name = self.body_ctx.lower_name(associated_type_decl.name());
+                let name = self.common_lowerer.lower_name(associated_type_decl.name());
                 let type_bound_list = self
                     .lower_type_bound_list(associated_type_decl.type_bound_list(), generic_params);
                 AssociatedTypeDecl::new(name, type_bound_list)
@@ -328,7 +315,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         type_bound_list: Option<ast::TypeBoundList>,
         generic_params: &GenericParams,
     ) -> TypeBoundList {
-        self.body_ctx.lower_optional_node(
+        self.common_lowerer.lower_optional_node(
             type_bound_list,
             |_| TypeBoundList::new(vec![]),
             |this, type_bound_list| {
@@ -349,10 +336,10 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         &mut self,
         trait_method_decls: impl Iterator<Item = ast::TraitMethodDecl>,
         trait_generic_params: &Spanned<GenericParams>,
-    ) -> Vec<Idx<FnDecl>> {
+    ) -> Vec<id::FnDecl> {
         trait_method_decls
             .map(|method_decl| {
-                let name = self.body_ctx.lower_name(method_decl.name());
+                let name = self.common_lowerer.lower_name(method_decl.name());
                 let visibility = Visibility::Public.at(method_decl
                     .fn_kw()
                     .map_or(name.span, |fn_kw| fn_kw.text_range().to_span()));
@@ -369,13 +356,15 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                                 generics_that_were_chilling: (),
                                 generics_that_were_chilling_file_span: trait_generic_params
                                     .span
-                                    .in_file(self.body_ctx.file_id),
+                                    .in_file(self.common_lowerer.file_id),
                                 generics_that_caused_duplication: duplicates
                                     .iter()
-                                    .map(|key| self.body_ctx.interner.resolve(key).to_string())
+                                    .map(|key| {
+                                        self.common_lowerer.interner.resolve(key).to_string()
+                                    })
                                     .collect(),
                                 generics_that_caused_duplication_file_span: span
-                                    .in_file(self.body_ctx.file_id),
+                                    .in_file(self.common_lowerer.file_id),
                             }
                             .to_diagnostic();
                             self.diagnostics.push(diagnostic);
@@ -396,7 +385,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
 
                 let fn_decl =
                     FnDecl::new(name, visibility, generic_params, param_list, ret_ty, None);
-                self.item_tree.functions.alloc(fn_decl)
+                self.item_tree.functions.insert(fn_decl)
             })
             .collect()
     }
@@ -405,13 +394,10 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         &mut self,
         to_ty: Option<ast::ApplyDeclType>,
         generic_params: &GenericParams,
-    ) -> Spanned<TypeId> {
-        self.body_ctx.lower_node(
+    ) -> Spanned<Type> {
+        self.common_lowerer.lower_node(
             to_ty,
-            |this, to_ty| {
-                let span = to_ty.range().to_span();
-                this.insert_unknown(span).at(span)
-            },
+            |_, to_ty| Type::Unknown.at(to_ty.range().to_span()),
             |this, to_ty| this.lower_type(to_ty.ty(), generic_params),
         )
     }
@@ -423,8 +409,10 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
     ) -> Vec<AssociatedTypeDefinition> {
         assoc_types
             .map(|assoc_type| {
-                let name = self.body_ctx.lower_name(assoc_type.name());
-                let ty = self.body_ctx.lower_type(assoc_type.ty(), generic_params);
+                let name = self.common_lowerer.lower_name(assoc_type.name());
+                let ty = self
+                    .common_lowerer
+                    .lower_type(assoc_type.ty(), generic_params);
                 AssociatedTypeDefinition::new(name, ty)
             })
             .collect()
@@ -434,17 +422,18 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         &mut self,
         methods: impl Iterator<Item = ast::FnDecl>,
         apply_generic_params: &Spanned<GenericParams>,
-    ) -> Vec<Idx<FnDecl>> {
+    ) -> Vec<id::FnDecl> {
         methods
             .map(|method| {
-                let f: Idx<FnDecl> =
-                    self.lower_fn_decl(&method)
-                        .idx
-                        .try_into()
-                        .unwrap_or_else(|_| {
-                            ice("lower_fn_decl returned ItemId not associated with function")
-                        });
-                let f_decl = &mut self.item_tree.functions[f];
+                let f: id::FnDecl = self
+                    .lower_fn_decl(&method)
+                    .inner
+                    .clone()
+                    .try_into()
+                    .unwrap_or_else(|_| {
+                        ice("lower_fn_decl returned ItemId not associated with function")
+                    });
+                let f_decl = self.item_tree.functions.get_mut(f);
                 let span = f_decl.generic_params.span;
                 let f_params = f_decl.generic_params.inner.clone();
                 f_decl.generic_params = f_params
@@ -455,13 +444,13 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                             generics_that_were_chilling: (),
                             generics_that_were_chilling_file_span: apply_generic_params
                                 .span
-                                .in_file(self.body_ctx.file_id),
+                                .in_file(self.common_lowerer.file_id),
                             generics_that_caused_duplication: duplicates
                                 .iter()
-                                .map(|key| self.body_ctx.interner.resolve(key).to_string())
+                                .map(|key| self.common_lowerer.interner.resolve(key).to_string())
                                 .collect(),
                             generics_that_caused_duplication_file_span: span
-                                .in_file(self.body_ctx.file_id),
+                                .in_file(self.common_lowerer.file_id),
                         }
                         .to_diagnostic();
                         self.diagnostics.push(diagnostic);
@@ -478,8 +467,8 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         field_list: Option<ast::StructDeclFieldList>,
         generic_params: &Spanned<GenericParams>,
     ) -> StructFieldDeclList {
-        let mut generic_params_used = Vec::with_capacity(generic_params.types.len());
-        let field_decl_list = self.body_ctx.lower_node(
+        let mut generic_params_used = HashSet::with_capacity(generic_params.types.len());
+        let field_decl_list = self.common_lowerer.lower_node(
             field_list,
             |_, _| StructFieldDeclList::poisoned(),
             |this, field_list| {
@@ -488,11 +477,9 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                         .fields()
                         .map(|field| {
                             let name = this.lower_name(field.name());
-                            let tid = this.lower_type(field.ty(), generic_params);
-                            if let Some(generic_name) = this.tckh.tenv.generic_used(&tid) {
-                                generic_params_used.push(generic_name);
-                            }
-                            StructFieldDecl::new(name, tid)
+                            let ty = this.lower_type(field.ty(), generic_params);
+                            ty.generics_used(&mut generic_params_used);
+                            StructFieldDecl::new(name, ty)
                         })
                         .collect(),
                 )
@@ -508,32 +495,33 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         variants: impl Iterator<Item = ast::EnumDeclVariant>,
         generic_params: &Spanned<GenericParams>,
     ) -> EnumDeclVariantList {
-        let mut generic_params_used = Vec::with_capacity(generic_params.types.len());
-        let variants = EnumDeclVariantList::new(
-            variants
-                .map(|variant| {
-                    let name = self.body_ctx.lower_name(variant.name());
-                    let ty = variant.ty().map(|ty| {
-                        let tid = self.body_ctx.lower_type(Some(ty), generic_params);
-                        if let Some(generic_name) = self.body_ctx.tckh.tenv.generic_used(&tid) {
-                            generic_params_used.push(generic_name);
-                        }
-                        tid
-                    });
+        todo!()
+        // let mut generic_params_used = Vec::with_capacity(generic_params.types.len());
+        // let variants = EnumDeclVariantList::new(
+        //     variants
+        //         .map(|variant| {
+        //             let name = self.common_lowerer.lower_name(variant.name());
+        //             let ty = variant.ty().map(|ty| {
+        //                 let tid = self.common_lowerer.lower_type(Some(ty), generic_params);
+        //                 if let Some(generic_name) = self.body_ctx.tckh.tenv.generic_used(&tid) {
+        //                     generic_params_used.push(generic_name);
+        //                 }
+        //                 tid
+        //             });
 
-                    EnumDeclVariant::new(name, ty)
-                })
-                .collect(),
-        );
-        self.check_unused_generics(enum_name, generic_params, &generic_params_used);
-        variants
+        //             EnumDeclVariant::new(name, ty)
+        //         })
+        //         .collect(),
+        // );
+        // self.check_unused_generics(enum_name, generic_params, &generic_params_used);
+        // variants
     }
 
     fn check_unused_generics(
         &mut self,
         item_name: &Spanned<Word>,
         generic_params: &Spanned<GenericParams>,
-        generics_used: &[Word],
+        generics_used: &HashSet<Word>,
     ) {
         let unused_generics: Vec<_> = generic_params
             .types
@@ -544,7 +532,7 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
                     .find(|name| **name == item.inner)
                     .is_none()
                 {
-                    Some(self.body_ctx.interner.resolve(&item).to_string())
+                    Some(self.common_lowerer.interner.resolve(&item).to_string())
                 } else {
                     None
                 }
@@ -554,10 +542,12 @@ impl<'a, 'pkgs> Ctx<'a, 'pkgs> {
         if !unused_generics.is_empty() {
             self.diagnostics.push(
                 LowerError::UnusedGenerics {
-                    item_name: self.body_ctx.interner.resolve(&item_name).to_string(),
-                    item_name_file_span: item_name.span.in_file(self.body_ctx.file_id),
+                    item_name: self.common_lowerer.interner.resolve(&item_name).to_string(),
+                    item_name_file_span: item_name.span.in_file(self.common_lowerer.file_id),
                     unused_generics: unused_generics,
-                    unused_generics_file_span: generic_params.span.in_file(self.body_ctx.file_id),
+                    unused_generics_file_span: generic_params
+                        .span
+                        .in_file(self.common_lowerer.file_id),
                 }
                 .to_diagnostic(),
             );

@@ -1,20 +1,17 @@
 use flux_diagnostics::Diagnostic;
+use flux_id::id;
 use flux_span::{FileId, WithSpan};
-use la_arena::Idx;
 
 use crate::{
-    hir::ModDecl,
     item::{ItemId, ItemTreeIdx},
     name_res::{FileResolver, ModDir},
     pkg::PkgBuilder,
 };
 
-use super::ModuleId;
-
 pub(crate) struct ModCollector<'a, 'b, R: FileResolver> {
     pub file_id: FileId,
     pub mod_dir: ModDir,
-    pub mod_id: ModuleId,
+    pub mod_id: id::Mod,
     pub diagnostics: Vec<Diagnostic>,
     pub pkg_builder: &'a mut PkgBuilder<'b, R>,
 }
@@ -22,9 +19,9 @@ pub(crate) struct ModCollector<'a, 'b, R: FileResolver> {
 impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
     pub fn collect(mut self, items: &[ItemId]) -> Vec<Diagnostic> {
         for item_id in items {
-            match item_id.idx {
+            match item_id.inner {
                 ItemTreeIdx::Function(fn_id) => {
-                    let f = &self.pkg_builder.item_tree.functions[fn_id];
+                    let f = &self.pkg_builder.item_tree.functions.get(fn_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         f.name.inner,
                         f.visibility.inner,
@@ -33,7 +30,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 }
                 ItemTreeIdx::BuiltinType(_) => {}
                 ItemTreeIdx::Module(mod_id) => {
-                    let m = &self.pkg_builder.item_tree.mods[mod_id];
+                    let m = &self.pkg_builder.item_tree.mods.get(mod_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         m.name.inner,
                         m.visibility.inner,
@@ -42,7 +39,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                     self.collect_child_module(mod_id);
                 }
                 ItemTreeIdx::Struct(struct_id) => {
-                    let s = &self.pkg_builder.item_tree.structs[struct_id];
+                    let s = &self.pkg_builder.item_tree.structs.get(struct_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         s.name.inner,
                         s.visibility.inner,
@@ -50,7 +47,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                     );
                 }
                 ItemTreeIdx::Trait(trait_id) => {
-                    let trt = &self.pkg_builder.item_tree.traits[trait_id];
+                    let trt = &self.pkg_builder.item_tree.traits.get(trait_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         trt.name.inner,
                         trt.visibility.inner,
@@ -59,21 +56,21 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 }
                 ItemTreeIdx::Apply(_) => {}
                 ItemTreeIdx::Enum(enum_id) => {
-                    let e = &self.pkg_builder.item_tree.enums[enum_id];
+                    let e = &self.pkg_builder.item_tree.enums.get(enum_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         e.name.inner,
                         e.visibility.inner,
                         item_id.clone(),
                     );
                 }
-                ItemTreeIdx::Use(use_id) => {}
+                ItemTreeIdx::Use(_) => {}
             }
         }
         self.diagnostics
     }
 
-    fn collect_child_module(&mut self, mod_decl_id: Idx<ModDecl>) {
-        let mod_decl = &self.pkg_builder.item_tree.mods[mod_decl_id];
+    fn collect_child_module(&mut self, mod_decl_id: id::ModDecl) {
+        let mod_decl = &self.pkg_builder.item_tree.mods.get(mod_decl_id);
         let name_str = mod_decl
             .name
             .map_ref(|name| self.pkg_builder.interner.resolve(name))

@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./compiler/flux_typesystem/Cargo.toml",
+    "./compiler/flux_typesystem/Cargo.toml"
+  ]
+}

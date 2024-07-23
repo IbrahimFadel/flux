@@ -1,15 +1,13 @@
 use std::collections::HashSet;
 
 use flux_diagnostics::ice;
-use flux_span::{FileSpanned, Interner, Spanned, WithSpan, Word};
+use flux_id::id;
+use flux_span::{Interner, Spanned, WithSpan, Word};
 use flux_syntax::ast;
 use flux_typesystem as ts;
-use flux_typesystem::{TEnv, TypeId};
 use itertools::Itertools;
 use la_arena::{Arena, Idx, RawIdx};
-use ts::{FnSignature, ThisCtx, Typed, WithType};
-
-use crate::item_tree::ItemTree;
+use ts::{Typed, WithType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
@@ -23,7 +21,7 @@ pub struct FnDecl {
     pub visibility: Spanned<Visibility>,
     pub generic_params: Spanned<GenericParams>,
     pub params: Spanned<ParamList>,
-    pub return_ty: Spanned<TypeId>,
+    pub return_ty: Spanned<Type>,
     pub ast: Option<ast::FnDecl>,
 }
 
@@ -33,7 +31,7 @@ impl FnDecl {
         visibility: Spanned<Visibility>,
         generic_params: Spanned<GenericParams>,
         params: Spanned<ParamList>,
-        return_ty: Spanned<TypeId>,
+        return_ty: Spanned<Type>,
         ast: Option<ast::FnDecl>,
     ) -> Self {
         Self {
@@ -46,12 +44,12 @@ impl FnDecl {
         }
     }
 
-    pub fn to_signature(&self) -> FnSignature {
-        FnSignature::new(
-            self.params.iter().map(|param| param.ty.inner),
-            self.return_ty.inner,
-        )
-    }
+    // pub fn to_signature(&self) -> FnSignature {
+    //     FnSignature::new(
+    //         self.params.iter().map(|param| param.ty.inner),
+    //         self.return_ty.inner,
+    //     )
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -134,11 +132,11 @@ impl EnumDeclVariantList {
 #[derive(Debug, Clone)]
 pub struct EnumDeclVariant {
     pub name: Spanned<Word>,
-    pub ty: Option<Spanned<TypeId>>,
+    pub ty: Option<Spanned<Type>>,
 }
 
 impl EnumDeclVariant {
-    pub fn new(name: Spanned<Word>, ty: Option<Spanned<TypeId>>) -> Self {
+    pub fn new(name: Spanned<Word>, ty: Option<Spanned<Type>>) -> Self {
         Self { name, ty }
     }
 }
@@ -149,7 +147,7 @@ pub struct TraitDecl {
     pub name: Spanned<Word>,
     pub generic_params: Spanned<GenericParams>,
     pub assoc_type_decls: Vec<AssociatedTypeDecl>,
-    pub methods: Vec<Idx<FnDecl>>,
+    pub methods: Vec<id::FnDecl>,
 }
 
 impl TraitDecl {
@@ -158,7 +156,7 @@ impl TraitDecl {
         name: Spanned<Word>,
         generic_params: Spanned<GenericParams>,
         assoc_type_decls: Vec<AssociatedTypeDecl>,
-        methods: Vec<Idx<FnDecl>>,
+        methods: Vec<id::FnDecl>,
     ) -> Self {
         Self {
             visibility,
@@ -169,12 +167,12 @@ impl TraitDecl {
         }
     }
 
-    pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
-        self.methods
-            .iter()
-            .map(|method_idx| item_tree.functions[*method_idx].to_signature())
-            .collect()
-    }
+    // pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
+    //     self.methods
+    //         .iter()
+    //         .map(|method_idx| item_tree.functions[*method_idx].to_signature())
+    //         .collect()
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -182,9 +180,9 @@ pub struct ApplyDecl {
     pub visibility: Spanned<Visibility>,
     pub generic_params: Spanned<GenericParams>,
     pub trt: Option<Spanned<Path>>,
-    pub to_ty: Spanned<TypeId>,
+    pub to_ty: Spanned<Type>,
     pub assoc_types: Vec<AssociatedTypeDefinition>,
-    pub methods: Vec<Idx<FnDecl>>,
+    pub methods: Vec<id::FnDecl>,
 }
 
 impl ApplyDecl {
@@ -192,9 +190,9 @@ impl ApplyDecl {
         visibility: Spanned<Visibility>,
         generic_params: Spanned<GenericParams>,
         trt: Option<Spanned<Path>>,
-        to_ty: Spanned<TypeId>,
+        to_ty: Spanned<Type>,
         assoc_types: Vec<AssociatedTypeDefinition>,
-        methods: Vec<Idx<FnDecl>>,
+        methods: Vec<id::FnDecl>,
     ) -> Self {
         Self {
             visibility,
@@ -206,12 +204,12 @@ impl ApplyDecl {
         }
     }
 
-    pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
-        self.methods
-            .iter()
-            .map(|method_idx| item_tree.functions[*method_idx].to_signature())
-            .collect()
-    }
+    // pub(crate) fn method_signatures(&self, item_tree: &ItemTree) -> Vec<FnSignature> {
+    //     self.methods
+    //         .iter()
+    //         .map(|method_idx| item_tree.functions[*method_idx].to_signature())
+    //         .collect()
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -246,11 +244,11 @@ impl StructFieldDeclList {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructFieldDecl {
     pub name: Spanned<Word>,
-    pub ty: Spanned<TypeId>,
+    pub ty: Spanned<Type>,
 }
 
 impl StructFieldDecl {
-    pub fn new(name: Spanned<Word>, ty: Spanned<TypeId>) -> Self {
+    pub fn new(name: Spanned<Word>, ty: Spanned<Type>) -> Self {
         Self { name, ty }
     }
 }
@@ -258,16 +256,12 @@ impl StructFieldDecl {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssociatedTypeDefinition {
     pub name: Spanned<Word>,
-    pub ty: Spanned<TypeId>,
+    pub ty: Spanned<Type>,
 }
 
 impl AssociatedTypeDefinition {
-    pub fn new(name: Spanned<Word>, ty: Spanned<TypeId>) -> Self {
+    pub fn new(name: Spanned<Word>, ty: Spanned<Type>) -> Self {
         Self { name, ty }
-    }
-
-    pub fn as_ts_assoc_type(&self) -> (Word, TypeId) {
-        (self.name.inner, self.ty.inner)
     }
 }
 
@@ -345,20 +339,20 @@ pub struct WherePredicate {
     pub bound: Spanned<Path>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Path {
     pub segments: Vec<Word>,
-    pub generic_args: Vec<TypeId>,
+    pub generic_args: Vec<Type>,
 }
 
-impl From<ts::Path> for Path {
-    fn from(value: ts::Path) -> Self {
-        Self::new(value.segments, value.generic_args)
-    }
-}
+// impl From<ts::Path> for Path {
+//     fn from(value: ts::Path) -> Self {
+//         Self::new(value.segments, value.generic_args)
+//     }
+// }
 
 impl Path {
-    pub fn new(segments: Vec<Word>, generic_args: Vec<TypeId>) -> Self {
+    pub fn new(segments: Vec<Word>, generic_args: Vec<Type>) -> Self {
         Self {
             segments,
             generic_args,
@@ -404,93 +398,6 @@ impl Path {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum Type {
-    Array(ArrayType),
-    Generic(Generic),
-    Path(Path),
-    ThisPath(ThisPath),
-    Ptr(TypeId),
-    Tuple(Vec<TypeId>),
-    Never,
-    Unknown,
-}
-
-impl Type {
-    pub const fn unit() -> Self {
-        Self::Tuple(vec![])
-    }
-}
-
-impl ts::Insert<Type> for TEnv {
-    fn insert(&mut self, ty: FileSpanned<Type>) -> TypeId {
-        let tkind = ty.map_inner(|ty| match ty {
-            Type::Array(arr) => ts::TypeKind::Concrete(ts::ConcreteKind::Array(arr.ty, arr.num)),
-            Type::Generic(generic) => ts::TypeKind::Generic(ts::Generic::new(
-                generic.name.inner,
-                generic
-                    .restrictions
-                    .iter()
-                    .map(|restriction| restriction.inner.0.clone().to_trait_restriction())
-                    .collect(),
-            )),
-            Type::Path(path) => ts::TypeKind::Concrete(ts::ConcreteKind::Path(ts::Path::new(
-                path.segments,
-                path.generic_args,
-            ))),
-            Type::Ptr(to) => ts::TypeKind::Concrete(ts::ConcreteKind::Ptr(to)),
-            Type::Tuple(types) => ts::TypeKind::Concrete(ts::ConcreteKind::Tuple(types)),
-            Type::Never => ts::TypeKind::Never,
-            Type::Unknown => ts::TypeKind::Unknown,
-            Type::ThisPath(this_path) => {
-                ts::TypeKind::ThisPath(ts::ThisPath::new(this_path.path.segments, ThisCtx::unset()))
-            }
-        });
-        self.insert(tkind)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ThisPath {
-    pub path: Path,
-}
-
-impl ThisPath {
-    pub fn new(path: Path) -> Self {
-        Self { path }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ArrayType {
-    pub ty: TypeId,
-    pub num: u64,
-}
-
-impl ArrayType {
-    pub fn new(ty: TypeId, num: u64) -> Self {
-        Self { ty, num }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Generic {
-    pub name: Spanned<Word>,
-    pub restrictions: TypeBoundList,
-}
-
-impl Generic {
-    pub fn new(name: Spanned<Word>, restrictions: TypeBoundList) -> Self {
-        Self { name, restrictions }
-    }
-}
-
-impl Path {
-    pub fn to_trait_restriction(self) -> ts::TraitRestriction {
-        ts::TraitRestriction::new(self.segments, self.generic_args)
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ParamList(Vec<Param>);
 
@@ -515,7 +422,7 @@ impl ParamList {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Param {
     pub name: Spanned<Word>,
-    pub ty: Spanned<TypeId>,
+    pub ty: Spanned<Type>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -535,7 +442,7 @@ impl TypeBoundList {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypeBound(Path);
 
 impl TypeBound {
@@ -565,7 +472,7 @@ impl AssociatedTypeDecl {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
-    Address(ExprIdx),
+    Address(id::Expr),
     // Block(Block),
     BinOp(BinOp),
     Cast(Cast),
@@ -573,7 +480,7 @@ pub enum Expr {
     // Call(Call),
     // Float(f64),
     Int(u64),
-    Tuple(Vec<ExprIdx>),
+    Tuple(Vec<id::Expr>),
     Path(Path),
     // Let(Let),
     Struct(StructExpr),
@@ -584,30 +491,15 @@ pub enum Expr {
     Poisoned,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct ExprIdx(Idx<Expr>);
-
-impl ExprIdx {
-    pub fn new(idx: Idx<Expr>) -> Self {
-        Self(idx)
-    }
-
-    pub fn idx(&self) -> Idx<Expr> {
-        self.0
-    }
-}
-
-impl WithType for ExprIdx {}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOp {
-    pub lhs: ExprIdx,
-    pub rhs: ExprIdx,
+    pub lhs: id::Expr,
+    pub rhs: id::Expr,
     pub op: Spanned<Op>,
 }
 
 impl BinOp {
-    pub fn new(lhs: ExprIdx, rhs: ExprIdx, op: Spanned<Op>) -> Self {
+    pub fn new(lhs: id::Expr, rhs: id::Expr, op: Spanned<Op>) -> Self {
         Self { lhs, rhs, op }
     }
 }
@@ -631,12 +523,12 @@ pub enum Op {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cast {
-    pub val: Typed<ExprIdx>,
-    pub to_ty: TypeId,
+    pub val: Typed<id::Expr>,
+    pub to_ty: id::Ty,
 }
 
 impl Cast {
-    pub fn new(val: Typed<ExprIdx>, to_ty: TypeId) -> Self {
+    pub fn new(val: Typed<id::Expr>, to_ty: id::Ty) -> Self {
         Self { val, to_ty }
     }
 }
@@ -656,38 +548,38 @@ impl StructExpr {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExprField {
     pub name: Spanned<Word>,
-    pub val: Typed<ExprIdx>,
+    pub val: Typed<id::Expr>,
 }
 
 impl StructExprField {
-    pub fn new(name: Spanned<Word>, val: Typed<ExprIdx>) -> Self {
+    pub fn new(name: Spanned<Word>, val: Typed<id::Expr>) -> Self {
         Self { name, val }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MemberAccess {
-    pub lhs: Typed<ExprIdx>,
+    pub lhs: Typed<id::Expr>,
     pub field: Spanned<Word>,
 }
 
 impl MemberAccess {
-    pub fn new(lhs: Typed<ExprIdx>, field: Spanned<Word>) -> Self {
+    pub fn new(lhs: Typed<id::Expr>, field: Spanned<Word>) -> Self {
         Self { lhs, field }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct If {
-    exprs: Vec<Typed<ExprIdx>>,
+    exprs: Vec<Typed<id::Expr>>,
 }
 
 impl If {
     pub fn new(
-        condition: Typed<ExprIdx>,
-        then: Typed<ExprIdx>,
-        else_ifs: impl Iterator<Item = (Typed<ExprIdx>, Typed<ExprIdx>)>,
-        r#else: Option<Typed<ExprIdx>>,
+        condition: Typed<id::Expr>,
+        then: Typed<id::Expr>,
+        else_ifs: impl Iterator<Item = (Typed<id::Expr>, Typed<id::Expr>)>,
+        r#else: Option<Typed<id::Expr>>,
     ) -> Self {
         Self {
             exprs: [condition, then]
@@ -698,7 +590,7 @@ impl If {
         }
     }
 
-    pub fn blocks(&self) -> impl Iterator<Item = &Typed<ExprIdx>> {
+    pub fn blocks(&self) -> impl Iterator<Item = &Typed<id::Expr>> {
         self.exprs.iter().step_by(2)
     }
 
@@ -707,21 +599,21 @@ impl If {
         self.exprs.len() % 2 != 0
     }
 
-    pub fn condition(&self) -> &Typed<ExprIdx> {
+    pub fn condition(&self) -> &Typed<id::Expr> {
         &self
             .exprs
             .get(0)
             .unwrap_or_else(|| ice("if expression missing condition expression"))
     }
 
-    pub fn then(&self) -> &Typed<ExprIdx> {
+    pub fn then(&self) -> &Typed<id::Expr> {
         &self
             .exprs
             .get(1)
             .unwrap_or_else(|| ice("if expression missing then block expression"))
     }
 
-    pub fn else_ifs(&self) -> Option<&[Typed<ExprIdx>]> {
+    pub fn else_ifs(&self) -> Option<&[Typed<id::Expr>]> {
         if self.has_else() {
             self.exprs.get(2..self.exprs.len() - 1)
         } else {
@@ -729,7 +621,7 @@ impl If {
         }
     }
 
-    pub fn else_block(&self) -> Option<&Typed<ExprIdx>> {
+    pub fn else_block(&self) -> Option<&Typed<id::Expr>> {
         if self.has_else() {
             self.exprs.last()
         } else {
@@ -743,4 +635,74 @@ pub enum Intrinsic {
     Panic,
     CmpEqU8,
     AddU8,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Type {
+    Array(ArrayType),
+    Generic(Generic),
+    Path(Path),
+    ThisPath(ThisPath),
+    Ptr(Box<Type>),
+    Tuple(Vec<Type>),
+    Never,
+    Unknown,
+}
+
+impl Type {
+    pub const UNIT: Self = Self::Tuple(vec![]);
+
+    pub fn generics_used(&self, set: &mut HashSet<Word>) {
+        match self {
+            Type::Array(array) => array.ty.generics_used(set),
+            Type::Generic(generic) => {
+                set.insert(generic.name.inner);
+            }
+            Type::Path(path) => path
+                .generic_args
+                .iter()
+                .for_each(|ty| ty.generics_used(set)),
+            Type::Ptr(ty) => ty.generics_used(set),
+            Type::Tuple(types) => types.iter().for_each(|ty| ty.generics_used(set)),
+            _ => {}
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ThisPath {
+    pub path: Path,
+}
+
+impl ThisPath {
+    pub fn new(path: Path) -> Self {
+        Self { path }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArrayType {
+    pub ty: Box<Type>,
+    pub num: u64,
+}
+
+impl ArrayType {
+    pub fn new(ty: Type, num: u64) -> Self {
+        Self {
+            ty: Box::new(ty),
+            num,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Generic {
+    pub name: Spanned<Word>,
+    pub restrictions: TypeBoundList,
+}
+
+impl Generic {
+    pub fn new(name: Spanned<Word>, restrictions: TypeBoundList) -> Self {
+        Self { name, restrictions }
+    }
 }

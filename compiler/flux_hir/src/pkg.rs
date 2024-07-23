@@ -1,42 +1,46 @@
 use std::collections::HashMap;
 
 use flux_diagnostics::{Diagnostic, SourceCache};
+use flux_id::id::{self, M};
 use flux_span::{FileId, Interner, Word};
-use flux_typesystem::TEnv;
 use la_arena::{Arena, Idx};
 
 use crate::{
     cfg::Config,
-    hir::{Expr, ExprIdx, FnDecl, TraitDecl},
+    hir::Expr,
     item::ItemId,
     item_tree::{lower_cst_to_item_tree, ItemTree},
-    module::{collect::ModCollector, ModuleData, ModuleId, ModuleTree},
+    module::{collect::ModCollector, ModuleData, ModuleTree},
     name_res::{import::Import, FileResolver, ModDir},
     prelude::PRELUDE_SRC,
 };
 
-mod prettyprint;
-
-#[derive(Debug, Clone)]
-pub struct BuiltPackage {
-    pub traits: Vec<(PackageId, Idx<TraitDecl>, TraitDecl)>,
-    pub tenv: TEnv,
+pub struct Package {
+    pub name: Word,
     pub item_tree: ItemTree,
+    pub module_tree: ModuleTree,
 }
 
-#[derive(Debug)]
-pub struct PackageDefs {
-    pub(crate) name: Word,
-    pub(crate) item_tree: ItemTree,
-    pub(crate) module_tree: ModuleTree,
-}
+pub type PackageId = Idx<Package>;
 
-pub type PackageId = Idx<PackageDefs>;
+// #[derive(Debug, Clone)]
+// pub struct BuiltPackage {
+//     pub traits: Vec<(PackageId, Idx<TraitDecl>, TraitDecl)>,
+//     pub tenv: TEnv,
+//     pub item_tree: ItemTree,
+// }
+
+// #[derive(Debug)]
+// pub struct PackageDefs {
+//     pub(crate) name: Word,
+//     pub(crate) item_tree: ItemTree,
+//     pub(crate) module_tree: ModuleTree,
+// }
 
 #[derive(Debug)]
 pub struct PackageBodies {
     pub(crate) exprs: Arena<Expr>,
-    pub(crate) fn_exprs: HashMap<(ModuleId, Idx<FnDecl>), ExprIdx>,
+    pub(crate) fn_exprs: HashMap<M<id::FnDecl>, id::Expr>,
 }
 
 pub(crate) struct PkgBuilder<'a, R: FileResolver> {
@@ -45,9 +49,7 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
     pub module_tree: ModuleTree,
     pub interner: &'static Interner,
     pub source_cache: &'a mut SourceCache,
-    pub diagnostics: Vec<Diagnostic>,
-    package_bodies: PackageBodies,
-    tenv: TEnv,
+    diagnostics: &'a mut Vec<Diagnostic>,
     config: &'a Config,
     pub resolver: R,
     unresolved_imports: Vec<Import>,
@@ -56,6 +58,7 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
 impl<'a, R: FileResolver> PkgBuilder<'a, R> {
     pub(crate) fn new(
         name: Word,
+        diagnostics: &'a mut Vec<Diagnostic>,
         interner: &'static Interner,
         source_cache: &'a mut SourceCache,
         config: &'a Config,
@@ -66,30 +69,20 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
             item_tree: ItemTree::new(),
             module_tree: ModuleTree::new(),
             interner,
-            package_bodies: PackageBodies {
-                exprs: Arena::new(),
-                fn_exprs: HashMap::new(),
-            },
-            tenv: TEnv::new(interner),
             source_cache,
             config,
             resolver,
-            diagnostics: vec![],
+            diagnostics,
             unresolved_imports: vec![],
         }
     }
 
-    pub fn finish(self) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
-        (
-            PackageDefs {
-                name: self.name,
-                item_tree: self.item_tree,
-                module_tree: self.module_tree,
-            },
-            self.package_bodies,
-            self.tenv,
-            self.diagnostics,
-        )
+    pub fn finish(self) -> Package {
+        Package {
+            name: self.name,
+            item_tree: self.item_tree,
+            module_tree: self.module_tree,
+        }
     }
 
     pub(crate) fn seed_with_entry(&mut self, file_id: FileId, src: &str) {
@@ -121,8 +114,8 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         &mut self,
         file_id: FileId,
         src: &str,
-        parent: Option<ModuleId>,
-    ) -> (ModuleId, Vec<ItemId>) {
+        parent: Option<id::Mod>,
+    ) -> (id::Mod, Vec<ItemId>) {
         let mut cst = flux_parser::parse(src, file_id, self.interner);
         let root = cst.syntax();
 
@@ -133,19 +126,16 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
         self.diagnostics.append(&mut cst.diagnostics);
 
         let module_data = ModuleData::new(parent, file_id);
-        let module_id = self.module_tree.alloc(module_data);
+        let module_id = self.module_tree.insert(module_data);
 
-        let (items, mut diagnostics) = lower_cst_to_item_tree(
+        let items = lower_cst_to_item_tree(
             root,
             file_id,
-            &mut self.item_tree,
             module_id,
+            &mut self.item_tree,
+            &mut self.diagnostics,
             self.interner,
-            &mut self.package_bodies,
-            &mut self.tenv,
         );
-
-        self.diagnostics.append(&mut diagnostics);
 
         (module_id, items)
     }

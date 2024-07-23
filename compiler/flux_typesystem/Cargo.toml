@@ -13,3 +13,4 @@ paste = "1.0.15"
 flux_diagnostics = { path = "../flux_diagnostics" }
 flux_span = { path = "../flux_span" }
 flux_proc_macros = { path = "../flux_proc_macros" }
+flux_id = { path = "../flux_id" }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::Deserialize;
 use toml::Value;
 
@@ -50,7 +52,18 @@ impl Default for BuildType {
 
 #[derive(Deserialize, Debug, Default, Clone)]
 pub struct Dependencies {
-    pub local: Vec<String>,
+    pub map: HashMap<String, Dependency>,
+}
+
+impl Dependencies {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Dependency)> {
+        self.map.iter()
+    }
+}
+
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct Dependency {
+    pub path: Option<String>,
 }
 
 pub fn parse_cfg(content: &str) -> Config {
@@ -129,19 +142,27 @@ pub fn parse_cfg(content: &str) -> Config {
         }
     }
     if let Some(dependencies) = value.get("dependencies") {
-        if let Some(local) = dependencies.get("local") {
-            let local = local
-                .as_array()
-                .expect("expected local dependencies to be an array")
-                .iter()
-                .map(|dep| {
-                    dep.as_str()
-                        .expect("expected local dependency to be string")
-                        .to_string()
-                })
-                .collect();
-            cfg.dependencies.local = local;
-        }
+        let table = dependencies.as_table().unwrap();
+        let dependencies_map = table
+            .iter()
+            .map(|(key, value)| {
+                let dependency = value.as_table().unwrap();
+                let path = dependency
+                    .get("path")
+                    .expect("dependency must have path property")
+                    .as_str()
+                    .expect("depdendency path must be string");
+                (
+                    key.clone(),
+                    Dependency {
+                        path: Some(path.to_string()),
+                    },
+                )
+            })
+            .collect();
+        cfg.dependencies = Dependencies {
+            map: dependencies_map,
+        };
     }
 
     cfg

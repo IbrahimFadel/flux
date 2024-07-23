@@ -22,6 +22,7 @@ flux_syntax = { path = "../flux_syntax" }
 flux_diagnostics = { path = "../flux_diagnostics" }
 flux_proc_macros = { path = "../flux_proc_macros" }
 flux_typesystem = { path = "../flux_typesystem" }
+flux_id = { path = "../flux_id" }
 
 [dev-dependencies]
 paste = "1.0.15"

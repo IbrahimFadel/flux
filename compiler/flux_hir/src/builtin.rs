@@ -4,7 +4,7 @@ use flux_span::{Interner, Word};
 
 use crate::hir::{Op, Path};
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BuiltinType {
     UInt(BuiltinUInt),
     SInt(BuiltinSInt),
@@ -97,7 +97,7 @@ impl BuiltinType {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BuiltinUInt {
     U64,
     U32,
@@ -105,7 +105,7 @@ pub(crate) enum BuiltinUInt {
     U8,
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BuiltinSInt {
     S64,
     S32,
@@ -113,7 +113,7 @@ pub(crate) enum BuiltinSInt {
     S8,
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum BuiltinFloat {
     F64,
     F32,

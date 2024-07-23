@@ -1,13 +1,22 @@
-use std::{ffi::OsString, sync::OnceLock};
+use std::{ffi::OsString, fs, path::Path, sync::OnceLock};
 
 use clap::{Parser, Subcommand};
 use commands::build;
+use diagnostics::DriverError;
+use flux_cfg::{Config, CFG_FILE_NAME};
+use flux_diagnostics::IOError;
 use flux_span::Interner;
 
 mod commands;
 mod diagnostics;
+mod driver;
 
 static INTERNER: OnceLock<Interner> = OnceLock::new();
+
+pub const PRE_INTERNED_VALUES: [&'static str; 14] = [
+    "s64", "s32", "s16", "s8", "u64", "u32", "u16", "u8", "f64", "f32", "str", "bool", "true",
+    "false",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitStatus {
@@ -43,4 +52,31 @@ where
     match args.command {
         Command::Build(args) => build::build(args),
     }
+}
+
+pub fn get_config(project_root: &Path) -> Result<Config, IOError> {
+    let cfg_path = project_root.join(CFG_FILE_NAME);
+    let content = fs::read_to_string(&cfg_path).map_err(|_error| {
+        DriverError::ReadConfigFile {
+            candidate: cfg_path.to_str().unwrap().to_string(),
+        }
+        .to_io_error()
+    })?;
+    Ok(flux_cfg::parse_cfg(&content))
+}
+
+pub fn get_package_entry_file_path(
+    package_root: &Path,
+    package_name: &str,
+) -> Result<(String, String), IOError> {
+    let file_path = package_root.join("src/main.flx");
+    std::fs::read_to_string(&file_path)
+        .map_err(|_error| {
+            DriverError::ReadEntryFile {
+                package: package_name.to_string(),
+                candidate: file_path.to_str().unwrap().to_string(),
+            }
+            .to_io_error()
+        })
+        .and_then(|content| Ok((file_path.to_str().unwrap().to_string(), content)))
 }
