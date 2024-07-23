@@ -43,15 +43,30 @@ pub enum ItemTreeIdx {
     Use(Idx<UseDecl>),
 }
 
+impl ItemTreeIdx {
+    pub fn to_item_name(&self) -> &'static str {
+        match self {
+            ItemTreeIdx::Apply(_) => "apply",
+            ItemTreeIdx::BuiltinType(_) => "builtin",
+            ItemTreeIdx::Enum(_) => "enum",
+            ItemTreeIdx::Function(_) => "function",
+            ItemTreeIdx::Module(_) => "module",
+            ItemTreeIdx::Struct(_) => "struct",
+            ItemTreeIdx::Trait(_) => "trait",
+            ItemTreeIdx::Use(_) => "use",
+        }
+    }
+}
+
 macro_rules! impl_try_from {
     ($item:ident, $variant:ident) => {
         impl TryFrom<ItemTreeIdx> for Idx<$item> {
-            type Error = ();
+            type Error = &'static str;
 
             fn try_from(value: ItemTreeIdx) -> Result<Self, Self::Error> {
                 match value {
                     ItemTreeIdx::$variant(id) => Ok(id),
-                    _ => Err(()),
+                    x => Err(x.to_item_name()),
                 }
             }
         }
@@ -71,13 +86,13 @@ macro_rules! impl_from {
     };
 }
 
-// impl_try_from!(ApplyDecl, Apply);
-// impl_try_from!(EnumDecl, Enum);
-// impl_try_from!(FnDecl, Function);
-// impl_try_from!(ModDecl, Module);
-// impl_try_from!(StructDecl, Struct);
-// impl_try_from!(TraitDecl, Trait);
-// impl_try_from!(UseDecl, Use);
+impl_try_from!(ApplyDecl, Apply);
+impl_try_from!(EnumDecl, Enum);
+impl_try_from!(FnDecl, Function);
+impl_try_from!(ModDecl, Module);
+impl_try_from!(StructDecl, Struct);
+impl_try_from!(TraitDecl, Trait);
+impl_try_from!(UseDecl, Use);
 
 // impl From<ItemTreeIdx> for Idx<ApplyDecl> {
 //     fn from(value: ItemTreeIdx) -> Self {
@@ -88,13 +103,13 @@ macro_rules! impl_from {
 //     }
 // }
 
-impl_from!(ApplyDecl, Apply);
-impl_from!(EnumDecl, Enum);
-impl_from!(FnDecl, Function);
-impl_from!(ModDecl, Module);
-impl_from!(StructDecl, Struct);
-impl_from!(TraitDecl, Trait);
-impl_from!(UseDecl, Use);
+// impl_from!(ApplyDecl, Apply);
+// impl_from!(EnumDecl, Enum);
+// impl_from!(FnDecl, Function);
+// impl_from!(ModDecl, Module);
+// impl_from!(StructDecl, Struct);
+// impl_from!(TraitDecl, Trait);
+// impl_from!(UseDecl, Use);
 
 // impl TryFrom<ItemTreeIdx> for Idx<FnDecl> {
 //     type Error = ();

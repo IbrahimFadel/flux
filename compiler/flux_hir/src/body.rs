@@ -10,7 +10,7 @@ use flux_typesystem::{
     self as ts, ConcreteKind, Insert, TChecker, TEnv, TypeId, TypeKind, Typed, WithType,
 };
 use la_arena::{Arena, Idx};
-use ts::{ApplicationId, ThisCtx, TraitId};
+use ts::{ApplicationId, FnSignature, ThisCtx, TraitId};
 
 use crate::{
     diagnostics::LowerError,
@@ -20,7 +20,7 @@ use crate::{
     module::{ModuleData, ModuleId, ModuleTree},
     name_res::item::ItemResolver,
     pkg::PackageBodies,
-    PackageDefs, PackageId, POISONED_NAME,
+    BuiltPackage, PackageDefs, PackageId, POISONED_NAME,
 };
 
 mod expr;
@@ -37,6 +37,7 @@ pub(crate) struct LowerCtx<'a, 'pkgs> {
     pub(crate) module_id: ModuleId,
     package_id: Option<PackageId>,
     packages: Option<&'pkgs Arena<PackageDefs>>,
+    dependencies: &'a [BuiltPackage],
     trait_map: HashMap<(PackageId, Idx<TraitDecl>), TraitId>,
     application_map: HashMap<(PackageId, Idx<ApplyDecl>), ApplicationId>,
 }
@@ -47,6 +48,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         packages: Option<&'pkgs Arena<PackageDefs>>,
         package_id: Option<PackageId>,
         module_id: ModuleId,
+        dependencies: &'a [BuiltPackage],
         package_bodies: &'a mut PackageBodies,
         tenv: &'a mut TEnv,
         interner: &'static Interner,
@@ -61,6 +63,7 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             file_id,
             module_id,
             package_id,
+            dependencies,
             packages,
             trait_map: HashMap::new(),
             application_map: HashMap::new(),
@@ -105,6 +108,10 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
         self.file_id = file_id;
     }
 
+    pub(crate) fn set_package_id(&mut self, package_id: PackageId) {
+        self.package_id = Some(package_id);
+    }
+
     // pub(crate) fn populate_trait_map(&mut self) {
     //     let item_tree = self.item_tree(self.package_id.unwrap());
     //     item_tree.top_level.iter().for_each(|item| match item.idx {
@@ -140,21 +147,21 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
 
     pub(crate) fn attach_trait_type_contexts(&mut self) {
         let og_mod_id = self.module_id;
-        let item_tree = self.item_tree(self.package_id.unwrap());
+        let og_package_id = self.package_id.unwrap();
+        let item_tree = self.item_tree(og_package_id);
+        let packages = self.packages.unwrap();
         item_tree.top_level.iter().for_each(|item| {
             self.set_module_id(item.mod_id);
-            let file_id =
-                self.packages.unwrap()[self.package_id.unwrap()].module_tree[item.mod_id].file_id;
+            let file_id = packages[og_package_id].module_tree[item.mod_id].file_id;
             self.set_file_id(file_id);
             match item.idx {
-                ItemTreeIdx::Trait(trait_idx) => self.handle_trait_decl(trait_idx),
+                ItemTreeIdx::Trait(trait_idx) => self.handle_trait_decl(trait_idx, og_package_id),
                 _ => {}
             }
         });
         item_tree.top_level.iter().for_each(|item| {
             self.set_module_id(item.mod_id);
-            let file_id =
-                self.packages.unwrap()[self.package_id.unwrap()].module_tree[item.mod_id].file_id;
+            let file_id = packages[og_package_id].module_tree[item.mod_id].file_id;
             self.set_file_id(file_id);
             match item.idx {
                 ItemTreeIdx::Apply(apply_idx) => {
@@ -165,11 +172,60 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
                 _ => {}
             }
         });
+
+        // Also need to insert applications and change `ThisPath` data. But we cant mutate, so need to store this in BuiltPackage somehow
+        for dep in self.dependencies {
+            // dep.appl
+            // self.tckh.insert_trait_application(trid, ts::Application::new(tid, assoc_types, signatures))
+            dep.traits.iter().for_each(|(package_id, trait_idx, trt)| {
+                let signatures = trt
+                    .methods
+                    .iter()
+                    .map(|method_idx| {
+                        let method = &dep.item_tree.functions[*method_idx];
+                        let signature_types = method
+                            .params
+                            .iter()
+                            .map(|param| param.ty.inner)
+                            .chain(std::iter::once(method.return_ty.inner))
+                            .map(|tid| dep.tenv.reconstruct(&tid))
+                            .map(|r| match r {
+                                Ok(r) => self.tckh.tenv.insert(r),
+                                Err((file_span, err)) => {
+                                    self.diagnostics.push(err);
+                                    self.tckh.tenv.insert(
+                                        TypeKind::Unknown
+                                            .file_span(file_span.file_id, file_span.inner),
+                                    )
+                                }
+                            });
+                        FnSignature::from_type_ids(signature_types)
+                    })
+                    .collect();
+                let ts_trait = ts::Trait::new(signatures);
+                let trid = self.tckh.tenv.insert_trait(ts_trait);
+                self.trait_map.insert((*package_id, *trait_idx), trid);
+            });
+        }
+
+        // for package_id in self.item_resolver().dependency_ids {
+        //     let pkg = &packages[*package_id];
+        //     pkg.item_tree.top_level.iter().for_each(|item| {
+        //         self.set_module_id(item.mod_id);
+        //         self.set_package_id(*package_id);
+        //         let file_id = packages[*package_id].module_tree[item.mod_id].file_id;
+        //         self.set_file_id(file_id);
+        //         match item.idx {
+        //             ItemTreeIdx::Trait(trait_idx) => self.handle_trait_decl(trait_idx, *package_id),
+        //             _ => {}
+        //         }
+        //     });
+        // }
+        self.set_package_id(og_package_id);
         self.set_module_id(og_mod_id);
     }
 
-    fn handle_trait_decl(&mut self, trait_idx: Idx<TraitDecl>) {
-        let package_id = self.package_id.unwrap();
+    fn handle_trait_decl(&mut self, trait_idx: Idx<TraitDecl>, package_id: PackageId) {
         let item_tree = self.item_tree(package_id);
         let trait_decl = &item_tree.traits[trait_idx];
 

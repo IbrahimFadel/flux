@@ -2,6 +2,9 @@
 name = "test"
 version = "0.1.0"
 
+[dependencies]
+local = [ "../../std" ]
+
 [build]
 opt-level = 1
 type = "debug"

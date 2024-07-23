@@ -1,0 +1,7 @@
+[package]
+name = "std"
+version = "0.1.0"
+
+[build]
+opt-level = 1
+type = "debug"

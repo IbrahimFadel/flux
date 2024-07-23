@@ -188,6 +188,10 @@ impl FnSignature {
         Self(parameters.chain(once(return_ty)).collect())
     }
 
+    pub fn from_type_ids(type_ids: impl Iterator<Item = TypeId>) -> Self {
+        Self(type_ids.collect())
+    }
+
     pub fn parameters(&self) -> &[TypeId] {
         self.0.get(..self.0.len() - 1).unwrap_or(&[])
     }

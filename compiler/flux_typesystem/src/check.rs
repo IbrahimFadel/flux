@@ -54,20 +54,6 @@ impl<'tenv> TChecker<'tenv> {
         ApplicationId::new(idx)
     }
 
-    pub fn get_trait_application(&mut self, trid: &TraitId, aid: &ApplicationId) -> &Application {
-        &self
-            .tenv
-            .trait_applications
-            .get(trid.raw() - 1)
-            .unwrap_or_else(|| ice(format!("invalid `TraitID` {:?}", trid)))
-            .get(aid.raw() - 1)
-            .unwrap_or_else(|| ice(format!("invalid `ApplicationId` {:?}", aid)))
-    }
-
-    pub fn get_application(&mut self, aid: &ApplicationId) -> &(TypeId, Vec<FnSignature>) {
-        &self.tenv.applications[aid.raw() - 1]
-    }
-
     pub fn valid_applications(&mut self, tid: TypeId, trid: &TraitId) -> Option<ApplicationId> {
         let poisoned_filespan = Span::poisoned().in_file(unsafe { FileId::poisoned() });
         self.tenv
@@ -304,28 +290,9 @@ impl<'tenv> TChecker<'tenv> {
         b: TypeId,
         span: InFile<Span>,
     ) -> Result<(), Diagnostic> {
-        let ThisPath { segments, this_ctx } = this_path;
-        match (this_ctx.trait_id, this_ctx.application_id) {
-            (Some(trid), Some(aid)) => {
-                let app = self.get_trait_application(&trid, &aid);
-                let name = &segments[0];
-                let assoc_type = app
-                    .assoc_types
-                    .iter()
-                    .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None })
-                    .copied();
-                match assoc_type {
-                    Some(assoc_tid) => self.unify(b, assoc_tid, span),
-                    None => Err(self.type_mismatch(&this_tid, &b, span)),
-                }
-            }
-            (None, Some(aid)) => {
-                let (tid, _) = self.get_application(&aid);
-                let tid = *tid;
-                self.unify(tid, b, span)
-            }
-            (None, None) => ice("`ThisPath` cannot have missing `TraitId` and `ApplicationId`"),
-            (Some(_), None) => todo!(),
+        match self.tenv.get_this_path_tid(this_path) {
+            Some(tid) => self.unify(b, tid, span),
+            None => Err(self.type_mismatch(&this_tid, &b, span)),
         }
     }
 
@@ -341,18 +308,5 @@ impl<'tenv> TChecker<'tenv> {
             span_file_span: unification_span,
         }
         .to_diagnostic()
-        // todo!()
-        // let a_file_span = self.tenv.get_type_filespan(a);
-        // let b_file_span = self.tenv.get_type_filespan(b);
-
-        // TypeError::TypeMismatch {
-        //     a: self.tenv.fmt_ty_id(a),
-        //     a_file_span,
-        //     b: self.tenv.fmt_ty_id(b),
-        //     b_file_span,
-        //     span: (),
-        //     span_file_span: unification_span,
-        // }
-        // .to_diagnostic()
     }
 }

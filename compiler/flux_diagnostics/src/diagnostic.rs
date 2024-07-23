@@ -120,6 +120,7 @@ pub enum DiagnosticCode {
     CannotResolveEmptyPath,
     UnresolvedPath,
     PrivateModule,
+    ExpectedTrait,
 
     PositiveIntegerOverflow,
     StmtFollowingTerminatorExpr,
@@ -133,6 +134,7 @@ pub enum DiagnosticCode {
     UnknownStructField,
 
     TypeMismatch,
+    CouldNotInfer,
 }
 
 impl std::fmt::Display for DiagnosticCode {

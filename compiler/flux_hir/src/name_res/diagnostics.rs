@@ -8,6 +8,7 @@ pub(crate) enum ResolutionError {
     EmptyPath { path: Path },
     UnresolvedPath { path: Path, segment: usize },
     PrivateModule { path: Path, segment: usize },
+    ExpectedTrait { path: Path, got: String },
 }
 
 impl ResolutionError {
@@ -31,8 +32,8 @@ impl ResolutionError {
                         .file_span(file_id, span),
                     format!(
                         "{}{} segment could not be resolved",
-                        segment,
-                        segment.nth_suffix()
+                        segment + 1,
+                        (segment + 1).nth_suffix()
                     )
                     .file_span(file_id, span),
                 ],
@@ -46,8 +47,21 @@ impl ResolutionError {
                         path.to_string(interner)
                     )
                     .file_span(file_id, span),
-                    format!("{}{} segment was private", segment, segment.nth_suffix())
+                    format!(
+                        "{}{} segment was private",
+                        segment + 1,
+                        (segment + 1).nth_suffix()
+                    )
+                    .file_span(file_id, span),
+                ],
+            ),
+            ResolutionError::ExpectedTrait { path, got } => (
+                DiagnosticCode::ExpectedTrait,
+                format!("expected trait"),
+                vec![
+                    format!("expected `{}` to be trait", path.to_string(interner))
                         .file_span(file_id, span),
+                    format!("instead got {got}").file_span(file_id, span),
                 ],
             ),
         };

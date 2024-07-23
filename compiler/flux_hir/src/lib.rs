@@ -2,16 +2,16 @@
 
 use cfg::Config;
 use flux_diagnostics::{Diagnostic, SourceCache};
-use flux_span::{FileId, Interner};
-use flux_typesystem::TEnv;
-use la_arena::Arena;
+use flux_span::{FileId, FileSpanned, Interner, Word};
+use flux_typesystem::{TEnv, TypeKind};
+use la_arena::{Arena, ArenaMap};
 use module::ModuleTree;
 use name_res::{item::ItemResolver, BasicFileResolver};
 use pkg::PkgBuilder;
 
 pub use hir::{Expr, ExprIdx, FnDecl};
 pub use module::ModuleId;
-pub use pkg::{PackageBodies, PackageDefs, PackageId};
+pub use pkg::{BuiltPackage, PackageBodies, PackageDefs, PackageId};
 
 mod body;
 mod builtin;
@@ -32,6 +32,7 @@ mod tests;
 const POISONED_NAME: &'static str = "<poisoned>";
 
 pub fn lower_package_defs(
+    name: Word,
     entry_file_id: FileId,
     entry_src: &str,
     interner: &'static Interner,
@@ -39,7 +40,7 @@ pub fn lower_package_defs(
     config: &Config,
 ) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
     let mut pkg_builder: PkgBuilder<'_, BasicFileResolver> =
-        PkgBuilder::new(interner, source_cache, config, BasicFileResolver);
+        PkgBuilder::new(name, interner, source_cache, config, BasicFileResolver);
     pkg_builder.seed_with_entry(entry_file_id, entry_src);
     let (pkg_defs, pkg_bodies, tenv, diagnostics) = pkg_builder.finish();
     if config.debug_item_tree && !config.debug_with_bodies {
@@ -55,24 +56,28 @@ pub fn lower_package_defs(
 pub fn lower_package_bodies(
     package_id: PackageId,
     packages: &Arena<PackageDefs>,
+    dependency_ids: &[PackageId],
+    dependencies: &[BuiltPackage],
     package_bodies: &mut PackageBodies,
     tenv: &mut TEnv,
     interner: &'static Interner,
     config: &Config,
 ) -> Vec<Diagnostic> {
-    tracing::info!(package =? package_id, "building package bodies");
     let mut diagnostics = vec![];
     let package = &packages[package_id];
 
     let mut ctx = body::LowerCtx::new(
         Some(ItemResolver::new(
+            packages,
             package_id,
+            dependency_ids,
             &package.module_tree,
             interner,
         )),
         Some(packages),
         Some(package_id),
         ModuleTree::PRELUDE_ID,
+        dependencies,
         package_bodies,
         tenv,
         interner,
@@ -100,4 +105,60 @@ pub fn lower_package_bodies(
     }
 
     diagnostics
+}
+
+pub fn finish_package(
+    id: PackageId,
+    defs: &PackageDefs,
+    bodies: &PackageBodies,
+    tenv: &TEnv,
+) -> BuiltPackage {
+    let mut diagnostics = vec![];
+    let mut function_signatures = ArenaMap::new();
+    let mut traits = vec![];
+    defs.item_tree
+        .top_level
+        .iter()
+        .for_each(|item| match item.idx {
+            item::ItemTreeIdx::Apply(apply_idx) => {
+                let a = &defs.item_tree.applies[apply_idx];
+                a.methods.iter().for_each(|method_idx| {
+                    let method = &defs.item_tree.functions[*method_idx];
+                    let sig = get_function_signature(method, tenv, &mut diagnostics);
+                    function_signatures.insert(*method_idx, sig);
+                });
+            }
+            item::ItemTreeIdx::Function(fn_idx) => {
+                let f = &defs.item_tree.functions[fn_idx];
+                let sig = get_function_signature(f, tenv, &mut diagnostics);
+                function_signatures.insert(fn_idx, sig);
+            }
+            item::ItemTreeIdx::Trait(trait_idx) => {
+                let t = &defs.item_tree.traits[trait_idx];
+                // t.methods.iter().for_each(|method_idx| {
+                //     let method = &defs.item_tree.functions[*method_idx];
+                //     let sig = get_function_signature(method, tenv, &mut diagnostics);
+                //     function_signatures.insert(*method_idx, sig);
+                // });
+                traits.push((id, trait_idx, t.clone()));
+            }
+            _ => {}
+        });
+    BuiltPackage {
+        traits,
+        tenv: tenv.clone(),
+        item_tree: defs.item_tree.clone(),
+    }
+}
+
+fn get_function_signature(
+    f: &FnDecl,
+    tenv: &TEnv,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<FileSpanned<TypeKind>> {
+    let param_types = f.params.iter().map(|param| tenv.reconstruct(&param.ty));
+    param_types
+        .chain(std::iter::once(tenv.reconstruct(&f.return_ty)))
+        .filter_map(|r| r.map_err(|(_, err)| diagnostics.push(err)).ok())
+        .collect()
 }

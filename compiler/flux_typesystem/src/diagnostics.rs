@@ -17,4 +17,14 @@ pub(crate) enum TypeError {
         #[filespanned]
         span: (),
     },
+    #[error(
+        location = ty,
+        primary = "could not infer type",
+        label at ty = "could not infer type",
+        help = "consider adding an explicit type annotation"
+    )]
+    CouldNotInfer {
+        #[filespanned]
+        ty: (),
+    },
 }

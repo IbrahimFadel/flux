@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use flux_diagnostics::{Diagnostic, SourceCache};
-use flux_span::{FileId, Interner};
+use flux_span::{FileId, Interner, Word};
 use flux_typesystem::TEnv;
 use la_arena::{Arena, Idx};
 
 use crate::{
     cfg::Config,
-    hir::{Expr, ExprIdx, FnDecl},
+    hir::{Expr, ExprIdx, FnDecl, TraitDecl},
     item::ItemId,
     item_tree::{lower_cst_to_item_tree, ItemTree},
     module::{collect::ModCollector, ModuleData, ModuleId, ModuleTree},
@@ -17,8 +17,16 @@ use crate::{
 
 mod prettyprint;
 
+#[derive(Debug, Clone)]
+pub struct BuiltPackage {
+    pub traits: Vec<(PackageId, Idx<TraitDecl>, TraitDecl)>,
+    pub tenv: TEnv,
+    pub item_tree: ItemTree,
+}
+
 #[derive(Debug)]
 pub struct PackageDefs {
+    pub(crate) name: Word,
     pub(crate) item_tree: ItemTree,
     pub(crate) module_tree: ModuleTree,
 }
@@ -32,6 +40,7 @@ pub struct PackageBodies {
 }
 
 pub(crate) struct PkgBuilder<'a, R: FileResolver> {
+    name: Word,
     pub item_tree: ItemTree,
     pub module_tree: ModuleTree,
     pub interner: &'static Interner,
@@ -46,12 +55,14 @@ pub(crate) struct PkgBuilder<'a, R: FileResolver> {
 
 impl<'a, R: FileResolver> PkgBuilder<'a, R> {
     pub(crate) fn new(
+        name: Word,
         interner: &'static Interner,
         source_cache: &'a mut SourceCache,
         config: &'a Config,
         resolver: R,
     ) -> Self {
         Self {
+            name,
             item_tree: ItemTree::new(),
             module_tree: ModuleTree::new(),
             interner,
@@ -71,6 +82,7 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
     pub fn finish(self) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
         (
             PackageDefs {
+                name: self.name,
                 item_tree: self.item_tree,
                 module_tree: self.module_tree,
             },
@@ -137,23 +149,4 @@ impl<'a, R: FileResolver> PkgBuilder<'a, R> {
 
         (module_id, items)
     }
-
-    // fn handle_lowered_items(&mut self, items: &[ItemId], mod_dir: &ModDir) {
-    //     for item_id in items {
-    //         match item_id.idx {
-    //             ItemTreeIdx::Function(fn_id) => {
-    //                 let f = &self.item_tree.functions[fn_id];
-    //                 self.module_tree[item_id.mod_id].scope.declare_function(
-    //                     f.name.inner,
-    //                     f.visibility.inner,
-    //                     item_id.clone(),
-    //                 );
-    //             }
-    //             ItemTreeIdx::Module(mod_id) => {
-    //                 let m = &self.item_tree.mods[mod_id];
-    //                 self.lower_child_module(m, mod_dir);
-    //             }
-    //         }
-    //     }
-    // }
 }

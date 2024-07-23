@@ -19,7 +19,7 @@ use crate::{
 
 pub(crate) mod lower;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ItemTree {
     pub top_level: Vec<ItemId>,
     pub applies: Arena<ApplyDecl>,

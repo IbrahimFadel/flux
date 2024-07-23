@@ -1,4 +1,8 @@
+use std::{collections::HashMap, sync::OnceLock};
+
 use flux_span::{Interner, Word};
+
+use crate::hir::{Op, Path};
 
 #[derive(Debug, Clone, Hash)]
 pub(crate) enum BuiltinType {
@@ -113,4 +117,39 @@ pub(crate) enum BuiltinSInt {
 pub(crate) enum BuiltinFloat {
     F64,
     F32,
+}
+
+static BINOP_TRAIT_NAMES: OnceLock<HashMap<Op, Path>> = OnceLock::new();
+
+pub(crate) fn get_binop_trait_path<'a>(op: &Op, interner: &'static Interner) -> Option<&'a Path> {
+    BINOP_TRAIT_NAMES
+        .get_or_init(|| {
+            let std = interner.get_or_intern_static("std");
+            let arithmetic = interner.get_or_intern_static("arithmetic");
+            let cmp = interner.get_or_intern_static("cmp");
+            HashMap::from([
+                (
+                    Op::Add,
+                    Path::new(
+                        vec![std, arithmetic, interner.get_or_intern_static("Add")],
+                        vec![],
+                    ),
+                ),
+                (
+                    Op::Mul,
+                    Path::new(
+                        vec![std, arithmetic, interner.get_or_intern_static("Mul")],
+                        vec![],
+                    ),
+                ),
+                (
+                    Op::CmpEq,
+                    Path::new(
+                        vec![std, cmp, interner.get_or_intern_static("CmpEq")],
+                        vec![],
+                    ),
+                ),
+            ])
+        })
+        .get(op)
 }

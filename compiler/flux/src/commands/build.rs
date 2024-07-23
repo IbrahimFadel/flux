@@ -7,7 +7,10 @@ use crate::{diagnostics::DriverError, ExitStatus, INTERNER};
 
 use flux_cfg::{Config, CFG_FILE_NAME};
 use flux_diagnostics::{ice, IOError, SourceCache};
-use flux_hir::{lower_package_bodies, lower_package_defs, PackageBodies, PackageId};
+use flux_hir::{
+    finish_package, lower_package_bodies, lower_package_defs, BuiltPackage, PackageBodies,
+    PackageId,
+};
 use flux_typesystem::TEnv;
 use la_arena::{Arena, ArenaMap};
 use lasso::ThreadedRodeo;
@@ -69,45 +72,103 @@ pub fn build(args: Args) -> ExitStatus {
     });
     let mut packages = Arena::new();
     let mut package_bodies = ArenaMap::new();
-    // let mut package_exprs = ArenaMap::new();
-    // let mut package_fn_exprss = ArenaMap::new();
     let mut package_tenvs: ArenaMap<PackageId, _> = ArenaMap::new();
     let mut source_cache = SourceCache::new(interner);
 
-    for pkg in &cfg.packages {
-        if let Err(io_errors) = build_package_defs(
-            &project_root.join(&pkg.name),
+    let mut dependency_ids = vec![];
+    let mut dependencies = vec![];
+    for dependency_path in &cfg.dependencies.local {
+        let root = project_root.join(dependency_path).canonicalize().unwrap();
+        tracing::debug!(dependecy =? root, "building dependency");
+        let dep = build_package(
+            &root,
             &lowering_config,
             &mut packages,
             &mut package_bodies,
             &mut package_tenvs,
             &mut source_cache,
-        ) {
-            io_errors.into_iter().for_each(|io_err| io_err.report())
-        };
+            &[],
+            &[],
+        );
+        if let Some(dep) = dep {
+            dependency_ids.push(dep);
+        }
+    }
+    for dependency_id in &dependency_ids {
+        let built_pkg = finish_package(
+            *dependency_id,
+            &packages[*dependency_id],
+            &package_bodies[*dependency_id],
+            &package_tenvs[*dependency_id],
+        );
+        dependencies.push(built_pkg);
     }
 
-    for (package_id, _) in packages.iter() {
-        let diagnostics = lower_package_bodies(
-            package_id,
-            &packages,
-            &mut package_bodies[package_id],
-            &mut package_tenvs[package_id],
-            &interner,
+    let single_package_workspace = cfg.packages.len() == 1;
+    for pkg in &cfg.packages {
+        let root = if single_package_workspace {
+            project_root.clone()
+        } else {
+            project_root.clone().join(pkg.name.clone())
+        }
+        .canonicalize()
+        .unwrap();
+        tracing::info!(package =? pkg, "building package definitions");
+        build_package(
+            &root,
             &lowering_config,
+            &mut packages,
+            &mut package_bodies,
+            &mut package_tenvs,
+            &mut source_cache,
+            &dependency_ids,
+            &dependencies,
         );
-        // println!("{:#?}", diagnostics);
-        // println!(
-        //     "{}",
-        //     diagnostics
-        //         .get(0)
-        //         .map(|diagnostic| diagnostic.offset.file_id.as_str(interner))
-        //         .unwrap_or("")
-        // );
-        source_cache.report_diagnostics(diagnostics.iter());
     }
 
     ExitStatus::Success
+}
+
+pub fn build_package(
+    root: &Path,
+    lowering_config: &flux_hir::cfg::Config,
+    packages: &mut Arena<flux_hir::PackageDefs>,
+    package_bodies: &mut ArenaMap<PackageId, PackageBodies>,
+    package_tenvs: &mut ArenaMap<PackageId, TEnv>,
+    source_cache: &mut SourceCache,
+    dependency_ids: &[PackageId],
+    dependencies: &[BuiltPackage],
+) -> Option<PackageId> {
+    let interner = INTERNER
+        .get()
+        .unwrap_or_else(|| ice("interner should be initialized by now"));
+    let package_id = match build_package_defs(
+        root,
+        lowering_config,
+        packages,
+        package_bodies,
+        package_tenvs,
+        source_cache,
+    ) {
+        Ok(package_id) => package_id,
+        Err(io_errors) => {
+            io_errors.into_iter().for_each(|io_err| io_err.report());
+            return None;
+        }
+    };
+    let diagnostics = lower_package_bodies(
+        package_id,
+        &packages,
+        dependency_ids,
+        dependencies,
+        &mut package_bodies[package_id],
+        &mut package_tenvs[package_id],
+        &interner,
+        &lowering_config,
+    );
+    source_cache.report_diagnostics(diagnostics.iter());
+
+    Some(package_id)
 }
 
 pub fn build_package_defs(
@@ -140,9 +201,14 @@ pub fn build_package_defs(
         .unwrap_or_else(|| ice("interner should be initialized by now"));
     let entry_file_id = source_cache.add_input_file(&entry_path, content.clone());
 
-    tracing::info!(package =? pkg, "building package definitions");
-    let (package_defs, bodies, tenvs, diagnostics) =
-        lower_package_defs(entry_file_id, &content, interner, source_cache, config);
+    let (package_defs, bodies, tenvs, diagnostics) = lower_package_defs(
+        interner.get_or_intern(&pkg.name),
+        entry_file_id,
+        &content,
+        interner,
+        source_cache,
+        config,
+    );
 
     let package_id = packages.alloc(package_defs);
     source_cache.report_diagnostics(diagnostics.iter());

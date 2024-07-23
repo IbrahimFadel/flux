@@ -14,6 +14,7 @@ pub type ModuleId = Idx<ModuleData>;
 pub(crate) struct ModuleTree(Arena<ModuleData>);
 
 impl ModuleTree {
+    pub(crate) const ROOT_ID: ModuleId = Idx::from_raw(RawIdx::from_u32(0));
     pub(crate) const PRELUDE_ID: ModuleId = Idx::from_raw(RawIdx::from_u32(1));
 
     pub fn new() -> Self {

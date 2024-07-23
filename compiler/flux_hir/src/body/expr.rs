@@ -2,6 +2,7 @@ use flux_span::Span;
 use flux_typesystem::{self as ts};
 
 use crate::{
+    builtin,
     diagnostics::LowerError,
     hir::{BinOp, Cast, If, MemberAccess, StructExpr, StructExprField},
     intrinsics, prelude,
@@ -150,47 +151,58 @@ impl<'a, 'pkgs> LowerCtx<'a, 'pkgs> {
             .unify(lhs.tid, rhs.tid, unification_span.in_file(self.file_id))
             .unwrap_or_else(|err| self.diagnostics.push(err));
 
-        let tid = if let Some(binop_trait) =
-            prelude::bin_op_trait_map(self.prelude(), self.interner).get(&op)
+        // resolve_trait
+        // resolve_struct
+        // etc.
+        let trait_path = builtin::get_binop_trait_path(&op, self.interner)
+            .unwrap_or_else(|| ice(format!("trait path should always exist for op `{:?}`", op)));
+        let tid = match self
+            .item_resolver()
+            .resolve_trait(trait_path, self.module_id)
         {
-            tracing::warn!("assuming builtin binop traits have just one method, this probably won't work in the future");
-            let package_id = self.package_id.unwrap();
-            let trid = self
-                .trait_map
-                .get(&(package_id, binop_trait.idx.clone().into()))
-                .unwrap_or_else(|| ice("prelude traits should always be in trait map"));
-            let trait_idx: Idx<TraitDecl> = binop_trait.idx.clone().into();
-            let trait_decl = &self.item_tree(package_id).traits[trait_idx];
+            Ok((package_id, binop_trait)) => {
+                tracing::warn!("assuming builtin binop traits have just one method, this probably won't work in the future");
+                let trid = self
+                    .trait_map
+                    .get(&(package_id, binop_trait))
+                    .unwrap_or_else(|| ice("trait not in trait map"));
+                let trait_decl = &self.item_tree(package_id).traits[binop_trait];
 
-            // I think we only need to check one side (either lhs or rhs) since we unified them already
-            let signature = if let Some(aid) = self.tckh.valid_applications(lhs.tid, trid) {
-                let application = self.tckh.get_trait_application(trid, &aid);
-                Some(application.signatures[0].clone())
-            } else {
-                let lhs_filespan = self.tckh.tenv.get_filespan(&lhs.tid);
-                self.diagnostics.push(
-                    LowerError::TypeDoesNotImplementTrait {
-                        ty: self.tckh.tenv.fmt_tid(&lhs.tid),
-                        ty_file_span: lhs_filespan,
-                        trt: self.interner.resolve(&trait_decl.name).to_string(),
-                    }
-                    .to_diagnostic(),
-                );
-                None
-            };
+                // I think we only need to check one side (either lhs or rhs) since we unified them already
+                let signature = if let Some(aid) = self.tckh.valid_applications(lhs.tid, trid) {
+                    let application = self.tckh.tenv.get_trait_application(trid, &aid);
+                    Some(application.signatures[0].clone())
+                } else {
+                    let lhs_filespan = self.tckh.tenv.get_filespan(&lhs.tid);
+                    self.diagnostics.push(
+                        LowerError::TypeDoesNotImplementTrait {
+                            ty: self.tckh.tenv.fmt_tid(&lhs.tid),
+                            ty_file_span: lhs_filespan,
+                            trt: self.interner.resolve(&trait_decl.name).to_string(),
+                        }
+                        .to_diagnostic(),
+                    );
+                    None
+                };
 
-            match signature {
-                Some(signature) => *signature.return_ty(),
-                None => self
-                    .tckh
-                    .tenv
-                    .insert_unknown(self.file_id, unification_span),
+                match signature {
+                    Some(signature) => *signature.return_ty(),
+                    None => self
+                        .tckh
+                        .tenv
+                        .insert_unknown(self.file_id, unification_span),
+                }
             }
-        } else {
-            ice("this needs a diagnostic");
-            // self.tckh
-            //     .tenv
-            //     .insert_unknown(self.file_id, unification_span)
+            Err(err) => {
+                self.diagnostics.push(err.to_diagnostic(
+                    self.file_id,
+                    unification_span,
+                    self.interner,
+                ));
+                self.tckh
+                    .tenv
+                    .insert_unknown(self.file_id, unification_span)
+            }
         };
 
         self.alloc_expr(Expr::BinOp(BinOp::new(lhs.inner, rhs.inner, op)))

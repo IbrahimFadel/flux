@@ -91,7 +91,7 @@ impl Primitives {
             .insert(Concrete(Tuple(types)).file_span(self.file_id, self.span))
     }
 
-    pub fn array(&self, tchk: &mut TChecker, ty: TypeId, n: u32) -> TypeId {
+    pub fn array(&self, tchk: &mut TChecker, ty: TypeId, n: u64) -> TypeId {
         tchk.tenv
             .insert(Concrete(Array(ty, n)).file_span(self.file_id, self.span))
     }

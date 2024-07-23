@@ -33,6 +33,12 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 }
                 ItemTreeIdx::BuiltinType(_) => {}
                 ItemTreeIdx::Module(mod_id) => {
+                    let m = &self.pkg_builder.item_tree.mods[mod_id];
+                    self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
+                        m.name.inner,
+                        m.visibility.inner,
+                        item_id.clone(),
+                    );
                     self.collect_child_module(mod_id);
                 }
                 ItemTreeIdx::Struct(struct_id) => {

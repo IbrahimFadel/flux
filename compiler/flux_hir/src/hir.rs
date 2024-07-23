@@ -17,7 +17,7 @@ pub enum Visibility {
     Public,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FnDecl {
     pub name: Spanned<Word>,
     pub visibility: Spanned<Visibility>,
@@ -54,7 +54,7 @@ impl FnDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModDecl {
     pub visibility: Spanned<Visibility>,
     pub name: Spanned<Word>,
@@ -66,7 +66,7 @@ impl ModDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructDecl {
     pub visibility: Spanned<Visibility>,
     pub name: Spanned<Word>,
@@ -90,7 +90,7 @@ impl StructDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumDecl {
     pub visibility: Spanned<Visibility>,
     pub name: Spanned<Word>,
@@ -114,7 +114,7 @@ impl EnumDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumDeclVariantList(Vec<EnumDeclVariant>);
 
 impl EnumDeclVariantList {
@@ -131,7 +131,7 @@ impl EnumDeclVariantList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumDeclVariant {
     pub name: Spanned<Word>,
     pub ty: Option<Spanned<TypeId>>,
@@ -143,7 +143,7 @@ impl EnumDeclVariant {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TraitDecl {
     pub visibility: Spanned<Visibility>,
     pub name: Spanned<Word>,
@@ -177,7 +177,7 @@ impl TraitDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApplyDecl {
     pub visibility: Spanned<Visibility>,
     pub generic_params: Spanned<GenericParams>,
@@ -214,7 +214,7 @@ impl ApplyDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UseDecl {
     pub path: Spanned<Path>,
     pub alias: Option<Spanned<Word>>,

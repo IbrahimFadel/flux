@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
-use flux_diagnostics::ice;
+use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_span::{FileId, FileSpanned, InFile, Interner, Span, WithSpan, Word};
 
 use crate::{
+    diagnostics::TypeError,
     r#trait::{Application, Trait},
     r#type::{TypeId, TypeKind},
     scope::Scope,
-    ConcreteKind, FnSignature, Path, ThisCtx, TraitId,
+    ApplicationId, ConcreteKind, FnSignature, Path, ThisCtx, ThisPath, TraitId,
 };
 
 pub trait Insert<T> {
@@ -22,7 +21,7 @@ impl Insert<TypeKind> for TEnv {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TEnv {
     types: Vec<FileSpanned<TypeKind>>,
     traits: Vec<Trait>,
@@ -201,5 +200,96 @@ impl TEnv {
             TypeKind::Ref(_) => unreachable!(),
             _ => None,
         }
+    }
+
+    pub fn get_trait_application(&self, trid: &TraitId, aid: &ApplicationId) -> &Application {
+        &self
+            .trait_applications
+            .get(trid.raw() - 1)
+            .unwrap_or_else(|| ice(format!("invalid `TraitID` {:?}", trid)))
+            .get(aid.raw() - 1)
+            .unwrap_or_else(|| ice(format!("invalid `ApplicationId` {:?}", aid)))
+    }
+
+    pub fn get_associated_type(
+        &self,
+        name: &Word,
+        trid: &TraitId,
+        aid: &ApplicationId,
+    ) -> Option<TypeId> {
+        let app = self.get_trait_application(&trid, &aid);
+        app.assoc_types
+            .iter()
+            .find_map(|(aname, tid)| if aname == name { Some(tid) } else { None })
+            .copied()
+    }
+
+    pub fn get_application(&self, aid: &ApplicationId) -> &(TypeId, Vec<FnSignature>) {
+        &self.applications[aid.raw() - 1]
+    }
+
+    pub fn get_this_path_tid(&self, this_path: &ThisPath) -> Option<TypeId> {
+        let ThisPath { segments, this_ctx } = this_path;
+        let name = segments.get(0);
+        match (this_ctx.trait_id, this_ctx.application_id) {
+            (Some(trid), Some(aid)) => match name {
+                Some(name) => self.get_associated_type(name, &trid, &aid),
+                None => {
+                    let app = self.get_application(&aid);
+                    Some(app.0)
+                }
+            },
+            (None, Some(aid)) => {
+                let (tid, _) = self.get_application(&aid);
+                Some(*tid)
+            }
+            (None, None) => ice("`ThisPath` cannot have missing `TraitId` and `ApplicationId`"),
+            (Some(_), None) => todo!(),
+        }
+    }
+
+    pub fn reconstruct(
+        &self,
+        tid: &TypeId,
+    ) -> Result<FileSpanned<TypeKind>, (InFile<Span>, Diagnostic)> {
+        let file_span = self.get_filespan(tid);
+        let tkind = match &self.get(tid).inner.inner {
+            TypeKind::ThisPath(this_path) => match None {
+                Some(tid) => return self.reconstruct(&tid),
+                None => return Err((file_span, self.could_not_infer_type(tid))),
+            },
+            // TypeKind::ThisPath(this_path) => match self.get_this_path_tid(this_path) {
+            //     Some(tid) => return self.reconstruct(&tid),
+            //     None => return Err((file_span, self.could_not_infer_type(tid))),
+            // },
+            TypeKind::Concrete(concrete_kind) => TypeKind::Concrete(concrete_kind.clone()),
+            TypeKind::Int(tid) => match tid {
+                Some(tid) => return self.reconstruct(tid),
+                None => TypeKind::Concrete(ConcreteKind::Path(Path::new(
+                    vec![self.interner.get_or_intern_static("u32")],
+                    vec![],
+                ))),
+            },
+            TypeKind::Float(tid) => match tid {
+                Some(tid) => return self.reconstruct(tid),
+                None => TypeKind::Concrete(ConcreteKind::Path(Path::new(
+                    vec![self.interner.get_or_intern_static("f32")],
+                    vec![],
+                ))),
+            },
+            TypeKind::Ref(tid) => return self.reconstruct(tid),
+            TypeKind::Generic(generic) => TypeKind::Generic(generic.clone()),
+            TypeKind::Never => TypeKind::Never,
+            TypeKind::Unknown => return Err((file_span, self.could_not_infer_type(tid))),
+        };
+        Ok(tkind.file_span(file_span.file_id, file_span.inner))
+    }
+
+    fn could_not_infer_type(&self, tid: &TypeId) -> Diagnostic {
+        TypeError::CouldNotInfer {
+            ty: (),
+            ty_file_span: self.get_filespan(tid),
+        }
+        .to_diagnostic()
     }
 }

@@ -4,7 +4,7 @@ use flux_span::Word;
 
 use crate::TypeId;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct Scope {
     pub map: HashMap<Word, TypeId>,
 }
