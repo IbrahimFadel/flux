@@ -1,16 +1,16 @@
 use flux_diagnostics::{Diagnostic, SourceCache, ToDiagnostic};
-use flux_span::{FileId, FileSpanned};
+use flux_util::{FileId, FileSpanned};
 
 use crate::diagnostics::LowerError;
 
 pub(crate) mod diagnostics;
-pub(crate) mod import;
+// pub(crate) mod import;
 pub(crate) mod item;
 
 const MOD_DEPTH_LIMIT: u32 = 16;
 
 #[derive(Debug)]
-pub(crate) struct ModDir {
+pub(super) struct ModDir {
     dir_path: DirPath,
     depth: u32,
 }
@@ -72,7 +72,7 @@ impl ModDir {
             }
         }
         Err(LowerError::CouldNotResolveModDecl {
-            decl: name.inner.inner.to_string(),
+            decl: name.to_string(),
             decl_file_span: name.to_file_span(),
             candidate_paths: candidate_files.to_vec(),
         }
@@ -125,7 +125,7 @@ pub struct RelativePath<'a> {
     pub path: &'a str,
 }
 
-pub trait FileResolver {
+pub(super) trait FileResolver {
     fn resolve_absolute_path(
         &self,
         path: &str,

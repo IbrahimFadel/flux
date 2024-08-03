@@ -1,7 +1,4 @@
-use flux_lexer::TokenKind;
-use flux_syntax::SyntaxKind;
-
-use crate::{parser::Parser, token_set::TokenSet};
+use crate::{lexer::TokenKind, parser::Parser, syntax::SyntaxKind, token_set::TokenSet};
 
 use self::{generic_args::opt_generic_arg_list, r#type::type_};
 

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use flux_id::id::InMod;
-use flux_span::{Interner, Word};
+use flux_util::{Interner, Word};
 
 use crate::{
     builtin::BuiltinType,
-    hir::Visibility,
+    def::item::Visibility,
     item::{ItemId, ItemTreeIdx},
     module::ModuleTree,
 };
@@ -21,11 +21,12 @@ impl ItemScope {
             .into_iter()
             .map(|(name, builtin_ty)| {
                 (
-                    name,
+                    *name,
                     (
                         Visibility::Public,
                         ItemId::new(
-                            ItemTreeIdx::BuiltinType(builtin_ty).in_mod(ModuleTree::PRELUDE_ID),
+                            ItemTreeIdx::BuiltinType(builtin_ty.clone())
+                                .in_mod(ModuleTree::PRELUDE_ID),
                         ),
                     ),
                 )

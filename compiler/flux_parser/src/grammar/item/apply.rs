@@ -1,14 +1,13 @@
-use flux_lexer::TokenKind;
-use flux_syntax::SyntaxKind;
-
 use crate::{
     grammar::{
         generic_params::{opt_generic_param_list, opt_where_clause},
         name, path,
         r#type::type_,
     },
+    lexer::TokenKind,
     marker::CompletedMarker,
     parser::Parser,
+    syntax::SyntaxKind,
     token_set::TokenSet,
 };
 

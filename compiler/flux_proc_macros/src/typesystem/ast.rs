@@ -170,7 +170,7 @@ impl Int {
             {
                 let ref_to = #ref_to;
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Int(
                             ref_to
                         ),
@@ -208,7 +208,7 @@ impl Float {
             {
                 let ref_to = #ref_to;
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Float(
                             ref_to
                         ),
@@ -226,7 +226,7 @@ impl kw::never {
         quote! {
             {
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Never,
                         file_id,
                         span
@@ -242,7 +242,7 @@ impl kw::unknown {
         quote! {
             {
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Unknown,
                         file_id,
                         span
@@ -280,7 +280,7 @@ fn syn_path_to_tid_token_stream(
                 let name_key = interner.get_or_intern(stringify!(#name));
                 let restrictions = vec![#(#restrictions),*];
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Generic(
                             flux_typesystem::Generic::new(name_key, restrictions)
                         ),
@@ -317,7 +317,7 @@ fn syn_path_to_tid_token_stream(
         {
             let seg_key = interner.get_or_intern(#seg);
             flux_typesystem::Insert::insert(tchk.tenv,
-                flux_span::WithSpan::file_span(
+                flux_util::WithSpan::file_span(
                     flux_typesystem::TypeKind::Concrete(flux_typesystem::ConcreteKind::Path(
                         flux_typesystem::Path::new(vec![seg_key], vec![#args])
                     )),
@@ -411,7 +411,7 @@ impl Path {
                 let seg_key = interner.get_or_intern(stringify!(#name));
                 let args = vec![#(#args),*];
                 flux_typesystem::Insert::insert(tchk.tenv,
-                    flux_span::WithSpan::file_span(
+                    flux_util::WithSpan::file_span(
                         flux_typesystem::TypeKind::Concrete(flux_typesystem::ConcreteKind::Path(
                             flux_typesystem::Path::new(vec![seg_key], args)
                         )),

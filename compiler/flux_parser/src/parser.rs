@@ -1,8 +1,11 @@
-use flux_lexer::{Token, TokenKind};
-use flux_syntax::SyntaxKind;
-
 use crate::{
-    event::Event, grammar::item::item, marker::Marker, source::Source, token_set::TokenSet,
+    event::Event,
+    grammar::item::item,
+    lexer::{Token, TokenKind},
+    marker::Marker,
+    source::Source,
+    syntax::SyntaxKind,
+    token_set::TokenSet,
 };
 
 pub(super) struct Parser<'a, 'src> {
@@ -150,10 +153,13 @@ impl<'a, 'src> Parser<'a, 'src> {
 
 #[cfg(test)]
 mod tests {
-    use flux_lexer::{Token, TokenKind};
     use text_size::TextRange;
 
-    use crate::{source::Source, token_set::TokenSet};
+    use crate::{
+        lexer::{Token, TokenKind},
+        source::Source,
+        token_set::TokenSet,
+    };
 
     use super::Parser;
 

@@ -1,11 +1,12 @@
-use flux_diagnostics::Diagnostic;
+use flux_diagnostics::{ice, Diagnostic};
 use flux_id::id;
-use flux_span::{FileId, WithSpan};
+use flux_util::{FileId, WithSpan};
 
 use crate::{
+    def::item::Visibility,
     item::{ItemId, ItemTreeIdx},
     name_res::{FileResolver, ModDir},
-    pkg::PkgBuilder,
+    package::PkgBuilder,
 };
 
 pub(crate) struct ModCollector<'a, 'b, R: FileResolver> {
@@ -21,7 +22,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
         for item_id in items {
             match item_id.inner {
                 ItemTreeIdx::Function(fn_id) => {
-                    let f = &self.pkg_builder.item_tree.functions.get(fn_id);
+                    let f = self.pkg_builder.item_tree.functions.get(fn_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         f.name.inner,
                         f.visibility.inner,
@@ -30,7 +31,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 }
                 ItemTreeIdx::BuiltinType(_) => {}
                 ItemTreeIdx::Module(mod_id) => {
-                    let m = &self.pkg_builder.item_tree.mods.get(mod_id);
+                    let m = self.pkg_builder.item_tree.mods.get(mod_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         m.name.inner,
                         m.visibility.inner,
@@ -39,7 +40,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                     self.collect_child_module(mod_id);
                 }
                 ItemTreeIdx::Struct(struct_id) => {
-                    let s = &self.pkg_builder.item_tree.structs.get(struct_id);
+                    let s = self.pkg_builder.item_tree.structs.get(struct_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         s.name.inner,
                         s.visibility.inner,
@@ -47,7 +48,7 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                     );
                 }
                 ItemTreeIdx::Trait(trait_id) => {
-                    let trt = &self.pkg_builder.item_tree.traits.get(trait_id);
+                    let trt = self.pkg_builder.item_tree.traits.get(trait_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         trt.name.inner,
                         trt.visibility.inner,
@@ -56,14 +57,28 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
                 }
                 ItemTreeIdx::Apply(_) => {}
                 ItemTreeIdx::Enum(enum_id) => {
-                    let e = &self.pkg_builder.item_tree.enums.get(enum_id);
+                    let e = self.pkg_builder.item_tree.enums.get(enum_id);
                     self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
                         e.name.inner,
                         e.visibility.inner,
                         item_id.clone(),
                     );
                 }
-                ItemTreeIdx::Use(_) => {}
+                ItemTreeIdx::Use(use_id) => {
+                    let u = self.pkg_builder.item_tree.uses.get(use_id);
+                    let name = u
+                        .alias
+                        .as_ref()
+                        .map(|a| a.inner)
+                        .or_else(|| u.path.last().copied())
+                        .unwrap_or_else(|| ice("no name for import"));
+
+                    self.pkg_builder.module_tree[item_id.mod_id].scope.declare(
+                        name,
+                        Visibility::Public,
+                        item_id.clone(),
+                    );
+                }
             }
         }
         self.diagnostics
@@ -73,7 +88,8 @@ impl<'a, 'b, R: FileResolver> ModCollector<'a, 'b, R> {
         let mod_decl = &self.pkg_builder.item_tree.mods.get(mod_decl_id);
         let name_str = mod_decl
             .name
-            .map_ref(|name| self.pkg_builder.interner.resolve(name))
+            .as_ref()
+            .map(|name| self.pkg_builder.interner.resolve(name))
             .in_file(self.file_id);
         let name_key = mod_decl.name.inner;
 

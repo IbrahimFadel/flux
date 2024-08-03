@@ -1,6 +1,4 @@
-use flux_syntax::SyntaxKind;
-
-use crate::event::Event;
+use crate::{event::Event, syntax::SyntaxKind};
 
 use super::Parser;
 

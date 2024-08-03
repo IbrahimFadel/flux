@@ -40,7 +40,7 @@ pub(super) fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                 variant_field_names.push(quote!(#field_file_span));
                 quote! {
                     #field_s
-                    #field_file_span: flux_span::InFile<flux_span::Span>,
+                    #field_file_span: flux_util::InFile<flux_util::Span>,
                 }
             } else {
                 quote! {
@@ -67,7 +67,7 @@ pub(super) fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                     let field_file_span = format_ident!("{}_file_span", field);
                     locations.push(quote!{#field_file_span.to_file_span()});
                     // locations.push(quote! {
-                    //     flux_span::InFile::map_ref::<fn(&flux_span::Span) -> usize, usize>(&#field_file_span, |span| span.range.start().into())
+                    //     flux_util::InFile::map_ref::<fn(&flux_util::Span) -> usize, usize>(&#field_file_span, |span| span.range.start().into())
                     // });
                 }
                 ErrorAttribute::Primary(primary) => {
@@ -80,11 +80,11 @@ pub(super) fn impl_to_diagnostic_enum(input: &DiagnosticEnum) -> TokenStream {
                     if let Some(exprs) = &label.exprs {
                         let exprs = exprs.iter();
                         variant_labels.push(quote! {
-                            <flux_span::InFile<flux_span::Span>>::to_file_spanned(&#field_file_span, format!(#msg, #(#exprs),*))
+                            <flux_util::InFile<flux_util::Span>>::to_file_spanned(&#field_file_span, format!(#msg, #(#exprs),*))
                         });
                     } else {
                         variant_labels.push(quote! {
-                            <flux_span::InFile<flux_span::Span>>::to_file_spanned(&#field_file_span, format!(#msg))
+                            <flux_util::InFile<flux_util::Span>>::to_file_spanned(&#field_file_span, format!(#msg))
                         });
                     }
                 }

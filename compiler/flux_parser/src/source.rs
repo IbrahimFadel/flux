@@ -1,4 +1,4 @@
-use flux_lexer::{Token, TokenKind};
+use crate::lexer::{Token, TokenKind};
 
 pub(crate) struct Source<'a, 'src> {
     tokens: &'a [Token<'src>],

@@ -1,148 +1,11 @@
-use std::ops::Deref;
-use std::{fmt::Display, iter::once};
+use std::{collections::HashSet, ops::Deref};
 
+use flux_diagnostics::ice;
 use flux_id::id;
-use flux_span::{Interner, Word};
-use itertools::Itertools;
+use flux_util::{Path, Word};
+use tracing::warn;
 
-use crate::r#trait::TraitRestriction;
-
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub enum Type {
-    Concrete(ConcreteKind),
-    Path(Path),
-    Generic(Generic),
-    Never,
-    Unknown,
-}
-
-impl Type {
-    pub const UNIT: Self = Self::Concrete(ConcreteKind::Tuple(vec![]));
-}
-
-// #[derive(Debug, Clone)]
-// pub enum TypeKind {
-//     ThisPath(ThisPath),
-//     Concrete(ConcreteKind),
-//     Int(Option<TypeId>),
-//     Float(Option<TypeId>),
-//     Ref(TypeId),
-//     Generic(Generic),
-//     Never,
-//     Unknown,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct ThisPath {
-//     pub segments: Vec<Word>,
-//     pub this_ctx: ThisCtx,
-// }
-
-// impl ThisPath {
-//     pub fn new(segments: Vec<Word>, this_ctx: ThisCtx) -> Self {
-//         Self { segments, this_ctx }
-//     }
-// }
-
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct Generic {
-    pub name: Word,
-    pub restrictions: Vec<TraitRestriction>,
-}
-
-impl Generic {
-    pub fn new(name: Word, restrictions: Vec<TraitRestriction>) -> Self {
-        Self { name, restrictions }
-    }
-}
-
-// impl Display for TypeKind {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::ThisPath(_) => write!(f, "todo"),
-//             Self::Concrete(concrete) => write!(f, "{concrete}"),
-//             Self::Float(_) => write!(f, "float"),
-//             Self::Generic(Generic { name, .. }) => write!(f, "{name:?}"),
-//             Self::Int(_) => write!(f, "int"),
-//             Self::Ref(id) => write!(f, "Ref({id}"),
-//             Self::Never => write!(f, "!"),
-//             Self::Unknown => write!(f, "unknown"),
-//         }
-//     }
-// }
-
-/// A `flux_typesystem` concrete kind
-///
-/// The kind of [`TypeKind::Concrete`]
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub enum ConcreteKind {
-    Array(id::Ty, u64),
-    Ptr(id::Ty),
-    Path(Path),
-    Tuple(Vec<id::Ty>),
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct Path {
-    pub segments: Vec<Word>,
-    pub generic_args: Vec<id::Ty>,
-}
-
-impl Path {
-    const INT_PATHS: [&'static str; 8] = ["u64", "u32", "u16", "u8", "s64", "s32", "s16", "s8"];
-    const FLOAT_PATHS: [&'static str; 2] = ["f64", "f32"];
-
-    pub fn new(segments: Vec<Word>, generic_args: Vec<id::Ty>) -> Self {
-        Self {
-            segments,
-            generic_args,
-        }
-    }
-
-    pub fn is_int(&self, interner: &'static Interner) -> bool {
-        if self.segments.len() == 1 {
-            let name = self.segments[0];
-            Self::INT_PATHS
-                .iter()
-                .find(|path| interner.get_or_intern_static(path) == name)
-                .is_some()
-        } else {
-            false
-        }
-    }
-
-    pub fn is_float(&self, interner: &'static Interner) -> bool {
-        if self.segments.len() == 1 {
-            let name = self.segments[0];
-            Self::FLOAT_PATHS
-                .iter()
-                .find(|path| interner.get_or_intern_static(path) == name)
-                .is_some()
-        } else {
-            false
-        }
-    }
-
-    pub fn to_string(&self, interner: &'static Interner) -> String {
-        self.segments
-            .iter()
-            .map(|seg| interner.resolve(seg))
-            .join("::")
-    }
-}
-
-impl Display for ConcreteKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Array(ty, n) => write!(f, "['{}; {n}]", ty.raw()),
-            Self::Path(path) => write!(f, "{path:?}"),
-            Self::Ptr(ptr) => write!(f, "{}*", ptr.raw()),
-            Self::Tuple(types) => {
-                write!(f, "({})", types.iter().map(|id| id.raw()).join(", "))
-            }
-        }
-    }
-}
+use crate::r#trait::ThisCtx;
 
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Typed<T> {
@@ -167,23 +30,128 @@ pub trait WithType {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct FnSignature(Vec<id::Ty>);
+impl WithType for id::Expr {}
 
-impl FnSignature {
-    pub fn new(parameters: impl Iterator<Item = id::Ty>, return_ty: id::Ty) -> Self {
-        Self(parameters.chain(once(return_ty)).collect())
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Type {
+    Concrete(ConcreteKind),
+    Generic(Generic),
+    ThisPath(ThisPath),
+    Int(Option<id::Ty>),
+    Float(Option<id::Ty>),
+    Ref(id::Ty),
+    Never,
+    Unknown,
+}
+
+impl Type {
+    pub const fn path(path: Path<Word, Type>) -> Self {
+        Self::Concrete(ConcreteKind::Path(path))
     }
 
-    pub fn from_type_ids(type_ids: impl Iterator<Item = id::Ty>) -> Self {
+    pub fn this_path<A>(path: Path<Word, A>, this_ctx: ThisCtx) -> Self {
+        Self::ThisPath(ThisPath::new(path.discard_args(), this_ctx))
+    }
+
+    pub const fn tuple(types: Vec<Type>) -> Self {
+        Self::Concrete(ConcreteKind::Tuple(types))
+    }
+
+    pub fn array(ty: Type, n: u64) -> Self {
+        Self::Concrete(ConcreteKind::Array(Box::new(ty), n))
+    }
+
+    pub fn ptr(ty: Type) -> Self {
+        Self::Concrete(ConcreteKind::Ptr(Box::new(ty)))
+    }
+
+    pub const fn unit() -> Self {
+        Self::Concrete(ConcreteKind::Tuple(vec![]))
+    }
+
+    pub const fn int() -> Self {
+        Self::Int(None)
+    }
+
+    pub const fn float() -> Self {
+        Self::Float(None)
+    }
+
+    pub fn generics_used(&self, set: &mut HashSet<Word>) {
+        match self {
+            Type::Concrete(concrete_kind) => match concrete_kind {
+                ConcreteKind::Array(ty, _) => ty.generics_used(set),
+                ConcreteKind::Ptr(ty) => ty.generics_used(set),
+                ConcreteKind::Path(path) => path.args.iter().for_each(|ty| ty.generics_used(set)),
+                ConcreteKind::Tuple(types) => types.iter().for_each(|ty| ty.generics_used(set)),
+            },
+            Type::Generic(generic) => {
+                set.insert(generic.name);
+            }
+            Type::Ref(_) => ice("`Type::Ref` should not be constructed before lowering package bodies, and generics should only be checked before then"),
+            Type::Int(_) | Type::Float(_) | Type::ThisPath(_) | Type::Never | Type::Unknown => {}
+        }
+    }
+
+    pub fn set_this_ctx(&mut self, this_ctx: ThisCtx) {
+        // warn!("`Type::set_this_ctx` needs to take `TEnv` be fully implemented");
+        match self {
+            Type::ThisPath(this_path) => {
+                this_path.ctx = this_ctx;
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ConcreteKind {
+    Array(Box<Type>, u64),
+    Ptr(Box<Type>),
+    Path(Path<Word, Type>),
+    Tuple(Vec<Type>),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Generic {
+    pub(super) name: Word,
+    bounds: Vec<Path<Word, Type>>,
+}
+
+impl Generic {
+    pub fn new(name: Word, bounds: Vec<Path<Word, Type>>) -> Self {
+        Self { name, bounds }
+    }
+}
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ThisPath {
+    pub(super) path: Path<Word>,
+    pub(super) ctx: ThisCtx,
+}
+
+impl ThisPath {
+    pub fn new(path: Path<Word>, ctx: ThisCtx) -> Self {
+        Self { path, ctx }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnSignature(Vec<Type>);
+
+impl FnSignature {
+    pub fn new(parameters: impl Iterator<Item = Type>, return_ty: Type) -> Self {
+        Self(parameters.chain(std::iter::once(return_ty)).collect())
+    }
+
+    pub fn from_type_ids(type_ids: impl Iterator<Item = Type>) -> Self {
         Self(type_ids.collect())
     }
 
-    pub fn parameters(&self) -> &[id::Ty] {
+    pub fn parameters(&self) -> &[Type] {
         self.0.get(..self.0.len() - 1).unwrap_or(&[])
     }
 
-    pub fn return_ty(&self) -> &id::Ty {
+    pub fn return_ty(&self) -> &Type {
         self.0.last().unwrap()
     }
 }

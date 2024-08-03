@@ -1,25 +1,32 @@
-use flux_diagnostics::Diagnostic;
-use flux_id::{id, Map};
-use flux_span::{InFile, Span};
-use tenv::TEnv;
-
-pub use r#type::{ConcreteKind, Generic, Path, Type, Typed, WithType};
-
+mod diagnostics;
+mod fmt;
+mod scope;
 mod tenv;
 mod r#trait;
 mod r#type;
+mod unify;
 
-pub struct TypeSystem<'env> {
-    tenv: &'env mut TEnv,
-    traits: Map<id::Tr, ()>,
-    applications: Map<id::App, ()>,
-}
+use std::sync::OnceLock;
 
-pub fn unify(
-    a: id::Ty,
-    b: id::Ty,
-    unification_span: InFile<Span>,
-    ts: &mut TypeSystem,
-) -> Result<(), Diagnostic> {
-    Ok(())
+use flux_util::{Interner, Path, Word};
+pub use r#trait::{ThisCtx, TraitApplicationInfo, TraitResolution};
+pub use r#type::{ConcreteKind, FnSignature, Generic, Type, Typed, WithType};
+pub use tenv::TEnv;
+
+static INT_PATHS: OnceLock<[Path<Word, Type>; 8]> = OnceLock::new();
+
+pub fn int_paths(interner: &'static Interner) -> &'static [Path<Word, Type>; 8] {
+    INT_PATHS.get_or_init(|| {
+        [
+            interner.get_or_intern_static("s64"),
+            interner.get_or_intern_static("s32"),
+            interner.get_or_intern_static("s16"),
+            interner.get_or_intern_static("s8"),
+            interner.get_or_intern_static("u64"),
+            interner.get_or_intern_static("u32"),
+            interner.get_or_intern_static("u16"),
+            interner.get_or_intern_static("u8"),
+        ]
+        .map(|name| Path::new(vec![name], vec![]))
+    })
 }

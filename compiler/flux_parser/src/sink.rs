@@ -1,10 +1,14 @@
 use cstree::{build::GreenNodeBuilder, text::TextRange};
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
-use flux_lexer::Token;
-use flux_span::{FileId, Interner, ToSpan, WithSpan};
-use flux_syntax::{Flux, SyntaxKind};
+use flux_util::{FileId, Interner, ToSpan, WithSpan};
 
-use crate::{diagnostics::ParserDiagnostic, event::Event, Parse};
+use crate::{
+    diagnostics::ParserDiagnostic,
+    event::Event,
+    lexer::Token,
+    syntax::{Flux, SyntaxKind},
+    Parse,
+};
 
 pub struct Sink<'cache, 't, 'src> {
     builder: GreenNodeBuilder<'cache, 'static, Flux, &'static Interner>,

@@ -1,20 +1,24 @@
 use cstree::green::GreenNode;
 use flux_diagnostics::Diagnostic;
-use flux_lexer::Lexer;
-use flux_span::{FileId, Interner};
-use flux_syntax::SyntaxNode;
+use flux_util::{FileId, Interner};
+use lexer::Lexer;
 use parser::Parser;
 use sink::Sink;
 use source::Source;
+use syntax::SyntaxNode;
 
 mod diagnostics;
 mod event;
 mod grammar;
+mod lexer;
 mod marker;
 mod parser;
 mod sink;
 mod source;
+pub mod syntax;
 mod token_set;
+
+pub use syntax::ast;
 
 pub fn parse(src: &str, file: FileId, interner: &'static Interner) -> Parse {
     let tokens: Vec<_> = Lexer::new(src).collect();

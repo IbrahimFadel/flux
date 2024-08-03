@@ -1,4 +1,4 @@
-use flux_syntax::SyntaxKind;
+use crate::syntax::SyntaxKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Event {

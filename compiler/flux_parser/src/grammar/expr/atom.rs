@@ -1,10 +1,9 @@
-use flux_lexer::TokenKind;
-use flux_syntax::SyntaxKind;
-
 use crate::{
     grammar::{expr::arg_list, generic_args::opt_generic_arg_list, name},
+    lexer::TokenKind,
     marker::CompletedMarker,
     parser::Parser,
+    syntax::SyntaxKind,
     token_set::TokenSet,
 };
 

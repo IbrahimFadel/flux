@@ -1,35 +1,33 @@
 use flux_diagnostics::ice;
-use flux_id::id::{self, InMod, M};
-use flux_span::{Interner, Word};
-use la_arena::{Arena, Idx};
+use flux_id::{
+    id::{self, InMod, InPkg, M, P},
+    Map,
+};
+use flux_util::{InFile, Interner, Path, WithSpan, Word};
 
 use crate::{
-    hir::{Path, TraitDecl, Visibility},
+    def::item::{StructDecl, TraitDecl, Visibility},
     item::{ItemId, ItemTreeIdx},
     item_scope::ItemScope,
     module::ModuleTree,
-    pkg::{Package, PackageId},
+    Package,
 };
 
 use super::diagnostics::ResolutionError;
 
-pub(crate) struct ItemResolver<'a> {
+pub(crate) type ResolvedItem = (id::Pkg, ItemId);
+
+pub struct ItemResolver<'a> {
     builtin_scope: ItemScope,
-    packages: &'a Arena<Package>,
-    package_id: PackageId,
-    pub(crate) dependency_ids: &'a [PackageId],
+    packages: &'a Map<id::Pkg, Package>,
+    package_id: id::Pkg,
     interner: &'static Interner,
-    module_tree: &'a ModuleTree,
 }
 
-pub(crate) type ResolvedItem = (PackageId, ItemId);
-
 impl<'a> ItemResolver<'a> {
-    pub(crate) fn new(
-        packages: &'a Arena<Package>,
-        package_id: PackageId,
-        dependency_ids: &'a [PackageId],
-        module_tree: &'a ModuleTree,
+    pub fn new(
+        package_id: id::Pkg,
+        packages: &'a Map<id::Pkg, Package>,
         interner: &'static Interner,
     ) -> Self {
         Self {
@@ -37,11 +35,32 @@ impl<'a> ItemResolver<'a> {
             interner,
             package_id,
             packages,
-            dependency_ids,
-            module_tree,
         }
     }
-    pub fn resolve_path(&self, path: M<&Path>) -> Result<ResolvedItem, ResolutionError> {
+
+    fn module_tree(&self, package_id: id::Pkg) -> &ModuleTree {
+        &self.packages.get(package_id).module_tree
+    }
+
+    pub fn get_module_with_decl(&self, mod_id: M<id::ModDecl>) -> id::Mod {
+        let m = &self
+            .packages
+            .get(self.package_id)
+            .item_tree
+            .mods
+            .get(*mod_id);
+        let (_, new_module_id) = self.module_tree(self.package_id)[mod_id.mod_id]
+            .children
+            .iter()
+            .find(|(child_name, _)| **child_name == m.name.inner)
+            .unwrap_or_else(|| ice("mod should exist as child in module tree"));
+        *new_module_id
+    }
+
+    pub fn resolve_path<A: Clone>(
+        &self,
+        path: M<&Path<Word, A>>,
+    ) -> Result<ResolvedItem, ResolutionError<A>> {
         let mut segments = path.segments.iter().enumerate();
         let mut name = match segments.next() {
             Some((_, segment)) => segment,
@@ -52,8 +71,21 @@ impl<'a> ItemResolver<'a> {
             }
         };
 
-        // If the path is absolute (aka, begins with package name, skip to first segment that needs to be resolved)
-        if *name == self.packages[self.package_id].name {
+        let pkg = self.packages.get(self.package_id);
+        if pkg
+            .dependencies
+            .iter()
+            .find(|package| self.packages.get(**package).name == *name)
+            .is_some()
+        {
+            return self.try_resolve_in_dependency(&path);
+        }
+
+        let mut mod_id = path.mod_id;
+
+        // If the path is absolute
+        if *name == pkg.name {
+            mod_id = ModuleTree::ROOT_ID;
             match segments.next() {
                 Some((_, segment)) => name = segment,
                 None => {
@@ -62,9 +94,9 @@ impl<'a> ItemResolver<'a> {
                     })
                 }
             };
-        };
+        }
 
-        let mut curr_per_ns = self.resolve_name(name.in_mod(path.mod_id));
+        let mut curr_per_ns = self.resolve_name(name.in_mod(mod_id));
 
         if curr_per_ns.is_none() {
             return self.try_resolve_in_dependency(&path);
@@ -83,13 +115,8 @@ impl<'a> ItemResolver<'a> {
 
             curr_per_ns = match &item_id.inner {
                 ItemTreeIdx::Module(m) => {
-                    let m = &self.packages[self.package_id].item_tree.mods.get(*m);
-                    let (_, new_module_id) = self.module_tree[path.mod_id]
-                        .children
-                        .iter()
-                        .find(|(child_name, _)| **child_name == m.name.inner)
-                        .unwrap_or_else(|| ice("mod should exist as child in module tree"));
-                    self.resolve_name(segment.in_mod(*new_module_id))
+                    let new_module_id = self.get_module_with_decl((*m).in_mod(mod_id));
+                    self.resolve_name(segment.in_mod(new_module_id))
                 }
                 _ => {
                     if vis == Visibility::Private {
@@ -118,106 +145,49 @@ impl<'a> ItemResolver<'a> {
             }
         }
 
-        let (vis, item_id) = curr_per_ns.unwrap(); // I think unwrap is okay here? but confirm
+        let (_vis, item_id) = curr_per_ns.unwrap(); // I think unwrap is okay here? but confirm
         Ok((self.package_id, item_id))
     }
 
-    // pub fn resolve_path(
-    //     &self,
-    //     path: &Path,
-    //     module_id: ModuleId,
-    // ) -> Result<ResolvedItem, ResolutionError> {
-    //     let mut segments = path.segments.iter().enumerate();
-    //     let mut name = match segments.next() {
-    //         Some((_, segment)) => segment,
-    //         None => {
-    //             return Err(ResolutionError::EmptyPath { path: path.clone() });
-    //         }
-    //     };
-
-    //     if *name == self.packages[self.package_id].name {
-    //         match segments.next() {
-    //             Some((_, segment)) => name = segment,
-    //             None => return Err(ResolutionError::EmptyPath { path: path.clone() }),
-    //         };
-    //     };
-
-    //     let mut cur_ns = self.resolve_name_in_module(name, module_id);
-
-    //     if cur_ns.is_none() {
-    //         return self.try_resolve_in_dependency(path);
-    //     }
-    //     println!("{}", self.interner.resolve(name));
-
-    //     for (i, segment) in segments {
-    //         let (vis, item_id) = match cur_ns {
-    //             Some(ns) => ns,
-    //             None => {
-    //                 return Err(ResolutionError::UnresolvedPath {
-    //                     path: path.clone(),
-    //                     segment: i + 1,
-    //                 })
-    //             }
-    //         };
-
-    //         cur_ns = match item_id.idx {
-    //             crate::item::ItemTreeIdx::Module(_) => {
-    //                 println!("mod {}", self.interner.resolve(name));
-    //                 self.resolve_name_in_module(segment, module_id)
-    //             }
-    //             _ => match vis {
-    //                 Visibility::Private => {
-    //                     return Err(ResolutionError::PrivateModule {
-    //                         path: path.clone(),
-    //                         segment: i + 1,
-    //                     })
-    //                 }
-    //                 Visibility::Public => return Ok((self.package_id, item_id)),
-    //             },
-    //         };
-    //         println!("result {:?}", cur_ns);
-
-    //         match &cur_ns {
-    //             Some((vis, _item_id)) => {
-    //                 if *vis == Visibility::Private {
-    //                     return Err(ResolutionError::PrivateModule {
-    //                         path: path.clone(),
-    //                         segment: i + 1,
-    //                     });
-    //                 }
-    //             }
-    //             None => {
-    //                 return Err(ResolutionError::UnresolvedPath {
-    //                     path: path.clone(),
-    //                     segment: i + 1,
-    //                 })
-    //             }
-    //         }
-    //     }
-
-    //     let (vis, item_id) = cur_ns.unwrap(); // I think unwrap is okay here? but confirm
-    //     Ok((self.package_id, item_id))
-    // }
-
     fn resolve_name(&self, name: M<&Word>) -> Option<(Visibility, ItemId)> {
-        let from_scope = self.module_tree[name.mod_id].scope.get(&name);
+        // println!(
+        //     "Segment: {} in mod: {:?}",
+        //     self.interner.resolve(&name),
+        //     name.mod_id
+        // );
+        let from_scope = self
+            .module_tree(self.package_id)
+            .get(name.mod_id)
+            .map(|module_data| module_data.scope.get(&name))
+            .flatten();
         let from_builtin = || self.builtin_scope.get(&name);
-        from_scope.or_else(from_builtin)
+        let from_prelude = || self.resolve_in_prelude(&name);
+        from_scope.or_else(from_builtin).or_else(from_prelude)
     }
 
-    fn try_resolve_in_dependency(&self, path: &Path) -> Result<ResolvedItem, ResolutionError> {
-        for package_id in self.dependency_ids {
-            let pkg = &self.packages[*package_id];
-            if &pkg.name != path.get(0) {
+    fn resolve_in_prelude(&self, name: &Word) -> Option<(Visibility, ItemId)> {
+        self.module_tree(self.package_id)
+            .get(ModuleTree::PRELUDE_ID)
+            .map(|module_data| module_data.scope.get(name))
+            .flatten()
+    }
+
+    fn try_resolve_in_dependency<A: Clone>(
+        &self,
+        path: &Path<Word, A>,
+    ) -> Result<ResolvedItem, ResolutionError<A>> {
+        for package_id in &self.packages.get(self.package_id).dependencies {
+            let pkg = &self.packages.get(*package_id);
+            if &pkg.name != path.get_nth(0) {
                 continue;
             }
-            let module_tree = &pkg.module_tree;
             let package_item_resolver =
-                ItemResolver::new(self.packages, *package_id, &[], module_tree, self.interner);
-            return package_item_resolver.resolve_path(
-                (&Path::new(path.segments[1..].to_vec(), path.generic_args.clone()))
+                ItemResolver::new(*package_id, self.packages, self.interner);
+            let x = package_item_resolver.resolve_path(
+                (&Path::new(path.segments[1..].to_vec(), path.args.clone()))
                     .in_mod(ModuleTree::ROOT_ID),
             );
+            return x;
         }
         Err(ResolutionError::UnresolvedPath {
             path: path.clone(),
@@ -225,63 +195,65 @@ impl<'a> ItemResolver<'a> {
         })
     }
 
-    // fn try_resolve_in_dependency(
-    //     &self,
-    //     path: &Spanned<Path>,
-    //     original_module_id: ModuleId,
-    //     dependencies: &[PackageDependency],
-    //     packages: &Arena<PackageData>,
-    // ) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
-    //     for dep in dependencies {
-    //         let package = &packages[dep.package_id];
-    //         if &package.name == path.nth(0) {
-    //             return package.resolve_path(path, original_module_id, packages);
-    //             // return packagedef_map
-    //             //     .resolve_path(path, def_map.root)
-    //             //     .map(|(_, mod_item)| (Some(dep.clone()), mod_item));
-    //         }
-    //     }
-
-    //     Err(ResolvePathError::UnresolvedPath {
-    //         path: path.clone(),
-    //         segment: 0,
-    //     })
-    // }
-
-    // 	fn try_resolve_in_dependency(
-    // 			&self,
-    // 			path: &Spanned<Path>,
-    // 			original_module_id: ModuleId,
-    // 			dependencies: &[PackageDependency],
-    // 			packages: &Arena<PackageData>,
-    // 	) -> Result<(Option<PackageId>, Option<ModuleItemWithVis>), ResolvePathError> {
-    // 			for dep in dependencies {
-    // 					let package = &packages[dep.package_id];
-    // 					if &package.name == path.nth(0) {
-    // 							return package.resolve_path(path, original_module_id, packages);
-    // 							// return packagedef_map
-    // 							//     .resolve_path(path, def_map.root)
-    // 							//     .map(|(_, mod_item)| (Some(dep.clone()), mod_item));
-    // 					}
-    // 			}
-
-    // 			Err(ResolvePathError::UnresolvedPath {
-    // 					path: path.clone(),
-    // 					segment: 0,
-    // 			})
-    // 	}
-
-    pub(crate) fn resolve_trait(
+    pub(crate) fn resolve_trait_ids<A: Clone>(
         &self,
-        path: &Path,
-        module_id: id::Mod,
-    ) -> Result<(PackageId, id::TraitDecl), ResolutionError> {
-        let (package_id, item_id) = self.resolve_path(path.in_mod(module_id))?;
-        let trait_idx: Result<id::TraitDecl, _> = item_id.inner.clone().try_into();
-        let trait_idx = trait_idx.map_err(|got| ResolutionError::ExpectedTrait {
-            path: path.clone(),
+        path: M<&Path<Word, A>>,
+    ) -> Result<P<M<id::TraitDecl>>, ResolutionError<A>> {
+        let (package_id, item_id) = self.resolve_path(path)?;
+        let trait_id = match &item_id.inner {
+            ItemTreeIdx::Trait(id) => *id,
+            ItemTreeIdx::Use(use_id) => {
+                let u = self
+                    .packages
+                    .get(self.package_id)
+                    .item_tree
+                    .uses
+                    .get(use_id.clone());
+                let use_path = u.path.inner.clone().allow_args();
+                return self.resolve_trait_ids((&use_path).in_mod(path.mod_id));
+            }
+            got => {
+                return Err(ResolutionError::UnexpectedItem {
+                    path: path.inner.clone(),
+                    expected: String::from("trait"),
+                    got: got.to_item_name().to_string(),
+                })
+            }
+        };
+        Ok(trait_id.in_mod(item_id.mod_id).in_pkg(package_id))
+    }
+
+    pub(crate) fn resolve_trait<A: Clone>(
+        &self,
+        path: M<&Path<Word, A>>,
+    ) -> Result<InFile<&TraitDecl>, ResolutionError<A>> {
+        let trait_id = self.resolve_trait_ids(path)?;
+        let pkg = self.packages.get(trait_id.pkg_id);
+        let trait_decl = pkg.item_tree.traits.get(trait_id.inner.inner);
+        let file_id = pkg.module_tree[trait_id.mod_id].file_id;
+        Ok(trait_decl.in_file(file_id))
+    }
+
+    pub(crate) fn resolve_struct<A: Clone>(
+        &self,
+        path: M<&Path<Word, A>>,
+    ) -> Result<InFile<&StructDecl>, ResolutionError<A>> {
+        let (package_id, item_id) = self.resolve_path(path)?;
+        let struct_id: Result<id::StructDecl, _> = item_id.inner.clone().try_into();
+        let struct_id = struct_id.map_err(|got| ResolutionError::UnexpectedItem {
+            path: path.inner.clone(),
+            expected: String::from("struct"),
             got: got.to_string(),
         })?;
-        Ok((package_id, trait_idx))
+        let pkg = self.packages.get(package_id);
+        let struct_decl = self
+            .packages
+            .get(package_id)
+            .item_tree
+            .structs
+            .get(struct_id);
+        let file_id = pkg.module_tree[item_id.mod_id].file_id;
+
+        Ok(struct_decl.in_file(file_id))
     }
 }

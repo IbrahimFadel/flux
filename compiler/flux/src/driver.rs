@@ -1,113 +1,157 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
-use flux_diagnostics::{ice, IOError, SourceCache};
-use flux_hir::pkg::{Package, PackageId};
-use flux_span::Interner;
-use la_arena::Arena;
-use resolve_path::PathResolveExt;
+use flux_diagnostics::{Diagnostic, IOError, SourceCache};
+use flux_hir::Package;
+use flux_id::{id, Map};
+use flux_util::Interner;
+use tracing::info;
 
-use crate::{get_config, get_package_entry_file_path, ExitStatus};
+use crate::{
+    cfg::{self, Config},
+    get_config, get_package_entry_file_path, ExitStatus,
+};
 
 pub(crate) struct Driver {
-    project_root: PathBuf,
-    compilation_config: flux_hir::cfg::Config,
+    compilation_config: flux_hir::Config,
     interner: &'static Interner,
     source_cache: SourceCache,
-    packages: Arena<Package>,
+    packages: Map<id::Pkg, Package>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 impl Driver {
-    pub(crate) fn new(
-        project_root: PathBuf,
-        compilation_config: flux_hir::cfg::Config,
-        interner: &'static Interner,
-    ) -> Self {
+    pub(crate) fn new(compilation_config: flux_hir::Config, interner: &'static Interner) -> Self {
         Self {
-            project_root,
             compilation_config,
             interner,
             source_cache: SourceCache::new(interner),
-            packages: Arena::new(),
+            packages: Map::new(),
+            diagnostics: vec![],
         }
     }
 
-    pub(crate) fn build_project(&mut self, flux_config: &flux_cfg::Config) -> ExitStatus {
+    pub(crate) fn build_project(
+        &mut self,
+        project_root: PathBuf,
+        flux_config: &Config,
+    ) -> (Vec<id::Pkg>, ExitStatus) {
         let single_package_project = flux_config.packages.len() == 1;
+
+        let mut built_packages = vec![];
         for package in &flux_config.packages {
             let package_root = if single_package_project {
-                self.project_root.clone()
+                project_root.clone()
             } else {
-                self.project_root.join(&package.name)
+                project_root.join(&package.name)
             };
 
-            let package_id = self
-                .build_package(&package_root.resolve(), &package.name)
-                .map_err(|errs| errs.into_iter().for_each(|err| err.report()))
-                .ok();
-
-            if let Some(package_id) = package_id {
-                let pkg = &self.packages[package_id];
-
-                if self.compilation_config.debug_item_tree {
-                    println!("{}", pkg.to_pretty(10, self.interner))
-                }
+            if !flux_config.dependencies.map.is_empty() {
+                info!(package =? package.name, "building dependencies");
             }
+            let (dependencies, errors) =
+                self.build_dependencies(&package_root, &flux_config.dependencies);
+            errors.into_iter().for_each(|err| err.report());
+
+            info!(package =? package.name, "building package definitions");
+            let package_id =
+                match self.build_package_definitions(&package.name, &resolve(&package_root)) {
+                    Ok(id) => id,
+                    Err(err) => {
+                        err.report();
+                        continue;
+                    }
+                };
+            built_packages.push(package_id);
+            self.packages
+                .get_mut(package_id)
+                .set_dependencies(dependencies);
         }
 
-        ExitStatus::Success
+        let mut exprs = Map::new();
+        for package_id in self.packages.keys() {
+            flux_hir::build_package_bodies(
+                package_id,
+                &self.packages,
+                &mut exprs,
+                self.interner,
+                &mut self.diagnostics,
+            );
+        }
+
+        info!(project =? project_root, "built {} packages", built_packages.len());
+
+        self.source_cache
+            .report_diagnostics(self.diagnostics.iter());
+
+        (built_packages, ExitStatus::Success)
     }
 
-    fn build_package(
+    fn build_dependencies(
         &mut self,
-        package_root: &Path,
+        project_root: &Path,
+        dependencies: &cfg::Dependencies,
+    ) -> (Vec<id::Pkg>, Vec<IOError>) {
+        let mut built_packages = vec![];
+        let mut errors = vec![];
+        for (_, dependency) in dependencies.map.iter() {
+            let path = dependency
+                .path
+                .as_ref()
+                .expect("no other type of dependency than local right now");
+            let path = resolve(&project_root.join(path));
+
+            let flux_config = match get_config(&path) {
+                Ok(cfg) => cfg,
+                Err(diagnostic) => {
+                    errors.push(diagnostic);
+                    continue;
+                }
+            };
+
+            let (mut packages, _) = self.build_project(path, &flux_config);
+            built_packages.append(&mut packages);
+        }
+        (built_packages, errors)
+    }
+
+    fn build_package_definitions(
+        &mut self,
         name: &str,
-    ) -> Result<PackageId, Vec<IOError>> {
-        tracing::debug!(package_root =? package_root, "building package");
-
-        let flux_config = match get_config(package_root) {
-            Err(err) => {
-                return Err(vec![err]);
-            }
-            Ok(cfg) => cfg,
-        };
-
-        self.build_dependencies(&flux_config);
-
+        package_root: &Path,
+    ) -> Result<id::Pkg, IOError> {
         let (entry_path, content) = match get_package_entry_file_path(package_root, name) {
             Ok(x) => x,
             Err(err) => {
-                return Err(vec![err]);
+                return Err(err);
             }
         };
 
-        let mut diagnostics = vec![];
+        let name = self.interner.get_or_intern(name);
         let file_id = self
             .source_cache
             .add_input_file(&entry_path, content.clone());
 
-        let pkg = flux_hir::package_definitions(
-            self.interner.get_or_intern(name),
+        let package = flux_hir::build_package_definitions(
+            name,
             file_id,
             &content,
-            &mut diagnostics,
-            &self.compilation_config,
-            self.interner,
             &mut self.source_cache,
+            self.interner,
+            &mut self.diagnostics,
         );
-
-        self.source_cache.report_diagnostics(diagnostics.iter());
-
-        Ok(self.packages.alloc(pkg))
+        let package_id = self.packages.insert(package);
+        Ok(package_id)
     }
+}
 
-    fn build_dependencies(&mut self, flux_config: &flux_cfg::Config) {
-        for (name, dependency) in flux_config.dependencies.iter() {
-            let path = dependency.path.as_ref().unwrap_or_else(|| ice("ruh roh"));
-            let package_root = self.project_root.join(path);
-            if let Err(errs) = self.build_package(&package_root, name) {
-                errs.into_iter()
-                    .for_each(|err| eprintln!("{}", err.to_string()));
-            }
+fn resolve(path: &Path) -> PathBuf {
+    let mut resolved = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => assert!(resolved.pop()),
+            segment => resolved.push(segment),
         }
     }
+    resolved
 }

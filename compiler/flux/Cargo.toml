@@ -6,19 +6,12 @@ edition = "2021"
 [dependencies]
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
-tracing-tree = "0.3.0"
-# itertools = "0.12.0"
-# la-arena = "0.3.0"
+clap = { version = "4.2.5", default-features = true, features = ["std", "derive"] }
 toml = "0.8.8"
 serde = { version = "1.0.159", features = ["derive"] }
-clap = { version = "4.2.5", default-features = true, features = ["std", "derive"] }
-pretty = "0.12.1"
 lasso = { version = "0.7.2", features = ["multi-threaded"] }
-la-arena = "0.3.1"
-resolve-path = "0.1.0"
 
-flux_hir = { path = "../flux_hir" }
-flux_cfg = { path = "../flux_cfg" }
 flux_diagnostics = { path = "../flux_diagnostics" }
-flux_span = { path = "../flux_span" }
-flux_typesystem= { path = "../flux_typesystem" }
+flux_util = { path = "../flux_util" }
+flux_id = { path = "../flux_id" }
+flux_hir = { path = "../flux_hir" }

@@ -1,17 +1,27 @@
 use flux_diagnostics::{fmt::NthSuffix, Diagnostic, DiagnosticCode};
-use flux_span::{FileId, FileSpan, Interner, Span, WithSpan};
+use flux_util::{FileId, FileSpan, Interner, Path, Span, WithSpan, Word};
 
-use crate::hir::Path;
-
-#[derive(Debug)]
-pub(crate) enum ResolutionError {
-    EmptyPath { path: Path },
-    UnresolvedPath { path: Path, segment: usize },
-    PrivateModule { path: Path, segment: usize },
-    ExpectedTrait { path: Path, got: String },
+#[derive(Debug, Clone)]
+pub enum ResolutionError<A> {
+    EmptyPath {
+        path: Path<Word, A>,
+    },
+    UnresolvedPath {
+        path: Path<Word, A>,
+        segment: usize,
+    },
+    PrivateModule {
+        path: Path<Word, A>,
+        segment: usize,
+    },
+    UnexpectedItem {
+        path: Path<Word, A>,
+        expected: String,
+        got: String,
+    },
 }
 
-impl ResolutionError {
+impl<A> ResolutionError<A> {
     pub(crate) fn to_diagnostic(
         &self,
         file_id: FileId,
@@ -55,11 +65,15 @@ impl ResolutionError {
                     .file_span(file_id, span),
                 ],
             ),
-            ResolutionError::ExpectedTrait { path, got } => (
-                DiagnosticCode::ExpectedTrait,
-                format!("expected trait"),
+            ResolutionError::UnexpectedItem {
+                path,
+                expected,
+                got,
+            } => (
+                DiagnosticCode::UnexpectedItem,
+                format!("expected {}", expected),
                 vec![
-                    format!("expected `{}` to be trait", path.to_string(interner))
+                    format!("expected `{}` to be {}", path.to_string(interner), expected)
                         .file_span(file_id, span),
                     format!("instead got {got}").file_span(file_id, span),
                 ],

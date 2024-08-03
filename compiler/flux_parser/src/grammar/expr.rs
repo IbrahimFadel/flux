@@ -1,7 +1,7 @@
-use flux_lexer::TokenKind;
-use flux_syntax::SyntaxKind;
-
-use crate::{marker::CompletedMarker, parser::Parser, token_set::TokenSet};
+use crate::{
+    lexer::TokenKind, marker::CompletedMarker, parser::Parser, syntax::SyntaxKind,
+    token_set::TokenSet,
+};
 
 use super::{name, r#type::type_};
 

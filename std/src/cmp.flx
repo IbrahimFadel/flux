@@ -1,4 +1,4 @@
-
+/*
 pub trait CmpEq {
 	fn cmp_eq(other This) -> bool;
 }
@@ -34,3 +34,4 @@ apply CmpEq to u16 {
 apply CmpEq to u8 {
 	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_u8(this, other)
 }
+*/

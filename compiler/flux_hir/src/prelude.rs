@@ -1,24 +1,11 @@
-pub(crate) static PRELUDE_SRC: &'static str = include_str!("prelude/prelude.flx");
+use std::sync::OnceLock;
 
-// static BIN_OP_TRAIT_NAME_MAP: OnceLock<HashMap<Op, &'static str>> = OnceLock::new();
-// static BIN_OP_TRAIT_MAP: OnceLock<HashMap<Op, ItemId>> = OnceLock::new();
+use flux_util::{Interner, Word};
 
-// fn bin_op_trait_name_map() -> &'static HashMap<Op, &'static str> {
-//     BIN_OP_TRAIT_NAME_MAP
-//         .get_or_init(|| HashMap::from([(Op::Add, "Add"), (Op::Mul, "Mul"), (Op::CmpEq, "CmpEq")]))
-// }
+pub(super) static PRELUDE_SRC: &'static str = include_str!("prelude/prelude.flx");
 
-// pub(crate) fn bin_op_trait_map(
-//     prelude_data: &ModuleData,
-//     interner: &'static Interner,
-// ) -> &'static HashMap<Op, ItemId> {
-//     BIN_OP_TRAIT_MAP.get_or_init(|| {
-//         bin_op_trait_name_map()
-//             .iter()
-//             .map(|(op, name)| {
-//                 let (_, item_id) = &prelude_data.scope.items[&interner.get_or_intern_static(name)];
-//                 (*op, item_id.clone())
-//             })
-//             .collect()
-//     })
-// }
+static MOD_NAME: OnceLock<Word> = OnceLock::new();
+
+pub fn prelude_name(interner: &'static Interner) -> Word {
+    interner.get_or_intern_static("prelude")
+}

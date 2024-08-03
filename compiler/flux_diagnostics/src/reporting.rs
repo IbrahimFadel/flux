@@ -2,10 +2,13 @@ use ariadne::CharSet;
 use ariadne::Config;
 
 use ariadne::Source;
-use flux_span::FileId;
-use flux_span::Interner;
+use colored::Colorize;
+use flux_util::FileId;
+use flux_util::Interner;
 use std::collections::HashMap;
 use std::path::PathBuf;
+
+use crate::fmt::Plural;
 
 use super::Diagnostic;
 
@@ -30,12 +33,20 @@ impl SourceCache {
     }
 
     pub fn report_diagnostics<'a>(&self, diagnostics: impl Iterator<Item = &'a Diagnostic>) {
-        diagnostics.for_each(|diagnostic| {
+        let diagnostics: Vec<_> = diagnostics.collect();
+        let count = diagnostics.len();
+        for diagnostic in diagnostics {
             diagnostic
                 .as_report(Config::default())
                 .eprint(self)
                 .unwrap()
-        })
+        }
+        if count > 0 {
+            eprintln!(
+                "{}",
+                format!("{} error{} generated", count, count.plural("s")).red()
+            );
+        }
     }
 
     pub fn write_diagnostics_to_buffer<W: std::io::Write>(

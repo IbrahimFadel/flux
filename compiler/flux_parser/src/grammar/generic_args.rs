@@ -1,7 +1,4 @@
-use flux_lexer::TokenKind;
-use flux_syntax::SyntaxKind;
-
-use crate::parser::Parser;
+use crate::{lexer::TokenKind, parser::Parser, syntax::SyntaxKind};
 
 use super::r#type::type_;
 

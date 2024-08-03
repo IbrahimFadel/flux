@@ -4,13 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-itertools = "0.13.0"
-pretty = "0.12.3"
-colored = "2.1.0"
 tracing = "0.1.37"
-paste = "1.0.15"
 
-flux_diagnostics = { path = "../flux_diagnostics" }
-flux_span = { path = "../flux_span" }
 flux_proc_macros = { path = "../flux_proc_macros" }
+flux_diagnostics = { path = "../flux_diagnostics" }
+flux_util = { path = "../flux_util" }
 flux_id = { path = "../flux_id" }

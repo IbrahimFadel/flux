@@ -1,1 +1,3 @@
-use std::arithmetic::CmpEq;
+use std::arithmetic::Add;
+use std::arithmetic::Mul;
+use std::cmp::CmpEq;

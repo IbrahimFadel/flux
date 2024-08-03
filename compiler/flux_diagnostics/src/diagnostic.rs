@@ -1,5 +1,5 @@
 use ariadne::{Color, Label, Report, ReportKind};
-use flux_span::{FileId, FileSpan, FileSpanned};
+use flux_util::{FileId, FileSpan, FileSpanned};
 
 pub trait ToDiagnostic {
     fn to_diagnostic(&self) -> Diagnostic;
@@ -120,7 +120,7 @@ pub enum DiagnosticCode {
     CannotResolveEmptyPath,
     UnresolvedPath,
     PrivateModule,
-    ExpectedTrait,
+    UnexpectedItem,
 
     PositiveIntegerOverflow,
     StmtFollowingTerminatorExpr,

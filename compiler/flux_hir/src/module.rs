@@ -2,11 +2,11 @@ use std::ops::Index;
 use std::{collections::HashMap, ops::IndexMut};
 
 use flux_id::{id, Map};
-use flux_span::{FileId, Word};
+use flux_util::{FileId, Word};
 
 use crate::item_scope::ItemScope;
 
-pub mod collect;
+pub(super) mod collect;
 
 #[derive(Debug)]
 pub struct ModuleTree(Map<id::Mod, ModuleData>);
@@ -17,6 +17,10 @@ impl ModuleTree {
 
     pub fn new() -> Self {
         Self(Map::new())
+    }
+
+    pub fn get(&self, mod_id: id::Mod) -> Option<&ModuleData> {
+        self.0.try_get(mod_id)
     }
 
     pub fn insert(&mut self, module: ModuleData) -> id::Mod {

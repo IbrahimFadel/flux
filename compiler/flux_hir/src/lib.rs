@@ -1,206 +1,132 @@
-#![feature(iter_array_chunks)]
+use std::collections::HashMap;
 
-use cfg::Config;
+use def::expr::Expr;
 use flux_diagnostics::{Diagnostic, SourceCache};
-use flux_span::{FileId, Interner, Word};
+use flux_id::{
+    id::{self, InMod, InPkg, P},
+    Map,
+};
+use flux_typesystem::{TraitApplicationInfo, TraitResolution};
+use flux_util::{FileId, Interner, Word};
+use item::ItemTreeIdx;
+use lower::lower_item_bodies;
 use name_res::BasicFileResolver;
-use pkg::{Package, PkgBuilder};
+use package::PkgBuilder;
 
-mod body;
 mod builtin;
-pub mod cfg;
-mod common_lower;
+pub mod def;
 mod diagnostics;
-mod hir;
 mod intrinsics;
 mod item;
 mod item_scope;
-pub(crate) mod item_tree;
+mod lower;
 mod module;
 mod name_res;
-pub mod pkg;
-pub(crate) mod prelude;
-pub mod prettyprint;
-#[cfg(test)]
-mod tests;
+mod package;
+mod prelude;
 
-const POISONED_NAME: &'static str = "<poisoned>";
+pub use name_res::item::ItemResolver;
+pub use package::Package;
 
-pub fn package_definitions(
+pub struct Config {
+    pub debug_cst: bool,
+    pub debug_item_tree: bool,
+    pub debug_bodies: bool,
+}
+
+impl Config {
+    pub fn release() -> Self {
+        Self {
+            debug_cst: false,
+            debug_item_tree: false,
+            debug_bodies: false,
+        }
+    }
+}
+
+pub fn build_package_definitions(
     name: Word,
     file_id: FileId,
     src: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-    compilation_config: &Config,
-    interner: &'static Interner,
     source_cache: &mut SourceCache,
+    interner: &'static Interner,
+    diagnostics: &mut Vec<Diagnostic>,
 ) -> Package {
-    let mut pkg_builder = PkgBuilder::new(
-        name,
-        diagnostics,
-        interner,
-        source_cache,
-        compilation_config,
-        BasicFileResolver,
-    );
+    let mut pkg_builder =
+        PkgBuilder::new(name, diagnostics, interner, source_cache, BasicFileResolver);
     pkg_builder.seed_with_entry(file_id, src);
     pkg_builder.finish()
 }
 
-pub fn package_bodies() {
-    // let lowering_ctx = body::Lo
+pub fn build_package_bodies(
+    package_id: id::Pkg,
+    packages: &Map<id::Pkg, Package>,
+    exprs: &mut Map<id::Expr, Expr>,
+    interner: &'static Interner,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let item_tree = &packages.get(package_id).item_tree;
+
+    let trait_resolution = build_trait_resolution_table(package_id, packages, interner);
+    for item_id in &item_tree.top_level {
+        lower_item_bodies(
+            item_id.mod_id.in_pkg(package_id),
+            item_id,
+            &trait_resolution,
+            packages,
+            exprs,
+            interner,
+            diagnostics,
+        );
+    }
 }
 
-// pub fn lower_package_defs(
-//     name: Word,
-//     entry_file_id: FileId,
-//     entry_src: &str,
-//     interner: &'static Interner,
-//     source_cache: &mut SourceCache,
-//     config: &Config,
-// ) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
-//     let mut pkg_builder: PkgBuilder<'_, BasicFileResolver> =
-//         PkgBuilder::new(name, interner, source_cache, config, BasicFileResolver);
-//     pkg_builder.seed_with_entry(entry_file_id, entry_src);
-//     let (pkg_defs, pkg_bodies, tenv, diagnostics) = pkg_builder.finish();
-//     if config.debug_item_tree && !config.debug_with_bodies {
-//         println!(
-//             "{}",
-//             pkg_defs.to_pretty(10, &pkg_bodies, &tenv, interner, config.debug_with_bodies)
-//         );
-//     }
+fn build_trait_resolution_table(
+    package_id: id::Pkg,
+    packages: &Map<id::Pkg, Package>,
+    interner: &'static Interner,
+) -> TraitResolution {
+    let mut this_types = HashMap::new();
+    let mut trait_applications: HashMap<
+        P<id::TraitDecl>,
+        Vec<(P<id::ApplyDecl>, TraitApplicationInfo)>,
+    > = HashMap::new();
 
-//     (pkg_defs, pkg_bodies, tenv, diagnostics)
-// }
+    let item_tree = &packages.get(package_id).item_tree;
+    item_tree
+        .top_level
+        .iter()
+        .for_each(|item_id| match item_id.inner {
+            ItemTreeIdx::Apply(apply_id) => {
+                let apply_decl = item_tree.applies.get(apply_id);
+                this_types.insert(apply_id.in_pkg(package_id), apply_decl.to_ty.inner.clone());
 
-// pub fn lower_package_defs(
-//     name: Word,
-//     entry_file_id: FileId,
-//     entry_src: &str,
-//     interner: &'static Interner,
-//     source_cache: &mut SourceCache,
-//     config: &Config,
-// ) -> (PackageDefs, PackageBodies, TEnv, Vec<Diagnostic>) {
-//     let mut pkg_builder: PkgBuilder<'_, BasicFileResolver> =
-//         PkgBuilder::new(name, interner, source_cache, config, BasicFileResolver);
-//     pkg_builder.seed_with_entry(entry_file_id, entry_src);
-//     let (pkg_defs, pkg_bodies, tenv, diagnostics) = pkg_builder.finish();
-//     if config.debug_item_tree && !config.debug_with_bodies {
-//         println!(
-//             "{}",
-//             pkg_defs.to_pretty(10, &pkg_bodies, &tenv, interner, config.debug_with_bodies)
-//         );
-//     }
+                let assoc_types: Vec<_> = apply_decl
+                    .assoc_types
+                    .iter()
+                    .map(|assoc_type| (assoc_type.name.inner, assoc_type.ty.inner.clone()))
+                    .collect();
 
-//     (pkg_defs, pkg_bodies, tenv, diagnostics)
-// }
+                if let Some(trt) = &apply_decl.trt {
+                    let item_resolver = ItemResolver::new(package_id, packages, interner);
+                    let application = item_resolver
+                        .resolve_trait_ids(trt.as_ref().inner.in_mod(item_id.mod_id))
+                        .map(|trait_id| {
+                            let trait_id = (**trait_id).in_pkg(trait_id.pkg_id);
+                            let apply_id = apply_id.in_pkg(package_id);
+                            (trait_id, apply_id)
+                        })
+                        .ok();
+                    if let Some((trait_id, apply_id)) = application {
+                        trait_applications
+                            .entry(trait_id)
+                            .or_default()
+                            .push((apply_id, TraitApplicationInfo::new(assoc_types)));
+                    }
+                }
+            }
+            _ => {}
+        });
 
-// pub fn lower_package_bodies(
-//     package_id: PackageId,
-//     packages: &Arena<PackageDefs>,
-//     dependency_ids: &[PackageId],
-//     dependencies: &[BuiltPackage],
-//     package_bodies: &mut PackageBodies,
-//     tenv: &mut TEnv,
-//     interner: &'static Interner,
-//     config: &Config,
-// ) -> Vec<Diagnostic> {
-//     let mut diagnostics = vec![];
-//     let package = &packages[package_id];
-
-//     let mut ctx = body::LowerCtx::new(
-//         Some(ItemResolver::new(
-//             packages,
-//             package_id,
-//             dependency_ids,
-//             &package.module_tree,
-//             interner,
-//         )),
-//         Some(packages),
-//         Some(package_id),
-//         ModuleTree::PRELUDE_ID,
-//         dependencies,
-//         package_bodies,
-//         tenv,
-//         interner,
-//         FileId::prelude(interner),
-//     );
-
-//     ctx.attach_trait_type_contexts();
-//     for (module_id, _) in package.module_tree.get().iter() {
-//         ctx.lower_module_bodies(module_id);
-//     }
-
-//     diagnostics.append(&mut ctx.finish());
-
-//     if config.debug_with_bodies {
-//         println!(
-//             "{}",
-//             package.to_pretty(
-//                 10,
-//                 &package_bodies,
-//                 tenv,
-//                 interner,
-//                 config.debug_with_bodies
-//             )
-//         );
-//     }
-
-//     diagnostics
-// }
-
-// pub fn finish_package(
-//     id: PackageId,
-//     defs: &PackageDefs,
-//     bodies: &PackageBodies,
-//     tenv: &TEnv,
-// ) -> BuiltPackage {
-//     let mut diagnostics = vec![];
-//     let mut function_signatures = ArenaMap::new();
-//     let mut traits = vec![];
-//     defs.item_tree
-//         .top_level
-//         .iter()
-//         .for_each(|item| match item.idx {
-//             item::ItemTreeIdx::Apply(apply_idx) => {
-//                 let a = &defs.item_tree.applies[apply_idx];
-//                 a.methods.iter().for_each(|method_idx| {
-//                     let method = &defs.item_tree.functions[*method_idx];
-//                     let sig = get_function_signature(method, tenv, &mut diagnostics);
-//                     function_signatures.insert(*method_idx, sig);
-//                 });
-//             }
-//             item::ItemTreeIdx::Function(fn_idx) => {
-//                 let f = &defs.item_tree.functions[fn_idx];
-//                 let sig = get_function_signature(f, tenv, &mut diagnostics);
-//                 function_signatures.insert(fn_idx, sig);
-//             }
-//             item::ItemTreeIdx::Trait(trait_idx) => {
-//                 let t = &defs.item_tree.traits[trait_idx];
-//                 // t.methods.iter().for_each(|method_idx| {
-//                 //     let method = &defs.item_tree.functions[*method_idx];
-//                 //     let sig = get_function_signature(method, tenv, &mut diagnostics);
-//                 //     function_signatures.insert(*method_idx, sig);
-//                 // });
-//                 traits.push((id, trait_idx, t.clone()));
-//             }
-//             _ => {}
-//         });
-//     BuiltPackage {
-//         traits,
-//         tenv: tenv.clone(),
-//         item_tree: defs.item_tree.clone(),
-//     }
-// }
-
-// fn get_function_signature(
-//     f: &FnDecl,
-//     tenv: &TEnv,
-//     diagnostics: &mut Vec<Diagnostic>,
-// ) -> Vec<FileSpanned<TypeKind>> {
-//     let param_types = f.params.iter().map(|param| tenv.reconstruct(&param.ty));
-//     param_types
-//         .chain(std::iter::once(tenv.reconstruct(&f.return_ty)))
-//         .filter_map(|r| r.map_err(|(_, err)| diagnostics.push(err)).ok())
-//         .collect()
-// }
+    TraitResolution::new(this_types, trait_applications)
+}

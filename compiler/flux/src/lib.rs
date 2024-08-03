@@ -1,12 +1,13 @@
 use std::{ffi::OsString, fs, path::Path, sync::OnceLock};
 
+use cfg::{Config, CFG_FILE_NAME};
 use clap::{Parser, Subcommand};
 use commands::build;
 use diagnostics::DriverError;
-use flux_cfg::{Config, CFG_FILE_NAME};
 use flux_diagnostics::IOError;
-use flux_span::Interner;
+use flux_util::Interner;
 
+mod cfg;
 mod commands;
 mod diagnostics;
 mod driver;
@@ -62,7 +63,7 @@ pub fn get_config(project_root: &Path) -> Result<Config, IOError> {
         }
         .to_io_error()
     })?;
-    Ok(flux_cfg::parse_cfg(&content))
+    Ok(cfg::parse_cfg(&content))
 }
 
 pub fn get_package_entry_file_path(

@@ -1,6 +1,6 @@
 //! Shamelessly yanked from rust-analyzer: <https://github.com/rust-lang/rust-analyzer/blob/master/crates/parser/src/token_set.rs>
 
-use flux_lexer::TokenKind;
+use crate::lexer::TokenKind;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TokenSet(u128);
@@ -39,9 +39,7 @@ const fn mask(kind: TokenKind) -> u128 {
 
 #[cfg(test)]
 mod tests {
-    use flux_lexer::TokenKind;
-
-    use crate::token_set::TokenSet;
+    use crate::{lexer::TokenKind, token_set::TokenSet};
 
     #[test]
     fn token_set_works_for_tokens() {

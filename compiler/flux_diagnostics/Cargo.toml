@@ -11,4 +11,4 @@ colored = "2.1.0"
 itertools = "0.13.0"
 num-traits = "0.2.19"
 
-flux_span = { path = "../flux_span" }
+flux_util = { path = "../flux_util" }

@@ -5,7 +5,7 @@ use flux_id::id::{self, M};
 use crate::builtin::BuiltinType;
 
 #[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemId(M<ItemTreeIdx>);
 
 impl Deref for ItemId {
@@ -16,26 +16,19 @@ impl Deref for ItemId {
     }
 }
 
+impl From<M<ItemTreeIdx>> for ItemId {
+    fn from(value: M<ItemTreeIdx>) -> Self {
+        Self::new(value)
+    }
+}
+
 impl ItemId {
     pub fn new(idx: M<ItemTreeIdx>) -> Self {
         Self(idx)
     }
-
-    pub fn to_item_name(&self) -> &'static str {
-        match self.inner {
-            ItemTreeIdx::Apply(_) => "apply",
-            ItemTreeIdx::BuiltinType(_) => "builtin",
-            ItemTreeIdx::Enum(_) => "enum",
-            ItemTreeIdx::Function(_) => "function",
-            ItemTreeIdx::Module(_) => "module",
-            ItemTreeIdx::Struct(_) => "struct",
-            ItemTreeIdx::Trait(_) => "trait",
-            ItemTreeIdx::Use(_) => "use",
-        }
-    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ItemTreeIdx {
     Apply(id::ApplyDecl),
     BuiltinType(BuiltinType),
