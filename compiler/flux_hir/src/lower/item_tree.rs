@@ -2,11 +2,11 @@ use std::collections::HashSet;
 
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_id::{
-    id::{self, InMod},
+    id::{self, WithMod},
     Map,
 };
 use flux_parser::ast::{self, AstNode};
-use flux_typesystem::{ThisCtx, Type};
+use flux_typesystem::Type;
 use flux_util::{FileId, Interner, Span, Spanned, ToSpan, WithSpan, Word};
 
 use crate::{
@@ -68,7 +68,7 @@ impl<'a> LoweringCtx<'a> {
     ) -> Self {
         Self {
             item_tree,
-            type_lowerer: r#type::LoweringCtx::new(ThisCtx::None, interner),
+            type_lowerer: r#type::LoweringCtx::new(interner),
             file_id,
             module_id,
             interner,
@@ -443,8 +443,10 @@ impl<'a> LoweringCtx<'a> {
         lower_node(
             self,
             to_ty,
-            |_, to_ty| Type::Unknown.at(to_ty.range().to_span()),
-            |this, to_ty| this.type_lowerer.lower_type(to_ty.ty(), generic_params),
+            |_, to_ty| Type::unknown().at(to_ty.range().to_span()),
+            |this, to_ty: ast::ApplyDeclType| {
+                this.type_lowerer.lower_type(to_ty.ty(), generic_params)
+            },
         )
     }
 

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::OnceLock};
 
 use flux_diagnostics::ice;
+use flux_typesystem::Type;
 use flux_util::{Interner, Path, Word};
 
 use crate::def::expr::Op;
@@ -89,9 +90,12 @@ impl BuiltinType {
     }
 }
 
-static BINOP_TRAIT_PATHS: OnceLock<HashMap<Op, (Path<Word>, Word)>> = OnceLock::new();
+static BINOP_TRAIT_PATHS: OnceLock<HashMap<Op, (Path<Word, Type>, Word)>> = OnceLock::new();
 
-pub(crate) fn get_binop_trait(op: &Op, interner: &'static Interner) -> &'static (Path<Word>, Word) {
+pub(crate) fn get_binop_trait(
+    op: &Op,
+    interner: &'static Interner,
+) -> &'static (Path<Word, Type>, Word) {
     let map = BINOP_TRAIT_PATHS.get_or_init(|| {
         HashMap::from(Op::binops().map(|op| {
             (

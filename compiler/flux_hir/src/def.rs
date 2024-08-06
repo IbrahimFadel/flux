@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use flux_id::{ids, Map};
-use flux_typesystem::Type;
+use flux_id::{id, ids, Map};
+use flux_typesystem::{Type, Typed};
 use flux_util::{Path, Spanned, WithSpan, Word};
 
 pub mod expr;
@@ -16,7 +16,7 @@ pub struct GenericParams {
 }
 
 impl GenericParams {
-    pub(crate) const INVALID_ID: GParam = GParam::new(usize::MAX);
+    pub(crate) const INVALID_ID: GParam = GParam::new(u32::MAX);
 
     pub fn new(types: Map<GParam, Spanned<Word>>, where_predicates: Vec<WherePredicate>) -> Self {
         Self {
@@ -44,16 +44,16 @@ impl GenericParams {
             .is_some();
     }
 
-    pub fn get_bounds_on_generic(&self, name: &Word) -> Vec<Path<Word, Type>> {
-        let bounds = self.where_predicates.iter().filter_map(|predicate| {
-            if predicate.name == *name {
-                Some(predicate.bound.inner.clone())
-            } else {
-                None
-            }
-        });
-        bounds.collect()
-    }
+    // pub fn get_bounds_on_generic(&self, name: &Word) -> Vec<TraitRestriction> {
+    //     let bounds = self.where_predicates.iter().filter_map(|predicate| {
+    //         if predicate.name == *name {
+    //             Some(predicate.bound.inner.clone())
+    //         } else {
+    //             None
+    //         }
+    //     });
+    //     bounds.collect()
+    // }
 
     /// Combine two sets of generic parameters
     ///
@@ -159,6 +159,10 @@ impl StructFieldDeclList {
     pub fn iter(&self) -> impl Iterator<Item = &StructFieldDecl> {
         self.0.iter()
     }
+
+    pub fn contains(&self, name: Word) -> bool {
+        self.iter().find(|field| field.name.inner == name).is_some()
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -248,5 +252,30 @@ pub struct AssociatedTypeDefinition {
 impl AssociatedTypeDefinition {
     pub fn new(name: Spanned<Word>, ty: Spanned<Type>) -> Self {
         Self { name, ty }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructExprFieldList(Vec<StructExprField>);
+
+impl StructExprFieldList {
+    pub fn new(fields: Vec<StructExprField>) -> Self {
+        Self(fields)
+    }
+
+    pub fn empty() -> Self {
+        Self(vec![])
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructExprField {
+    name: Spanned<Word>,
+    val: Typed<id::Expr>,
+}
+
+impl StructExprField {
+    pub fn new(name: Spanned<Word>, val: Typed<id::Expr>) -> Self {
+        Self { name, val }
     }
 }

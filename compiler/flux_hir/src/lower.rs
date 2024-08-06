@@ -1,17 +1,17 @@
 use flux_diagnostics::{ice, Diagnostic};
 use flux_id::{
-    id::{self, InMod, InPkg, P},
+    id::{self, InPkg},
     Map,
 };
 use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxNode,
 };
-use flux_typesystem::{TEnv, ThisCtx, TraitResolution};
-use flux_util::{FileId, Interner, WithSpan};
+use flux_typesystem::{TEnv, ThisCtx, Type, TypeKind};
+use flux_util::{FileId, Interner};
 
 use crate::{
-    def::expr::Expr,
+    def::{expr::Expr, item::ApplyDecl},
     item::{ItemId, ItemTreeIdx},
     name_res::item::ItemResolver,
     Package,
@@ -45,9 +45,8 @@ pub(super) fn lower_cst_to_item_tree(
 }
 
 pub(super) fn lower_item_bodies(
-    mod_id: P<id::Mod>,
+    mod_id: InPkg<id::Mod>,
     item_id: &ItemId,
-    trait_resolution: &TraitResolution,
     packages: &Map<id::Pkg, Package>,
     exprs: &mut Map<id::Expr, Expr>,
     interner: &'static Interner,
@@ -68,7 +67,6 @@ pub(super) fn lower_item_bodies(
         ItemTreeIdx::Apply(apply_id) => lower_apply_bodies(
             *apply_id,
             &ctx,
-            trait_resolution,
             &item_resolver,
             exprs,
             interner,
@@ -77,10 +75,9 @@ pub(super) fn lower_item_bodies(
         // ItemTreeIdx::BuiltinType(_) => todo!(),
         // ItemTreeIdx::Enum(_) => todo!(),
         ItemTreeIdx::Function(function_id) => lower_function_body(
+            None,
             *function_id,
-            &ThisCtx::None,
             &ctx,
-            trait_resolution,
             &item_resolver,
             exprs,
             interner,
@@ -97,7 +94,6 @@ pub(super) fn lower_item_bodies(
 fn lower_apply_bodies(
     apply_id: id::ApplyDecl,
     ctx: &LoweringCtx,
-    trait_resolution: &TraitResolution,
     item_resolver: &ItemResolver,
     exprs: &mut Map<id::Expr, Expr>,
     interner: &'static Interner,
@@ -105,27 +101,11 @@ fn lower_apply_bodies(
 ) {
     let apply_decl = ctx.item_tree.applies.get(apply_id);
 
-    let this_ctx = match &apply_decl.trt {
-        Some(trt) => item_resolver
-            .resolve_trait_ids(trt.as_ref().inner.in_mod(ctx.mod_id))
-            .map_err(|err| diagnostics.push(err.to_diagnostic(ctx.file_id, trt.span, interner)))
-            .map(|trait_id| {
-                ThisCtx::TraitApplication((
-                    (**trait_id).in_pkg(trait_id.pkg_id),
-                    apply_id.in_pkg(ctx.package_id),
-                ))
-            })
-            .ok(),
-        None => Some(ThisCtx::TypeApplication(apply_id.in_pkg(ctx.package_id))),
-    }
-    .unwrap_or(ThisCtx::None);
-
     apply_decl.methods.iter().for_each(|method_id| {
         lower_function_body(
+            Some(apply_decl),
             *method_id,
-            &this_ctx,
             ctx,
-            trait_resolution,
             item_resolver,
             exprs,
             interner,
@@ -135,33 +115,31 @@ fn lower_apply_bodies(
 }
 
 fn lower_function_body(
+    apply_decl: Option<&ApplyDecl>,
     function_id: id::FnDecl,
-    this_ctx: &ThisCtx,
     ctx: &LoweringCtx,
-    trait_resolution: &TraitResolution,
     item_resolver: &ItemResolver,
     exprs: &mut Map<id::Expr, Expr>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let fn_decl = ctx.item_tree.functions.get(function_id);
-    let mut tenv = TEnv::new(trait_resolution, interner);
+    let mut tenv = TEnv::new(interner);
 
-    match this_ctx {
-        ThisCtx::TraitApplication((_, apply_id)) | ThisCtx::TypeApplication(apply_id) => {
-            let pkg = ctx.packages.get(ctx.package_id);
-            let apply_decl = pkg.item_tree.applies.get(apply_id.inner);
-            let file_id = pkg.module_tree[ctx.mod_id].file_id;
-            let tid = tenv.insert(apply_decl.to_ty.clone().in_file(file_id));
-            tenv.insert_local(interner.get_or_intern_static("this"), tid);
-        }
-        ThisCtx::TraitDecl(_) | ThisCtx::None => {}
+    if let Some(apply_decl) = apply_decl {
+        let this = tenv.insert(apply_decl.to_ty.clone());
+
+        let assoc_types = apply_decl
+            .assoc_types
+            .iter()
+            .map(|assoc_type| (assoc_type.name.inner, tenv.insert(assoc_type.ty.clone())))
+            .collect();
+
+        tenv.set_this_ctx(ThisCtx::new(this, assoc_types));
     }
 
     fn_decl.params.iter().for_each(|param| {
-        let mut ty = param.ty.clone();
-        ty.set_this_ctx(this_ctx.clone());
-        let tid = tenv.insert(ty.in_file(ctx.file_id));
+        let tid = tenv.insert(param.ty.clone());
         tenv.insert_local(param.name.inner, tid);
     });
 
@@ -177,21 +155,26 @@ fn lower_function_body(
         ctx.packages,
         &mut tenv,
         item_resolver,
-        this_ctx.clone(),
         interner,
         diagnostics,
     );
     let body = expr_lowerer.lower(ast.body(), &fn_decl.generic_params);
 
-    let mut return_ty = fn_decl.return_ty.clone();
-    return_ty.set_this_ctx(this_ctx.clone());
-    let return_ty = expr_lowerer.tenv.insert(return_ty.in_file(ctx.file_id));
-    let unification_span = expr_lowerer.tenv.get_filespan(body.tid);
+    let return_ty = fn_decl.return_ty.clone();
+    let return_ty = expr_lowerer.tenv.insert(return_ty);
 
-    expr_lowerer
-        .tenv
-        .unify(return_ty, body.tid, unification_span)
-        .unwrap_or_else(|err| diagnostics.push(err));
+    tenv.add_equality(body.tid, return_ty);
+
+    // println!("Function: `{}`\n{tenv}", interner.resolve(&fn_decl.name));
+
+    let body_ty = tenv
+        .resolve(body.tid, ctx.file_id)
+        .map_err(|errs| diagnostics.extend(errs))
+        .ok();
+
+    if let Some(body_ty) = body_ty {
+        println!("Resolved body to: {}", tenv.fmt_concrete_kind(&body_ty));
+    }
 }
 
 /*

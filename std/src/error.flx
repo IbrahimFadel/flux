@@ -1,0 +1,9 @@
+pub enum Result<T, E> {
+	Ok -> T,
+	Err -> E,
+}
+
+pub enum Option<T> {
+	Some -> T,
+	None
+}

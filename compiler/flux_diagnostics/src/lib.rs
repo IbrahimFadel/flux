@@ -5,6 +5,7 @@ mod reporting;
 
 use std::{
     backtrace::Backtrace,
+    env,
     fmt::Display,
     iter::{once, repeat},
     process::exit,
@@ -19,6 +20,14 @@ const TAB_WIDTH: usize = 8;
 const ICE_MSG: &'static str = "internal compiler error:";
 
 pub fn ice(msg: impl Display) -> ! {
+    let print_stack_trace = env::var("FLUX_STACKTRACE").map_or(false, |val| {
+        val.parse::<u8>().map_or(false, |v| match v {
+            0 => false,
+            1 => true,
+            _ => false,
+        })
+    });
+
     let formatted_msg = format!("{}", msg);
     let box_width = formatted_msg.len() + TAB_WIDTH;
     let box_top = once("+")
@@ -33,13 +42,17 @@ pub fn ice(msg: impl Display) -> ! {
     );
 
     eprintln!(
-        "{}\n| {} |\n|\t{} |\n{}\n{}\nStack Trace:\n{}",
+        "{}\n| {} |\n|\t{} |\n{}\n{}\n{}",
         box_top.clone(),
         ice.red(),
         formatted_msg.blue(),
         box_top,
         "Exiting...".black(),
-        "" // Backtrace::force_capture()
+        if print_stack_trace {
+            format!("Stack Trace:\n{}", Backtrace::force_capture())
+        } else {
+            String::new()
+        }
     );
     exit(0)
 }

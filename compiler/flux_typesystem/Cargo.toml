@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 tracing = "0.1.37"
+paste = "1.0.15"
 
 flux_proc_macros = { path = "../flux_proc_macros" }
 flux_diagnostics = { path = "../flux_diagnostics" }

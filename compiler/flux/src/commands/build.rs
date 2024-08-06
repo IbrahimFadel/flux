@@ -31,6 +31,10 @@ pub struct Args {
     /// Defaults to false.
     #[arg(long)]
     debug_bodies: bool,
+
+    /// Prints the stack trace on panic
+    #[arg(long)]
+    stack_trace: bool,
 }
 
 pub fn build(args: Args) -> ExitStatus {

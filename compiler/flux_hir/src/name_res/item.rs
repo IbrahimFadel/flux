@@ -1,6 +1,6 @@
 use flux_diagnostics::ice;
 use flux_id::{
-    id::{self, InMod, InPkg, M, P},
+    id::{self, InMod, WithMod},
     Map,
 };
 use flux_util::{InFile, Interner, Path, WithSpan, Word};
@@ -42,7 +42,7 @@ impl<'a> ItemResolver<'a> {
         &self.packages.get(package_id).module_tree
     }
 
-    pub fn get_module_with_decl(&self, mod_id: M<id::ModDecl>) -> id::Mod {
+    pub fn get_module_with_decl(&self, mod_id: InMod<id::ModDecl>) -> id::Mod {
         let m = &self
             .packages
             .get(self.package_id)
@@ -59,7 +59,7 @@ impl<'a> ItemResolver<'a> {
 
     pub fn resolve_path<A: Clone>(
         &self,
-        path: M<&Path<Word, A>>,
+        path: InMod<&Path<Word, A>>,
     ) -> Result<ResolvedItem, ResolutionError<A>> {
         let mut segments = path.segments.iter().enumerate();
         let mut name = match segments.next() {
@@ -149,7 +149,7 @@ impl<'a> ItemResolver<'a> {
         Ok((self.package_id, item_id))
     }
 
-    fn resolve_name(&self, name: M<&Word>) -> Option<(Visibility, ItemId)> {
+    fn resolve_name(&self, name: InMod<&Word>) -> Option<(Visibility, ItemId)> {
         // println!(
         //     "Segment: {} in mod: {:?}",
         //     self.interner.resolve(&name),
@@ -197,8 +197,8 @@ impl<'a> ItemResolver<'a> {
 
     pub(crate) fn resolve_trait_ids<A: Clone>(
         &self,
-        path: M<&Path<Word, A>>,
-    ) -> Result<P<M<id::TraitDecl>>, ResolutionError<A>> {
+        path: InMod<&Path<Word, A>>,
+    ) -> Result<(id::Pkg, id::Mod, id::TraitDecl), ResolutionError<A>> {
         let (package_id, item_id) = self.resolve_path(path)?;
         let trait_id = match &item_id.inner {
             ItemTreeIdx::Trait(id) => *id,
@@ -220,23 +220,23 @@ impl<'a> ItemResolver<'a> {
                 })
             }
         };
-        Ok(trait_id.in_mod(item_id.mod_id).in_pkg(package_id))
+        Ok((package_id, item_id.mod_id, trait_id))
     }
 
     pub(crate) fn resolve_trait<A: Clone>(
         &self,
-        path: M<&Path<Word, A>>,
+        path: InMod<&Path<Word, A>>,
     ) -> Result<InFile<&TraitDecl>, ResolutionError<A>> {
-        let trait_id = self.resolve_trait_ids(path)?;
-        let pkg = self.packages.get(trait_id.pkg_id);
-        let trait_decl = pkg.item_tree.traits.get(trait_id.inner.inner);
-        let file_id = pkg.module_tree[trait_id.mod_id].file_id;
+        let (package_id, mod_id, trait_id) = self.resolve_trait_ids(path)?;
+        let pkg = self.packages.get(package_id);
+        let trait_decl = pkg.item_tree.traits.get(trait_id);
+        let file_id = pkg.module_tree[mod_id].file_id;
         Ok(trait_decl.in_file(file_id))
     }
 
     pub(crate) fn resolve_struct<A: Clone>(
         &self,
-        path: M<&Path<Word, A>>,
+        path: InMod<&Path<Word, A>>,
     ) -> Result<InFile<&StructDecl>, ResolutionError<A>> {
         let (package_id, item_id) = self.resolve_path(path)?;
         let struct_id: Result<id::StructDecl, _> = item_id.inner.clone().try_into();

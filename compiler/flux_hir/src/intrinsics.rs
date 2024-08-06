@@ -15,7 +15,7 @@ macro_rules! intrinsic_signatures {
 				fn [<$name _signature>]( interner: &'static Interner) -> FnSignature {
 						FnSignature::new(
 								[$(Type::path(Path::new(vec![interner.get_or_intern(stringify!($param_ty))], vec![]))),*].into_iter(),
-								Type::Never,
+								Type::never(),
 						)
 				}
 		}

@@ -1,6 +1,6 @@
 use flux_diagnostics::ice;
 use flux_parser::ast::{self, AstNode};
-use flux_typesystem::{Generic, ThisCtx, Type};
+use flux_typesystem::Type;
 use flux_util::{Interner, Path, Spanned, ToSpan, WithSpan, Word};
 use tracing::warn;
 
@@ -9,15 +9,14 @@ use crate::def::GenericParams;
 use super::lower_node;
 
 pub(super) struct LoweringCtx {
-    this_ctx: ThisCtx,
     interner: &'static Interner,
 }
 
 impl LoweringCtx {
     const POISONED_NAME: &'static str = "poisoned";
 
-    pub(super) fn new(this_ctx: ThisCtx, interner: &'static Interner) -> Self {
-        Self { this_ctx, interner }
+    pub(super) fn new(interner: &'static Interner) -> Self {
+        Self { interner }
     }
 
     pub(super) fn lower_name(&self, name: Option<ast::Name>) -> Spanned<Word> {
@@ -79,7 +78,7 @@ impl LoweringCtx {
         lower_node(
             self,
             ty,
-            |_, ty| Type::Unknown.at(ty.range().to_span()),
+            |_, ty| Type::unknown().at(ty.range().to_span()),
             |this, ty| match ty {
                 ast::Type::PathType(path_type) => this.lower_path_type(path_type, generic_params),
                 ast::Type::TupleType(tuple_type) => {
@@ -100,16 +99,13 @@ impl LoweringCtx {
         generic_params: &GenericParams,
     ) -> Spanned<Type> {
         let path = self.lower_path(path_type.path(), generic_params).inner;
+        let span = path_type.range().to_span();
         let ty = if generic_params.is_path_generic(&path) {
-            let name = path.get_nth(0);
-            Type::Generic(Generic::new(
-                *name,
-                generic_params.get_bounds_on_generic(name),
-            ))
+            Type::generic(*path.get_nth(0))
         } else {
             Type::path(path)
         };
-        ty.at(path_type.range().to_span())
+        ty.at(span)
     }
 
     fn lower_tuple_type(
@@ -154,6 +150,6 @@ impl LoweringCtx {
         generic_params: &GenericParams,
     ) -> Spanned<Type> {
         let path = self.lower_path(this_path_type.path(), generic_params);
-        path.map(|path| Type::this_path(path, self.this_ctx.clone()))
+        path.map(|path| Type::this_path(path))
     }
 }

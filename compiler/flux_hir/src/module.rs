@@ -12,8 +12,8 @@ pub(super) mod collect;
 pub struct ModuleTree(Map<id::Mod, ModuleData>);
 
 impl ModuleTree {
-    pub(crate) const ROOT_ID: id::Mod = id::Mod::new(0);
-    pub(crate) const PRELUDE_ID: id::Mod = id::Mod::new(1);
+    pub(crate) const ROOT_ID: id::Mod = id::Mod::from_idx(0);
+    pub(crate) const PRELUDE_ID: id::Mod = id::Mod::from_idx(1);
 
     pub fn new() -> Self {
         Self(Map::new())

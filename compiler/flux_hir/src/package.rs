@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Package {
-    pub(crate) name: Word,
+    pub name: Word,
     pub(crate) item_tree: ItemTree,
     pub(crate) module_tree: ModuleTree,
     pub(crate) dependencies: Vec<id::Pkg>,

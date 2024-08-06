@@ -29,4 +29,10 @@ impl Scope {
             .get(name)
             .unwrap_or_else(|| ice("could not get local"))
     }
+
+    pub(super) fn try_get_local_by_tid(&self, tid: id::Ty) -> Option<Word> {
+        self.map
+            .iter()
+            .find_map(|(name, local_tid)| if *local_tid == tid { Some(*name) } else { None })
+    }
 }

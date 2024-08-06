@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 paste = "1.0.15"
 replace_with = "0.1.7"
+polonius-the-crab = "0.4.1"
 
 flux_diagnostics = { path = "../flux_diagnostics" }

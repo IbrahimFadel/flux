@@ -145,21 +145,42 @@ pub enum LowerError {
         expected_num: usize,
     },
     #[error(
-        location = ty,
-        primary = "type does not implement trait",
-        label at ty = "type `{ty}` does not implement trait `{trt}`"
+        location = got_fields,
+        primary = "incorrect fields in struct initialization",
+        label at got_fields = "got fields {} in `{struct_name}` initialization" with (quote_and_listify(got_fields.iter())),
+        label at struct_name = "`{struct_name}` declared here with fields {}" with (quote_and_listify(expected_fields.iter().sorted()))
     )]
-    TypeDoesNotImplementTrait {
+    IncorrectStructFieldsInInitialization {
         #[filespanned]
-        ty: String,
-        trt: String,
+        got_fields: Vec<String>,
+        #[filespanned]
+        struct_name: String,
+        expected_fields: Vec<String>,
     },
     #[error(
-        location = field,
-        primary = "unknown struct field referenced",
-        label at field = "unknown struct field `{field}` referenced",
-        label at strukt = "struct `{strukt}` defined here"
+        location = expr,
+        primary = "cannot access field on non struct expression",
+        label at expr = "this is not a struct"
     )]
+    MemberAccessOnNonStruct {
+        #[filespanned]
+        expr: (),
+    }, // #[error(
+    //     location = ty,
+    //     primary = "type does not implement trait",
+    //     label at ty = "type `{ty}` does not implement trait `{trt}`"
+    // )]
+    // TypeDoesNotImplementTrait {
+    //     #[filespanned]
+    //     ty: String,
+    //     trt: String,
+    // },
+    #[error(
+           location = field,
+           primary = "unknown struct field referenced",
+           label at field = "unknown struct field `{field}` referenced",
+           label at strukt = "struct `{strukt}` defined here"
+       )]
     UnknownStructField {
         #[filespanned]
         field: String,

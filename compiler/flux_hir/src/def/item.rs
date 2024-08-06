@@ -3,6 +3,8 @@ use flux_parser::ast;
 use flux_typesystem::Type;
 use flux_util::{Path, Spanned, Word};
 
+use crate::lower::item_tree::ItemTree;
+
 use super::{
     AssociatedTypeDecl, AssociatedTypeDefinition, EnumDeclVariantList, GenericParams, ParamList,
     StructFieldDeclList,
@@ -128,6 +130,21 @@ impl TraitDecl {
             assoc_type_decls,
             methods,
         }
+    }
+
+    pub(crate) fn get_method_in_item_tree<'a>(
+        &'a self,
+        name: Word,
+        item_tree: &'a ItemTree,
+    ) -> Option<&FnDecl> {
+        self.methods.iter().find_map(|method_id| {
+            let fn_decl = item_tree.functions.get(*method_id);
+            if fn_decl.name.inner == name {
+                Some(fn_decl)
+            } else {
+                None
+            }
+        })
     }
 }
 

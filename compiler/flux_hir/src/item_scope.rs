@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use flux_id::id::InMod;
+use flux_id::id::WithMod;
 use flux_util::{Interner, Word};
 
 use crate::{

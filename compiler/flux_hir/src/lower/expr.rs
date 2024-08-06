@@ -1,20 +1,24 @@
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_id::{
-    id::{self, InMod},
+    id::{self, WithMod, WithPackage},
     Map,
 };
 use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxToken,
 };
-use flux_typesystem::{FnSignature, TEnv, ThisCtx, Typed, WithType};
-use flux_util::{FileId, FileSpanned, Interner, Span, Spanned, ToSpan, WithSpan};
+use flux_typesystem::{
+    ConcreteKind, FnSignature, TEnv, TraitRestriction, Type, TypeKind, Typed, WithType,
+};
+use flux_util::{FileId, FileSpanned, InFile, Interner, Span, Spanned, ToSpan, WithSpan};
+use tracing::trace;
 
 use crate::{
     builtin,
     def::{
-        expr::{BinOp, Expr, Op},
-        GenericParams,
+        expr::{BinOp, Cast, Expr, If, MemberAccess, Op},
+        item::StructDecl,
+        GenericParams, StructExprField, StructExprFieldList,
     },
     diagnostics::LowerError,
     intrinsics,
@@ -24,32 +28,31 @@ use crate::{
 
 use super::{lower_node_mut, r#type};
 
-pub(super) struct LoweringCtx<'a, 'res> {
+pub(super) struct LoweringCtx<'a> {
     type_lowerer: r#type::LoweringCtx,
     file_id: FileId,
     mod_id: id::Mod,
     exprs: &'a mut Map<id::Expr, Expr>,
     packages: &'a Map<id::Pkg, Package>,
-    pub(super) tenv: &'a mut TEnv<'res>,
+    pub(super) tenv: &'a mut TEnv,
     item_resolver: &'a ItemResolver<'a>,
     interner: &'static Interner,
     diagnostics: &'a mut Vec<Diagnostic>,
 }
 
-impl<'a, 'res> LoweringCtx<'a, 'res> {
+impl<'a> LoweringCtx<'a> {
     pub(super) fn new(
         file_id: FileId,
         mod_id: id::Mod,
         exprs: &'a mut Map<id::Expr, Expr>,
         packages: &'a Map<id::Pkg, Package>,
-        tenv: &'a mut TEnv<'res>,
+        tenv: &'a mut TEnv,
         item_resolver: &'a ItemResolver<'a>,
-        this_ctx: ThisCtx,
         interner: &'static Interner,
         diagnostics: &'a mut Vec<Diagnostic>,
     ) -> Self {
         Self {
-            type_lowerer: r#type::LoweringCtx::new(this_ctx, interner),
+            type_lowerer: r#type::LoweringCtx::new(interner),
             file_id,
             mod_id,
             exprs,
@@ -70,10 +73,9 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             self,
             expr,
             |this, expr| {
-                this.exprs.insert(Expr::Poisoned).with_type(
-                    this.tenv
-                        .insert_unknown(this.file_id, expr.range().to_span()),
-                )
+                this.exprs
+                    .insert(Expr::Poisoned)
+                    .with_type(this.tenv.insert(Type::unknown().at(expr.range().to_span())))
             },
             |this, expr| match expr {
                 ast::Expr::PathExpr(path_expr) => this.lower_path_expr(path_expr, generic_params),
@@ -82,20 +84,24 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                 ast::Expr::IntExpr(int_expr) => this.lower_int_expr(int_expr),
                 ast::Expr::BinExpr(bin_expr) => this.lower_bin_expr(bin_expr, generic_params),
                 ast::Expr::CallExpr(_) => todo!(),
-                ast::Expr::StructExpr(_) => todo!(),
+                ast::Expr::StructExpr(struct_expr) => {
+                    this.lower_struct_expr(struct_expr, generic_params)
+                }
                 ast::Expr::BlockExpr(block_expr) => {
                     this.lower_block_expr(block_expr, generic_params)
                 }
                 ast::Expr::TupleExpr(_) => todo!(),
                 ast::Expr::AddressExpr(_) => todo!(),
                 ast::Expr::IdxExpr(_) => todo!(),
-                ast::Expr::MemberAccessExpr(_) => todo!(),
-                ast::Expr::IfExpr(_) => todo!(),
+                ast::Expr::MemberAccessExpr(member_access_expr) => {
+                    this.lower_member_access_expr(member_access_expr, generic_params)
+                }
+                ast::Expr::IfExpr(if_expr) => this.lower_if_expr(if_expr, generic_params),
                 ast::Expr::IntrinsicExpr(intrinsic_expr) => {
                     this.lower_intrinsic_expr(intrinsic_expr, generic_params)
                 }
                 ast::Expr::StringExpr(_) => todo!(),
-                ast::Expr::CastExpr(_) => todo!(),
+                ast::Expr::CastExpr(cast_expr) => this.lower_cast_expr(cast_expr, generic_params),
             },
         )
     }
@@ -125,15 +131,12 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             .ty()
             .map(|ty| {
                 let ty = self.type_lowerer.lower_type(Some(ty), generic_params);
-                self.tenv.insert(ty.in_file(self.file_id))
+                self.tenv.insert(ty)
             })
-            .unwrap_or_else(|| self.tenv.insert_unknown(self.file_id, name.span));
+            .unwrap_or_else(|| self.tenv.insert(Type::unknown().at(name.span)));
         let val = self.lower(let_stmt.value(), generic_params);
-        let unification_span = self.tenv.get_filespan(val.tid);
 
-        self.tenv
-            .unify(ty, val.tid, unification_span)
-            .unwrap_or_else(|err| self.diagnostics.push(err));
+        self.tenv.add_equality(ty, val.tid);
 
         let ty = if let_stmt.ty().is_some() { ty } else { val.tid };
         self.tenv.insert_local(name.inner, ty);
@@ -150,8 +153,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             .lower_path(path_expr.path(), generic_params);
         let file_id = self.file_id;
         let span = path.span;
-        let path =
-            path.map(|path| path.map_args(|arg| self.tenv.insert(arg.file_span(file_id, span))));
+        let path = path.map(|path| path.map_args(|arg| self.tenv.insert(arg.at(span))));
 
         let tid = (path.len() == 1)
             .then(|| self.tenv.try_get_local(path.get_nth(0)).cloned())
@@ -164,7 +166,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     }
                     .to_diagnostic(),
                 );
-                self.tenv.insert_unknown(file_id, span)
+                self.tenv.insert(Type::unknown().at(span))
             });
 
         self.exprs.insert(Expr::Path(path.inner)).with_type(tid)
@@ -172,7 +174,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
 
     fn lower_int_expr(&mut self, int_expr: ast::IntExpr) -> Typed<id::Expr> {
         let span = int_expr.range().to_span();
-        let tid = self.tenv.insert_int(self.file_id, span);
+        let tid = self.tenv.insert(Type::int().at(span));
         let poisoned = |this: &mut Self| this.exprs.insert(Expr::Poisoned).with_type(tid);
 
         let val_str = match int_expr.v() {
@@ -218,40 +220,42 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         let rhs = self.lower(bin_expr.rhs(), generic_params);
         let span = Span::combine(self.tenv.get_span(lhs.tid), self.tenv.get_span(rhs.tid));
 
+        let tid = self.tenv.insert(Type::unknown().at(span));
+
         let (trait_path, method_name) = builtin::get_binop_trait(&op, self.interner);
-        let tid = match self
+        let trait_id = self
             .item_resolver
             .resolve_trait_ids(trait_path.in_mod(self.mod_id))
-        {
-            Ok(trait_id) => {
-                let item_tree = &self.packages.get(trait_id.pkg_id).item_tree;
-                let trait_decl = item_tree.traits.get(**trait_id);
-                let method = &trait_decl
-                    .methods
-                    .iter()
-                    .find_map(|method| {
-                        let fn_decl = item_tree.functions.get(*method);
-                        if fn_decl.name.inner == *method_name {
-                            Some(fn_decl)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        ice(format!(
-                            "could not find method associated with binop `{}`",
-                            op.inner
-                        ))
-                    });
-                self.tenv
-                    .insert(method.return_ty.clone().in_file(self.file_id))
-            }
-            Err(err) => {
+            .map_err(|err| {
                 self.diagnostics
-                    .push(err.to_diagnostic(self.file_id, span, self.interner));
-                self.tenv.insert_unknown(self.file_id, span)
-            }
-        };
+                    .push(err.to_diagnostic(self.file_id, span, self.interner))
+            })
+            .map(|(package_id, _, trait_id)| trait_id.in_pkg(package_id))
+            .ok();
+
+        if let Some(trait_id) = trait_id {
+            self.tenv
+                .add_trait_restriction(lhs.tid, TraitRestriction::new(trait_id, vec![rhs.tid]));
+            self.tenv
+                .add_trait_restriction(rhs.tid, TraitRestriction::new(trait_id, vec![lhs.tid]));
+
+            let item_tree = &self.packages.get(trait_id.pkg_id).item_tree;
+            let trait_decl = item_tree.traits.get(trait_id.inner);
+
+            let method_return_ty = trait_decl
+                .get_method_in_item_tree(*method_name, item_tree)
+                .map(|method| method.return_ty.inner.clone())
+                .unwrap_or_else(|| {
+                    ice(format!(
+                        "could not find builtin method `{}` for trait `{}`",
+                        self.interner.resolve(method_name),
+                        self.interner.resolve(&trait_decl.name)
+                    ))
+                });
+
+            let method_return_ty = self.tenv.insert(method_return_ty.at(span));
+            self.tenv.add_equality(tid, method_return_ty);
+        }
 
         self.exprs
             .insert(Expr::BinOp(BinOp::new(lhs, rhs, op)))
@@ -280,22 +284,109 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         .at(op.text_range().to_span())
     }
 
+    fn lower_struct_expr(
+        &mut self,
+        struct_expr: ast::StructExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<id::Expr> {
+        let span = struct_expr.range().to_span();
+        let path = self
+            .type_lowerer
+            .lower_path(struct_expr.path(), generic_params);
+
+        let struct_decl = self
+            .item_resolver
+            .resolve_struct(path.as_ref().inner.in_mod(self.mod_id))
+            .map_err(|err| {
+                self.diagnostics
+                    .push(err.to_diagnostic(self.file_id, span, self.interner))
+            })
+            .ok();
+
+        if let Some(struct_decl) = struct_decl {
+            let fields =
+                self.lower_struct_fields(struct_expr.field_list(), generic_params, &struct_decl);
+        }
+
+        self.exprs
+            .insert(Expr::Poisoned)
+            .with_type(self.tenv.insert(Type::unknown().at(span)))
+    }
+
+    fn lower_struct_fields(
+        &mut self,
+        field_list: Option<ast::StructExprFieldList>,
+        generic_params: &GenericParams,
+        struct_decl: &InFile<&StructDecl>,
+    ) -> StructExprFieldList {
+        lower_node_mut(
+            self,
+            field_list,
+            |_, _| StructExprFieldList::empty(),
+            |this, field_list| {
+                let mut all_fields = vec![];
+                let mut unknown_fields = vec![];
+                let fields = field_list
+                    .fields()
+                    .map(|field| {
+                        let name = this.type_lowerer.lower_name(field.name());
+                        let val = this.lower(field.val(), generic_params);
+
+                        all_fields.push(name.inner);
+                        if !struct_decl.fields.contains(*name) {
+                            unknown_fields.push(name.inner);
+                        }
+
+                        StructExprField::new(name, val)
+                    })
+                    .collect();
+
+                if !unknown_fields.is_empty() {
+                    this.diagnostics.push(
+                        LowerError::IncorrectStructFieldsInInitialization {
+                            got_fields: all_fields
+                                .iter()
+                                .map(|name| this.interner.resolve(&name).to_string())
+                                .collect(),
+                            got_fields_file_span: field_list
+                                .range()
+                                .to_span()
+                                .in_file(this.file_id),
+                            struct_name: this.interner.resolve(&struct_decl.name).to_string(),
+                            struct_name_file_span: struct_decl
+                                .name
+                                .span
+                                .in_file(struct_decl.file_id),
+                            expected_fields: struct_decl
+                                .fields
+                                .iter()
+                                .map(|field| this.interner.resolve(&field.name).to_string())
+                                .collect(),
+                        }
+                        .to_diagnostic(),
+                    );
+                }
+
+                StructExprFieldList::new(fields)
+            },
+        )
+    }
+
     fn lower_block_expr(
         &mut self,
         block_expr: ast::BlockExpr,
         generic_params: &GenericParams,
     ) -> Typed<id::Expr> {
         let mut terminator: Option<Typed<id::Expr>> = None;
-        let file_id = self.file_id;
         block_expr.stmts().for_each(|stmt| {
             if let Some(terminator) = &terminator {
-                let file_span = self.tenv.get_filespan(terminator.tid);
+                let span = self.tenv.get_span(terminator.tid);
                 self.diagnostics.push(
                     LowerError::StmtFollowingTerminatorExpr {
                         terminator: (),
-                        terminator_file_span: file_span,
+                        terminator_file_span: span.in_file(self.file_id),
                         following_expr: (),
-                        following_expr_file_span: stmt.range().to_span().in_file(file_id),
+                        following_expr_file_span: stmt.range().to_span().in_file(self.file_id),
                     }
                     .to_diagnostic(),
                 );
@@ -314,8 +405,62 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         terminator.unwrap_or_else(|| {
             self.exprs
                 .insert(Expr::unit())
-                .with_type(self.tenv.insert_unit(file_id, span))
+                .with_type(self.tenv.insert(Type::unknown().at(span)))
         })
+    }
+
+    fn lower_member_access_expr(
+        &mut self,
+        member_access_expr: ast::MemberAccessExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<id::Expr> {
+        let span = member_access_expr.range().to_span();
+        let lhs = self.lower(member_access_expr.lhs(), generic_params);
+        let rhs = self.type_lowerer.lower_name(member_access_expr.rhs());
+        self.tenv.add_field_requirement(lhs.tid, rhs.inner);
+
+        self.exprs
+            .insert(Expr::MemberAccess(MemberAccess::new(lhs, rhs)))
+            .with_type(self.tenv.insert(Type::unknown().at(span)))
+    }
+
+    fn lower_if_expr(
+        &mut self,
+        if_expr: ast::IfExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<id::Expr> {
+        let cond = self.lower(if_expr.condition(), generic_params);
+        let then = self.lower_if_block_expr(if_expr.block(), generic_params);
+        let r#else = if_expr
+            .else_block()
+            .map(|else_block| self.lower_if_block_expr(else_block.block(), generic_params));
+        let else_ifs = if_expr.else_ifs().map(|else_if| {
+            let cond = self.lower(else_if.condition(), generic_params);
+            let block = self.lower_if_block_expr(else_if.block(), generic_params);
+            (cond, block)
+        });
+
+        let tid = then.tid;
+        let if_expr = If::new(cond, then, else_ifs, r#else);
+        self.exprs.insert(Expr::If(if_expr)).with_type(tid)
+    }
+
+    fn lower_if_block_expr(
+        &mut self,
+        block_expr: Option<ast::BlockExpr>,
+        generic_params: &GenericParams,
+    ) -> Typed<id::Expr> {
+        lower_node_mut(
+            self,
+            block_expr,
+            |this, block| {
+                this.exprs.insert(Expr::Poisoned).with_type(
+                    this.tenv
+                        .insert(Type::unknown().at(block.range().to_span())),
+                )
+            },
+            |this, block| this.lower_block_expr(block, generic_params),
+        )
     }
 
     fn lower_intrinsic_expr(
@@ -340,9 +485,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     (&signature).file_span(self.file_id, span),
                 );
 
-                let tid = self
-                    .tenv
-                    .insert(signature.return_ty().clone().file_span(self.file_id, span));
+                let tid = self.tenv.insert(signature.return_ty().clone().at(span));
                 self.exprs.insert(Expr::Intrinsic).with_type(tid)
             }
             None => {
@@ -355,7 +498,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                 );
                 self.exprs
                     .insert(Expr::Poisoned)
-                    .with_type(self.tenv.insert_unknown(self.file_id, span))
+                    .with_type(self.tenv.insert(Type::unknown().at(span)))
             }
         }
     }
@@ -378,15 +521,11 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     .map(|(arg, expected)| {
                         let unification_span = arg.range().to_span().in_file(this.file_id);
                         let expr = this.lower(Some(arg), generic_params);
-                        let expected_tid = this.tenv.insert(
-                            expected
-                                .clone()
-                                .file_span(this.file_id, unification_span.inner),
-                        );
+                        let expected_tid = this
+                            .tenv
+                            .insert(expected.clone().at(unification_span.inner));
 
-                        this.tenv
-                            .unify(expected_tid, expr.tid, unification_span)
-                            .unwrap_or_else(|err| this.diagnostics.push(err));
+                        this.tenv.add_equality(expected_tid, expr.tid);
 
                         expr
                     })
@@ -413,5 +552,19 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         );
 
         result
+    }
+
+    fn lower_cast_expr(
+        &mut self,
+        cast_expr: ast::CastExpr,
+        generic_params: &GenericParams,
+    ) -> Typed<id::Expr> {
+        let val = self.lower(cast_expr.val(), generic_params);
+        let to_ty = self
+            .type_lowerer
+            .lower_type(cast_expr.to_ty(), generic_params);
+        let tid = self.tenv.insert(to_ty);
+        let cast = Cast::new(val, tid);
+        self.exprs.insert(Expr::Cast(cast)).with_type(tid)
     }
 }

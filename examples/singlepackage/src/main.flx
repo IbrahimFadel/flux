@@ -1,6 +1,7 @@
-// mod vec;
+mod vec;
 
+/*
 fn main() {
-	let x = 1 + 2;
-	0
+	// let x = 1 + 2;
 }
+*/

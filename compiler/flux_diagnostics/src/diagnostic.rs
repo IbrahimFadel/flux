@@ -130,7 +130,8 @@ pub enum DiagnosticCode {
     UnknownLocal,
     UnknownIntrinsic,
     IncorrectNumberOfArgs,
-    TypeDoesNotImplementTrait,
+    IncorrectStructFieldsInInitialization,
+    MemberAccessOnNonStruct,
     UnknownStructField,
 
     TypeMismatch,

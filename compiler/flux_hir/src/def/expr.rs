@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use flux_diagnostics::ice;
 use flux_id::id;
-use flux_typesystem::{Typed, WithType};
+use flux_typesystem::Typed;
 use flux_util::{Path, Spanned, Word};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -138,12 +138,12 @@ impl Op {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cast {
-    pub val: Spanned<Typed<id::Expr>>,
-    pub to_ty: Spanned<id::Ty>,
+    pub val: Typed<id::Expr>,
+    pub to_ty: id::Ty,
 }
 
 impl Cast {
-    pub fn new(val: Spanned<Typed<id::Expr>>, to_ty: Spanned<id::Ty>) -> Self {
+    pub fn new(val: Typed<id::Expr>, to_ty: id::Ty) -> Self {
         Self { val, to_ty }
     }
 }

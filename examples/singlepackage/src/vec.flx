@@ -13,7 +13,7 @@ apply<T> to Vector<T> {
 		}
 	}
 
-	fn push(v T) {
+	fn push(this Vector<T>, v T) {
 		let buf = if this.len == this.cap {
 			@flux.intrinsics.malloc(this.cap * 2) as T*
 		} else {

@@ -1,37 +1,35 @@
-/*
 pub trait CmpEq {
-	fn cmp_eq(other This) -> bool;
+	fn cmp_eq(this This, other This) -> bool;
 }
 
 apply CmpEq to s64 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_s64(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_s64(this, other)
 }
 
 apply CmpEq to s32 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_s32(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_s32(this, other)
 }
 
 apply CmpEq to s16 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_s16(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_s16(this, other)
 }
 
 apply CmpEq to s8 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_s8(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_s8(this, other)
 }
 
 apply CmpEq to u64 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_u64(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_u64(this, other)
 }
 
 apply CmpEq to u32 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_u32(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_u32(this, other)
 }
 
 apply CmpEq to u16 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_u16(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_u16(this, other)
 }
 
 apply CmpEq to u8 {
-	fn cmp_eq(other This) -> bool => @flux.intrinsics.cmp_eq_u8(this, other)
+	fn cmp_eq(this This, other This) -> bool => @flux.intrinsics.cmp_eq_u8(this, other)
 }
-*/

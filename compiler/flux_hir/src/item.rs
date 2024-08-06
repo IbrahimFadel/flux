@@ -1,29 +1,29 @@
 use std::ops::Deref;
 
-use flux_id::id::{self, M};
+use flux_id::id::{self, InMod};
 
 use crate::builtin::BuiltinType;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ItemId(M<ItemTreeIdx>);
+pub struct ItemId(InMod<ItemTreeIdx>);
 
 impl Deref for ItemId {
-    type Target = M<ItemTreeIdx>;
+    type Target = InMod<ItemTreeIdx>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<M<ItemTreeIdx>> for ItemId {
-    fn from(value: M<ItemTreeIdx>) -> Self {
+impl From<InMod<ItemTreeIdx>> for ItemId {
+    fn from(value: InMod<ItemTreeIdx>) -> Self {
         Self::new(value)
     }
 }
 
 impl ItemId {
-    pub fn new(idx: M<ItemTreeIdx>) -> Self {
+    pub fn new(idx: InMod<ItemTreeIdx>) -> Self {
         Self(idx)
     }
 }

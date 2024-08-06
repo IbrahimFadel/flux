@@ -12,8 +12,8 @@ pub struct FileId(TokenKey);
 
 impl FileId {
     /// This should only be used when you know for certain the file id won't end up being used (the diagnostic won't be reported)
-    pub unsafe fn poisoned() -> Self {
-        Self(transmute(u32::MAX))
+    pub fn poisoned() -> Self {
+        Self(unsafe { transmute(u32::MAX) })
     }
 
     pub fn new(key: TokenKey) -> Self {
@@ -33,7 +33,7 @@ impl FileId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct InFile<T> {
     pub inner: T,
     pub file_id: FileId,

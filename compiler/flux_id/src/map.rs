@@ -1,14 +1,21 @@
 use std::marker::PhantomData;
 
+use polonius_the_crab::{polonius, polonius_return};
 use replace_with::replace_with_or_abort;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Map<K, V> {
+pub struct Map<K, V>
+where
+    K: From<u32> + Into<u32>,
+{
     data: Vec<V>,
     _idx: PhantomData<K>,
 }
 
-impl<K, V> Default for Map<K, V> {
+impl<K, V> Default for Map<K, V>
+where
+    K: From<u32> + Into<u32>,
+{
     fn default() -> Self {
         Self {
             data: vec![],
@@ -17,7 +24,10 @@ impl<K, V> Default for Map<K, V> {
     }
 }
 
-impl<K, V> Map<K, V> {
+impl<K, V> Map<K, V>
+where
+    K: From<u32> + Into<u32>,
+{
     pub const fn new() -> Self {
         Self {
             data: vec![],
@@ -36,90 +46,107 @@ impl<K, V> Map<K, V> {
         self.data.len()
     }
 
-    pub fn insert(&mut self, v: V) -> K
-    where
-        K: From<usize>,
-    {
+    pub fn contains(&self, k: K) -> bool {
+        self.try_get(k).is_some()
+    }
+
+    pub fn insert(&mut self, v: V) -> K {
         let idx = self.data.len();
         self.data.push(v);
-        K::from(idx)
+        Self::idx_to_key(idx)
     }
 
-    pub fn get(&self, k: K) -> &V
-    where
-        K: Into<usize>,
-    {
-        &self.data[k.into()]
+    pub fn get(&self, k: K) -> &V {
+        &self.data[Self::key_to_idx(k)]
     }
 
-    pub unsafe fn get_unchecked(&self, k: K) -> &V
-    where
-        K: Into<usize>,
-    {
-        unsafe { self.data.get_unchecked(k.into()) }
+    pub unsafe fn get_unchecked(&self, k: K) -> &V {
+        unsafe { self.data.get_unchecked(Self::key_to_idx(k)) }
     }
 
-    pub fn get_mut(&mut self, k: K) -> &mut V
-    where
-        K: Into<usize>,
-    {
-        &mut self.data[k.into()]
+    pub fn get_mut(&mut self, k: K) -> &mut V {
+        &mut self.data[Self::key_to_idx(k)]
     }
 
-    pub unsafe fn get_unchecked_mut(&mut self, k: K) -> &mut V
-    where
-        K: Into<usize>,
-    {
-        unsafe { self.data.get_unchecked_mut(k.into()) }
+    pub unsafe fn get_unchecked_mut(&mut self, k: K) -> &mut V {
+        unsafe { self.data.get_unchecked_mut(Self::key_to_idx(k)) }
     }
 
-    pub fn try_get(&self, k: K) -> Option<&V>
-    where
-        K: Into<usize>,
-    {
-        self.data.get(k.into())
+    pub fn try_get(&self, k: K) -> Option<&V> {
+        self.data.get(Self::key_to_idx(k))
     }
 
-    pub fn try_get_mut(&mut self, k: K) -> Option<&mut V>
-    where
-        K: Into<usize>,
-    {
-        self.data.get_mut(k.into())
+    pub fn try_get_mut(&mut self, k: K) -> Option<&mut V> {
+        self.data.get_mut(Self::key_to_idx(k))
     }
 
-    pub fn set(&mut self, k: K, v: V)
+    pub fn get_mut_or(&mut self, default: V, k: K) -> &mut V {
+        let mut this = self;
+        polonius!(|this| -> &'polonius mut V {
+            if let Some(v) = this.try_get_mut(k) {
+                polonius_return!(v);
+            }
+        });
+        let k = this.insert(default);
+        this.get_mut(k)
+    }
+
+    pub fn get_mut_or_else<F>(&mut self, default: F, k: K) -> &mut V
     where
-        K: Into<usize>,
+        F: FnOnce() -> V,
     {
+        let mut this = self;
+        polonius!(|this| -> &'polonius mut V {
+            if let Some(v) = this.try_get_mut(k) {
+                polonius_return!(v);
+            }
+        });
+        let k = this.insert(default());
+        this.get_mut(k)
+    }
+
+    pub fn get_mut_or_default(&mut self, k: K) -> &mut V
+    where
+        V: Default,
+    {
+        self.get_mut_or(V::default(), k)
+    }
+
+    pub fn set(&mut self, k: K, v: V) {
         *self.get_mut(k) = v;
     }
 
     pub fn set_with<F>(&mut self, k: K, f: F)
     where
-        K: Into<usize>,
         F: FnOnce(V) -> V,
     {
         replace_with_or_abort(self.get_mut(k), f)
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (K, &'a V)>
-    where
-        K: From<usize>,
-    {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (K, &'a V)> {
         self.data
             .iter()
             .enumerate()
-            .map(|(idx, v)| (K::from(idx), v))
+            .map(|(idx, v)| (Self::idx_to_key(idx), v))
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = K> + '_
-    where
-        K: From<usize>,
-    {
-        self.data.iter().enumerate().map(|(idx, _)| K::from(idx))
+    pub fn keys(&self) -> impl Iterator<Item = K> + '_ {
+        self.data
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| Self::idx_to_key(idx))
     }
 
     pub fn values<'a>(&'a self) -> impl Iterator<Item = &'a V> {
         self.data.iter()
+    }
+
+    fn idx_to_key(idx: usize) -> K {
+        K::from(idx as u32)
+    }
+
+    fn key_to_idx(k: K) -> usize {
+        let raw: u32 = k.into();
+        raw as usize
     }
 }

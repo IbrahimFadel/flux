@@ -37,6 +37,7 @@ impl Driver {
     ) -> (Vec<id::Pkg>, ExitStatus) {
         let single_package_project = flux_config.packages.len() == 1;
 
+        let mut all_dependencies = vec![];
         let mut built_packages = vec![];
         for package in &flux_config.packages {
             let package_root = if single_package_project {
@@ -50,6 +51,7 @@ impl Driver {
             }
             let (dependencies, errors) =
                 self.build_dependencies(&package_root, &flux_config.dependencies);
+            all_dependencies.extend(dependencies.iter().copied());
             errors.into_iter().for_each(|err| err.report());
 
             info!(package =? package.name, "building package definitions");
@@ -68,7 +70,12 @@ impl Driver {
         }
 
         let mut exprs = Map::new();
-        for package_id in self.packages.keys() {
+        for (package_id, package) in self
+            .packages
+            .iter()
+            .filter(|(package_id, _)| !all_dependencies.contains(package_id))
+        {
+            info!(package =? self.interner.resolve(&package.name), "building package bodies");
             flux_hir::build_package_bodies(
                 package_id,
                 &self.packages,
@@ -77,8 +84,6 @@ impl Driver {
                 &mut self.diagnostics,
             );
         }
-
-        info!(project =? project_root, "built {} packages", built_packages.len());
 
         self.source_cache
             .report_diagnostics(self.diagnostics.iter());
