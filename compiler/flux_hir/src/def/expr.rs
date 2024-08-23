@@ -2,8 +2,10 @@ use std::fmt::Display;
 
 use flux_diagnostics::ice;
 use flux_id::id;
-use flux_typesystem::Typed;
+use flux_typesystem::{Type, Typed, WithType};
 use flux_util::{Path, Spanned, Word};
+
+use super::StructExprFieldList;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
@@ -26,6 +28,8 @@ pub enum Expr {
     Poisoned,
 }
 
+impl WithType for Expr {}
+
 impl Expr {
     pub(crate) const fn unit() -> Self {
         Self::Tuple(vec![])
@@ -34,13 +38,13 @@ impl Expr {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOp {
-    pub lhs: Typed<id::Expr>,
-    pub rhs: Typed<id::Expr>,
+    pub lhs: id::Expr,
+    pub rhs: id::Expr,
     pub op: Spanned<Op>,
 }
 
 impl BinOp {
-    pub fn new(lhs: Typed<id::Expr>, rhs: Typed<id::Expr>, op: Spanned<Op>) -> Self {
+    pub fn new(lhs: id::Expr, rhs: id::Expr, op: Spanned<Op>) -> Self {
         Self { lhs, rhs, op }
     }
 }
@@ -138,24 +142,24 @@ impl Op {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cast {
-    pub val: Typed<id::Expr>,
+    pub val: id::Expr,
     pub to_ty: id::Ty,
 }
 
 impl Cast {
-    pub fn new(val: Typed<id::Expr>, to_ty: id::Ty) -> Self {
+    pub fn new(val: id::Expr, to_ty: id::Ty) -> Self {
         Self { val, to_ty }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExpr {
-    pub path: Spanned<Path<Word, id::Ty>>,
-    pub fields: Spanned<Vec<StructExprField>>,
+    pub path: Spanned<Path<Word, Type>>,
+    pub fields: StructExprFieldList,
 }
 
 impl StructExpr {
-    pub fn new(path: Spanned<Path<Word, id::Ty>>, fields: Spanned<Vec<StructExprField>>) -> Self {
+    pub fn new(path: Spanned<Path<Word, Type>>, fields: StructExprFieldList) -> Self {
         Self { path, fields }
     }
 }
@@ -163,38 +167,38 @@ impl StructExpr {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExprField {
     pub name: Spanned<Word>,
-    pub val: Spanned<Typed<id::Expr>>,
+    pub val: Spanned<id::Expr>,
 }
 
 impl StructExprField {
-    pub fn new(name: Spanned<Word>, val: Spanned<Typed<id::Expr>>) -> Self {
+    pub fn new(name: Spanned<Word>, val: Spanned<id::Expr>) -> Self {
         Self { name, val }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MemberAccess {
-    pub lhs: Typed<id::Expr>,
+    pub lhs: id::Expr,
     pub field: Spanned<Word>,
 }
 
 impl MemberAccess {
-    pub fn new(lhs: Typed<id::Expr>, field: Spanned<Word>) -> Self {
+    pub fn new(lhs: id::Expr, field: Spanned<Word>) -> Self {
         Self { lhs, field }
     }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct If {
-    exprs: Vec<Typed<id::Expr>>,
+    exprs: Vec<id::Expr>,
 }
 
 impl If {
     pub fn new(
-        condition: Typed<id::Expr>,
-        then: Typed<id::Expr>,
-        else_ifs: impl Iterator<Item = (Typed<id::Expr>, Typed<id::Expr>)>,
-        r#else: Option<Typed<id::Expr>>,
+        condition: id::Expr,
+        then: id::Expr,
+        else_ifs: impl Iterator<Item = (id::Expr, id::Expr)>,
+        r#else: Option<id::Expr>,
     ) -> Self {
         Self {
             exprs: [condition, then]
@@ -205,7 +209,7 @@ impl If {
         }
     }
 
-    pub fn blocks(&self) -> impl Iterator<Item = &Typed<id::Expr>> {
+    pub fn blocks(&self) -> impl Iterator<Item = &id::Expr> {
         self.exprs.iter().step_by(2)
     }
 
@@ -214,21 +218,21 @@ impl If {
         self.exprs.len() % 2 != 0
     }
 
-    pub fn condition(&self) -> &Typed<id::Expr> {
+    pub fn condition(&self) -> &id::Expr {
         &self
             .exprs
             .get(0)
             .unwrap_or_else(|| ice("if expression missing condition expression"))
     }
 
-    pub fn then(&self) -> &Typed<id::Expr> {
+    pub fn then(&self) -> &id::Expr {
         &self
             .exprs
             .get(1)
             .unwrap_or_else(|| ice("if expression missing then block expression"))
     }
 
-    pub fn else_ifs(&self) -> Option<&[Typed<id::Expr>]> {
+    pub fn else_ifs(&self) -> Option<&[id::Expr]> {
         if self.has_else() {
             self.exprs.get(2..self.exprs.len() - 1)
         } else {
@@ -236,7 +240,7 @@ impl If {
         }
     }
 
-    pub fn else_block(&self) -> Option<&Typed<id::Expr>> {
+    pub fn else_block(&self) -> Option<&id::Expr> {
         if self.has_else() {
             self.exprs.last()
         } else {

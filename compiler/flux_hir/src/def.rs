@@ -160,6 +160,10 @@ impl StructFieldDeclList {
         self.0.iter()
     }
 
+    pub fn find(&self, name: Word) -> Option<&StructFieldDecl> {
+        self.iter().find(|field| field.name.inner == name)
+    }
+
     pub fn contains(&self, name: Word) -> bool {
         self.iter().find(|field| field.name.inner == name).is_some()
     }
@@ -271,11 +275,11 @@ impl StructExprFieldList {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExprField {
     name: Spanned<Word>,
-    val: Typed<id::Expr>,
+    val: id::Expr,
 }
 
 impl StructExprField {
-    pub fn new(name: Spanned<Word>, val: Typed<id::Expr>) -> Self {
+    pub fn new(name: Spanned<Word>, val: id::Expr) -> Self {
         Self { name, val }
     }
 }

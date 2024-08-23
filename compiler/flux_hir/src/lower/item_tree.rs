@@ -6,7 +6,7 @@ use flux_id::{
     Map,
 };
 use flux_parser::ast::{self, AstNode};
-use flux_typesystem::Type;
+use flux_typesystem::{ThisCtx, Type};
 use flux_util::{FileId, Interner, Span, Spanned, ToSpan, WithSpan, Word};
 
 use crate::{
@@ -68,7 +68,7 @@ impl<'a> LoweringCtx<'a> {
     ) -> Self {
         Self {
             item_tree,
-            type_lowerer: r#type::LoweringCtx::new(interner),
+            type_lowerer: r#type::LoweringCtx::new(ThisCtx::Function, interner),
             file_id,
             module_id,
             interner,
@@ -99,12 +99,30 @@ impl<'a> LoweringCtx<'a> {
         let visibility = self.lower_visibility(apply_decl.visibility());
         let generic_params =
             self.lower_generic_param_list(apply_decl.generic_param_list(), visibility.span);
+
+        let to_ty = self.lower_apply_to_ty(apply_decl.to_ty(), &generic_params);
         let trt = apply_decl
             .trt()
             .map(|trt| self.type_lowerer.lower_path(trt.path(), &generic_params));
-        let to_ty = self.lower_apply_to_ty(apply_decl.to_ty(), &generic_params);
+
+        let this_ctx = match trt {
+            Some(_) => ThisCtx::TraitApplication(Box::new(to_ty.kind.clone()), vec![]),
+            None => ThisCtx::TypeApplication(Box::new(to_ty.kind.clone())),
+        };
+        self.type_lowerer.set_this_ctx(this_ctx);
+
         let assoc_types =
             self.lower_associated_type_definitions(apply_decl.associated_types(), &generic_params);
+
+        match trt {
+            Some(_) => self.type_lowerer.set_associated_types(
+                assoc_types
+                    .iter()
+                    .map(|assoc_ty| (assoc_ty.name.inner, assoc_ty.ty.kind.clone()))
+                    .collect(),
+            ),
+            None => {}
+        };
 
         let methods = self.lower_apply_methods(apply_decl.methods(), &generic_params);
 

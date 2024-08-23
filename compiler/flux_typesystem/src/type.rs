@@ -3,13 +3,19 @@ use std::{collections::HashSet, ops::Deref};
 use flux_id::id::{self, InPkg};
 use flux_util::{Path, Word};
 
+use crate::ThisCtx;
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Type {
     pub kind: TypeKind,
-    pub(super) restrictions: Vec<Restriction>,
+    pub restrictions: Vec<Restriction>,
 }
 
 impl Type {
+    pub const fn new(kind: TypeKind, restrictions: Vec<Restriction>) -> Self {
+        Self { kind, restrictions }
+    }
+
     pub const fn unknown() -> Self {
         Self {
             kind: TypeKind::Unknown,
@@ -42,6 +48,13 @@ impl Type {
         Self::tuple(vec![])
     }
 
+    pub const fn r#ref(tid: id::Ty) -> Self {
+        Self {
+            kind: TypeKind::Ref(tid),
+            restrictions: vec![],
+        }
+    }
+
     pub fn array(ty: Type, n: u64) -> Self {
         Self {
             kind: TypeKind::Concrete(ConcreteKind::Array(Box::new(ty), n)),
@@ -63,9 +76,9 @@ impl Type {
         }
     }
 
-    pub const fn this_path(path: Path<Word, Type>) -> Self {
+    pub const fn this_path(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
         Self {
-            kind: TypeKind::ThisPath(path),
+            kind: TypeKind::ThisPath(ThisPath::new(path, this_ctx)),
             restrictions: vec![],
         }
     }
@@ -133,12 +146,24 @@ impl Type {
 pub enum TypeKind {
     Concrete(ConcreteKind),
     Generic(Word),
-    ThisPath(Path<Word, Type>), // `This` or associated type like `This::Foo`
+    ThisPath(ThisPath), // `This` or associated type like `This::Foo`
     Ref(id::Ty),
     Int,
     Float,
     Never,
     Unknown,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ThisPath {
+    pub path: Path<Word, Type>,
+    pub this_ctx: ThisCtx,
+}
+
+impl ThisPath {
+    pub const fn new(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
+        Self { path, this_ctx }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

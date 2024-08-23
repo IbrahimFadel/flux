@@ -1,17 +1,44 @@
-use flux_id::id;
+use std::collections::HashMap;
+
+use flux_id::id::{self, InPkg};
 use flux_util::Word;
 
-#[derive(Debug)]
-pub struct ThisCtx {
-    pub(super) this: id::Ty,
-    pub(super) assoc_types: Vec<(Word, id::Ty)>,
+use crate::TypeKind;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ThisCtx {
+    Function,
+    TypeApplication(Box<TypeKind>),
+    TraitApplication(Box<TypeKind>, Vec<(Word, TypeKind)>),
 }
 
-impl ThisCtx {
-    pub const fn new(this: id::Ty, assoc_types: Vec<(Word, id::Ty)>) -> Self {
-        Self { this, assoc_types }
+#[derive(Debug, Clone)]
+pub struct TraitApplication {
+    pub to: TypeKind,
+    pub args: Vec<TypeKind>,
+}
+
+impl TraitApplication {
+    pub fn new(to: TypeKind, args: Vec<TypeKind>) -> Self {
+        Self { to, args }
     }
 }
+
+pub struct TraitResolver {
+    traits: HashMap<InPkg<id::TraitDecl>, Vec<TraitApplication>>,
+}
+
+// #[derive(Clone, PartialEq, Eq, Debug)]
+// pub struct ThisCtx {
+//     pub(super) this: id::Ty,
+//     pub(super) assoc_types: Vec<(Word, id::Ty)>,
+// }
+
+// impl ThisCtx {
+//     pub const fn new(this: id::Ty, assoc_types: Vec<(Word, id::Ty)>) -> Self {
+//         Self { this, assoc_types }
+//     }
+// }
 
 // use std::collections::HashMap;
 

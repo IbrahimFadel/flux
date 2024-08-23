@@ -4,7 +4,7 @@ use flux_id::id;
 
 use crate::{r#type::Restriction, ConcreteKind, TEnv, TraitRestriction, TypeKind};
 
-impl Display for TEnv {
+impl<'a> Display for TEnv<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut relevant_types = vec![];
         for (tid, ty) in self.types.iter() {
@@ -75,7 +75,7 @@ impl Display for TEnv {
     }
 }
 
-impl TEnv {
+impl<'a> TEnv<'a> {
     pub fn fmt_tid(&self, tid: id::Ty) -> String {
         self.fmt_typekind(&self.types.get(tid).kind)
     }
@@ -84,7 +84,7 @@ impl TEnv {
         use crate::TypeKind::*;
         match ty {
             ThisPath(this_path) => std::iter::once("This")
-                .chain(this_path.iter().map(|key| self.interner.resolve(key)))
+                .chain(this_path.path.iter().map(|key| self.interner.resolve(key)))
                 .collect::<Vec<_>>()
                 .join("::"),
             Concrete(concrete_kind) => self.fmt_concrete_kind(concrete_kind),

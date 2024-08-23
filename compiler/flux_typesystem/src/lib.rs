@@ -1,4 +1,4 @@
-mod diagnostics;
+pub mod diagnostics;
 mod fmt;
 mod resolve;
 mod scope;
@@ -10,8 +10,9 @@ mod unify;
 use std::sync::OnceLock;
 
 use flux_util::{Interner, Path, Word};
-pub use r#trait::ThisCtx;
+pub use r#trait::{ThisCtx, TraitApplication};
 pub use r#type::{ConcreteKind, FnSignature, TraitRestriction, Type, TypeKind, Typed, WithType};
+pub use resolve::TraitResolver;
 pub use tenv::TEnv;
 
 static INT_PATHS: OnceLock<[Path<Word, Type>; 8]> = OnceLock::new();

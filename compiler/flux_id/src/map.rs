@@ -50,6 +50,22 @@ where
         self.try_get(k).is_some()
     }
 
+    pub fn as_ptr(&self) -> *const V {
+        self.data.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut V {
+        self.data.as_mut_ptr()
+    }
+
+    pub fn as_ref(&self) -> &Vec<V> {
+        &self.data
+    }
+
+    pub fn as_mut(&mut self) -> &mut Vec<V> {
+        &mut self.data
+    }
+
     pub fn insert(&mut self, v: V) -> K {
         let idx = self.data.len();
         self.data.push(v);

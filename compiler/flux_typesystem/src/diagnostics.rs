@@ -1,7 +1,7 @@
 use flux_proc_macros::diagnostic;
 
 #[diagnostic]
-pub(crate) enum TypeError {
+pub enum TypeError {
     #[error(
 			location = span,
 			primary =  "type mismatch",

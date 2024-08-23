@@ -1,78 +1,102 @@
-use std::mem;
+use std::{collections::HashMap, mem};
 
-use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
-use flux_id::id;
-use flux_util::{FileId, WithSpan};
-use tracing::trace;
+use flux_id::id::{self, InPkg};
+use flux_util::{FileId, Span, WithSpan};
+use tracing::{trace, warn};
 
-use crate::{diagnostics::TypeError, r#type::Restriction, ConcreteKind, TEnv, Type, TypeKind};
+use crate::{r#trait::TraitApplication, r#type::Restriction, ConcreteKind, TEnv, TypeKind};
 
-impl TEnv {
-    pub fn resolve(
-        &mut self,
-        tid: id::Ty,
-        file_id: FileId,
-    ) -> Result<ConcreteKind, Vec<Diagnostic>> {
-        trace!("resolving `{}", Into::<u32>::into(tid));
-        let ty = self.get(tid);
-
-        let mut diagnostics = vec![];
-        let num_restrictions = ty.restrictions.len();
+impl<'a> TEnv<'a> {
+    pub fn resolve(&mut self, tid: id::Ty) -> Result<TypeKind, Vec<Restriction>> {
+        // trace!(
+        //     "resolving '{}: {} - {:?}",
+        //     Into::<u32>::into(tid),
+        //     self.fmt_tid(tid),
+        //     self.get(tid).restrictions
+        // );
         loop {
-            let ty = self.get_mut(tid);
-            let restrictions = mem::take(&mut ty.restrictions);
-            let reduced_restrictions: Vec<_> = restrictions
+            let initial_restrictions = mem::take(&mut self.get_mut(tid).restrictions);
+            let num_initial_restrictions = initial_restrictions.len();
+
+            let final_restrictions: Vec<_> = initial_restrictions
                 .into_iter()
                 .filter(|restriction| match restriction {
                     Restriction::Equals(other) => {
-                        let unification_span = self.get_span(tid).in_file(file_id);
-                        self.unify(tid, *other, unification_span)
-                            .map_err(|err| diagnostics.push(err))
-                            .is_err()
+                        let unification_span = Span::poisoned().in_file(FileId::poisoned());
+                        // println!("{} == {}", self.fmt_tid(tid), self.fmt_tid(*other));
+                        self.unify(tid, *other, unification_span).is_err()
                     }
-                    Restriction::Field(_) => todo!(),
-                    Restriction::Trait(_) => todo!(),
+                    Restriction::Field(_) => {
+                        warn!("unimplemented");
+                        false
+                    }
+                    Restriction::Trait(trait_restriction) => self
+                        .resolve_trait_restriction(tid, trait_restriction)
+                        .is_err(),
                 })
                 .collect();
-            let ty = self.get_mut(tid);
-            ty.restrictions = reduced_restrictions;
-            if num_restrictions == ty.restrictions.len() || ty.restrictions.is_empty() {
-                break;
+
+            // println!("{:?} {}", final_restrictions, num_initial_restrictions);
+            if final_restrictions.len() == 0 {
+                return self
+                    .get(tid)
+                    .kind
+                    .resolve(self)
+                    .map_err(|_| final_restrictions);
+            } else if final_restrictions.len() == num_initial_restrictions {
+                self.get_mut(tid).restrictions = final_restrictions.clone();
+                return Err(final_restrictions);
             }
-        }
 
-        let ty = self.get(tid);
-        if ty.restrictions.is_empty() {
-            return ty.kind.to_concrete(self).map_err(|err| vec![err]);
+            self.get_mut(tid).restrictions = final_restrictions;
         }
-
-        if !diagnostics.is_empty() {
-            return Err(diagnostics);
-        }
-
-        Err(vec![TypeError::CouldNotInfer {
-            ty: (),
-            ty_file_span: self.get_span(tid).in_file(file_id),
-        }
-        .to_diagnostic()])
     }
 }
 
 impl TypeKind {
-    fn to_concrete(&self, tenv: &TEnv) -> Result<ConcreteKind, Diagnostic> {
+    pub fn resolve(&self, tenv: &TEnv) -> Result<TypeKind, ()> {
         use TypeKind::*;
         match &self {
-            Concrete(concrete_kind) => Ok(concrete_kind.clone()),
-            Generic(_) => todo!(),
-            ThisPath(this_path) => tenv
-                .get(tenv.resolve_this_path(this_path))
-                .kind
-                .to_concrete(tenv),
-            Ref(tid) => tenv.get(*tid).kind.to_concrete(tenv),
-            Int => todo!(),
+            Concrete(concrete_kind) => {
+                use ConcreteKind::*;
+                match concrete_kind {
+                    Array(_, _) => todo!(),
+                    Ptr(ty) => {
+                        ty.kind.resolve(tenv)?;
+                        Ok(self.clone())
+                    }
+                    Path(path) => {
+                        for arg in &path.args {
+                            arg.kind.resolve(tenv)?;
+                        }
+                        Ok(self.clone())
+                    }
+                    Tuple(types) => {
+                        for ty in types {
+                            ty.kind.resolve(tenv)?;
+                        }
+                        Ok(self.clone())
+                    }
+                }
+            }
+            Generic(_) => Ok(self.clone()),
+            ThisPath(this_path) => tenv.resolve_this_path(this_path).resolve(tenv),
+            Ref(tid) => tenv.get(*tid).kind.resolve(tenv),
+            Int => Err(()),
             Float => todo!(),
             Never => todo!(),
-            Unknown => todo!(),
+            Unknown => Err(()),
         }
+    }
+}
+
+pub struct TraitResolver {
+    pub traits: HashMap<InPkg<id::TraitDecl>, Vec<TraitApplication>>,
+    // fields: HashMap<InPkg<id::StructDecl>, Vec<Word>>,
+}
+
+impl TraitResolver {
+    pub fn new(traits: HashMap<InPkg<id::TraitDecl>, Vec<TraitApplication>>) -> Self {
+        Self { traits }
     }
 }

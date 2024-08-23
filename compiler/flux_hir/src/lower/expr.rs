@@ -7,16 +7,13 @@ use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxToken,
 };
-use flux_typesystem::{
-    ConcreteKind, FnSignature, TEnv, TraitRestriction, Type, TypeKind, Typed, WithType,
-};
+use flux_typesystem::{FnSignature, TEnv, ThisCtx, TraitRestriction, Type, Typed, WithType};
 use flux_util::{FileId, FileSpanned, InFile, Interner, Span, Spanned, ToSpan, WithSpan};
-use tracing::trace;
 
 use crate::{
     builtin,
     def::{
-        expr::{BinOp, Cast, Expr, If, MemberAccess, Op},
+        expr::{BinOp, Cast, Expr, If, MemberAccess, Op, StructExpr},
         item::StructDecl,
         GenericParams, StructExprField, StructExprFieldList,
     },
@@ -28,31 +25,31 @@ use crate::{
 
 use super::{lower_node_mut, r#type};
 
-pub(super) struct LoweringCtx<'a> {
+pub(super) struct LoweringCtx<'a, 'res> {
     type_lowerer: r#type::LoweringCtx,
     file_id: FileId,
     mod_id: id::Mod,
-    exprs: &'a mut Map<id::Expr, Expr>,
+    exprs: &'a mut Map<id::Expr, Typed<Expr>>,
     packages: &'a Map<id::Pkg, Package>,
-    pub(super) tenv: &'a mut TEnv,
+    pub(super) tenv: &'a mut TEnv<'res>,
     item_resolver: &'a ItemResolver<'a>,
     interner: &'static Interner,
     diagnostics: &'a mut Vec<Diagnostic>,
 }
 
-impl<'a> LoweringCtx<'a> {
+impl<'a, 'res> LoweringCtx<'a, 'res> {
     pub(super) fn new(
         file_id: FileId,
         mod_id: id::Mod,
-        exprs: &'a mut Map<id::Expr, Expr>,
+        exprs: &'a mut Map<id::Expr, Typed<Expr>>,
         packages: &'a Map<id::Pkg, Package>,
-        tenv: &'a mut TEnv,
+        tenv: &'a mut TEnv<'res>,
         item_resolver: &'a ItemResolver<'a>,
         interner: &'static Interner,
         diagnostics: &'a mut Vec<Diagnostic>,
     ) -> Self {
         Self {
-            type_lowerer: r#type::LoweringCtx::new(interner),
+            type_lowerer: r#type::LoweringCtx::new(ThisCtx::Function, interner),
             file_id,
             mod_id,
             exprs,
@@ -68,14 +65,15 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         expr: Option<ast::Expr>,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         lower_node_mut(
             self,
             expr,
             |this, expr| {
-                this.exprs
-                    .insert(Expr::Poisoned)
-                    .with_type(this.tenv.insert(Type::unknown().at(expr.range().to_span())))
+                this.exprs.insert(
+                    Expr::Poisoned
+                        .with_type(this.tenv.insert(Type::unknown().at(expr.range().to_span()))),
+                )
             },
             |this, expr| match expr {
                 ast::Expr::PathExpr(path_expr) => this.lower_path_expr(path_expr, generic_params),
@@ -106,11 +104,7 @@ impl<'a> LoweringCtx<'a> {
         )
     }
 
-    fn lower_stmt(
-        &mut self,
-        stmt: ast::Stmt,
-        generic_params: &GenericParams,
-    ) -> (bool, Typed<id::Expr>) {
+    fn lower_stmt(&mut self, stmt: ast::Stmt, generic_params: &GenericParams) -> (bool, id::Expr) {
         match stmt {
             ast::Stmt::LetStmt(let_stmt) => (false, self.lower_let_expr(let_stmt, generic_params)),
             ast::Stmt::ExprStmt(expr_stmt) => (false, self.lower(expr_stmt.expr(), generic_params)),
@@ -125,7 +119,7 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         let_stmt: ast::LetStmt,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let name = self.type_lowerer.lower_name(let_stmt.name());
         let ty = let_stmt
             .ty()
@@ -136,18 +130,22 @@ impl<'a> LoweringCtx<'a> {
             .unwrap_or_else(|| self.tenv.insert(Type::unknown().at(name.span)));
         let val = self.lower(let_stmt.value(), generic_params);
 
-        self.tenv.add_equality(ty, val.tid);
+        let val_tid = self.exprs.get(val).tid;
+        self.tenv.add_equality(ty, val_tid);
 
-        let ty = if let_stmt.ty().is_some() { ty } else { val.tid };
+        let ty = if let_stmt.ty().is_some() { ty } else { val_tid };
+        let tid = self
+            .tenv
+            .insert(Type::unit().at(let_stmt.range().to_span()));
         self.tenv.insert_local(name.inner, ty);
-        self.exprs.insert(Expr::unit()).with_type(ty)
+        self.exprs.insert(Expr::unit().with_type(tid))
     }
 
     fn lower_path_expr(
         &mut self,
         path_expr: ast::PathExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let path = self
             .type_lowerer
             .lower_path(path_expr.path(), generic_params);
@@ -169,13 +167,13 @@ impl<'a> LoweringCtx<'a> {
                 self.tenv.insert(Type::unknown().at(span))
             });
 
-        self.exprs.insert(Expr::Path(path.inner)).with_type(tid)
+        self.exprs.insert(Expr::Path(path.inner).with_type(tid))
     }
 
-    fn lower_int_expr(&mut self, int_expr: ast::IntExpr) -> Typed<id::Expr> {
+    fn lower_int_expr(&mut self, int_expr: ast::IntExpr) -> id::Expr {
         let span = int_expr.range().to_span();
         let tid = self.tenv.insert(Type::int().at(span));
-        let poisoned = |this: &mut Self| this.exprs.insert(Expr::Poisoned).with_type(tid);
+        let poisoned = |this: &mut Self| this.exprs.insert(Expr::Poisoned.with_type(tid));
 
         let val_str = match int_expr.v() {
             Some(v) => self
@@ -207,18 +205,20 @@ impl<'a> LoweringCtx<'a> {
             },
         };
 
-        self.exprs.insert(Expr::Int(val)).with_type(tid)
+        self.exprs.insert(Expr::Int(val).with_type(tid))
     }
 
     fn lower_bin_expr(
         &mut self,
         bin_expr: ast::BinExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let op = self.lower_op(bin_expr.op());
         let lhs = self.lower(bin_expr.lhs(), generic_params);
+        let lhs_tid = self.exprs.get(lhs).tid;
         let rhs = self.lower(bin_expr.rhs(), generic_params);
-        let span = Span::combine(self.tenv.get_span(lhs.tid), self.tenv.get_span(rhs.tid));
+        let rhs_tid = self.exprs.get(rhs).tid;
+        let span = Span::combine(self.tenv.get_span(lhs_tid), self.tenv.get_span(rhs_tid));
 
         let tid = self.tenv.insert(Type::unknown().at(span));
 
@@ -235,16 +235,15 @@ impl<'a> LoweringCtx<'a> {
 
         if let Some(trait_id) = trait_id {
             self.tenv
-                .add_trait_restriction(lhs.tid, TraitRestriction::new(trait_id, vec![rhs.tid]));
+                .add_trait_restriction(lhs_tid, TraitRestriction::new(trait_id, vec![rhs_tid]));
             self.tenv
-                .add_trait_restriction(rhs.tid, TraitRestriction::new(trait_id, vec![lhs.tid]));
+                .add_trait_restriction(rhs_tid, TraitRestriction::new(trait_id, vec![lhs_tid]));
 
             let item_tree = &self.packages.get(trait_id.pkg_id).item_tree;
             let trait_decl = item_tree.traits.get(trait_id.inner);
 
-            let method_return_ty = trait_decl
+            let method = trait_decl
                 .get_method_in_item_tree(*method_name, item_tree)
-                .map(|method| method.return_ty.inner.clone())
                 .unwrap_or_else(|| {
                     ice(format!(
                         "could not find builtin method `{}` for trait `{}`",
@@ -253,13 +252,12 @@ impl<'a> LoweringCtx<'a> {
                     ))
                 });
 
-            let method_return_ty = self.tenv.insert(method_return_ty.at(span));
+            let method_return_ty = self.tenv.insert(method.return_ty.inner.clone().at(span));
             self.tenv.add_equality(tid, method_return_ty);
         }
 
         self.exprs
-            .insert(Expr::BinOp(BinOp::new(lhs, rhs, op)))
-            .with_type(tid)
+            .insert(Expr::BinOp(BinOp::new(lhs, rhs, op)).with_type(tid))
     }
 
     fn lower_op(&mut self, op: Option<&SyntaxToken>) -> Spanned<Op> {
@@ -288,9 +286,9 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         struct_expr: ast::StructExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let span = struct_expr.range().to_span();
-        let path = self
+        let mut path = self
             .type_lowerer
             .lower_path(struct_expr.path(), generic_params);
 
@@ -303,14 +301,27 @@ impl<'a> LoweringCtx<'a> {
             })
             .ok();
 
-        if let Some(struct_decl) = struct_decl {
+        let expr = if let Some(struct_decl) = struct_decl {
+            /*
+               deal w args
+            */
+            let num_args = path.args.len();
+            let num_params = struct_decl.generic_params.types.len();
+            if num_args < num_params {
+                for _ in num_args..num_params {
+                    path.args.push(Type::unknown());
+                }
+            }
+
             let fields =
                 self.lower_struct_fields(struct_expr.field_list(), generic_params, &struct_decl);
-        }
+            Expr::Struct(StructExpr::new(path.clone(), fields))
+        } else {
+            Expr::Poisoned
+        };
 
-        self.exprs
-            .insert(Expr::Poisoned)
-            .with_type(self.tenv.insert(Type::unknown().at(span)))
+        let tid = self.tenv.insert(Type::path(path.inner).at(path.span));
+        self.exprs.insert(expr.with_type(tid))
     }
 
     fn lower_struct_fields(
@@ -333,9 +344,14 @@ impl<'a> LoweringCtx<'a> {
                         let val = this.lower(field.val(), generic_params);
 
                         all_fields.push(name.inner);
-                        if !struct_decl.fields.contains(*name) {
-                            unknown_fields.push(name.inner);
-                        }
+                        match struct_decl.fields.find(*name) {
+                            Some(field_decl) => {
+                                let val_tid = this.exprs.get(val).tid;
+                                let decl_tid = this.tenv.insert(field_decl.ty.clone());
+                                this.tenv.add_equality(val_tid, decl_tid);
+                            }
+                            None => unknown_fields.push(name.inner),
+                        };
 
                         StructExprField::new(name, val)
                     })
@@ -376,11 +392,11 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         block_expr: ast::BlockExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
-        let mut terminator: Option<Typed<id::Expr>> = None;
+    ) -> id::Expr {
+        let mut terminator: Option<id::Expr> = None;
         block_expr.stmts().for_each(|stmt| {
             if let Some(terminator) = &terminator {
-                let span = self.tenv.get_span(terminator.tid);
+                let span = self.tenv.get_span(self.exprs.get(*terminator).tid);
                 self.diagnostics.push(
                     LowerError::StmtFollowingTerminatorExpr {
                         terminator: (),
@@ -404,8 +420,7 @@ impl<'a> LoweringCtx<'a> {
             .to_span();
         terminator.unwrap_or_else(|| {
             self.exprs
-                .insert(Expr::unit())
-                .with_type(self.tenv.insert(Type::unknown().at(span)))
+                .insert(Expr::unit().with_type(self.tenv.insert(Type::unit().at(span))))
         })
     }
 
@@ -413,50 +428,56 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         member_access_expr: ast::MemberAccessExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let span = member_access_expr.range().to_span();
         let lhs = self.lower(member_access_expr.lhs(), generic_params);
+        let lhs_tid = self.exprs.get(lhs).tid;
         let rhs = self.type_lowerer.lower_name(member_access_expr.rhs());
-        self.tenv.add_field_requirement(lhs.tid, rhs.inner);
+        self.tenv.add_field_requirement(lhs_tid, rhs.inner);
 
-        self.exprs
-            .insert(Expr::MemberAccess(MemberAccess::new(lhs, rhs)))
-            .with_type(self.tenv.insert(Type::unknown().at(span)))
+        self.exprs.insert(
+            Expr::MemberAccess(MemberAccess::new(lhs, rhs))
+                .with_type(self.tenv.insert(Type::unknown().at(span))),
+        )
     }
 
-    fn lower_if_expr(
-        &mut self,
-        if_expr: ast::IfExpr,
-        generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    fn lower_if_expr(&mut self, if_expr: ast::IfExpr, generic_params: &GenericParams) -> id::Expr {
         let cond = self.lower(if_expr.condition(), generic_params);
         let then = self.lower_if_block_expr(if_expr.block(), generic_params);
-        let r#else = if_expr
-            .else_block()
-            .map(|else_block| self.lower_if_block_expr(else_block.block(), generic_params));
+        let tid = self.exprs.get(then).tid;
+        let r#else = if_expr.else_block().map(|else_block| {
+            let block = self.lower_if_block_expr(else_block.block(), generic_params);
+            let block_tid = self.exprs.get(block).tid;
+            self.tenv.add_equality(tid, block_tid);
+            block
+        });
+
         let else_ifs = if_expr.else_ifs().map(|else_if| {
             let cond = self.lower(else_if.condition(), generic_params);
             let block = self.lower_if_block_expr(else_if.block(), generic_params);
+            let block_tid = self.exprs.get(block).tid;
+            self.tenv.add_equality(tid, block_tid);
             (cond, block)
         });
 
-        let tid = then.tid;
         let if_expr = If::new(cond, then, else_ifs, r#else);
-        self.exprs.insert(Expr::If(if_expr)).with_type(tid)
+        self.exprs.insert(Expr::If(if_expr).with_type(tid))
     }
 
     fn lower_if_block_expr(
         &mut self,
         block_expr: Option<ast::BlockExpr>,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         lower_node_mut(
             self,
             block_expr,
             |this, block| {
-                this.exprs.insert(Expr::Poisoned).with_type(
-                    this.tenv
-                        .insert(Type::unknown().at(block.range().to_span())),
+                this.exprs.insert(
+                    Expr::Poisoned.with_type(
+                        this.tenv
+                            .insert(Type::unknown().at(block.range().to_span())),
+                    ),
                 )
             },
             |this, block| this.lower_block_expr(block, generic_params),
@@ -467,7 +488,7 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         intrinsic_expr: ast::IntrinsicExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let span = intrinsic_expr.range().to_span();
         let name_syntax = intrinsic_expr
             .name()
@@ -486,7 +507,7 @@ impl<'a> LoweringCtx<'a> {
                 );
 
                 let tid = self.tenv.insert(signature.return_ty().clone().at(span));
-                self.exprs.insert(Expr::Intrinsic).with_type(tid)
+                self.exprs.insert(Expr::Intrinsic.with_type(tid))
             }
             None => {
                 self.diagnostics.push(
@@ -497,8 +518,7 @@ impl<'a> LoweringCtx<'a> {
                     .to_diagnostic(),
                 );
                 self.exprs
-                    .insert(Expr::Poisoned)
-                    .with_type(self.tenv.insert(Type::unknown().at(span)))
+                    .insert(Expr::Poisoned.with_type(self.tenv.insert(Type::unknown().at(span))))
             }
         }
     }
@@ -508,7 +528,7 @@ impl<'a> LoweringCtx<'a> {
         arg_list: Option<ast::ArgList>,
         generic_params: &GenericParams,
         expected_signature: FileSpanned<&FnSignature>,
-    ) -> Spanned<Vec<Typed<id::Expr>>> {
+    ) -> Spanned<Vec<id::Expr>> {
         let params = expected_signature.parameters();
         let result = lower_node_mut(
             self,
@@ -524,9 +544,8 @@ impl<'a> LoweringCtx<'a> {
                         let expected_tid = this
                             .tenv
                             .insert(expected.clone().at(unification_span.inner));
-
-                        this.tenv.add_equality(expected_tid, expr.tid);
-
+                        this.tenv
+                            .add_equality(this.exprs.get(expr).tid, expected_tid);
                         expr
                     })
                     .collect::<Vec<_>>()
@@ -558,13 +577,14 @@ impl<'a> LoweringCtx<'a> {
         &mut self,
         cast_expr: ast::CastExpr,
         generic_params: &GenericParams,
-    ) -> Typed<id::Expr> {
+    ) -> id::Expr {
         let val = self.lower(cast_expr.val(), generic_params);
-        let to_ty = self
+        let mut to_ty = self
             .type_lowerer
             .lower_type(cast_expr.to_ty(), generic_params);
+        to_ty.span = cast_expr.range().to_span();
         let tid = self.tenv.insert(to_ty);
         let cast = Cast::new(val, tid);
-        self.exprs.insert(Expr::Cast(cast)).with_type(tid)
+        self.exprs.insert(Expr::Cast(cast).with_type(tid))
     }
 }

@@ -2,9 +2,9 @@ use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_id::id;
 use flux_util::{InFile, Span, WithSpan};
 
-use crate::{diagnostics::TypeError, ConcreteKind, TEnv, TypeKind};
+use crate::{diagnostics::TypeError, int_paths, ConcreteKind, TEnv, Type, TypeKind};
 
-impl TEnv {
+impl<'a> TEnv<'a> {
     pub fn unify(
         &mut self,
         a: id::Ty,
@@ -13,6 +13,8 @@ impl TEnv {
     ) -> Result<(), Diagnostic> {
         use TypeKind::*;
         match (&self.get(a).inner.kind, &self.get(b).inner.kind) {
+            (Ref(a_ref), _) => self.unify(*a_ref, b, unification_span),
+            (_, Ref(b_ref)) => self.unify(a, *b_ref, unification_span),
             (Unknown, _) => {
                 self.types
                     .set_with(a, |old_ty| old_ty.map(|ty| ty.to_kind(Ref(b))));
@@ -24,20 +26,113 @@ impl TEnv {
                 Ok(())
             }
             (_, ThisPath(this_path)) => {
-                let tid = self.resolve_this_path(this_path);
+                let tkind = self.resolve_this_path(this_path);
+                let tid = self.insert(Type::new(tkind.clone(), vec![]).at(self.get_span(b)));
                 self.unify(a, tid, unification_span)
             }
             (Concrete(a_concrete), Concrete(b_concrete)) => match (a_concrete, b_concrete) {
                 (ConcreteKind::Path(a_path), ConcreteKind::Path(b_path)) => {
-                    if a_path.segments == b_path.segments {
-                        Ok(())
+                    if a_path.segments != b_path.segments {
+                        return Err(self.type_mismatch(a, b, unification_span));
                     } else {
-                        Err(self.type_mismatch(a, b, unification_span))
+                        let mut new_a_path = a_path.clone();
+                        let mut new_b_path = b_path.clone();
+                        a_path
+                            .args
+                            .clone()
+                            .into_iter()
+                            .zip(b_path.args.clone().into_iter())
+                            .enumerate()
+                            .map(|(i, (a_arg, b_arg))| {
+                                let a_tid = self.insert(a_arg.at(Span::poisoned()));
+                                let b_tid = self.insert(b_arg.at(Span::poisoned()));
+                                let res = self.unify(a_tid, b_tid, unification_span);
+                                new_a_path.args[i] = self.get(a_tid).inner.clone();
+                                new_b_path.args[i] = self.get(b_tid).inner.clone();
+                                res
+                            })
+                            .collect::<Result<Vec<_>, Diagnostic>>()?;
+
+                        self.types.set_with(a, |old_ty| {
+                            old_ty.map(|ty| {
+                                ty.to_kind(TypeKind::Concrete(ConcreteKind::Path(new_a_path)))
+                            })
+                        });
+                        self.types.set_with(b, |old_ty| {
+                            old_ty.map(|ty| {
+                                ty.to_kind(TypeKind::Concrete(ConcreteKind::Path(new_b_path)))
+                            })
+                        });
+                        Ok(())
                     }
+                }
+                (ConcreteKind::Tuple(a_tup), ConcreteKind::Tuple(b_tup)) => {
+                    let a_span = self.get_span(a);
+                    let b_span = self.get_span(b);
+                    a_tup
+                        .clone()
+                        .iter()
+                        .zip(b_tup.clone().iter())
+                        .map(|(a_inner, b_inner)| {
+                            let a_inner = self.insert(a_inner.clone().at(a_span));
+                            let b_inner = self.insert(b_inner.clone().at(b_span));
+                            self.unify(a_inner, b_inner, unification_span.clone())
+                        })
+                        .collect::<Result<(), _>>()
+                }
+                (ConcreteKind::Ptr(a_ptr), ConcreteKind::Ptr(b_ptr)) => {
+                    let a_span = self.get_span(a);
+                    let b_span = self.get_span(b);
+                    let a_ptr = (*a_ptr.clone()).at(a_span);
+                    let b_ptr = (*b_ptr.clone()).at(b_span);
+                    let a_ptr = self.insert(a_ptr);
+                    let b_ptr = self.insert(b_ptr);
+                    self.unify(a_ptr, b_ptr, unification_span)
                 }
                 _ => Err(self.type_mismatch(a, b, unification_span)),
             },
+            (Concrete(ConcreteKind::Path(path)), Int) if path.is_in(int_paths(self.interner)) => {
+                let new_tkind = TypeKind::Concrete(ConcreteKind::Path(path.clone()));
+                self.types
+                    .set_with(b, |old_ty| old_ty.map(|ty| ty.to_kind(new_tkind)));
+                Ok(())
+            }
+            (Int, Concrete(ConcreteKind::Path(path))) if path.is_in(int_paths(self.interner)) => {
+                let new_tkind = TypeKind::Concrete(ConcreteKind::Path(path.clone()));
+                self.types
+                    .set_with(a, |old_ty| old_ty.map(|ty| ty.to_kind(new_tkind)));
+                Ok(())
+            }
+            (Int, Int) => Ok(()),
+            // (Concrete(ConcreteKind::Path(path)), Int) => match int_id {
+            //     Some(id) => self.unify(a, id, unification_span),
+            //     None => {
+            //         if path.is_in(int_paths(self.interner)) {
+            //             self.types
+            //                 .set_with(b, |old_ty| old_ty.map_inner(|_| Type::Int(Some(a))));
+            //             Ok(())
+            //         } else {
+            //             return Err(self.type_mismatch(a, b, unification_span));
+            //         }
+            //     }
+            // },
+            (ThisPath(this_path), _) => {
+                let a_ty = self.get(a);
+                let this = self.resolve_this_path(this_path);
+                let this_tid =
+                    self.insert(Type::new(this.clone(), a_ty.restrictions.clone()).at(a_ty.span));
+                self.unify(this_tid, b, unification_span)
+            }
+            (Generic(a_gen), Generic(b_gen)) if a_gen == b_gen => Ok(()),
             (_, _) => Err(self.type_mismatch(a, b, unification_span)),
+        }
+    }
+
+    pub fn types_unify(&self, a: &TypeKind, b: &TypeKind) -> bool {
+        use TypeKind::*;
+        match (a, b) {
+            (_, Unknown) | (Unknown, _) => false,
+            _ => false,
         }
     }
 

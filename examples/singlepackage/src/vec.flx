@@ -19,6 +19,8 @@ apply<T> to Vector<T> {
 		} else {
 			this.buf
 		};
+
+		let x s64 = 0;
 		// buf[this.len] = v;
 	}
 }

@@ -20,7 +20,7 @@ const TAB_WIDTH: usize = 8;
 const ICE_MSG: &'static str = "internal compiler error:";
 
 pub fn ice(msg: impl Display) -> ! {
-    let print_stack_trace = env::var("FLUX_STACKTRACE").map_or(false, |val| {
+    let print_stack_trace = env::var("FLUX_BACKTRACE").map_or(false, |val| {
         val.parse::<u8>().map_or(false, |v| match v {
             0 => false,
             1 => true,

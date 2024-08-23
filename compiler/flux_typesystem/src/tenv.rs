@@ -1,27 +1,30 @@
 use flux_diagnostics::ice;
 use flux_id::{id, Map};
-use flux_util::{Interner, Path, Span, Spanned, Word};
+use flux_util::{FileId, Interner, Span, Spanned, WithSpan, Word};
 
 use crate::{
     r#trait::ThisCtx,
-    r#type::{Restriction, Type},
+    r#type::{Restriction, ThisPath, Type},
+    resolve::TraitResolver,
     scope::Scope,
     TraitRestriction, TypeKind,
 };
 
-pub struct TEnv {
+pub struct TEnv<'a> {
     pub(super) this_ctx: Option<ThisCtx>,
     pub(super) types: Map<id::Ty, Spanned<Type>>,
     pub(super) scopes: Vec<Scope>,
+    trait_resolver: &'a TraitResolver,
     pub(super) interner: &'static Interner,
 }
 
-impl TEnv {
-    pub fn new(interner: &'static Interner) -> Self {
+impl<'a> TEnv<'a> {
+    pub fn new(trait_resolver: &'a TraitResolver, interner: &'static Interner) -> Self {
         Self {
             this_ctx: None,
             types: Map::new(),
             scopes: vec![Scope::new()],
+            trait_resolver,
             interner,
         }
     }
@@ -46,6 +49,9 @@ impl TEnv {
         self.types
             .get_mut(a)
             .push_restriction(Restriction::Equals(b));
+        self.types
+            .get_mut(b)
+            .push_restriction(Restriction::Equals(a));
     }
 
     pub fn add_field_requirement(&mut self, tid: id::Ty, name: Word) {
@@ -85,38 +91,105 @@ impl TEnv {
         self.get(tid).span
     }
 
-    pub fn resolve_this_path(&self, this_path: &Path<Word, Type>) -> id::Ty {
-        let this_ctx = self
-            .this_ctx
-            .as_ref()
-            .unwrap_or_else(|| ice("`TEnv` missing `ThisCtx` when resolving `ThisPath`"));
-        let this_tid = this_ctx.this;
+    pub fn resolve_this_path<'b>(&'b self, this_path: &'b ThisPath) -> &TypeKind {
+        match &this_path.this_ctx {
+            ThisCtx::Function => todo!(),
+            ThisCtx::TypeApplication(this) => this,
+            ThisCtx::TraitApplication(this, assoc_types) => match this_path.path.len() {
+                0 => this,
+                1 => {
+                    let name = this_path.path.get_nth(0);
+                    assoc_types
+                        .iter()
+                        .find_map(
+                            |(assoc_name, ty)| {
+                                if assoc_name == name {
+                                    Some(ty)
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                        .unwrap_or_else(|| {
+                            ice(format!(
+                                "no associated type `{}` in `ThisCtx`: {:#?}",
+                                self.interner.resolve(name),
+                                this_path.this_ctx
+                            ))
+                        })
+                }
+                2.. => unimplemented!(),
+            },
+        }
+    }
 
-        match this_path.len() {
-            0 => this_tid,
-            1 => {
-                let name = this_path.get_nth(0);
-                this_ctx
-                    .assoc_types
-                    .iter()
-                    .find_map(
-                        |(assoc_name, ty)| {
-                            if assoc_name == name {
-                                Some(*ty)
-                            } else {
-                                None
-                            }
-                        },
-                    )
-                    .unwrap_or_else(|| {
-                        ice(format!(
-                            "no associated type `{}` in `ThisCtx`: {:#?}",
-                            self.interner.resolve(name),
-                            this_ctx
-                        ))
-                    })
-            }
-            2.. => unimplemented!(),
+    pub fn resolve_trait_restriction(
+        &mut self,
+        tid: id::Ty,
+        trait_restriction: &TraitRestriction,
+    ) -> Result<(), ()> {
+        // println!(
+        //     "resolving restriction {}: {:?}{}",
+        //     self.fmt_tid(tid),
+        //     trait_restriction.trait_id,
+        //     if trait_restriction.args.is_empty() {
+        //         format!("")
+        //     } else {
+        //         format!(
+        //             "<{}>",
+        //             trait_restriction
+        //                 .args
+        //                 .iter()
+        //                 .map(|arg| self.fmt_tid(*arg))
+        //                 .collect::<Vec<_>>()
+        //                 .join(", ")
+        //         )
+        //     }
+        // );
+
+        // let args = application
+        //     .args
+        //     .iter()
+        //     .map(|arg| self.insert(Type::new(arg.clone(), vec![]).at(Span::poisoned())))
+        //     .collect();
+
+        let unification_span = Span::poisoned().in_file(FileId::poisoned());
+
+        let application = self
+            .trait_resolver
+            .traits
+            .get(&trait_restriction.trait_id)
+            .map(|applications| {
+                applications.iter().find_map(|application| {
+                    let app_to =
+                        self.insert(Type::new(application.to.clone(), vec![]).at(Span::poisoned()));
+                    if self.unify(app_to, tid, unification_span).is_ok() {
+                        let args_match = application
+                            .args
+                            .iter()
+                            .zip(trait_restriction.args.iter())
+                            .filter(|(a, b)| {
+                                let a = self
+                                    .insert(Type::new((**a).clone(), vec![]).at(Span::poisoned()));
+                                self.unify(a, **b, unification_span).is_ok()
+                            })
+                            .count()
+                            == trait_restriction.args.len();
+                        if args_match {
+                            Some(application)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+            })
+            .flatten();
+
+        match application {
+            Some(_) => Ok(()),
+            None => Err(()),
         }
     }
 }

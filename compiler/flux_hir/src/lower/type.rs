@@ -1,6 +1,6 @@
 use flux_diagnostics::ice;
 use flux_parser::ast::{self, AstNode};
-use flux_typesystem::Type;
+use flux_typesystem::{ThisCtx, Type, TypeKind};
 use flux_util::{Interner, Path, Spanned, ToSpan, WithSpan, Word};
 use tracing::warn;
 
@@ -9,14 +9,29 @@ use crate::def::GenericParams;
 use super::lower_node;
 
 pub(super) struct LoweringCtx {
+    this_ctx: ThisCtx,
     interner: &'static Interner,
 }
 
 impl LoweringCtx {
     const POISONED_NAME: &'static str = "poisoned";
 
-    pub(super) fn new(interner: &'static Interner) -> Self {
-        Self { interner }
+    pub(super) fn new(this_ctx: ThisCtx, interner: &'static Interner) -> Self {
+        Self { this_ctx, interner }
+    }
+
+    pub(super) fn set_this_ctx(&mut self, this_ctx: ThisCtx) {
+        self.this_ctx = this_ctx;
+    }
+
+    pub(super) fn set_associated_types(&mut self, assoc_types: Vec<(Word, TypeKind)>) {
+        match &mut self.this_ctx {
+            ThisCtx::Function => ice("cannot set associated types with `ThisCtx::Function`"),
+            ThisCtx::TypeApplication(_) => {
+                ice("cannot set associated types with `ThisCtx::TypeApplication`")
+            }
+            ThisCtx::TraitApplication(_, old_assoc_types) => *old_assoc_types = assoc_types,
+        }
     }
 
     pub(super) fn lower_name(&self, name: Option<ast::Name>) -> Spanned<Word> {
@@ -150,6 +165,6 @@ impl LoweringCtx {
         generic_params: &GenericParams,
     ) -> Spanned<Type> {
         let path = self.lower_path(this_path_type.path(), generic_params);
-        path.map(|path| Type::this_path(path))
+        path.map(|path| Type::this_path(path, self.this_ctx.clone()))
     }
 }
