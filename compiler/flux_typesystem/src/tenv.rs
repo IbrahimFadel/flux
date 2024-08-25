@@ -226,14 +226,15 @@ impl<'a> TEnv<'a> {
             //         .join(", ")
             // );
             // for arg in trait_restriction.args.iter() {
-            let tkinds = potential_applications
+            let tkinds: Vec<_> = potential_applications
                 .iter()
                 .map(|app| &app.to)
                 .cloned()
                 .collect();
-            self.get_mut(tid)
-                .push_restriction(Restriction::EqualsOneOf(tkinds));
-
+            if !tkinds.is_empty() {
+                self.get_mut(tid)
+                    .push_restriction(Restriction::EqualsOneOf(tkinds));
+            }
             // for (i, arg) in trait_restriction.args.iter().enumerate() {
             //     let tkinds = potential_applications
             //         .iter()

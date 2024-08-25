@@ -227,14 +227,7 @@ fn lower_function_body(
         }
     }
 
-    format_function_with_types(
-        fn_decl,
-        body,
-        &exprs_copy,
-        &mut tenv,
-        source_cache,
-        ctx.file_id,
-    );
+    format_function_with_types(body, &exprs_copy, &mut tenv, source_cache, ctx.file_id);
 }
 
 /*

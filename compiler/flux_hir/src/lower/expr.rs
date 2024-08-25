@@ -238,10 +238,36 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             .ok();
 
         if let Some(trait_id) = trait_id {
-            self.tenv
-                .add_trait_restriction(lhs_tid, TraitRestriction::new(trait_id, vec![rhs_tid]));
-            self.tenv
-                .add_trait_restriction(rhs_tid, TraitRestriction::new(trait_id, vec![lhs_tid]));
+            let include_other_side_as_arg = match op.inner {
+                Op::Add | Op::Sub | Op::Mul | Op::Div => true,
+                _ => false,
+            };
+            let is_output = match op.inner {
+                Op::Add | Op::Sub | Op::Mul | Op::Div => true,
+                _ => false,
+            };
+            self.tenv.add_trait_restriction(
+                lhs_tid,
+                TraitRestriction::new(
+                    trait_id,
+                    if include_other_side_as_arg {
+                        vec![rhs_tid]
+                    } else {
+                        vec![]
+                    },
+                ),
+            );
+            self.tenv.add_trait_restriction(
+                rhs_tid,
+                TraitRestriction::new(
+                    trait_id,
+                    if include_other_side_as_arg {
+                        vec![lhs_tid]
+                    } else {
+                        vec![]
+                    },
+                ),
+            );
 
             let item_tree = &self.packages.get(trait_id.pkg_id).item_tree;
             let trait_decl = item_tree.traits.get(trait_id.inner);
@@ -259,11 +285,13 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             let method_return_ty = self.tenv.insert(method.return_ty.inner.clone().at(span));
             self.tenv.add_equality(tid, method_return_ty);
 
-            self.tenv.add_assoc_type_restriction(
-                tid,
-                lhs_tid,
-                TraitRestriction::new(trait_id, vec![rhs_tid]),
-            );
+            if is_output {
+                self.tenv.add_assoc_type_restriction(
+                    tid,
+                    lhs_tid,
+                    TraitRestriction::new(trait_id, vec![rhs_tid]),
+                );
+            }
         }
 
         self.exprs

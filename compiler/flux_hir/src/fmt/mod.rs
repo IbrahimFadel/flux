@@ -2,17 +2,16 @@ use std::collections::HashSet;
 
 use flux_diagnostics::{Diagnostic, DiagnosticCode, SourceCache};
 use flux_id::{id, Map};
-use flux_parser::ast::AstNode;
 use flux_typesystem::{TEnv, TypeKind, Typed};
-use flux_util::{FileId, FileSpanned, WithSpan};
+use flux_util::{FileId, WithSpan};
 
-use crate::def::{expr::Expr, item::FnDecl};
+use crate::def::expr::Expr;
 
 macro_rules! format_tid {
     ($tid:expr, $tenv:expr, $file_id:expr) => {
         format!("'{}: {}{}", Into::<u32>::into($tid), $tenv.fmt_tid($tid), {
             let tkind = $tenv.resolve($tid).unwrap_or(TypeKind::Unknown);
-            if tkind != $tenv.get($tid).kind {
+            if tkind != $tenv.get_inner($tid).kind {
                 format!(" OR {}", $tenv.fmt_typekind(&tkind))
             } else {
                 format!("")
@@ -23,7 +22,6 @@ macro_rules! format_tid {
 }
 
 pub(super) fn format_function_with_types(
-    fn_decl: &FnDecl,
     body: id::Expr,
     exprs: &Map<id::Expr, Typed<Expr>>,
     tenv: &mut TEnv,
