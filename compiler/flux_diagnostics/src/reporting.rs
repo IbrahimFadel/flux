@@ -54,9 +54,10 @@ impl SourceCache {
         diagnostics: &[Diagnostic],
         buf: &mut W,
     ) {
-        let cfg = Config::default()
-            .with_char_set(CharSet::Ascii)
-            .with_color(false);
+        // let cfg = Config::default()
+        //     .with_char_set(CharSet::Ascii)
+        //     .with_color(false);
+        let cfg = Config::default();
         for diagnostic in diagnostics {
             let report = diagnostic.as_report(cfg);
             report.write(self, &mut *buf).unwrap();

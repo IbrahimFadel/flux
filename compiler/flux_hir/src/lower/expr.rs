@@ -7,18 +7,21 @@ use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxToken,
 };
-use flux_typesystem::{FnSignature, TEnv, ThisCtx, TraitRestriction, Type, Typed, WithType};
-use flux_util::{FileId, FileSpanned, InFile, Interner, Span, Spanned, ToSpan, WithSpan};
+use flux_typesystem::{
+    ConcreteKind, FnSignature, TEnv, ThisCtx, TraitRestriction, Type, TypeKind, Typed, WithType,
+};
+use flux_util::{FileId, FileSpanned, InFile, Interner, Span, Spanned, ToSpan, WithSpan, Word};
 
 use crate::{
     builtin,
     def::{
-        expr::{BinOp, Cast, Expr, If, MemberAccess, Op, StructExpr},
+        expr::{BinOp, Cast, Expr, If, Intrinsic, MemberAccess, Op, StructExpr},
         item::StructDecl,
         GenericParams, StructExprField, StructExprFieldList,
     },
     diagnostics::LowerError,
     intrinsics,
+    item::ItemTreeIdx,
     name_res::item::ItemResolver,
     Package,
 };
@@ -44,12 +47,13 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         exprs: &'a mut Map<id::Expr, Typed<Expr>>,
         packages: &'a Map<id::Pkg, Package>,
         tenv: &'a mut TEnv<'res>,
+        this_ctx: ThisCtx,
         item_resolver: &'a ItemResolver<'a>,
         interner: &'static Interner,
         diagnostics: &'a mut Vec<Diagnostic>,
     ) -> Self {
         Self {
-            type_lowerer: r#type::LoweringCtx::new(ThisCtx::Function, interner),
+            type_lowerer: r#type::LoweringCtx::new(this_ctx, interner),
             file_id,
             mod_id,
             exprs,
@@ -254,6 +258,12 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
 
             let method_return_ty = self.tenv.insert(method.return_ty.inner.clone().at(span));
             self.tenv.add_equality(tid, method_return_ty);
+
+            self.tenv.add_assoc_type_restriction(
+                tid,
+                lhs_tid,
+                TraitRestriction::new(trait_id, vec![rhs_tid]),
+            );
         }
 
         self.exprs
@@ -433,12 +443,107 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         let lhs = self.lower(member_access_expr.lhs(), generic_params);
         let lhs_tid = self.exprs.get(lhs).tid;
         let rhs = self.type_lowerer.lower_name(member_access_expr.rhs());
-        self.tenv.add_field_requirement(lhs_tid, rhs.inner);
 
-        self.exprs.insert(
-            Expr::MemberAccess(MemberAccess::new(lhs, rhs))
-                .with_type(self.tenv.insert(Type::unknown().at(span))),
-        )
+        let lhs_ty = self.tenv.get(lhs_tid);
+        let tid =
+            self.resolve_type_of_struct_field(&lhs_ty.kind.clone().at(lhs_ty.span), &rhs, span);
+
+        // println!("{}", self.tenv.fmt_tid(tid));
+        // let tid = self.tenv.insert(Type::unknown().at(span));
+        // self.tenv.add_equality(tid, expected_tid);
+
+        self.exprs
+            .insert(Expr::MemberAccess(MemberAccess::new(lhs, rhs)).with_type(tid))
+    }
+
+    fn resolve_type_of_struct_field(
+        &mut self,
+        typekind: &Spanned<TypeKind>,
+        field_name: &Spanned<Word>,
+        span: Span,
+    ) -> id::Ty {
+        match &typekind.inner {
+            TypeKind::ThisPath(this_path) => match &self.type_lowerer.this_ctx {
+                ThisCtx::Function | ThisCtx::TraitDecl => {
+                    self.diagnostics.push(
+                        LowerError::CouldNotResolveStruct {
+                            strukt: this_path.path.to_string(self.interner),
+                            strukt_file_span: typekind.span.in_file(self.file_id),
+                        }
+                        .to_diagnostic(),
+                    );
+                    self.tenv.insert(Type::unknown().at(span))
+                }
+                ThisCtx::TraitApplication(this_ty, _) | ThisCtx::TypeApplication(this_ty) => self
+                    .resolve_type_of_struct_field(
+                        &(*this_ty.clone()).at(typekind.span),
+                        field_name,
+                        span,
+                    ),
+            },
+            TypeKind::Concrete(ConcreteKind::Path(path)) => self
+                .item_resolver
+                .resolve_path(path.in_mod(self.mod_id))
+                .map(|(pkg_id, item_id)| match item_id.inner {
+                    ItemTreeIdx::Struct(struct_idx) => {
+                        let pkg = self.packages.get(pkg_id);
+                        let strukt = pkg.item_tree.structs.get(struct_idx);
+                        let file_id = pkg.module_tree[item_id.mod_id].file_id;
+                        strukt
+                            .fields
+                            .iter()
+                            .find_map(|field| {
+                                if field.name.inner == field_name.inner {
+                                    Some(self.tenv.insert(field.ty.inner.clone().at(span)))
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                self.diagnostics.push(
+                                    LowerError::UnknownStructField {
+                                        field: self.interner.resolve(field_name).to_string(),
+                                        field_file_span: field_name.span.in_file(self.file_id),
+                                        strukt: self.interner.resolve(&strukt.name).to_string(),
+                                        strukt_file_span: strukt.name.span.in_file(file_id),
+                                    }
+                                    .to_diagnostic(),
+                                );
+                                self.tenv.insert(Type::unknown().at(span))
+                            })
+                    }
+                    _ => {
+                        self.diagnostics.push(
+                            LowerError::MemberAccessOnNonStruct {
+                                expr: (),
+                                expr_file_span: typekind.span.in_file(self.file_id),
+                            }
+                            .to_diagnostic(),
+                        );
+                        self.tenv.insert(Type::unknown().at(span))
+                    }
+                })
+                .unwrap_or_else(|_| {
+                    self.diagnostics.push(
+                        LowerError::CouldNotResolveStruct {
+                            strukt: path.to_string(self.interner),
+                            strukt_file_span: typekind.span.in_file(self.file_id),
+                        }
+                        .to_diagnostic(),
+                    );
+                    self.tenv.insert(Type::unknown().at(span))
+                }),
+            _ => {
+                self.diagnostics.push(
+                    LowerError::MemberAccessOnNonStruct {
+                        expr: (),
+                        expr_file_span: typekind.span.in_file(self.file_id),
+                    }
+                    .to_diagnostic(),
+                );
+                self.tenv.insert(Type::unknown().at(span))
+            }
+        }
     }
 
     fn lower_if_expr(&mut self, if_expr: ast::IfExpr, generic_params: &GenericParams) -> id::Expr {
@@ -500,14 +605,15 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
 
         match intrinsics::get_signature(&name, self.interner) {
             Some(signature) => {
-                let _args = self.lower_arg_list(
+                let args = self.lower_arg_list(
                     intrinsic_expr.arg_list(),
                     generic_params,
                     (&signature).file_span(self.file_id, span),
                 );
 
                 let tid = self.tenv.insert(signature.return_ty().clone().at(span));
-                self.exprs.insert(Expr::Intrinsic.with_type(tid))
+                self.exprs
+                    .insert(Expr::Intrinsic(Intrinsic::new(name, args)).with_type(tid))
             }
             None => {
                 self.diagnostics.push(

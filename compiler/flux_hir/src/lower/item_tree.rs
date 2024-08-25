@@ -210,6 +210,9 @@ impl<'a> LoweringCtx<'a> {
             &mut generic_params,
             trait_decl.where_clause(),
         );
+
+        self.type_lowerer.set_this_ctx(ThisCtx::TraitDecl);
+
         let associated_types =
             self.lower_associated_type_decls(trait_decl.associated_types(), &generic_params);
         let methods = self.lower_trait_method_decls(trait_decl.method_decls(), &generic_params);

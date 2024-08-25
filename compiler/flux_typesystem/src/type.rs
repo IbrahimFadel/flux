@@ -3,7 +3,7 @@ use std::{collections::HashSet, ops::Deref};
 use flux_id::id::{self, InPkg};
 use flux_util::{Path, Word};
 
-use crate::ThisCtx;
+use crate::{ThisCtx, TraitApplication};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Type {
@@ -76,9 +76,9 @@ impl Type {
         }
     }
 
-    pub const fn this_path(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
+    pub fn this_path(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
         Self {
-            kind: TypeKind::ThisPath(ThisPath::new(path, this_ctx)),
+            kind: TypeKind::ThisPath(ThisPath::new(path, vec![this_ctx])),
             restrictions: vec![],
         }
     }
@@ -157,12 +157,15 @@ pub enum TypeKind {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ThisPath {
     pub path: Path<Word, Type>,
-    pub this_ctx: ThisCtx,
+    pub potential_this_ctx: Vec<ThisCtx>,
 }
 
 impl ThisPath {
-    pub const fn new(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
-        Self { path, this_ctx }
+    pub const fn new(path: Path<Word, Type>, potential_this_ctx: Vec<ThisCtx>) -> Self {
+        Self {
+            path,
+            potential_this_ctx,
+        }
     }
 }
 
@@ -177,6 +180,9 @@ pub enum ConcreteKind {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Restriction {
     Equals(id::Ty),
+    EqualsOneOf(Vec<TypeKind>),
+    AssocTypeOf(id::Ty, TraitRestriction),
+    // PossibleAssocTypes(Vec<TypeKind>),
     Field(Word),
     Trait(TraitRestriction),
 }

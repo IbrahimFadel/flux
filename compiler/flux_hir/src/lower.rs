@@ -1,6 +1,6 @@
 use std::mem;
 
-use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
+use flux_diagnostics::{ice, Diagnostic, SourceCache, ToDiagnostic};
 use flux_id::{
     id::{self, InPkg},
     Map,
@@ -14,6 +14,7 @@ use flux_util::{FileId, Interner, WithSpan};
 
 use crate::{
     def::{expr::Expr, item::ApplyDecl},
+    fmt::format_function_with_types,
     item::{ItemId, ItemTreeIdx},
     name_res::item::ItemResolver,
     Package,
@@ -54,6 +55,7 @@ pub(super) fn lower_item_bodies(
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
+    source_cache: &SourceCache,
 ) {
     let item_tree = &packages.get(mod_id.pkg_id).item_tree;
     let file_id = packages.get(mod_id.pkg_id).module_tree[*mod_id].file_id;
@@ -75,6 +77,7 @@ pub(super) fn lower_item_bodies(
             exprs,
             interner,
             diagnostics,
+            source_cache,
         ),
         // ItemTreeIdx::BuiltinType(_) => todo!(),
         // ItemTreeIdx::Enum(_) => todo!(),
@@ -87,6 +90,7 @@ pub(super) fn lower_item_bodies(
             exprs,
             interner,
             diagnostics,
+            source_cache,
         ),
         // ItemTreeIdx::Module(_) => todo!(),
         // ItemTreeIdx::Struct(_) => todo!(),
@@ -104,6 +108,7 @@ fn lower_apply_bodies(
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
+    source_cache: &SourceCache,
 ) {
     let apply_decl = ctx.item_tree.applies.get(apply_id);
 
@@ -117,6 +122,7 @@ fn lower_apply_bodies(
             exprs,
             interner,
             diagnostics,
+            source_cache,
         );
     });
 }
@@ -130,25 +136,26 @@ fn lower_function_body(
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
+    source_cache: &SourceCache,
 ) {
     let fn_decl = ctx.item_tree.functions.get(function_id);
     let mut tenv = TEnv::new(trait_resolver, interner);
 
-    if let Some(apply_decl) = apply_decl {
+    let this_ctx = apply_decl.map_or(ThisCtx::Function, |apply_decl| {
         let assoc_types: Vec<_> = apply_decl
             .assoc_types
             .iter()
             .map(|assoc_type| (assoc_type.name.inner, assoc_type.ty.kind.clone()))
             .collect();
 
-        let this_ctx = match apply_decl.trt {
+        match apply_decl.trt {
             Some(_) => {
                 ThisCtx::TraitApplication(Box::new(apply_decl.to_ty.kind.clone()), assoc_types)
             }
             None => ThisCtx::TypeApplication(Box::new(apply_decl.to_ty.kind.clone())),
-        };
-        tenv.set_this_ctx(this_ctx);
-    }
+        }
+    });
+    tenv.set_this_ctx(this_ctx.clone());
 
     fn_decl.params.iter().for_each(|param| {
         let tid = tenv.insert(param.ty.clone());
@@ -166,6 +173,7 @@ fn lower_function_body(
         exprs,
         ctx.packages,
         &mut tenv,
+        this_ctx,
         item_resolver,
         interner,
         diagnostics,
@@ -203,26 +211,11 @@ fn lower_function_body(
         *exprs.as_mut() = final_unresolved_expressions;
     };
 
-    // for expr in unresolved_expressions.iter() {
-    //     println!("Expr: {:#?}", expr.inner);
-    // }
-
-    // println!("{} unresolved types", unresolved_expressions.len());
-    // for unresolved_expr in unresolved_expressions {
-    //     println!(
-    //         "could not resolve type of {}",
-    //         tenv.fmt_tid(unresolved_expr.tid)
-    //     );
-    // }
-
     for expr in exprs_copy.values() {
         // println!("resolving {:?}", expr.inner);
         match tenv.resolve(expr.tid) {
-            Ok(tkind) => {
-                // println!("{:?}: {}", expr.inner, tenv.fmt_typekind(&tkind));
-            }
+            Ok(tkind) => {}
             Err(err) => {
-                // println!("{:?} unresolved with: {:#?}", expr.inner, err);
                 diagnostics.push(
                     TypeError::CouldNotInfer {
                         ty: (),
@@ -234,54 +227,14 @@ fn lower_function_body(
         }
     }
 
-    // for expr in unresolved_expressions {
-    //     match tenv.resolve(expr.tid) {
-    //         Ok(typekind) => {
-    //             println!("Resolved to {}", tenv.fmt_typekind(&typekind));
-    //         }
-    //         Err(_) => {}
-    //     }
-    // }
-
-    // loop {
-    //     let restrictions = mem::take(&mut tenv.get_mut(body_tid).restrictions);
-    //     let new_restrictions = match tenv.resolve(body_tid) {
-    //         Ok(concrete) => {
-    //             println!("Resolved body to: {}", tenv.fmt_concrete_kind(&concrete));
-    //             break;
-    //         }
-    //         Err(r) => r,
-    //     };
-
-    //     let new_num_restrictions = new_restrictions.len();
-    //     tenv.get_mut(body_tid).restrictions = new_restrictions;
-
-    //     if new_num_restrictions == 0 {
-    //         break;
-    //     } else if new_num_restrictions == restrictions.len() {
-    //         diagnostics.push(
-    //             TypeError::CouldNotInfer {
-    //                 ty: (),
-    //                 ty_file_span: tenv.get_span(body_tid).in_file(ctx.file_id),
-    //             }
-    //             .to_diagnostic(),
-    //         );
-    //         break;
-    //     }
-    // }
-
-    // for expr in exprs.values() {}
-
-    // println!("Function: `{}`\n{tenv}", interner.resolve(&fn_decl.name));
-
-    // let body_ty = tenv
-    //     .resolve(exprs.get(body).tid, ctx.file_id)
-    //     .map_err(|errs| diagnostics.extend(errs))
-    //     .ok();
-
-    // if let Some(body_ty) = body_ty {
-    //     println!("Resolved body to: {}", tenv.fmt_concrete_kind(&body_ty));
-    // }
+    format_function_with_types(
+        fn_decl,
+        body,
+        &exprs_copy,
+        &mut tenv,
+        source_cache,
+        ctx.file_id,
+    );
 }
 
 /*

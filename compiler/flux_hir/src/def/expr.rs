@@ -23,7 +23,7 @@ pub enum Expr {
     Struct(StructExpr),
     MemberAccess(MemberAccess),
     If(If),
-    Intrinsic,
+    Intrinsic(Intrinsic),
     // Str(Str),
     Poisoned,
 }
@@ -250,8 +250,13 @@ impl If {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum Intrinsic {
-    Panic,
-    CmpEqU8,
-    AddU8,
+pub struct Intrinsic {
+    pub name: Word,
+    pub args: Spanned<Vec<id::Expr>>,
+}
+
+impl Intrinsic {
+    pub fn new(name: Word, args: Spanned<Vec<id::Expr>>) -> Self {
+        Self { name, args }
+    }
 }

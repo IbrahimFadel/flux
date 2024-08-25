@@ -187,4 +187,13 @@ pub enum LowerError {
         #[filespanned]
         strukt: String,
     },
+    #[error(
+        location = strukt,
+        primary = "could not resolve struct",
+        label at strukt = "could not resolve struct `{strukt}`"
+    )]
+    CouldNotResolveStruct {
+        #[filespanned]
+        strukt: String,
+    },
 }

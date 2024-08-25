@@ -9,7 +9,7 @@ use crate::def::GenericParams;
 use super::lower_node;
 
 pub(super) struct LoweringCtx {
-    this_ctx: ThisCtx,
+    pub(super) this_ctx: ThisCtx,
     interner: &'static Interner,
 }
 
@@ -27,6 +27,7 @@ impl LoweringCtx {
     pub(super) fn set_associated_types(&mut self, assoc_types: Vec<(Word, TypeKind)>) {
         match &mut self.this_ctx {
             ThisCtx::Function => ice("cannot set associated types with `ThisCtx::Function`"),
+            ThisCtx::TraitDecl => ice("cannot set associated types with `ThisCtx::TraitDecl`"),
             ThisCtx::TypeApplication(_) => {
                 ice("cannot set associated types with `ThisCtx::TypeApplication`")
             }

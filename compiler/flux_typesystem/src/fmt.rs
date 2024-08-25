@@ -20,6 +20,8 @@ impl<'a> Display for TEnv<'a> {
                             relevant_types.push(*other);
                         }
                     }
+                    Restriction::EqualsOneOf(_) => todo!(),
+                    Restriction::AssocTypeOf(_, _) => todo!(),
                     Restriction::Field(_) => {}
                     Restriction::Trait(_) => {}
                 }
@@ -54,6 +56,8 @@ impl<'a> Display for TEnv<'a> {
                                 Into::<u32>::into(*tid),
                                 Into::<u32>::into(*other),
                             ),
+                            Restriction::EqualsOneOf(_) => todo!(),
+                            Restriction::AssocTypeOf(_, _) => todo!(),
                             Restriction::Field(name) => format!(
                                 "'{} has field `{}`",
                                 Into::<u32>::into(*tid),

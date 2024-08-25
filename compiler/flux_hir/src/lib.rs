@@ -16,6 +16,7 @@ use package::PkgBuilder;
 mod builtin;
 pub mod def;
 mod diagnostics;
+mod fmt;
 mod intrinsics;
 mod item;
 mod item_scope;
@@ -64,6 +65,7 @@ pub fn build_package_bodies(
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
+    source_cache: &SourceCache,
 ) {
     let item_tree = &packages.get(package_id).item_tree;
 
@@ -77,6 +79,7 @@ pub fn build_package_bodies(
             exprs,
             interner,
             diagnostics,
+            source_cache,
         );
         // if matches!(item_id.inner, item::ItemTreeIdx::Apply(_)) {
         //     break;
@@ -112,10 +115,17 @@ fn build_trait_resolution_table(
                                 (trait_id, apply_id)
                             })
                             .ok();
+
                         if let Some((trait_id, apply_id)) = application {
+                            let assoc_types = apply_decl
+                                .assoc_types
+                                .iter()
+                                .map(|assoc_ty| (assoc_ty.name.inner, assoc_ty.ty.kind.clone()))
+                                .collect();
                             let app = TraitApplication::new(
                                 apply_decl.to_ty.kind.clone(),
                                 trt.args.iter().map(|ty| ty.kind.clone()).collect(),
+                                assoc_types,
                             );
                             trait_applications.entry(trait_id).or_default().push(app);
                         }

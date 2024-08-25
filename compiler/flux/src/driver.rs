@@ -82,6 +82,7 @@ impl Driver {
                 &mut exprs,
                 self.interner,
                 &mut self.diagnostics,
+                &self.source_cache,
             );
         }
 

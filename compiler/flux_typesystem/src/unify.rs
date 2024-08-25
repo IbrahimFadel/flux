@@ -1,3 +1,5 @@
+use std::convert::identity;
+
 use flux_diagnostics::{Diagnostic, ToDiagnostic};
 use flux_id::id;
 use flux_util::{InFile, Span, WithSpan};
@@ -25,10 +27,31 @@ impl<'a> TEnv<'a> {
                     .set_with(b, |old_ty| old_ty.map(|ty| ty.to_kind(Ref(a))));
                 Ok(())
             }
+            (ThisPath(this_path), _) => {
+                let a_ty = self.get(a);
+                let potential_this = self.resolve_this_path(this_path);
+                if potential_this.len() == 1 {
+                    let this_tid = self.insert(
+                        Type::new(potential_this[0].clone(), a_ty.restrictions.clone())
+                            .at(a_ty.span),
+                    );
+                    self.unify(this_tid, b, unification_span)
+                } else {
+                    Err(self.type_mismatch(a, b, unification_span))
+                }
+            }
             (_, ThisPath(this_path)) => {
-                let tkind = self.resolve_this_path(this_path);
-                let tid = self.insert(Type::new(tkind.clone(), vec![]).at(self.get_span(b)));
-                self.unify(a, tid, unification_span)
+                let b_ty = self.get(b);
+                let potential_this = self.resolve_this_path(this_path);
+                if potential_this.len() == 1 {
+                    let this_tid = self.insert(
+                        Type::new(potential_this[0].clone(), b_ty.restrictions.clone())
+                            .at(b_ty.span),
+                    );
+                    self.unify(a, this_tid, unification_span)
+                } else {
+                    Err(self.type_mismatch(a, b, unification_span))
+                }
             }
             (Concrete(a_concrete), Concrete(b_concrete)) => match (a_concrete, b_concrete) {
                 (ConcreteKind::Path(a_path), ConcreteKind::Path(b_path)) => {
@@ -91,6 +114,7 @@ impl<'a> TEnv<'a> {
                 }
                 _ => Err(self.type_mismatch(a, b, unification_span)),
             },
+            (Int, Int) => Ok(()),
             (Concrete(ConcreteKind::Path(path)), Int) if path.is_in(int_paths(self.interner)) => {
                 let new_tkind = TypeKind::Concrete(ConcreteKind::Path(path.clone()));
                 self.types
@@ -103,35 +127,72 @@ impl<'a> TEnv<'a> {
                     .set_with(a, |old_ty| old_ty.map(|ty| ty.to_kind(new_tkind)));
                 Ok(())
             }
-            (Int, Int) => Ok(()),
-            // (Concrete(ConcreteKind::Path(path)), Int) => match int_id {
-            //     Some(id) => self.unify(a, id, unification_span),
-            //     None => {
-            //         if path.is_in(int_paths(self.interner)) {
-            //             self.types
-            //                 .set_with(b, |old_ty| old_ty.map_inner(|_| Type::Int(Some(a))));
-            //             Ok(())
-            //         } else {
-            //             return Err(self.type_mismatch(a, b, unification_span));
-            //         }
-            //     }
-            // },
-            (ThisPath(this_path), _) => {
-                let a_ty = self.get(a);
-                let this = self.resolve_this_path(this_path);
-                let this_tid =
-                    self.insert(Type::new(this.clone(), a_ty.restrictions.clone()).at(a_ty.span));
-                self.unify(this_tid, b, unification_span)
-            }
             (Generic(a_gen), Generic(b_gen)) if a_gen == b_gen => Ok(()),
             (_, _) => Err(self.type_mismatch(a, b, unification_span)),
         }
     }
 
     pub fn types_unify(&self, a: &TypeKind, b: &TypeKind) -> bool {
+        // println!(
+        //     "do {} and {} unify?",
+        //     self.fmt_typekind(a),
+        //     self.fmt_typekind(b)
+        // );
         use TypeKind::*;
         match (a, b) {
             (_, Unknown) | (Unknown, _) => false,
+            (Concrete(a_concrete), Concrete(b_concrete)) => {
+                self.concretes_unify(a_concrete, b_concrete)
+            }
+            (Concrete(ConcreteKind::Path(path)), Int)
+            | (Int, Concrete(ConcreteKind::Path(path)))
+                if path.is_in(int_paths(self.interner)) =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn assoc_types_unify(&self, a: &TypeKind, b: &TypeKind) {}
+
+    fn concretes_unify(&self, a_concrete: &ConcreteKind, b_concrete: &ConcreteKind) -> bool {
+        use ConcreteKind::*;
+        match (a_concrete, b_concrete) {
+            (Array(a_arr, n_a), Array(b_arr, n_b)) => {
+                let (n_a, n_b) = (n_a, n_b);
+                if !self.types_unify(&a_arr.kind, &b_arr.kind) {
+                    return false;
+                }
+                n_a == n_b
+            }
+            (Path(a_path), Path(b_path)) => {
+                if a_path.segments != b_path.segments {
+                    return false;
+                }
+                let a_args_len = a_path.args.len();
+                let b_args_len = b_path.args.len();
+                if a_args_len < b_args_len {
+                    for i in 0..a_args_len {
+                        if !self.types_unify(&a_path.args[i].kind, &b_path.args[i].kind) {
+                            return false;
+                        }
+                    }
+                } else if b_args_len < a_args_len {
+                    for i in 0..b_args_len {
+                        if !self.types_unify(&a_path.args[i].kind, &b_path.args[i].kind) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            (Ptr(a_ptr), Ptr(b_ptr)) => self.types_unify(&a_ptr.kind, &b_ptr.kind),
+            (Tuple(a_tup), Tuple(b_tup)) => a_tup
+                .iter()
+                .zip(b_tup.iter())
+                .map(|(a_inner, b_inner)| self.types_unify(&a_inner.kind, &b_inner.kind))
+                .any(identity),
             _ => false,
         }
     }

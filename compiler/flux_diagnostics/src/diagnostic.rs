@@ -133,6 +133,7 @@ pub enum DiagnosticCode {
     IncorrectStructFieldsInInitialization,
     MemberAccessOnNonStruct,
     UnknownStructField,
+    CouldNotResolveStruct,
 
     TypeMismatch,
     CouldNotInfer,

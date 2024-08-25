@@ -8,19 +8,25 @@ use crate::TypeKind;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ThisCtx {
     Function,
+    TraitDecl,
     TypeApplication(Box<TypeKind>),
     TraitApplication(Box<TypeKind>, Vec<(Word, TypeKind)>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TraitApplication {
     pub to: TypeKind,
     pub args: Vec<TypeKind>,
+    pub assoc_types: Vec<(Word, TypeKind)>,
 }
 
 impl TraitApplication {
-    pub fn new(to: TypeKind, args: Vec<TypeKind>) -> Self {
-        Self { to, args }
+    pub fn new(to: TypeKind, args: Vec<TypeKind>, assoc_types: Vec<(Word, TypeKind)>) -> Self {
+        Self {
+            to,
+            args,
+            assoc_types,
+        }
     }
 }
 

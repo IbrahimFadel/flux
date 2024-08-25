@@ -1,13 +1,13 @@
 use flux_diagnostics::ice;
 use flux_id::{id, Map};
-use flux_util::{FileId, Interner, Span, Spanned, WithSpan, Word};
+use flux_util::{Interner, Span, Spanned, WithSpan, Word};
 
 use crate::{
     r#trait::ThisCtx,
     r#type::{Restriction, ThisPath, Type},
     resolve::TraitResolver,
     scope::Scope,
-    TraitRestriction, TypeKind,
+    TraitApplication, TraitRestriction, TypeKind,
 };
 
 pub struct TEnv<'a> {
@@ -41,8 +41,24 @@ impl<'a> TEnv<'a> {
         self.types.get(tid)
     }
 
+    pub fn get_inner(&self, tid: id::Ty) -> &Spanned<Type> {
+        let mut tid = tid;
+        while let TypeKind::Ref(id) = self.types.get(tid).kind {
+            tid = id;
+        }
+        self.get(tid)
+    }
+
     pub fn get_mut(&mut self, tid: id::Ty) -> &mut Spanned<Type> {
         self.types.get_mut(tid)
+    }
+
+    pub fn get_inner_mut(&mut self, tid: id::Ty) -> &mut Spanned<Type> {
+        let mut tid = tid;
+        while let TypeKind::Ref(id) = self.types.get(tid).kind {
+            tid = id;
+        }
+        self.get_mut(tid)
     }
 
     pub fn add_equality(&mut self, a: id::Ty, b: id::Ty) {
@@ -64,6 +80,11 @@ impl<'a> TEnv<'a> {
     pub fn add_trait_restriction(&mut self, tid: id::Ty, restriction: TraitRestriction) {
         let ty = self.types.get_mut(tid);
         ty.push_restriction(Restriction::Trait(restriction));
+    }
+
+    pub fn add_assoc_type_restriction(&mut self, tid: id::Ty, of: id::Ty, trt: TraitRestriction) {
+        let ty = self.types.get_mut(tid);
+        ty.push_restriction(Restriction::AssocTypeOf(of, trt));
     }
 
     pub fn insert_local(&mut self, name: Word, tid: id::Ty) {
@@ -91,43 +112,48 @@ impl<'a> TEnv<'a> {
         self.get(tid).span
     }
 
-    pub fn resolve_this_path<'b>(&'b self, this_path: &'b ThisPath) -> &TypeKind {
-        match &this_path.this_ctx {
-            ThisCtx::Function => todo!(),
-            ThisCtx::TypeApplication(this) => this,
-            ThisCtx::TraitApplication(this, assoc_types) => match this_path.path.len() {
-                0 => this,
-                1 => {
-                    let name = this_path.path.get_nth(0);
-                    assoc_types
-                        .iter()
-                        .find_map(
-                            |(assoc_name, ty)| {
-                                if assoc_name == name {
-                                    Some(ty)
-                                } else {
-                                    None
-                                }
-                            },
-                        )
-                        .unwrap_or_else(|| {
-                            ice(format!(
-                                "no associated type `{}` in `ThisCtx`: {:#?}",
-                                self.interner.resolve(name),
-                                this_path.this_ctx
-                            ))
-                        })
-                }
-                2.. => unimplemented!(),
-            },
-        }
+    pub fn resolve_this_path<'b>(&'b self, this_path: &'b ThisPath) -> Vec<&TypeKind> {
+        this_path
+            .potential_this_ctx
+            .iter()
+            .filter_map(|this_ctx| match this_ctx {
+                ThisCtx::Function | ThisCtx::TraitDecl => None,
+                ThisCtx::TypeApplication(this) => Some(&**this),
+                ThisCtx::TraitApplication(this, assoc_types) => match this_path.path.len() {
+                    0 => Some(this),
+                    1 => {
+                        let name = this_path.path.get_nth(0);
+                        let types = assoc_types
+                            .iter()
+                            .find_map(
+                                |(assoc_name, ty)| {
+                                    if assoc_name == name {
+                                        Some(ty)
+                                    } else {
+                                        None
+                                    }
+                                },
+                            )
+                            .unwrap_or_else(|| {
+                                ice(format!(
+                                    "no associated type `{}` in `ThisCtx`: {:#?}",
+                                    self.interner.resolve(name),
+                                    this_path.potential_this_ctx
+                                ))
+                            });
+                        Some(types)
+                    }
+                    2.. => unimplemented!(),
+                },
+            })
+            .collect()
     }
 
     pub fn resolve_trait_restriction(
         &mut self,
         tid: id::Ty,
         trait_restriction: &TraitRestriction,
-    ) -> Result<(), ()> {
+    ) -> Result<Vec<TraitApplication>, ()> {
         // println!(
         //     "resolving restriction {}: {:?}{}",
         //     self.fmt_tid(tid),
@@ -146,51 +172,150 @@ impl<'a> TEnv<'a> {
         //         )
         //     }
         // );
+        let to_ty = &self.get(tid).kind;
 
-        // let args = application
-        //     .args
-        //     .iter()
-        //     .map(|arg| self.insert(Type::new(arg.clone(), vec![]).at(Span::poisoned())))
-        //     .collect();
-
-        let unification_span = Span::poisoned().in_file(FileId::poisoned());
-
-        let application = self
-            .trait_resolver
-            .traits
-            .get(&trait_restriction.trait_id)
-            .map(|applications| {
-                applications.iter().find_map(|application| {
-                    let app_to =
-                        self.insert(Type::new(application.to.clone(), vec![]).at(Span::poisoned()));
-                    if self.unify(app_to, tid, unification_span).is_ok() {
-                        let args_match = application
-                            .args
-                            .iter()
-                            .zip(trait_restriction.args.iter())
-                            .filter(|(a, b)| {
-                                let a = self
-                                    .insert(Type::new((**a).clone(), vec![]).at(Span::poisoned()));
-                                self.unify(a, **b, unification_span).is_ok()
-                            })
-                            .count()
-                            == trait_restriction.args.len();
-                        if args_match {
-                            Some(application)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
+        if let Some(applications) = self.trait_resolver.traits.get(&trait_restriction.trait_id) {
+            let potential_applications: Vec<_> = applications
+                .iter()
+                .filter(|app| {
+                    let args_match = app
+                        .args
+                        .iter()
+                        .zip(trait_restriction.args.iter())
+                        .filter(|(a, b)| {
+                            // println!(
+                            //     "checking {} and {}",
+                            //     self.fmt_typekind(a),
+                            //     self.fmt_typekind(&self.get(**b).kind)
+                            // );
+                            self.types_unify(a, &self.get(**b).kind)
+                        })
+                        .count()
+                        == trait_restriction.args.len();
+                    // println!("{:?} and {:?}", app.args, trait_restriction.args);
+                    // println!(
+                    //     "Tos match {}, Args match {}",
+                    //     self.types_unify(&app.to, to_ty),
+                    //     args_match
+                    // );
+                    // println!(
+                    //     "checking {} and {}",
+                    //     self.fmt_typekind(&app.to),
+                    //     self.fmt_typekind(to_ty)
+                    // );
+                    self.types_unify(&app.to, to_ty) && args_match
                 })
-            })
-            .flatten();
+                .cloned()
+                .collect();
 
-        match application {
-            Some(_) => Ok(()),
-            None => Err(()),
+            // println!("{:?}", trait_restriction.args);
+            // println!(
+            //     "Potention applications: {}",
+            //     potential_applications
+            //         .iter()
+            //         .map(|app| format!(
+            //             "to {} with args {}",
+            //             self.fmt_typekind(&app.to),
+            //             app.args
+            //                 .iter()
+            //                 .map(|arg| self.fmt_typekind(arg))
+            //                 .collect::<Vec<_>>()
+            //                 .join(", ")
+            //         ))
+            //         .collect::<Vec<_>>()
+            //         .join(", ")
+            // );
+            // for arg in trait_restriction.args.iter() {
+            let tkinds = potential_applications
+                .iter()
+                .map(|app| &app.to)
+                .cloned()
+                .collect();
+            self.get_mut(tid)
+                .push_restriction(Restriction::EqualsOneOf(tkinds));
+
+            // for (i, arg) in trait_restriction.args.iter().enumerate() {
+            //     let tkinds = potential_applications
+            //         .iter()
+            //         .map(|app| &app.args[i])
+            //         .cloned()
+            //         .collect();
+            //     self.get_mut(*arg)
+            //         .push_restriction(Restriction::AssocTypeOf(tkinds));
+            // }
+
+            // }
+
+            if !potential_applications.is_empty() {
+                return Ok(potential_applications);
+            }
         }
+
+        Err(())
+
+        // // println!(
+        // //     "resolving restriction {}: {:?}{}",
+        // //     self.fmt_tid(tid),
+        // //     trait_restriction.trait_id,
+        // //     if trait_restriction.args.is_empty() {
+        // //         format!("")
+        // //     } else {
+        // //         format!(
+        // //             "<{}>",
+        // //             trait_restriction
+        // //                 .args
+        // //                 .iter()
+        // //                 .map(|arg| self.fmt_tid(*arg))
+        // //                 .collect::<Vec<_>>()
+        // //                 .join(", ")
+        // //         )
+        // //     }
+        // // );
+
+        // // let args = application
+        // //     .args
+        // //     .iter()
+        // //     .map(|arg| self.insert(Type::new(arg.clone(), vec![]).at(Span::poisoned())))
+        // //     .collect();
+
+        // let unification_span = Span::poisoned().in_file(FileId::poisoned());
+
+        // let application = self
+        //     .trait_resolver
+        //     .traits
+        //     .get(&trait_restriction.trait_id)
+        //     .map(|applications| {
+        //         applications.iter().find_map(|application| {
+        //             let app_to =
+        //                 self.insert(Type::new(application.to.clone(), vec![]).at(Span::poisoned()));
+        //             if self.unify(app_to, tid, unification_span).is_ok() {
+        //                 let args_match = application
+        //                     .args
+        //                     .iter()
+        //                     .zip(trait_restriction.args.iter())
+        //                     .filter(|(a, b)| {
+        //                         let a = self
+        //                             .insert(Type::new((**a).clone(), vec![]).at(Span::poisoned()));
+        //                         self.unify(a, **b, unification_span).is_ok()
+        //                     })
+        //                     .count()
+        //                     == trait_restriction.args.len();
+        //                 if args_match {
+        //                     Some(application)
+        //                 } else {
+        //                     None
+        //                 }
+        //             } else {
+        //                 None
+        //             }
+        //         })
+        //     })
+        //     .flatten();
+
+        // match application {
+        //     Some(_) => Ok(()),
+        //     None => Err(()),
+        // }
     }
 }
 

@@ -270,12 +270,16 @@ impl StructExprFieldList {
     pub fn empty() -> Self {
         Self(vec![])
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &StructExprField> {
+        self.0.iter()
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExprField {
-    name: Spanned<Word>,
-    val: id::Expr,
+    pub name: Spanned<Word>,
+    pub val: id::Expr,
 }
 
 impl StructExprField {
