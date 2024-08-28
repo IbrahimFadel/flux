@@ -137,6 +137,7 @@ pub enum DiagnosticCode {
 
     TypeMismatch,
     CouldNotInfer,
+    CouldBeMultipleTypes,
 }
 
 impl std::fmt::Display for DiagnosticCode {

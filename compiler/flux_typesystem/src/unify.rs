@@ -19,12 +19,12 @@ impl<'a> TEnv<'a> {
             (_, Ref(b_ref)) => self.unify(a, *b_ref, unification_span),
             (Unknown, _) => {
                 self.types
-                    .set_with(a, |old_ty| old_ty.map(|ty| ty.to_kind(Ref(b))));
+                    .set_with(a, |old_ty| old_ty.map(|ty| ty.set_kind(Ref(b))));
                 Ok(())
             }
             (_, Unknown) => {
                 self.types
-                    .set_with(b, |old_ty| old_ty.map(|ty| ty.to_kind(Ref(a))));
+                    .set_with(b, |old_ty| old_ty.map(|ty| ty.set_kind(Ref(a))));
                 Ok(())
             }
             (ThisPath(this_path), _) => {
@@ -78,12 +78,12 @@ impl<'a> TEnv<'a> {
 
                         self.types.set_with(a, |old_ty| {
                             old_ty.map(|ty| {
-                                ty.to_kind(TypeKind::Concrete(ConcreteKind::Path(new_a_path)))
+                                ty.set_kind(TypeKind::Concrete(ConcreteKind::Path(new_a_path)))
                             })
                         });
                         self.types.set_with(b, |old_ty| {
                             old_ty.map(|ty| {
-                                ty.to_kind(TypeKind::Concrete(ConcreteKind::Path(new_b_path)))
+                                ty.set_kind(TypeKind::Concrete(ConcreteKind::Path(new_b_path)))
                             })
                         });
                         Ok(())
@@ -116,15 +116,13 @@ impl<'a> TEnv<'a> {
             },
             (Int, Int) => Ok(()),
             (Concrete(ConcreteKind::Path(path)), Int) if path.is_in(int_paths(self.interner)) => {
-                let new_tkind = TypeKind::Concrete(ConcreteKind::Path(path.clone()));
                 self.types
-                    .set_with(b, |old_ty| old_ty.map(|ty| ty.to_kind(new_tkind)));
+                    .set_with(b, |old_ty| old_ty.map(|ty| ty.set_kind(Ref(a))));
                 Ok(())
             }
             (Int, Concrete(ConcreteKind::Path(path))) if path.is_in(int_paths(self.interner)) => {
-                let new_tkind = TypeKind::Concrete(ConcreteKind::Path(path.clone()));
                 self.types
-                    .set_with(a, |old_ty| old_ty.map(|ty| ty.to_kind(new_tkind)));
+                    .set_with(a, |old_ty| old_ty.map(|ty| ty.set_kind(Ref(b))));
                 Ok(())
             }
             (Generic(a_gen), Generic(b_gen)) if a_gen == b_gen => Ok(()),
@@ -141,6 +139,8 @@ impl<'a> TEnv<'a> {
         use TypeKind::*;
         match (a, b) {
             (_, Unknown) | (Unknown, _) => false,
+            (Ref(a), _) => self.types_unify(&self.get(*a).kind, b),
+            (_, Ref(b)) => self.types_unify(a, &self.get(*b).kind),
             (Concrete(a_concrete), Concrete(b_concrete)) => {
                 self.concretes_unify(a_concrete, b_concrete)
             }

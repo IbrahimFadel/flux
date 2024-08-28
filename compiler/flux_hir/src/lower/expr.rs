@@ -69,48 +69,67 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         &mut self,
         expr: Option<ast::Expr>,
         generic_params: &GenericParams,
-    ) -> id::Expr {
+    ) -> Spanned<id::Expr> {
         lower_node_mut(
             self,
             expr,
             |this, expr| {
-                this.exprs.insert(
-                    Expr::Poisoned
-                        .with_type(this.tenv.insert(Type::unknown().at(expr.range().to_span()))),
-                )
+                this.exprs
+                    .insert(
+                        Expr::Poisoned.with_type(
+                            this.tenv.insert(Type::unknown().at(expr.range().to_span())),
+                        ),
+                    )
+                    .at(expr.range().to_span())
             },
-            |this, expr| match expr {
-                ast::Expr::PathExpr(path_expr) => this.lower_path_expr(path_expr, generic_params),
-                ast::Expr::ParenExpr(_) => todo!(),
-                ast::Expr::FloatExpr(_) => todo!(),
-                ast::Expr::IntExpr(int_expr) => this.lower_int_expr(int_expr),
-                ast::Expr::BinExpr(bin_expr) => this.lower_bin_expr(bin_expr, generic_params),
-                ast::Expr::CallExpr(_) => todo!(),
-                ast::Expr::StructExpr(struct_expr) => {
-                    this.lower_struct_expr(struct_expr, generic_params)
+            |this, expr| {
+                let span = expr.range().to_span();
+                match expr {
+                    ast::Expr::PathExpr(path_expr) => {
+                        this.lower_path_expr(path_expr, generic_params)
+                    }
+                    ast::Expr::ParenExpr(_) => todo!(),
+                    ast::Expr::FloatExpr(_) => todo!(),
+                    ast::Expr::IntExpr(int_expr) => this.lower_int_expr(int_expr),
+                    ast::Expr::BinExpr(bin_expr) => this.lower_bin_expr(bin_expr, generic_params),
+                    ast::Expr::CallExpr(_) => todo!(),
+                    ast::Expr::StructExpr(struct_expr) => {
+                        this.lower_struct_expr(struct_expr, generic_params)
+                    }
+                    ast::Expr::BlockExpr(block_expr) => {
+                        this.lower_block_expr(block_expr, generic_params)
+                    }
+                    ast::Expr::TupleExpr(_) => todo!(),
+                    ast::Expr::AddressExpr(_) => todo!(),
+                    ast::Expr::IdxExpr(_) => todo!(),
+                    ast::Expr::MemberAccessExpr(member_access_expr) => {
+                        this.lower_member_access_expr(member_access_expr, generic_params)
+                    }
+                    ast::Expr::IfExpr(if_expr) => this.lower_if_expr(if_expr, generic_params),
+                    ast::Expr::IntrinsicExpr(intrinsic_expr) => {
+                        this.lower_intrinsic_expr(intrinsic_expr, generic_params)
+                    }
+                    ast::Expr::StringExpr(_) => todo!(),
+                    ast::Expr::CastExpr(cast_expr) => {
+                        this.lower_cast_expr(cast_expr, generic_params)
+                    }
                 }
-                ast::Expr::BlockExpr(block_expr) => {
-                    this.lower_block_expr(block_expr, generic_params)
-                }
-                ast::Expr::TupleExpr(_) => todo!(),
-                ast::Expr::AddressExpr(_) => todo!(),
-                ast::Expr::IdxExpr(_) => todo!(),
-                ast::Expr::MemberAccessExpr(member_access_expr) => {
-                    this.lower_member_access_expr(member_access_expr, generic_params)
-                }
-                ast::Expr::IfExpr(if_expr) => this.lower_if_expr(if_expr, generic_params),
-                ast::Expr::IntrinsicExpr(intrinsic_expr) => {
-                    this.lower_intrinsic_expr(intrinsic_expr, generic_params)
-                }
-                ast::Expr::StringExpr(_) => todo!(),
-                ast::Expr::CastExpr(cast_expr) => this.lower_cast_expr(cast_expr, generic_params),
+                .at(span)
             },
         )
     }
 
-    fn lower_stmt(&mut self, stmt: ast::Stmt, generic_params: &GenericParams) -> (bool, id::Expr) {
+    fn lower_stmt(
+        &mut self,
+        stmt: ast::Stmt,
+        generic_params: &GenericParams,
+    ) -> (bool, Spanned<id::Expr>) {
+        let span = stmt.range().to_span();
         match stmt {
-            ast::Stmt::LetStmt(let_stmt) => (false, self.lower_let_expr(let_stmt, generic_params)),
+            ast::Stmt::LetStmt(let_stmt) => (
+                false,
+                self.lower_let_expr(let_stmt, generic_params).at(span),
+            ),
             ast::Stmt::ExprStmt(expr_stmt) => (false, self.lower(expr_stmt.expr(), generic_params)),
             ast::Stmt::TerminatorExprStmt(terminator_expr_stmt) => (
                 true,
@@ -134,7 +153,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             .unwrap_or_else(|| self.tenv.insert(Type::unknown().at(name.span)));
         let val = self.lower(let_stmt.value(), generic_params);
 
-        let val_tid = self.exprs.get(val).tid;
+        let val_tid = self.exprs.get(*val).tid;
         self.tenv.add_equality(ty, val_tid);
 
         let ty = if let_stmt.ty().is_some() { ty } else { val_tid };
@@ -219,10 +238,10 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
     ) -> id::Expr {
         let op = self.lower_op(bin_expr.op());
         let lhs = self.lower(bin_expr.lhs(), generic_params);
-        let lhs_tid = self.exprs.get(lhs).tid;
+        let lhs_tid = self.exprs.get(*lhs).tid;
         let rhs = self.lower(bin_expr.rhs(), generic_params);
-        let rhs_tid = self.exprs.get(rhs).tid;
-        let span = Span::combine(self.tenv.get_span(lhs_tid), self.tenv.get_span(rhs_tid));
+        let rhs_tid = self.exprs.get(*rhs).tid;
+        let span = Span::combine(lhs.span, rhs.span);
 
         let tid = self.tenv.insert(Type::unknown().at(span));
 
@@ -246,28 +265,26 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                 Op::Add | Op::Sub | Op::Mul | Op::Div => true,
                 _ => false,
             };
-            self.tenv.add_trait_restriction(
-                lhs_tid,
-                TraitRestriction::new(
-                    trait_id,
-                    if include_other_side_as_arg {
-                        vec![rhs_tid]
-                    } else {
-                        vec![]
-                    },
-                ),
+            let lhs_restriction = TraitRestriction::new(
+                trait_id,
+                if include_other_side_as_arg {
+                    vec![rhs_tid]
+                } else {
+                    vec![]
+                },
             );
-            self.tenv.add_trait_restriction(
-                rhs_tid,
-                TraitRestriction::new(
-                    trait_id,
-                    if include_other_side_as_arg {
-                        vec![lhs_tid]
-                    } else {
-                        vec![]
-                    },
-                ),
+            let rhs_restriction = TraitRestriction::new(
+                trait_id,
+                if include_other_side_as_arg {
+                    vec![lhs_tid]
+                } else {
+                    vec![]
+                },
             );
+            self.tenv
+                .add_trait_restriction(lhs_tid, lhs_restriction.clone());
+            self.tenv
+                .add_trait_restriction(rhs_tid, rhs_restriction.clone());
 
             let item_tree = &self.packages.get(trait_id.pkg_id).item_tree;
             let trait_decl = item_tree.traits.get(trait_id.inner);
@@ -286,16 +303,15 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             self.tenv.add_equality(tid, method_return_ty);
 
             if is_output {
-                self.tenv.add_assoc_type_restriction(
-                    tid,
-                    lhs_tid,
-                    TraitRestriction::new(trait_id, vec![rhs_tid]),
-                );
+                self.tenv
+                    .add_assoc_type_restriction(tid, lhs_tid, lhs_restriction);
+                self.tenv
+                    .add_assoc_type_restriction(tid, rhs_tid, rhs_restriction);
             }
         }
 
         self.exprs
-            .insert(Expr::BinOp(BinOp::new(lhs, rhs, op)).with_type(tid))
+            .insert(Expr::BinOp(BinOp::new(*lhs, *rhs, op)).with_type(tid))
     }
 
     fn lower_op(&mut self, op: Option<&SyntaxToken>) -> Spanned<Op> {
@@ -384,14 +400,14 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                         all_fields.push(name.inner);
                         match struct_decl.fields.find(*name) {
                             Some(field_decl) => {
-                                let val_tid = this.exprs.get(val).tid;
+                                let val_tid = this.exprs.get(*val).tid;
                                 let decl_tid = this.tenv.insert(field_decl.ty.clone());
                                 this.tenv.add_equality(val_tid, decl_tid);
                             }
                             None => unknown_fields.push(name.inner),
                         };
 
-                        StructExprField::new(name, val)
+                        StructExprField::new(name, *val)
                     })
                     .collect();
 
@@ -447,7 +463,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             } else {
                 let (was_terminator, expr) = self.lower_stmt(stmt, generic_params);
                 if was_terminator {
-                    terminator = Some(expr);
+                    terminator = Some(*expr);
                 }
             }
         });
@@ -469,7 +485,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
     ) -> id::Expr {
         let span = member_access_expr.range().to_span();
         let lhs = self.lower(member_access_expr.lhs(), generic_params);
-        let lhs_tid = self.exprs.get(lhs).tid;
+        let lhs_tid = self.exprs.get(*lhs).tid;
         let rhs = self.type_lowerer.lower_name(member_access_expr.rhs());
 
         let lhs_ty = self.tenv.get(lhs_tid);
@@ -481,7 +497,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         // self.tenv.add_equality(tid, expected_tid);
 
         self.exprs
-            .insert(Expr::MemberAccess(MemberAccess::new(lhs, rhs)).with_type(tid))
+            .insert(Expr::MemberAccess(MemberAccess::new(*lhs, rhs)).with_type(tid))
     }
 
     fn resolve_type_of_struct_field(
@@ -590,10 +606,10 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             let block = self.lower_if_block_expr(else_if.block(), generic_params);
             let block_tid = self.exprs.get(block).tid;
             self.tenv.add_equality(tid, block_tid);
-            (cond, block)
+            (*cond, block)
         });
 
-        let if_expr = If::new(cond, then, else_ifs, r#else);
+        let if_expr = If::new(*cond, then, else_ifs, r#else);
         self.exprs.insert(Expr::If(if_expr).with_type(tid))
     }
 
@@ -679,8 +695,8 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                             .tenv
                             .insert(expected.clone().at(unification_span.inner));
                         this.tenv
-                            .add_equality(this.exprs.get(expr).tid, expected_tid);
-                        expr
+                            .add_equality(this.exprs.get(*expr).tid, expected_tid);
+                        *expr
                     })
                     .collect::<Vec<_>>()
                     .at(arg_list.range().to_span());
@@ -718,7 +734,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             .lower_type(cast_expr.to_ty(), generic_params);
         to_ty.span = cast_expr.range().to_span();
         let tid = self.tenv.insert(to_ty);
-        let cast = Cast::new(val, tid);
+        let cast = Cast::new(*val, tid);
         self.exprs.insert(Expr::Cast(cast).with_type(tid))
     }
 }

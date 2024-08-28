@@ -11,37 +11,66 @@ use crate::{
 impl<'a> TEnv<'a> {
     pub fn resolve(&mut self, tid: id::Ty) -> Result<TypeKind, Vec<Restriction>> {
         trace!(
-            "resolving '{}: {} - {:?}",
+            "resolving '{}: {} - {}",
             Into::<u32>::into(tid),
             self.fmt_tid(tid),
-            self.get(tid).restrictions
+            self.get(tid)
+                .restrictions
+                .iter()
+                .map(|restriction| self.fmt_restriction(tid, restriction))
+                .collect::<Vec<_>>()
+                .join(", ")
         );
         loop {
             let initial_restrictions = mem::take(&mut self.get_mut(tid).restrictions);
-            let num_initial_restrictions = initial_restrictions.len();
+
+            // for restriction in &initial_restrictions {
+            //     if matches!(restriction, Restriction::EqualsOneOf(_)) {
+            //         println!("Initial: {:?}", initial_restrictions);
+            //     }
+            // }
 
             let final_restrictions: Vec<_> = initial_restrictions
+                .clone()
                 .into_iter()
-                .filter(|restriction| match restriction {
+                .filter_map(|restriction| match &restriction {
                     Restriction::Equals(other) => {
                         let unification_span = Span::poisoned().in_file(FileId::poisoned());
-                        self.unify(tid, *other, unification_span).is_err()
+                        self.unify(tid, *other, unification_span)
+                            .map_err(|_| restriction)
+                            .err()
                     }
                     Restriction::EqualsOneOf(tkinds) => {
-                        let final_tkinds: Vec<_> = tkinds
+                        let mut final_tkinds: Vec<_> = tkinds
                             .iter()
                             .filter(|tkind| self.types_unify(tkind, &self.get(tid).kind))
+                            .cloned()
                             .collect();
+
+                        // Deduplicate
+                        if !final_tkinds.is_empty() {
+                            final_tkinds = Some(final_tkinds[0].clone())
+                                .into_iter()
+                                .chain(
+                                    // always include first element
+                                    final_tkinds
+                                        .windows(2)
+                                        .filter(|w| !self.types_unify(&w[0], &w[1]))
+                                        .map(|w| w[1].clone()),
+                                )
+                                .collect();
+                        }
+
                         match final_tkinds.len() {
-                            0 => true,
+                            0 => Some(restriction),
                             1 => {
                                 let eq_tid = self.insert(
-                                    Type::new(final_tkinds[0].clone(), vec![]).at(Span::poisoned()),
+                                    Type::new(final_tkinds[0].clone(), vec![])
+                                        .at(self.get_span(tid)),
                                 );
-                                self.add_equality(tid, eq_tid);
-                                false
+                                Some(Restriction::Equals(eq_tid))
                             }
-                            _ => todo!(),
+                            _ => Some(Restriction::EqualsOneOf(final_tkinds)),
                         }
                     }
                     Restriction::AssocTypeOf(of, trait_restriction) => {
@@ -49,7 +78,7 @@ impl<'a> TEnv<'a> {
                         let potential_applications =
                             match self.resolve_trait_restriction(*of, trait_restriction) {
                                 Ok(apps) => apps,
-                                Err(_) => return true,
+                                Err(_) => return Some(restriction),
                             };
 
                         match &mut self.get_inner_mut(tid).kind {
@@ -64,20 +93,32 @@ impl<'a> TEnv<'a> {
                                     })
                                     .collect();
                                 this_path.potential_this_ctx = potential_this_ctx;
-                                this_path.potential_this_ctx.is_empty()
+                                if this_path.potential_this_ctx.is_empty() {
+                                    Some(restriction)
+                                } else {
+                                    None
+                                }
                             }
-                            _ => true,
+                            _ => Some(restriction),
                         }
                     }
                     Restriction::Field(_) => {
                         warn!("unimplemented");
-                        false
+                        None
                     }
                     Restriction::Trait(trait_restriction) => self
-                        .resolve_trait_restriction(tid, trait_restriction)
-                        .is_err(),
+                        .resolve_trait_restriction(tid, &trait_restriction)
+                        .map_err(|_| restriction)
+                        .err(),
                 })
                 .collect();
+
+            // for restriction in &final_restrictions {
+            //     if matches!(restriction, Restriction::EqualsOneOf(_)) {
+            //         println!("Final: {:?}", final_restrictions);
+            //     }
+            // }
+            // println!("{:?}", final_restrictions);
 
             if final_restrictions.len() == 0 {
                 return self
@@ -85,7 +126,7 @@ impl<'a> TEnv<'a> {
                     .kind
                     .resolve(self)
                     .map_err(|_| final_restrictions);
-            } else if final_restrictions.len() == num_initial_restrictions {
+            } else if final_restrictions == initial_restrictions {
                 self.get_mut(tid).restrictions = final_restrictions.clone();
                 return Err(final_restrictions);
             }

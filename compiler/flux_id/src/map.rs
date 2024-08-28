@@ -58,7 +58,7 @@ where
         self.data.as_mut_ptr()
     }
 
-    pub fn as_ref(&self) -> &Vec<V> {
+    pub const fn as_ref(&self) -> &Vec<V> {
         &self.data
     }
 

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, ops::Deref};
 
 use flux_id::id::{self, InPkg};
-use flux_util::{Path, Word};
+use flux_util::{Path, Span, Word};
 
 use crate::{ThisCtx, TraitApplication};
 
@@ -134,7 +134,7 @@ impl Type {
         self.restrictions.push(restriction);
     }
 
-    pub fn to_kind(self, kind: TypeKind) -> Self {
+    pub fn set_kind(self, kind: TypeKind) -> Self {
         Self {
             kind,
             restrictions: self.restrictions,

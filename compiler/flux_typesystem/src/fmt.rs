@@ -2,7 +2,9 @@ use std::fmt::Display;
 
 use flux_id::id;
 
-use crate::{r#type::Restriction, ConcreteKind, TEnv, TraitRestriction, TypeKind};
+use crate::{
+    r#type::Restriction, ConcreteKind, TEnv, TraitApplication, TraitRestriction, TypeKind,
+};
 
 impl<'a> Display for TEnv<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -84,6 +86,17 @@ impl<'a> TEnv<'a> {
         self.fmt_typekind(&self.types.get(tid).kind)
     }
 
+    // pub fn fmt_tid_include_resolved(&mut self, tid: id::Ty) -> Vec<String> {
+    //     let tkind_b = self.get(tid).kind.resolve(self);
+    //     let tkind_a = &self.get(tid).kind;
+    //     match tkind_b {
+    //         Ok(tkind_b) if tkind_b != *tkind_a => {
+    //             vec![self.fmt_typekind(tkind_a), self.fmt_typekind(&tkind_b)]
+    //         }
+    //         Ok(_) | Err(_) => vec![self.fmt_typekind(tkind_a)],
+    //     }
+    // }
+
     pub fn fmt_typekind(&self, ty: &TypeKind) -> String {
         use crate::TypeKind::*;
         match ty {
@@ -148,7 +161,55 @@ impl<'a> TEnv<'a> {
                     trait_restriction
                         .args
                         .iter()
-                        .map(|arg| format!("'{}", Into::<u32>::into(*arg)))
+                        .map(|arg| self.fmt_tid(*arg))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        )
+    }
+
+    pub(super) fn fmt_restriction(&self, tid: id::Ty, restriction: &Restriction) -> String {
+        match restriction {
+            Restriction::Equals(other) => {
+                format!("{} == {}", self.fmt_tid(tid), self.fmt_tid(*other))
+            }
+            Restriction::EqualsOneOf(types) => format!(
+                "{} == [{}]",
+                self.fmt_tid(tid),
+                types
+                    .iter()
+                    .map(|tkind| self.fmt_typekind(tkind))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ),
+            Restriction::AssocTypeOf(ty, trait_restriction) => format!(
+                "{} associated type of {} with trait restriction {}",
+                self.fmt_tid(tid),
+                self.fmt_tid(*ty),
+                self.fmt_trait_restriction(trait_restriction)
+            ),
+            Restriction::Field(_) => todo!(),
+            Restriction::Trait(trait_restriction) => format!(
+                "{}: {}",
+                self.fmt_tid(tid),
+                self.fmt_trait_restriction(trait_restriction)
+            ),
+        }
+    }
+
+    pub(super) fn fmt_trait_application(&self, app: &TraitApplication) -> String {
+        format!(
+            "to {}{}",
+            self.fmt_typekind(&app.to),
+            if app.args.is_empty() {
+                format!("")
+            } else {
+                format!(
+                    " with args {}",
+                    app.args
+                        .iter()
+                        .map(|arg| self.fmt_typekind(arg))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )

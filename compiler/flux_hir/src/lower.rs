@@ -9,7 +9,7 @@ use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxNode,
 };
-use flux_typesystem::{diagnostics::TypeError, TEnv, ThisCtx, TraitResolver, Typed};
+use flux_typesystem::{diagnostics::TypeError, Restriction, TEnv, ThisCtx, TraitResolver, Typed};
 use flux_util::{FileId, Interner, WithSpan};
 
 use crate::{
@@ -182,7 +182,7 @@ fn lower_function_body(
     let return_ty = fn_decl.return_ty.clone();
     let return_ty = expr_lowerer.tenv.insert(return_ty);
 
-    let body_tid = exprs.get(body).tid;
+    let body_tid = exprs.get(*body).tid;
     tenv.add_equality(body_tid, return_ty);
 
     let exprs_copy = exprs.clone();
@@ -215,19 +215,56 @@ fn lower_function_body(
         // println!("resolving {:?}", expr.inner);
         match tenv.resolve(expr.tid) {
             Ok(tkind) => {}
-            Err(err) => {
-                diagnostics.push(
-                    TypeError::CouldNotInfer {
-                        ty: (),
-                        ty_file_span: tenv.get_span(expr.tid).in_file(ctx.file_id),
+            Err(unresolved_restrictions) => {
+                if unresolved_restrictions.is_empty() {
+                    diagnostics.push(
+                        TypeError::CouldNotInfer {
+                            ty: (),
+                            ty_file_span: tenv.get_span(expr.tid).in_file(ctx.file_id),
+                        }
+                        .to_diagnostic(),
+                    );
+                } else {
+                    for unresolved_restriction in unresolved_restrictions {
+                        // println!("{:#?}", unresolved_restriction);
+                        match unresolved_restriction {
+                            Restriction::Equals(other) => diagnostics.push(
+                                TypeError::TypeMismatch {
+                                    a: tenv.fmt_tid(expr.tid),
+                                    a_file_span: tenv.get_span(expr.tid).in_file(ctx.file_id),
+                                    b: tenv.fmt_tid(other),
+                                    b_file_span: tenv.get_span(other).in_file(ctx.file_id),
+                                    span: (),
+                                    span_file_span: tenv.get_span(expr.tid).in_file(ctx.file_id),
+                                }
+                                .to_diagnostic(),
+                            ),
+                            Restriction::EqualsOneOf(types) => {
+                                diagnostics.push(
+                                    TypeError::CouldBeMultipleTypes {
+                                        ty: (),
+                                        ty_file_span: tenv.get_span(expr.tid).in_file(ctx.file_id),
+                                        potential_types: types
+                                            .into_iter()
+                                            .map(|tkind| tenv.fmt_typekind(&tkind))
+                                            .collect(),
+                                    }
+                                    .to_diagnostic(),
+                                );
+                            }
+                            Restriction::AssocTypeOf(_, _) => {
+                                println!("HELLOOOOOO");
+                            }
+                            Restriction::Field(_) => todo!(),
+                            Restriction::Trait(_) => todo!(),
+                        }
                     }
-                    .to_diagnostic(),
-                );
+                }
             }
         }
     }
 
-    format_function_with_types(body, &exprs_copy, &mut tenv, source_cache, ctx.file_id);
+    format_function_with_types(*body, &exprs_copy, &mut tenv, source_cache, ctx.file_id);
 }
 
 /*

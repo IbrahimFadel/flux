@@ -1,3 +1,4 @@
+use flux_diagnostics::fmt::quote_and_listify;
 use flux_proc_macros::diagnostic;
 
 #[diagnostic]
@@ -26,5 +27,16 @@ pub enum TypeError {
     CouldNotInfer {
         #[filespanned]
         ty: (),
+    },
+    #[error(
+        location = ty,
+        primary = "could not infer type",
+        label at ty = "could not infer type",
+        label at ty = "could be any of {}" with (quote_and_listify(potential_types.iter())),
+    )]
+    CouldBeMultipleTypes {
+        #[filespanned]
+        ty: (),
+        potential_types: Vec<String>,
     },
 }

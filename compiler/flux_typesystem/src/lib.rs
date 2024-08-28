@@ -11,7 +11,9 @@ use std::sync::OnceLock;
 
 use flux_util::{Interner, Path, Word};
 pub use r#trait::{ThisCtx, TraitApplication};
-pub use r#type::{ConcreteKind, FnSignature, TraitRestriction, Type, TypeKind, Typed, WithType};
+pub use r#type::{
+    ConcreteKind, FnSignature, Restriction, TraitRestriction, Type, TypeKind, Typed, WithType,
+};
 pub use resolve::TraitResolver;
 pub use tenv::TEnv;
 
