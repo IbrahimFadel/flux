@@ -196,4 +196,15 @@ pub enum LowerError {
         #[filespanned]
         strukt: String,
     },
+    #[error(
+        location = callee,
+        primary = "callee is not a function",
+        label at callee = "callee is not a function",
+        label at callee = "`{ty}`"
+    )]
+    CalleeNotFunction {
+        #[filespanned]
+        callee: (),
+        ty: String,
+    },
 }

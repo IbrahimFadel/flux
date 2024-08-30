@@ -256,4 +256,19 @@ impl<'a> ItemResolver<'a> {
 
         Ok(struct_decl.in_file(file_id))
     }
+
+    pub(crate) fn resolve_struct_ids<A: Clone>(
+        &self,
+        path: InMod<&Path<Word, A>>,
+    ) -> Result<(id::Pkg, id::Mod, id::StructDecl), ResolutionError<A>> {
+        let (package_id, item_id) = self.resolve_path(path)?;
+        let struct_id: Result<id::StructDecl, _> = item_id.inner.clone().try_into();
+        let struct_id = struct_id.map_err(|got| ResolutionError::UnexpectedItem {
+            path: path.inner.clone(),
+            expected: String::from("struct"),
+            got: got.to_string(),
+        })?;
+
+        Ok((package_id, item_id.mod_id, struct_id))
+    }
 }

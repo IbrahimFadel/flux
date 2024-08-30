@@ -1,11 +1,11 @@
 use std::{collections::HashSet, ops::Deref};
 
 use flux_id::id::{self, InPkg};
-use flux_util::{Path, Span, Word};
+use flux_util::{Path, Word};
 
-use crate::{ThisCtx, TraitApplication};
+use crate::ThisCtx;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Type {
     pub kind: TypeKind,
     pub restrictions: Vec<Restriction>,
@@ -69,16 +69,30 @@ impl Type {
         }
     }
 
-    pub const fn generic(name: Word) -> Self {
+    pub const fn function(signature: FnSignature) -> Self {
         Self {
-            kind: TypeKind::Generic(name),
+            kind: TypeKind::Concrete(ConcreteKind::Fn(signature)),
             restrictions: vec![],
         }
     }
 
-    pub fn this_path(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
+    pub fn r#address(ty: Type) -> Self {
         Self {
-            kind: TypeKind::ThisPath(ThisPath::new(path, vec![this_ctx])),
+            kind: TypeKind::Concrete(ConcreteKind::Addr(Box::new(ty))),
+            restrictions: vec![],
+        }
+    }
+
+    pub const fn generic(name: Word, restrictions: Vec<TraitRestriction>) -> Self {
+        Self {
+            kind: TypeKind::Generic(name, restrictions),
+            restrictions: vec![],
+        }
+    }
+
+    pub fn this_path(path: Path<Word, Type>, potential_this_ctx: Vec<ThisCtx>) -> Self {
+        Self {
+            kind: TypeKind::ThisPath(ThisPath::new(path, potential_this_ctx)),
             restrictions: vec![],
         }
     }
@@ -115,10 +129,14 @@ impl Type {
             TypeKind::Concrete(concrete_kind) => match concrete_kind {
                 ConcreteKind::Array(ty, _) => ty.generics_used(set),
                 ConcreteKind::Ptr(ty) => ty.generics_used(set),
+                ConcreteKind::Addr(ty) => ty.generics_used(set),
                 ConcreteKind::Path(path) => path.args.iter().for_each(|ty| ty.generics_used(set)),
                 ConcreteKind::Tuple(types) => types.iter().for_each(|ty| ty.generics_used(set)),
+                ConcreteKind::Fn(signature) => {
+                    signature.0.iter().for_each(|ty| ty.generics_used(set))
+                }
             },
-            TypeKind::Generic(name) => {
+            TypeKind::Generic(name, _) => {
                 set.insert(*name);
             }
             TypeKind::Ref(_)
@@ -142,10 +160,10 @@ impl Type {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum TypeKind {
     Concrete(ConcreteKind),
-    Generic(Word),
+    Generic(Word, Vec<TraitRestriction>),
     ThisPath(ThisPath), // `This` or associated type like `This::Foo`
     Ref(id::Ty),
     Int,
@@ -154,7 +172,7 @@ pub enum TypeKind {
     Unknown,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct ThisPath {
     pub path: Path<Word, Type>,
     pub potential_this_ctx: Vec<ThisCtx>,
@@ -169,25 +187,27 @@ impl ThisPath {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum ConcreteKind {
     Array(Box<Type>, u64),
     Ptr(Box<Type>),
+    Addr(Box<Type>),
     Path(Path<Word, Type>),
     Tuple(Vec<Type>),
+    Fn(FnSignature),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum Restriction {
     Equals(id::Ty),
     EqualsOneOf(Vec<TypeKind>),
-    AssocTypeOf(id::Ty, TraitRestriction),
+    AssocTypeOf(id::Ty, TraitRestriction, Word),
     // PossibleAssocTypes(Vec<TypeKind>),
     Field(Word),
     Trait(TraitRestriction),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct TraitRestriction {
     pub(super) trait_id: InPkg<id::TraitDecl>,
     pub(super) args: Vec<id::Ty>,
@@ -224,143 +244,7 @@ pub trait WithType {
 
 impl WithType for id::Expr {}
 
-// use std::{collections::HashSet, ops::Deref};
-
-// use flux_diagnostics::ice;
-// use flux_id::id;
-// use flux_util::{Path, Word};
-
-// use crate::r#trait::ThisCtx;
-
-// #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-// pub struct Typed<T> {
-//     pub tid: id::Ty,
-//     pub inner: T,
-// }
-
-// impl<T> Deref for Typed<T> {
-//     type Target = T;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.inner
-//     }
-// }
-
-// pub trait WithType {
-//     fn with_type(self, tid: id::Ty) -> Typed<Self>
-//     where
-//         Self: Sized,
-//     {
-//         Typed { tid, inner: self }
-//     }
-// }
-
-// impl WithType for id::Expr {}
-
-// #[derive(Clone, PartialEq, Eq, Debug)]
-// pub enum Type {
-//     Concrete(ConcreteKind),
-//     Generic(Generic),
-//     ThisPath(ThisPath),
-//     Int(Option<id::Ty>),
-//     Float(Option<id::Ty>),
-//     Ref(id::Ty),
-//     Never,
-//     Unknown,
-// }
-
-// impl Type {
-//     pub const fn path(path: Path<Word, Type>) -> Self {
-//         Self::Concrete(ConcreteKind::Path(path))
-//     }
-
-//     pub fn this_path(path: Path<Word, Type>, this_ctx: ThisCtx) -> Self {
-//         Self::ThisPath(ThisPath::new(path, this_ctx))
-//     }
-
-//     pub const fn tuple(types: Vec<Type>) -> Self {
-//         Self::Concrete(ConcreteKind::Tuple(types))
-//     }
-
-//     pub fn array(ty: Type, n: u64) -> Self {
-//         Self::Concrete(ConcreteKind::Array(Box::new(ty), n))
-//     }
-
-//     pub fn ptr(ty: Type) -> Self {
-//         Self::Concrete(ConcreteKind::Ptr(Box::new(ty)))
-//     }
-
-//     pub const fn unit() -> Self {
-//         Self::Concrete(ConcreteKind::Tuple(vec![]))
-//     }
-
-//     pub const fn int() -> Self {
-//         Self::Int(None)
-//     }
-
-//     pub const fn float() -> Self {
-//         Self::Float(None)
-//     }
-
-//     pub fn generics_used(&self, set: &mut HashSet<Word>) {
-//         match self {
-//             Type::Concrete(concrete_kind) => match concrete_kind {
-//                 ConcreteKind::Array(ty, _) => ty.generics_used(set),
-//                 ConcreteKind::Ptr(ty) => ty.generics_used(set),
-//                 ConcreteKind::Path(path) => path.args.iter().for_each(|ty| ty.generics_used(set)),
-//                 ConcreteKind::Tuple(types) => types.iter().for_each(|ty| ty.generics_used(set)),
-//             },
-//             Type::Generic(generic) => {
-//                 set.insert(generic.name);
-//             }
-//             Type::Ref(_) => ice("`Type::Ref` should not be constructed before lowering package bodies, and generics should only be checked before then"),
-//             Type::Int(_) | Type::Float(_) | Type::ThisPath(_) | Type::Never | Type::Unknown => {}
-//         }
-//     }
-
-//     pub fn set_this_ctx(&mut self, this_ctx: ThisCtx) {
-//         // warn!("`Type::set_this_ctx` needs to take `TEnv` be fully implemented");
-//         match self {
-//             Type::ThisPath(this_path) => {
-//                 this_path.ctx = this_ctx;
-//             }
-//             _ => {}
-//         }
-//     }
-// }
-
-// #[derive(Clone, PartialEq, Eq, Debug)]
-// pub enum ConcreteKind {
-//     Array(Box<Type>, u64),
-//     Ptr(Box<Type>),
-//     Path(Path<Word, Type>),
-//     Tuple(Vec<Type>),
-// }
-
-// #[derive(Clone, PartialEq, Eq, Debug)]
-// pub struct Generic {
-//     pub(super) name: Word,
-//     bounds: Vec<Path<Word, Type>>,
-// }
-
-// impl Generic {
-//     pub fn new(name: Word, bounds: Vec<Path<Word, Type>>) -> Self {
-//         Self { name, bounds }
-//     }
-// }
-// #[derive(Clone, PartialEq, Eq, Debug)]
-// pub struct ThisPath {
-//     pub(super) path: Path<Word, Type>,
-//     pub(super) ctx: ThisCtx,
-// }
-
-// impl ThisPath {
-//     pub fn new(path: Path<Word, Type>, ctx: ThisCtx) -> Self {
-//         Self { path, ctx }
-//     }
-// }
-
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct FnSignature(Vec<Type>);
 
 impl FnSignature {

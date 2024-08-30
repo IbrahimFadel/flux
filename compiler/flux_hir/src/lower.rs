@@ -9,7 +9,9 @@ use flux_parser::{
     ast::{self, AstNode},
     syntax::SyntaxNode,
 };
-use flux_typesystem::{diagnostics::TypeError, Restriction, TEnv, ThisCtx, TraitResolver, Typed};
+use flux_typesystem::{
+    diagnostics::TypeError, MethodResolver, Restriction, TEnv, ThisCtx, TraitResolver, Typed,
+};
 use flux_util::{FileId, Interner, WithSpan};
 
 use crate::{
@@ -51,6 +53,7 @@ pub(super) fn lower_item_bodies(
     mod_id: InPkg<id::Mod>,
     item_id: &ItemId,
     trait_resolver: &TraitResolver,
+    method_resolver: &MethodResolver,
     packages: &Map<id::Pkg, Package>,
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
@@ -74,6 +77,7 @@ pub(super) fn lower_item_bodies(
             &ctx,
             &item_resolver,
             trait_resolver,
+            method_resolver,
             exprs,
             interner,
             diagnostics,
@@ -87,6 +91,7 @@ pub(super) fn lower_item_bodies(
             &ctx,
             &item_resolver,
             trait_resolver,
+            method_resolver,
             exprs,
             interner,
             diagnostics,
@@ -105,6 +110,7 @@ fn lower_apply_bodies(
     ctx: &LoweringCtx,
     item_resolver: &ItemResolver,
     trait_resolver: &TraitResolver,
+    method_resolver: &MethodResolver,
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
@@ -119,6 +125,7 @@ fn lower_apply_bodies(
             ctx,
             item_resolver,
             trait_resolver,
+            method_resolver,
             exprs,
             interner,
             diagnostics,
@@ -133,13 +140,14 @@ fn lower_function_body(
     ctx: &LoweringCtx,
     item_resolver: &ItemResolver,
     trait_resolver: &TraitResolver,
+    method_resolver: &MethodResolver,
     exprs: &mut Map<id::Expr, Typed<Expr>>,
     interner: &'static Interner,
     diagnostics: &mut Vec<Diagnostic>,
     source_cache: &SourceCache,
 ) {
     let fn_decl = ctx.item_tree.functions.get(function_id);
-    let mut tenv = TEnv::new(trait_resolver, interner);
+    let mut tenv = TEnv::new(trait_resolver, method_resolver, interner);
 
     let this_ctx = apply_decl.map_or(ThisCtx::Function, |apply_decl| {
         let assoc_types: Vec<_> = apply_decl
@@ -252,11 +260,16 @@ fn lower_function_body(
                                     .to_diagnostic(),
                                 );
                             }
-                            Restriction::AssocTypeOf(_, _) => {
+                            Restriction::AssocTypeOf(_, _, _) => {
                                 println!("HELLOOOOOO");
                             }
                             Restriction::Field(_) => todo!(),
-                            Restriction::Trait(_) => todo!(),
+                            Restriction::Trait(trait_restriction) => {
+                                println!(
+                                    "Trait restriction: {}",
+                                    tenv.fmt_trait_restriction(&trait_restriction)
+                                )
+                            }
                         }
                     }
                 }

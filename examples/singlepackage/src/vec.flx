@@ -14,17 +14,20 @@ apply<T> to Vector<T> {
 	}
 
 	fn push(this This, v T) {
-		// let x = this.cap * 2;
 		let buf = if this.len == this.cap {
-			@flux.intrinsics.malloc(this.cap * 2) as T*
+			this.cap = this.cap * 2;
+
+			let new_buf = @flux.intrinsics.malloc(this.cap) as T*;
+			@flux.intrinsics.memcpy(new_buf, this.buf);
+			@flux.intrinsics.free(this.buf);
+
+			new_buf
 		} else {
 			this.buf
 		};
-
-		let x s16 = 0;
-		let y = x * 1;
 		
-
-		// buf[this.len] = v;
+		buf.idx(this.len) = v;
+		this.len = this.len + 1;
+		this.buf = buf;
 	}
 }

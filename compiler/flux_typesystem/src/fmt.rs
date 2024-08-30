@@ -23,7 +23,7 @@ impl<'a> Display for TEnv<'a> {
                         }
                     }
                     Restriction::EqualsOneOf(_) => todo!(),
-                    Restriction::AssocTypeOf(_, _) => todo!(),
+                    Restriction::AssocTypeOf(_, _, _) => todo!(),
                     Restriction::Field(_) => {}
                     Restriction::Trait(_) => {}
                 }
@@ -59,7 +59,7 @@ impl<'a> Display for TEnv<'a> {
                                 Into::<u32>::into(*other),
                             ),
                             Restriction::EqualsOneOf(_) => todo!(),
-                            Restriction::AssocTypeOf(_, _) => todo!(),
+                            Restriction::AssocTypeOf(_, _, _) => todo!(),
                             Restriction::Field(name) => format!(
                                 "'{} has field `{}`",
                                 Into::<u32>::into(*tid),
@@ -108,7 +108,7 @@ impl<'a> TEnv<'a> {
             Ref(tid) => self.fmt_tid(*tid),
             Int => format!("int"),
             Float => format!("float"),
-            Generic(name) => format!("{}", self.interner.resolve(&name)),
+            Generic(name, _) => format!("{}", self.interner.resolve(&name)),
             Never => format!("!"),
             Unknown => format!("unknown"),
         }
@@ -117,6 +117,7 @@ impl<'a> TEnv<'a> {
     pub fn fmt_concrete_kind(&self, concrete_kind: &ConcreteKind) -> String {
         use ConcreteKind::*;
         match concrete_kind {
+            Addr(ty) => format!("{}&", self.fmt_typekind(&ty.kind)),
             Array(ty, n) => format!("[{}; {n}]", self.fmt_typekind(&ty.kind)),
             Ptr(ty) => format!("{}*", self.fmt_typekind(&ty.kind)),
             Path(path) => format!(
@@ -146,10 +147,20 @@ impl<'a> TEnv<'a> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Fn(signature) => format!(
+                "Fn({}) -> {}",
+                signature
+                    .parameters()
+                    .iter()
+                    .map(|param| self.fmt_typekind(&param.kind))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                self.fmt_typekind(&signature.return_ty().kind)
+            ),
         }
     }
 
-    fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
+    pub fn fmt_trait_restriction(&self, trait_restriction: &TraitRestriction) -> String {
         format!(
             "TrId({}){}",
             Into::<u32>::into(trait_restriction.trait_id.inner),
@@ -169,7 +180,7 @@ impl<'a> TEnv<'a> {
         )
     }
 
-    pub(super) fn fmt_restriction(&self, tid: id::Ty, restriction: &Restriction) -> String {
+    pub fn fmt_restriction(&self, tid: id::Ty, restriction: &Restriction) -> String {
         match restriction {
             Restriction::Equals(other) => {
                 format!("{} == {}", self.fmt_tid(tid), self.fmt_tid(*other))
@@ -183,9 +194,10 @@ impl<'a> TEnv<'a> {
                     .collect::<Vec<_>>()
                     .join(" | ")
             ),
-            Restriction::AssocTypeOf(ty, trait_restriction) => format!(
-                "{} associated type of {} with trait restriction {}",
+            Restriction::AssocTypeOf(ty, trait_restriction, name) => format!(
+                "{} associated type `{}` of {} with trait restriction {}",
                 self.fmt_tid(tid),
+                self.interner.resolve(name),
                 self.fmt_tid(*ty),
                 self.fmt_trait_restriction(trait_restriction)
             ),
@@ -198,7 +210,7 @@ impl<'a> TEnv<'a> {
         }
     }
 
-    pub(super) fn fmt_trait_application(&self, app: &TraitApplication) -> String {
+    pub fn fmt_trait_application(&self, app: &TraitApplication) -> String {
         format!(
             "to {}{}",
             self.fmt_typekind(&app.to),

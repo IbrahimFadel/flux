@@ -14,7 +14,9 @@ impl<'a> TEnv<'a> {
         unification_span: InFile<Span>,
     ) -> Result<(), Diagnostic> {
         use TypeKind::*;
-        match (&self.get(a).inner.kind, &self.get(b).inner.kind) {
+        // println!("{:?} {:?}", self.get(a).kind, self.get(b).kind);
+        // println!("{} {}", self.fmt_tid(a), self.fmt_tid(b));
+        let unifies = match (&self.get(a).inner.kind, &self.get(b).inner.kind) {
             (Ref(a_ref), _) => self.unify(*a_ref, b, unification_span),
             (_, Ref(b_ref)) => self.unify(a, *b_ref, unification_span),
             (Unknown, _) => {
@@ -125,17 +127,25 @@ impl<'a> TEnv<'a> {
                     .set_with(a, |old_ty| old_ty.map(|ty| ty.set_kind(Ref(b))));
                 Ok(())
             }
-            (Generic(a_gen), Generic(b_gen)) if a_gen == b_gen => Ok(()),
+            (Generic(_, a_restrictions), Generic(_, b_restrictions)) => {
+                let b_restrictions = b_restrictions.clone();
+                for a_restriction in a_restrictions.clone() {
+                    self.resolve_trait_restriction(b, &a_restriction)
+                        .map_err(|_| self.type_mismatch(a, b, unification_span))?;
+                }
+                for b_restriction in b_restrictions {
+                    self.resolve_trait_restriction(a, &b_restriction)
+                        .map_err(|_| self.type_mismatch(a, b, unification_span))?;
+                }
+                Ok(())
+            }
             (_, _) => Err(self.type_mismatch(a, b, unification_span)),
-        }
+        };
+        // println!("OK: {}", unifies.is_ok());
+        unifies
     }
 
     pub fn types_unify(&self, a: &TypeKind, b: &TypeKind) -> bool {
-        // println!(
-        //     "do {} and {} unify?",
-        //     self.fmt_typekind(a),
-        //     self.fmt_typekind(b)
-        // );
         use TypeKind::*;
         match (a, b) {
             (_, Unknown) | (Unknown, _) => false,
@@ -150,6 +160,21 @@ impl<'a> TEnv<'a> {
             {
                 true
             }
+            (Generic(_, a_restrictions), Generic(_, b_restrictions)) => {
+                let b_restrictions = b_restrictions.clone();
+                for a_restriction in a_restrictions.clone() {
+                    if !self.does_type_implement_trait(b, &a_restriction) {
+                        return false;
+                    }
+                }
+                for b_restriction in b_restrictions {
+                    if !self.does_type_implement_trait(a, &b_restriction) {
+                        return false;
+                    }
+                }
+                true
+            }
+            // ...
             _ => false,
         }
     }

@@ -6,7 +6,7 @@ use flux_id::{
     id::{self, WithMod, WithPackage},
     Map,
 };
-use flux_typesystem::{TraitApplication, TraitResolver, Typed};
+use flux_typesystem::{MethodResolver, TraitApplication, TraitResolver, Typed};
 use flux_util::{FileId, Interner, Word};
 use item::ItemTreeIdx;
 use lower::lower_item_bodies;
@@ -69,12 +69,13 @@ pub fn build_package_bodies(
 ) {
     let item_tree = &packages.get(package_id).item_tree;
 
-    let trait_resolution = build_trait_resolution_table(packages, interner);
+    let (trait_resolution, method_resolver) = build_resolvers(packages, interner);
     for item_id in &item_tree.top_level {
         lower_item_bodies(
             item_id.mod_id.in_pkg(package_id),
             item_id,
             &trait_resolution,
+            &method_resolver,
             packages,
             exprs,
             interner,
@@ -87,15 +88,13 @@ pub fn build_package_bodies(
     }
 }
 
-fn build_trait_resolution_table(
+fn build_resolvers(
     packages: &Map<id::Pkg, Package>,
     interner: &'static Interner,
-) -> TraitResolver {
+) -> (TraitResolver, MethodResolver) {
     let mut trait_applications: HashMap<id::InPkg<id::TraitDecl>, Vec<TraitApplication>> =
         HashMap::new();
-    // let mut apply_types: HashMap<P<id::ApplyDecl>, ApplicationTypes> = HashMap::new();
-    // let mut trait_application_info: HashMap<P<id::TraitDecl>, Vec<ApplicationInfo>> =
-    //     HashMap::new();
+    let mut methods = Vec::new();
     for package_id in packages.keys() {
         let item_tree = &packages.get(package_id).item_tree;
         item_tree
@@ -104,6 +103,17 @@ fn build_trait_resolution_table(
             .for_each(|item_id| match item_id.inner {
                 ItemTreeIdx::Apply(apply_id) => {
                     let apply_decl = item_tree.applies.get(apply_id);
+
+                    let tkind_methods = apply_decl
+                        .methods
+                        .iter()
+                        .map(|method| {
+                            let method = item_tree.functions.get(*method);
+                            let name = method.name.inner;
+                            let signaure = method.as_fn_signature();
+                            (name, signaure)
+                        })
+                        .collect();
 
                     if let Some(trt) = &apply_decl.trt {
                         let item_resolver = ItemResolver::new(package_id, packages, interner);
@@ -131,38 +141,14 @@ fn build_trait_resolution_table(
                         }
                     }
 
-                    // let assoc_types: Vec<_> = apply_decl
-                    //     .assoc_types
-                    //     .iter()
-                    //     .map(|assoc_type| (assoc_type.name.inner, assoc_type.ty.inner.clone()))
-                    //     .collect();
-
-                    // apply_types.insert(
-                    //     apply_id.in_pkg(package_id),
-                    //     ApplicationTypes::new(apply_decl.to_ty.inner.clone(), assoc_types),
-                    // );
-
-                    // if let Some(trt) = &apply_decl.trt {
-                    //     let item_resolver = ItemResolver::new(package_id, packages, interner);
-                    //     let application = item_resolver
-                    //         .resolve_trait_ids(trt.as_ref().inner.in_mod(item_id.mod_id))
-                    //         .map(|(trait_package_id, _, trait_id)| {
-                    //             let trait_id = trait_id.in_pkg(trait_package_id);
-                    //             let apply_id = apply_id.in_pkg(package_id);
-                    //             (trait_id, apply_id)
-                    //         })
-                    //         .ok();
-                    //     if let Some((trait_id, apply_id)) = application {
-                    //         trait_application_info
-                    //             .entry(trait_id)
-                    //             .or_default()
-                    //             .push(ApplicationInfo::new(trt.args.clone(), apply_id));
-                    //     }
-                    // }
+                    methods.push((apply_decl.to_ty.kind.clone(), tkind_methods));
                 }
                 _ => {}
             });
     }
 
-    TraitResolver::new(trait_applications)
+    (
+        TraitResolver::new(trait_applications),
+        MethodResolver::new(methods),
+    )
 }

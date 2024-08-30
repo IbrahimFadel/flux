@@ -134,6 +134,7 @@ pub enum DiagnosticCode {
     MemberAccessOnNonStruct,
     UnknownStructField,
     CouldNotResolveStruct,
+    CalleeNotFunction,
 
     TypeMismatch,
     CouldNotInfer,

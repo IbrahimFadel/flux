@@ -74,12 +74,13 @@ enum_node!(
     CastExpr
 );
 
-enum_node!(Type: PathType, ThisPathType, TupleType, ArrayType, PtrType);
+enum_node!(Type: PathType, ThisPathType, TupleType, ArrayType, PtrType, RefType);
 basic_node!(PathType);
 basic_node!(ThisPathType);
 basic_node!(TupleType);
 basic_node!(ArrayType);
 basic_node!(PtrType);
+basic_node!(RefType);
 
 enum_node!(Stmt: LetStmt, ExprStmt, TerminatorExprStmt);
 

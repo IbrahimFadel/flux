@@ -72,6 +72,7 @@ pub enum SyntaxKind {
     EnumDeclVariant,
     ArrayType,
     PtrType,
+    RefType,
     ThisPathType,
 
     Whitespace,

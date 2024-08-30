@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::VecDeque, fmt::Display};
 
 use flux_diagnostics::ice;
 use flux_id::id;
@@ -10,11 +10,12 @@ use super::StructExprFieldList;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
     Address(id::Expr),
+    Assignment(Assignment),
     // Block(Block),
     BinOp(BinOp),
     Cast(Cast),
     // Enum(EnumExpr),
-    // Call(Call),
+    Call(Call),
     // Float(f64),
     Int(u64),
     Tuple(Vec<id::Expr>),
@@ -33,6 +34,18 @@ impl WithType for Expr {}
 impl Expr {
     pub(crate) const fn unit() -> Self {
         Self::Tuple(vec![])
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Assignment {
+    pub lhs: id::Expr,
+    pub val: id::Expr,
+}
+
+impl Assignment {
+    pub fn new(lhs: id::Expr, val: id::Expr) -> Self {
+        Self { lhs, val }
     }
 }
 
@@ -153,6 +166,26 @@ impl Cast {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Call {
+    exprs: Vec<Spanned<id::Expr>>,
+}
+
+impl Call {
+    pub fn new(callee: Spanned<id::Expr>, mut args: Vec<Spanned<id::Expr>>) -> Self {
+        args.push(callee);
+        Self { exprs: args }
+    }
+
+    pub fn callee(&self) -> &Spanned<id::Expr> {
+        self.exprs.last().unwrap()
+    }
+
+    pub fn args(&self) -> &[Spanned<id::Expr>] {
+        self.exprs.get(..self.exprs.len() - 1).unwrap_or(&[])
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructExpr {
     pub path: Spanned<Path<Word, Type>>,
     pub fields: StructExprFieldList,
@@ -178,12 +211,12 @@ impl StructExprField {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MemberAccess {
-    pub lhs: id::Expr,
+    pub lhs: Spanned<id::Expr>,
     pub field: Spanned<Word>,
 }
 
 impl MemberAccess {
-    pub fn new(lhs: id::Expr, field: Spanned<Word>) -> Self {
+    pub fn new(lhs: Spanned<id::Expr>, field: Spanned<Word>) -> Self {
         Self { lhs, field }
     }
 }
@@ -252,11 +285,11 @@ impl If {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Intrinsic {
     pub name: Word,
-    pub args: Spanned<Vec<id::Expr>>,
+    pub args: Spanned<Vec<Spanned<id::Expr>>>,
 }
 
 impl Intrinsic {
-    pub fn new(name: Word, args: Spanned<Vec<id::Expr>>) -> Self {
+    pub fn new(name: Word, args: Spanned<Vec<Spanned<id::Expr>>>) -> Self {
         Self { name, args }
     }
 }

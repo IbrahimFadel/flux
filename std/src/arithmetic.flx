@@ -8,11 +8,6 @@ apply Add<u64> to u64 {
 	fn add(this This, other This) -> This::Output => @flux.intrinsics.add_u64(this, other)
 }
 
-apply Add<u64> to u64 {
-	type Output = u64;
-	fn add(this This, other This) -> This::Output => @flux.intrinsics.add_u64(this, other)
-}
-
 apply Add<u32> to u32 {
 	type Output = u32;
 	fn add(this This, other This) -> This::Output => @flux.intrinsics.add_u32(this, other)

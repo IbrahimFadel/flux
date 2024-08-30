@@ -1,6 +1,6 @@
 use flux_id::id;
 use flux_parser::ast;
-use flux_typesystem::Type;
+use flux_typesystem::{FnSignature, Type};
 use flux_util::{Path, Spanned, Word};
 
 use crate::lower::item_tree::ItemTree;
@@ -43,6 +43,13 @@ impl FnDecl {
             return_ty,
             ast,
         }
+    }
+
+    pub fn as_fn_signature(&self) -> FnSignature {
+        FnSignature::new(
+            self.params.iter().map(|param| &param.ty.inner).cloned(),
+            self.return_ty.inner.clone(),
+        )
     }
 }
 

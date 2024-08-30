@@ -105,6 +105,7 @@ impl LoweringCtx {
                 ast::Type::ThisPathType(this_path_type) => {
                     this.lower_this_path_type(this_path_type, generic_params)
                 }
+                ast::Type::RefType(ref_type) => this.lower_ref_type(ref_type, generic_params),
             },
         )
     }
@@ -117,7 +118,8 @@ impl LoweringCtx {
         let path = self.lower_path(path_type.path(), generic_params).inner;
         let span = path_type.range().to_span();
         let ty = if generic_params.is_path_generic(&path) {
-            Type::generic(*path.get_nth(0))
+            let name = path.get_nth(0);
+            Type::generic(*name, vec![])
         } else {
             Type::path(path)
         };
@@ -166,6 +168,15 @@ impl LoweringCtx {
         generic_params: &GenericParams,
     ) -> Spanned<Type> {
         let path = self.lower_path(this_path_type.path(), generic_params);
-        path.map(|path| Type::this_path(path, self.this_ctx.clone()))
+        path.map(|path| Type::this_path(path, vec![self.this_ctx.clone()]))
+    }
+
+    fn lower_ref_type(
+        &self,
+        ref_type: ast::RefType,
+        generic_params: &GenericParams,
+    ) -> Spanned<Type> {
+        let ty = self.lower_type(ref_type.ty(), generic_params).inner;
+        Type::address(ty).at(ref_type.range().to_span())
     }
 }

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use flux_diagnostics::{ice, Diagnostic, ToDiagnostic};
 use flux_id::{
     id::{self, WithMod, WithPackage},
@@ -8,14 +10,17 @@ use flux_parser::{
     syntax::SyntaxToken,
 };
 use flux_typesystem::{
-    ConcreteKind, FnSignature, TEnv, ThisCtx, TraitRestriction, Type, TypeKind, Typed, WithType,
+    ConcreteKind, FnSignature, TEnv, ThisCtx, ThisPath, TraitRestriction, Type, TypeKind, Typed,
+    WithType,
 };
-use flux_util::{FileId, FileSpanned, InFile, Interner, Span, Spanned, ToSpan, WithSpan, Word};
+use flux_util::{
+    FileId, FileSpanned, InFile, Interner, Path, Span, Spanned, ToSpan, WithSpan, Word,
+};
 
 use crate::{
     builtin,
     def::{
-        expr::{BinOp, Cast, Expr, If, Intrinsic, MemberAccess, Op, StructExpr},
+        expr::{Assignment, BinOp, Call, Cast, Expr, If, Intrinsic, MemberAccess, Op, StructExpr},
         item::StructDecl,
         GenericParams, StructExprField, StructExprFieldList,
     },
@@ -92,7 +97,9 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     ast::Expr::FloatExpr(_) => todo!(),
                     ast::Expr::IntExpr(int_expr) => this.lower_int_expr(int_expr),
                     ast::Expr::BinExpr(bin_expr) => this.lower_bin_expr(bin_expr, generic_params),
-                    ast::Expr::CallExpr(_) => todo!(),
+                    ast::Expr::CallExpr(call_expr) => {
+                        this.lower_call_expr(call_expr, generic_params)
+                    }
                     ast::Expr::StructExpr(struct_expr) => {
                         this.lower_struct_expr(struct_expr, generic_params)
                     }
@@ -237,12 +244,23 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         generic_params: &GenericParams,
     ) -> id::Expr {
         let op = self.lower_op(bin_expr.op());
+        if *op == Op::Eq {
+            return self.lower_bin_assignment_expr(bin_expr, generic_params);
+        }
+
         let lhs = self.lower(bin_expr.lhs(), generic_params);
         let lhs_tid = self.exprs.get(*lhs).tid;
         let rhs = self.lower(bin_expr.rhs(), generic_params);
         let rhs_tid = self.exprs.get(*rhs).tid;
         let span = Span::combine(lhs.span, rhs.span);
 
+        // let tid = self.tenv.insert(
+        //     Type::this_path(
+        //         Path::new(vec![self.interner.get_or_intern_static("Output")], vec![]),
+        //         vec![],
+        //     )
+        //     .at(span),
+        // );
         let tid = self.tenv.insert(Type::unknown().at(span));
 
         let (trait_path, method_name) = builtin::get_binop_trait(&op, self.interner);
@@ -303,15 +321,54 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             self.tenv.add_equality(tid, method_return_ty);
 
             if is_output {
-                self.tenv
-                    .add_assoc_type_restriction(tid, lhs_tid, lhs_restriction);
-                self.tenv
-                    .add_assoc_type_restriction(tid, rhs_tid, rhs_restriction);
+                self.tenv.add_assoc_type_restriction(
+                    tid,
+                    lhs_tid,
+                    lhs_restriction,
+                    self.interner.get_or_intern_static("Output"),
+                );
+                self.tenv.add_assoc_type_restriction(
+                    tid,
+                    rhs_tid,
+                    rhs_restriction,
+                    self.interner.get_or_intern_static("Output"),
+                );
+                // self.tenv.add_assoc_type_restriction(
+                //     method_return_ty,
+                //     lhs_tid,
+                //     lhs_restriction,
+                //     self.interner.get_or_intern_static("Output"),
+                // );
+                // self.tenv.add_assoc_type_restriction(
+                //     tid,
+                //     method_return_ty,
+                //     rhs_restriction,
+                //     self.interner.get_or_intern_static("Output"),
+                // );
             }
         }
 
         self.exprs
             .insert(Expr::BinOp(BinOp::new(*lhs, *rhs, op)).with_type(tid))
+    }
+
+    fn lower_bin_assignment_expr(
+        &mut self,
+        bin_expr: ast::BinExpr,
+        generic_params: &GenericParams,
+    ) -> id::Expr {
+        let lhs = self.lower(bin_expr.lhs(), generic_params);
+        let rhs = self.lower(bin_expr.rhs(), generic_params);
+
+        self.tenv
+            .add_equality(self.exprs.get(*lhs).tid, self.exprs.get(*rhs).tid);
+
+        self.exprs.insert(
+            Expr::Assignment(Assignment::new(*lhs, *rhs)).with_type(
+                self.tenv
+                    .insert(Type::unit().at(bin_expr.range().to_span())),
+            ),
+        )
     }
 
     fn lower_op(&mut self, op: Option<&SyntaxToken>) -> Spanned<Op> {
@@ -334,6 +391,53 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
             _ => ice("invalid op token encountered"),
         }
         .at(op.text_range().to_span())
+    }
+
+    fn lower_call_expr(
+        &mut self,
+        call_expr: ast::CallExpr,
+        generic_params: &GenericParams,
+    ) -> id::Expr {
+        let span = call_expr.range().to_span();
+        let callee = self.lower(call_expr.callee(), generic_params);
+        let callee_tid = self.exprs.get(*callee).tid;
+
+        let this_tid = if let Expr::MemberAccess(member_access) = &self.exprs.get(*callee).inner {
+            Some(member_access.lhs.clone())
+        } else {
+            None
+        };
+
+        let (args, ty) = if self.tenv.is_function(callee_tid) {
+            let signature = match &self.tenv.get(callee_tid).kind {
+                TypeKind::Concrete(ConcreteKind::Fn(sig)) => sig,
+                _ => unreachable!(),
+            }
+            .clone();
+
+            let args = self.lower_arg_list(
+                call_expr.args(),
+                generic_params,
+                (&signature).file_span(self.file_id, span),
+                this_tid,
+            );
+
+            (args, signature.return_ty().clone())
+        } else {
+            self.diagnostics.push(
+                LowerError::CalleeNotFunction {
+                    callee: (),
+                    callee_file_span: callee.span.in_file(self.file_id),
+                    ty: self.tenv.fmt_tid(callee_tid),
+                }
+                .to_diagnostic(),
+            );
+            (vec![].at(span), Type::unknown())
+        };
+        let tid = self.tenv.insert(ty.at(span));
+
+        self.exprs
+            .insert(Expr::Call(Call::new(callee, args.inner)).with_type(tid))
     }
 
     fn lower_struct_expr(
@@ -497,7 +601,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         // self.tenv.add_equality(tid, expected_tid);
 
         self.exprs
-            .insert(Expr::MemberAccess(MemberAccess::new(*lhs, rhs)).with_type(tid))
+            .insert(Expr::MemberAccess(MemberAccess::new(lhs, rhs)).with_type(tid))
     }
 
     fn resolve_type_of_struct_field(
@@ -506,7 +610,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         field_name: &Spanned<Word>,
         span: Span,
     ) -> id::Ty {
-        match &typekind.inner {
+        let ty = match &typekind.inner {
             TypeKind::ThisPath(this_path) => match &self.type_lowerer.this_ctx {
                 ThisCtx::Function | ThisCtx::TraitDecl => {
                     self.diagnostics.push(
@@ -516,14 +620,15 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                         }
                         .to_diagnostic(),
                     );
-                    self.tenv.insert(Type::unknown().at(span))
+                    Type::unknown()
                 }
-                ThisCtx::TraitApplication(this_ty, _) | ThisCtx::TypeApplication(this_ty) => self
-                    .resolve_type_of_struct_field(
+                ThisCtx::TraitApplication(this_ty, _) | ThisCtx::TypeApplication(this_ty) => {
+                    return self.resolve_type_of_struct_field(
                         &(*this_ty.clone()).at(typekind.span),
                         field_name,
                         span,
-                    ),
+                    )
+                }
             },
             TypeKind::Concrete(ConcreteKind::Path(path)) => self
                 .item_resolver
@@ -538,7 +643,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                             .iter()
                             .find_map(|field| {
                                 if field.name.inner == field_name.inner {
-                                    Some(self.tenv.insert(field.ty.inner.clone().at(span)))
+                                    Some(field.ty.inner.clone())
                                 } else {
                                     None
                                 }
@@ -553,7 +658,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                                     }
                                     .to_diagnostic(),
                                 );
-                                self.tenv.insert(Type::unknown().at(span))
+                                Type::unknown()
                             })
                     }
                     _ => {
@@ -564,7 +669,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                             }
                             .to_diagnostic(),
                         );
-                        self.tenv.insert(Type::unknown().at(span))
+                        Type::unknown()
                     }
                 })
                 .unwrap_or_else(|_| {
@@ -575,19 +680,25 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                         }
                         .to_diagnostic(),
                     );
-                    self.tenv.insert(Type::unknown().at(span))
+                    Type::unknown()
                 }),
-            _ => {
-                self.diagnostics.push(
-                    LowerError::MemberAccessOnNonStruct {
-                        expr: (),
-                        expr_file_span: typekind.span.in_file(self.file_id),
-                    }
-                    .to_diagnostic(),
-                );
-                self.tenv.insert(Type::unknown().at(span))
-            }
-        }
+            tkind => self
+                .tenv
+                .method_resolver
+                .resolve_method(tkind, &field_name, self.tenv)
+                .map(|signature| Type::function(signature.clone()))
+                .unwrap_or_else(|_| {
+                    self.diagnostics.push(
+                        LowerError::MemberAccessOnNonStruct {
+                            expr: (),
+                            expr_file_span: typekind.span.in_file(self.file_id),
+                        }
+                        .to_diagnostic(),
+                    );
+                    Type::unknown()
+                }),
+        };
+        self.tenv.insert(ty.at(span))
     }
 
     fn lower_if_expr(&mut self, if_expr: ast::IfExpr, generic_params: &GenericParams) -> id::Expr {
@@ -653,6 +764,7 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     intrinsic_expr.arg_list(),
                     generic_params,
                     (&signature).file_span(self.file_id, span),
+                    None,
                 );
 
                 let tid = self.tenv.insert(signature.return_ty().clone().at(span));
@@ -678,37 +790,37 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
         arg_list: Option<ast::ArgList>,
         generic_params: &GenericParams,
         expected_signature: FileSpanned<&FnSignature>,
-    ) -> Spanned<Vec<id::Expr>> {
+        this_id: Option<Spanned<id::Expr>>,
+    ) -> Spanned<Vec<Spanned<id::Expr>>> {
         let params = expected_signature.parameters();
         let result = lower_node_mut(
             self,
             arg_list,
             |_, arg_list| vec![].at(arg_list.range().to_span()),
             |this, arg_list| {
-                let arg_list = arg_list
+                let mut arg_list_exprs = arg_list
                     .args()
-                    .zip(params.iter())
-                    .map(|(arg, expected)| {
-                        let unification_span = arg.range().to_span().in_file(this.file_id);
-                        let expr = this.lower(Some(arg), generic_params);
-                        let expected_tid = this
-                            .tenv
-                            .insert(expected.clone().at(unification_span.inner));
-                        this.tenv
-                            .add_equality(this.exprs.get(*expr).tid, expected_tid);
-                        *expr
-                    })
+                    .map(|arg| this.lower(Some(arg), generic_params))
                     .collect::<Vec<_>>()
                     .at(arg_list.range().to_span());
 
-                let args_count = arg_list.len();
+                if let Some(this_id) = this_id {
+                    let this_expr = this.exprs.get(*this_id);
+                    let span = this.tenv.get_span(this_expr.tid);
+                    let expected_this_tid = this.tenv.insert(params[0].clone().at(span));
+
+                    this.tenv.add_equality(this_expr.tid, expected_this_tid);
+                    arg_list_exprs.insert(0, this_id);
+                }
+
+                let args_count = arg_list_exprs.len();
                 let sig_count = params.len();
 
                 if args_count != sig_count {
                     this.diagnostics.push(
                         LowerError::IncorrectNumberOfArgs {
                             got_num: args_count,
-                            got_num_file_span: arg_list.span.in_file(this.file_id),
+                            got_num_file_span: arg_list_exprs.span.in_file(this.file_id),
                             expected_num: sig_count,
                             expected_num_file_span: expected_signature.to_file_span(),
                         }
@@ -716,7 +828,15 @@ impl<'a, 'res> LoweringCtx<'a, 'res> {
                     );
                 }
 
-                arg_list
+                for (i, arg) in arg_list_exprs.iter().enumerate() {
+                    if let Some(param) = params.get(i) {
+                        let expected_tid = this.tenv.insert(param.clone().at(arg.span));
+                        this.tenv
+                            .add_equality(expected_tid, this.exprs.get(**arg).tid);
+                    }
+                }
+
+                arg_list_exprs
             },
         );
 

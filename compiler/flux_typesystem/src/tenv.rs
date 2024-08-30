@@ -3,11 +3,12 @@ use flux_id::{id, Map};
 use flux_util::{Interner, Span, Spanned, WithSpan, Word};
 
 use crate::{
+    methods::MethodResolver,
     r#trait::ThisCtx,
     r#type::{Restriction, ThisPath, Type},
     resolve::TraitResolver,
     scope::Scope,
-    TraitApplication, TraitRestriction, TypeKind,
+    ConcreteKind, TraitApplication, TraitRestriction, TypeKind,
 };
 
 pub struct TEnv<'a> {
@@ -15,16 +16,22 @@ pub struct TEnv<'a> {
     pub(super) types: Map<id::Ty, Spanned<Type>>,
     pub(super) scopes: Vec<Scope>,
     trait_resolver: &'a TraitResolver,
+    pub method_resolver: &'a MethodResolver,
     pub(super) interner: &'static Interner,
 }
 
 impl<'a> TEnv<'a> {
-    pub fn new(trait_resolver: &'a TraitResolver, interner: &'static Interner) -> Self {
+    pub fn new(
+        trait_resolver: &'a TraitResolver,
+        method_resolver: &'a MethodResolver,
+        interner: &'static Interner,
+    ) -> Self {
         Self {
             this_ctx: None,
             types: Map::new(),
             scopes: vec![Scope::new()],
             trait_resolver,
+            method_resolver,
             interner,
         }
     }
@@ -82,9 +89,15 @@ impl<'a> TEnv<'a> {
         ty.push_restriction(Restriction::Trait(restriction));
     }
 
-    pub fn add_assoc_type_restriction(&mut self, tid: id::Ty, of: id::Ty, trt: TraitRestriction) {
+    pub fn add_assoc_type_restriction(
+        &mut self,
+        tid: id::Ty,
+        of: id::Ty,
+        trt: TraitRestriction,
+        name: Word,
+    ) {
         let ty = self.types.get_mut(tid);
-        ty.push_restriction(Restriction::AssocTypeOf(of, trt));
+        ty.push_restriction(Restriction::AssocTypeOf(of, trt, name));
     }
 
     pub fn insert_local(&mut self, name: Word, tid: id::Ty) {
@@ -110,6 +123,13 @@ impl<'a> TEnv<'a> {
 
     pub fn get_span(&self, tid: id::Ty) -> Span {
         self.get(tid).span
+    }
+
+    pub fn is_function(&self, tid: id::Ty) -> bool {
+        matches!(
+            self.get_inner(tid).kind,
+            TypeKind::Concrete(ConcreteKind::Fn(_))
+        )
     }
 
     pub fn resolve_this_path<'b>(&'b self, this_path: &'b ThisPath) -> Vec<&TypeKind> {
@@ -157,6 +177,15 @@ impl<'a> TEnv<'a> {
         let to_ty = &self.get(tid).kind;
 
         if let Some(applications) = self.trait_resolver.traits.get(&trait_restriction.trait_id) {
+            // println!(
+            //     "apps: {}",
+            //     applications
+            //         .iter()
+            //         .map(|app| self.fmt_trait_application(app))
+            //         .collect::<Vec<_>>()
+            //         .join(", ")
+            // );
+
             let potential_applications: Vec<_> = applications
                 .iter()
                 .filter(|app| {
@@ -171,6 +200,14 @@ impl<'a> TEnv<'a> {
                 })
                 .cloned()
                 .collect();
+            // println!(
+            //     "valid apps: {}",
+            //     potential_applications
+            //         .iter()
+            //         .map(|app| self.fmt_trait_application(app))
+            //         .collect::<Vec<_>>()
+            //         .join(", ")
+            // );
 
             let tkinds: Vec<_> = potential_applications
                 .iter()
@@ -199,5 +236,32 @@ impl<'a> TEnv<'a> {
         }
 
         Err(())
+    }
+
+    pub fn does_type_implement_trait(
+        &self,
+        ty: &TypeKind,
+        trait_restriction: &TraitRestriction,
+    ) -> bool {
+        if let Some(applications) = self.trait_resolver.traits.get(&trait_restriction.trait_id) {
+            let potential_applications: Vec<_> = applications
+                .iter()
+                .filter(|app| {
+                    let args_match = app
+                        .args
+                        .iter()
+                        .zip(trait_restriction.args.iter())
+                        .filter(|(a, b)| self.types_unify(a, &self.get(**b).kind))
+                        .count()
+                        == trait_restriction.args.len();
+                    self.types_unify(&app.to, ty) && args_match
+                })
+                .cloned()
+                .collect();
+
+            !potential_applications.is_empty()
+        } else {
+            false
+        }
     }
 }

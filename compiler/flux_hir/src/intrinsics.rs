@@ -46,6 +46,42 @@ macro_rules! intrinsic_signatures {
 () => {}
 }
 
+fn ptr_read_signature(interner: &'static Interner) -> FnSignature {
+    FnSignature::new(
+        [
+            Type::ptr(Type::generic(interner.get_or_intern_static("T"), vec![])),
+            Type::path(Path::new(
+                vec![interner.get_or_intern_static("u64")],
+                vec![],
+            )),
+        ]
+        .into_iter(),
+        Type::generic(interner.get_or_intern_static("T"), vec![]),
+    )
+}
+
+fn memcpy_signature(interner: &'static Interner) -> FnSignature {
+    FnSignature::new(
+        [
+            Type::ptr(Type::generic(interner.get_or_intern_static("T"), vec![])),
+            Type::ptr(Type::generic(interner.get_or_intern_static("T"), vec![])),
+        ]
+        .into_iter(),
+        Type::unit(),
+    )
+}
+
+fn free_signature(interner: &'static Interner) -> FnSignature {
+    FnSignature::new(
+        [Type::ptr(Type::generic(
+            interner.get_or_intern_static("T"),
+            vec![],
+        ))]
+        .into_iter(),
+        Type::unit(),
+    )
+}
+
 intrinsic_signatures!(
     panic(str) -> !;
     malloc(u64) -> u8*;
@@ -94,6 +130,18 @@ pub(crate) fn get_signature(
             (
                 interner.get_or_intern_static(prefix!("malloc")),
                 malloc_signature as Handler,
+            ),
+            (
+                interner.get_or_intern_static(prefix!("memcpy")),
+                memcpy_signature as Handler,
+            ),
+            (
+                interner.get_or_intern_static(prefix!("free")),
+                free_signature as Handler,
+            ),
+            (
+                interner.get_or_intern_static(prefix!("ptr_read")),
+                ptr_read_signature as Handler,
             ),
             (
                 interner.get_or_intern_static(prefix!("add_s64")),

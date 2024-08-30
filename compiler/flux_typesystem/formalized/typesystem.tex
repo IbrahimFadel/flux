@@ -1,0 +1,37 @@
+\documentclass{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{mathtools}
+\usepackage{bussproofs}
+\usepackage{turnstile}
+
+\title{Flux Typesystem}
+\author{Ibrahim Fadel}
+\date{\today}
+
+\begin{document}
+	\maketitle
+
+	\begin{tabular}{lr}
+		Expressions & e $\Coloneqq x$ | $e_1$ $e_2$ | $\lambda x.e$  \\
+	\end{tabular}
+
+	\begin{prooftree}
+		\AxiomC{}
+		\UnaryInfC{$\Gamma \vdash ()$}
+	\end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$(x: \alpha) \in \Gamma$}
+		\UnaryInfC{$\Gamma \vdash x: \alpha$}
+	\end{prooftree}
+	% \begin{prooftree}
+	% 	\AxiomC{$\Gamma \vdash e: \alpha$}
+	% 	\AxiomC{$\alpha = \beta$}
+	% 	\BinaryInfC{$\Gamma \vdash e: \beta$}
+	% \end{prooftree}
+	\begin{prooftree}
+		\AxiomC{$\Gamma \vdash e \implies \alpha$}
+		\AxiomC{$\alpha = \beta$}
+		\BinaryInfC{$\Gamma \vdash e \impliedby \beta$}
+	\end{prooftree}
+\end{document}

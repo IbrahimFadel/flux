@@ -1,0 +1,12 @@
+pub trait Index<T> {
+	type Output;
+	fn idx(this This, index T) -> This::Output;
+}
+
+apply<T> Index<u64> to T* {
+	type Output = T;
+
+	fn idx(this This, index u64) -> This::Output {
+		@flux.intrinsics.ptr_read(this, index)
+	}
+}

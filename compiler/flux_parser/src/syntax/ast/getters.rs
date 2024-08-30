@@ -55,6 +55,9 @@ getters! {
     PtrType {
         ty -> node(Type);
     }
+    RefType {
+        ty -> node(Type);
+    }
     Path {
         segments -> toks(Ident);
         generic_arg_list -> node(GenericArgList);

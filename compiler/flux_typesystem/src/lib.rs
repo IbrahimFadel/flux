@@ -1,5 +1,6 @@
 pub mod diagnostics;
 mod fmt;
+mod methods;
 mod resolve;
 mod scope;
 mod tenv;
@@ -10,9 +11,11 @@ mod unify;
 use std::sync::OnceLock;
 
 use flux_util::{Interner, Path, Word};
+pub use methods::MethodResolver;
 pub use r#trait::{ThisCtx, TraitApplication};
 pub use r#type::{
-    ConcreteKind, FnSignature, Restriction, TraitRestriction, Type, TypeKind, Typed, WithType,
+    ConcreteKind, FnSignature, Restriction, ThisPath, TraitRestriction, Type, TypeKind, Typed,
+    WithType,
 };
 pub use resolve::TraitResolver;
 pub use tenv::TEnv;

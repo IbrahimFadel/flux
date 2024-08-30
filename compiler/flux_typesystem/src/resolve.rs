@@ -1,11 +1,13 @@
 use std::{collections::HashMap, mem};
 
 use flux_id::id::{self, InPkg};
-use flux_util::{FileId, Span, WithSpan};
+use flux_util::{FileId, Path, Span, WithSpan};
 use tracing::{trace, warn};
 
 use crate::{
-    r#trait::TraitApplication, r#type::Restriction, ConcreteKind, TEnv, ThisCtx, Type, TypeKind,
+    r#trait::TraitApplication,
+    r#type::{Restriction, ThisPath},
+    ConcreteKind, TEnv, ThisCtx, Type, TypeKind,
 };
 
 impl<'a> TEnv<'a> {
@@ -24,17 +26,20 @@ impl<'a> TEnv<'a> {
         loop {
             let initial_restrictions = mem::take(&mut self.get_mut(tid).restrictions);
 
-            // for restriction in &initial_restrictions {
-            //     if matches!(restriction, Restriction::EqualsOneOf(_)) {
-            //         println!("Initial: {:?}", initial_restrictions);
-            //     }
-            // }
-
             let final_restrictions: Vec<_> = initial_restrictions
                 .clone()
                 .into_iter()
                 .filter_map(|restriction| match &restriction {
                     Restriction::Equals(other) => {
+                        // for r in &self.get(tid).restrictions {
+                        //     match r {
+                        //         Restriction::Equals(other) => match self.get(*other).kind {
+                        //             _ => {}
+                        //         },
+                        //         _ => {}
+                        //     }
+                        // }
+
                         let unification_span = Span::poisoned().in_file(FileId::poisoned());
                         self.unify(tid, *other, unification_span)
                             .map_err(|_| restriction)
@@ -73,7 +78,7 @@ impl<'a> TEnv<'a> {
                             _ => Some(Restriction::EqualsOneOf(final_tkinds)),
                         }
                     }
-                    Restriction::AssocTypeOf(of, trait_restriction) => {
+                    Restriction::AssocTypeOf(of, trait_restriction, name) => {
                         let app_to_kind = self.get(*of).kind.clone();
                         let potential_applications =
                             match self.resolve_trait_restriction(*of, trait_restriction) {
@@ -81,17 +86,17 @@ impl<'a> TEnv<'a> {
                                 Err(_) => return Some(restriction),
                             };
 
+                        let potential_this_ctx = potential_applications
+                            .iter()
+                            .map(|app| {
+                                ThisCtx::TraitApplication(
+                                    Box::new(app_to_kind.clone()),
+                                    app.assoc_types.clone(),
+                                )
+                            })
+                            .collect();
                         match &mut self.get_inner_mut(tid).kind {
                             TypeKind::ThisPath(this_path) => {
-                                let potential_this_ctx = potential_applications
-                                    .into_iter()
-                                    .map(|app| {
-                                        ThisCtx::TraitApplication(
-                                            Box::new(app_to_kind.clone()),
-                                            app.assoc_types.clone(),
-                                        )
-                                    })
-                                    .collect();
                                 this_path.potential_this_ctx = potential_this_ctx;
                                 if this_path.potential_this_ctx.is_empty() {
                                     Some(restriction)
@@ -99,7 +104,28 @@ impl<'a> TEnv<'a> {
                                     None
                                 }
                             }
-                            _ => Some(restriction),
+                            _ => {
+                                for r in &initial_restrictions {
+                                    match r {
+                                        Restriction::Equals(other) => {
+                                            match &mut self.get_inner_mut(*other).kind {
+                                                TypeKind::ThisPath(this_path) => {
+                                                    this_path.potential_this_ctx =
+                                                        potential_this_ctx.clone();
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                if potential_this_ctx.len() == 1 {
+                                    None
+                                } else {
+                                    Some(restriction)
+                                }
+                            }
                         }
                     }
                     Restriction::Field(_) => {
@@ -112,13 +138,6 @@ impl<'a> TEnv<'a> {
                         .err(),
                 })
                 .collect();
-
-            // for restriction in &final_restrictions {
-            //     if matches!(restriction, Restriction::EqualsOneOf(_)) {
-            //         println!("Final: {:?}", final_restrictions);
-            //     }
-            // }
-            // println!("{:?}", final_restrictions);
 
             if final_restrictions.len() == 0 {
                 return self
@@ -148,6 +167,10 @@ impl TypeKind {
                         ty.kind.resolve(tenv)?;
                         Ok(self.clone())
                     }
+                    Addr(ty) => {
+                        ty.kind.resolve(tenv)?;
+                        Ok(self.clone())
+                    }
                     Path(path) => {
                         for arg in &path.args {
                             arg.kind.resolve(tenv)?;
@@ -160,9 +183,16 @@ impl TypeKind {
                         }
                         Ok(self.clone())
                     }
+                    Fn(signature) => {
+                        for param in signature.parameters() {
+                            param.kind.resolve(tenv)?;
+                        }
+                        signature.return_ty().kind.resolve(tenv)?;
+                        Ok(self.clone())
+                    }
                 }
             }
-            Generic(_) => Ok(self.clone()),
+            Generic(_, _) => Ok(self.clone()),
             ThisPath(this_path) => {
                 let potential_this = tenv.resolve_this_path(this_path);
                 if potential_this.len() == 1 {

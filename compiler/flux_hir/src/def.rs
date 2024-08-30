@@ -1,7 +1,7 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Debug};
 
 use flux_id::{id, ids, Map};
-use flux_typesystem::{Type, Typed};
+use flux_typesystem::{TraitRestriction, Type, Typed};
 use flux_util::{Path, Spanned, WithSpan, Word};
 
 pub mod expr;
@@ -100,6 +100,19 @@ impl GenericParams {
             Err((self, duplicates))
         }
     }
+
+    // pub fn get_trait_restrictions(&self, generic: &Word) -> Vec<TraitRestriction> {
+    //     self.where_predicates
+    //         .iter()
+    //         .filter_map(|predicate| {
+    //             if predicate.name == *generic {
+    //                 Some(TraitRestriction::new(trait_id, args))
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    //         .collect()
+    // }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

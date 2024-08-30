@@ -5,7 +5,7 @@ use flux_util::Word;
 
 use crate::TypeKind;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum ThisCtx {
     Function,
     TraitDecl,

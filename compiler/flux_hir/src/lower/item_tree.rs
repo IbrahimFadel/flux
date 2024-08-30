@@ -84,7 +84,7 @@ impl<'a> LoweringCtx<'a> {
         let item_id = match item {
             ast::Item::ApplyDecl(apply_decl) => self.lower_apply_decl(apply_decl),
             ast::Item::EnumDecl(enum_decl) => self.lower_enum_decl(enum_decl),
-            ast::Item::FnDecl(fn_decl) => self.lower_fn_decl(fn_decl),
+            ast::Item::FnDecl(fn_decl) => self.lower_fn_decl(fn_decl, None),
             ast::Item::ModDecl(mod_decl) => self.lower_mod_decl(mod_decl),
             ast::Item::StructDecl(struct_decl) => self.lower_struct_decl(struct_decl),
             ast::Item::TraitDecl(trait_decl) => self.lower_trait_decl(trait_decl),
@@ -145,7 +145,11 @@ impl<'a> LoweringCtx<'a> {
             .into()
     }
 
-    fn lower_fn_decl(&mut self, function: &ast::FnDecl) -> ItemId {
+    fn lower_fn_decl(
+        &mut self,
+        function: &ast::FnDecl,
+        apply_generic_params: Option<&Spanned<GenericParams>>,
+    ) -> ItemId {
         let visibility = self.lower_visibility(function.visibility());
         let name = self.type_lowerer.lower_name(function.name());
         let mut generic_param_list =
@@ -154,6 +158,31 @@ impl<'a> LoweringCtx<'a> {
             &mut generic_param_list,
             function.where_clause(),
         );
+        let generic_params_span = generic_param_list.span;
+        if let Some(apply_generic_params) = apply_generic_params {
+            generic_param_list = generic_param_list.map(|generic_param_list| {
+                generic_param_list
+                    .union(apply_generic_params)
+                    .unwrap_or_else(|(fallback_generic_params, duplicates)| {
+                        let diagnostic = LowerError::DuplicateGenericParams {
+                            generics_that_were_chilling: (),
+                            generics_that_were_chilling_file_span: apply_generic_params
+                                .span
+                                .in_file(self.file_id),
+                            generics_that_caused_duplication: duplicates
+                                .iter()
+                                .map(|key| self.interner.resolve(key).to_string())
+                                .collect(),
+                            generics_that_caused_duplication_file_span: generic_params_span
+                                .in_file(self.file_id),
+                        }
+                        .to_diagnostic();
+                        self.diagnostics.push(diagnostic);
+                        fallback_generic_params
+                    })
+            });
+        }
+
         let param_list = self.lower_param_list(function.param_list(), &generic_param_list);
         let ret_ty = self.lower_function_return_type(
             function.return_type(),
@@ -494,37 +523,13 @@ impl<'a> LoweringCtx<'a> {
     ) -> Vec<id::FnDecl> {
         methods
             .map(|method| {
-                let f: id::FnDecl = self
-                    .lower_fn_decl(&method)
+                self.lower_fn_decl(&method, Some(&apply_generic_params))
                     .inner
                     .clone()
                     .try_into()
                     .unwrap_or_else(|_| {
                         ice("`lower_fn_decl` returned `ItemId` not associated with function")
-                    });
-                let f_decl = self.item_tree.functions.get_mut(f);
-                let span = f_decl.generic_params.span;
-                let f_params = f_decl.generic_params.inner.clone();
-                f_decl.generic_params = f_params
-                    .union(apply_generic_params)
-                    .map(|params| params.at(span))
-                    .unwrap_or_else(|(fallback_generic_params, duplicates)| {
-                        let diagnostic = LowerError::DuplicateGenericParams {
-                            generics_that_were_chilling: (),
-                            generics_that_were_chilling_file_span: apply_generic_params
-                                .span
-                                .in_file(self.file_id),
-                            generics_that_caused_duplication: duplicates
-                                .iter()
-                                .map(|key| self.interner.resolve(key).to_string())
-                                .collect(),
-                            generics_that_caused_duplication_file_span: span.in_file(self.file_id),
-                        }
-                        .to_diagnostic();
-                        self.diagnostics.push(diagnostic);
-                        fallback_generic_params.at(span)
-                    });
-                f
+                    })
             })
             .collect()
     }

@@ -15,6 +15,18 @@ pub(crate) fn type_(p: &mut Parser, parent: &str) {
         TokenKind::LSquare => array_type(p),
         _ => return p.expected("type", parent),
     };
+    while p.at(TokenKind::Ampersand) || p.at(TokenKind::CmpAnd) {
+        if p.at(TokenKind::Ampersand) {
+            let ref_m = m.clone().precede(p);
+            p.bump(TokenKind::Ampersand);
+            m = ref_m.complete(p, SyntaxKind::RefType);
+        } else if p.at(TokenKind::CmpAnd) {
+            let ref_m = m.clone().precede(p);
+            p.bump(TokenKind::CmpAnd);
+            let inner_ref_m = ref_m.complete(p, SyntaxKind::RefType).clone().precede(p);
+            m = inner_ref_m.complete(p, SyntaxKind::RefType);
+        }
+    }
     while p.at(TokenKind::Star) {
         let ptr_m = m.clone().precede(p);
         p.bump(TokenKind::Star);
